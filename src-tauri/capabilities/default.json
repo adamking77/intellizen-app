@@ -5,6 +5,36 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "fs:default",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-read-text-file",
+    "fs:allow-write-file",
+    "fs:allow-create",
+    "fs:allow-mkdir",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/vault" },
+        { "path": "$HOME/vault/**/*" },
+        { "path": "$HOME/vault/intelligence" },
+        { "path": "$HOME/vault/intelligence/**/*" }
+      ]
+    },
+    "shell:default",
+    "shell:allow-execute",
+    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "claude",
+          "cmd": "claude",
+          "args": ["-p", { "validator": ".*" }, "--allowedTools", { "validator": ".*" }],
+          "sidecar": false
+        }
+      ]
+    }
   ]
 }

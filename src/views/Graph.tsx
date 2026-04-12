@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Crosshair,
+  FolderKanban,
+  GitBranch,
   Link2,
   Move,
   ScanSearch,
+  Sparkles,
   Trash2,
   Unlink,
   ZoomIn,
@@ -22,12 +25,15 @@ import {
   deleteGraphNodes,
   listGraphEdges,
   listGraphNodes,
+  listProjectSignals,
   listProjects,
   updateGraphEdge,
   updateGraphNode,
   updateGraphNodePosition,
 } from "@/lib/data";
-import type { GraphEntityType, GraphNodeRecord } from "@/lib/types";
+import type { GraphEntityType, GraphNodeRecord, ProjectSignal } from "@/lib/types";
+
+type GraphMode = "project" | "standalone";
 
 const ENTITY_STYLES: Record<
   GraphEntityType,
@@ -98,7 +104,14 @@ type PanState = {
   startClientY: number;
 } | null;
 
+type EdgeDragState = {
+  sourceNodeId: string;
+  startX: number;
+  startY: number;
+} | null;
+
 export function GraphView() {
+  const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
   const [createLabel, setCreateLabel] = useState("");
   const [createEntityType, setCreateEntityType] = useState<GraphEntityType>("person");
@@ -115,43 +128,53 @@ export function GraphView() {
   const [edgeDraftLabel, setEdgeDraftLabel] = useState("");
   const [dragPositions, setDragPositions] = useState<Record<string, Point>>({});
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEW);
+  const [edgeDragState, setEdgeDragState] = useState<EdgeDragState>(null);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState>(null);
   const panStateRef = useRef<PanState>(null);
   const dragPositionsRef = useRef<Record<string, Point>>({});
   const viewportStateRef = useRef<ViewportState>(DEFAULT_VIEW);
+  const edgeDragStateRef = useRef<EdgeDragState>(null);
 
   const { data: projects } = useQuery({
     queryKey: ["projects"],
     queryFn: listProjects,
   });
 
+  // Auto-select first project when switching to project mode
   useEffect(() => {
-    if (
-      (graphProjectId === null || !projects?.some((project) => project.id === graphProjectId)) &&
-      projects &&
-      projects.length > 0
-    ) {
+    if (graphMode === "project" && graphProjectId === null && projects && projects.length > 0) {
       setGraphProjectId(projects[0].id);
     }
-  }, [graphProjectId, projects]);
+  }, [graphMode, graphProjectId, projects]);
 
   const selectedProject = useMemo(
     () => projects?.find((project) => project.id === graphProjectId) ?? null,
     [projects, graphProjectId],
   );
 
+  // Effective project ID: null for standalone, selected ID for project mode
+  const effectiveProjectId = graphMode === "standalone" ? null : graphProjectId;
+
   const nodesQuery = useQuery({
-    queryKey: ["graph-nodes", graphProjectId],
-    queryFn: () => listGraphNodes(graphProjectId as number),
-    enabled: graphProjectId !== null,
+    queryKey: ["graph-nodes", effectiveProjectId],
+    queryFn: () => listGraphNodes(effectiveProjectId),
+    enabled: graphMode === "standalone" || graphProjectId !== null,
   });
 
   const edgesQuery = useQuery({
-    queryKey: ["graph-edges", graphProjectId],
-    queryFn: () => listGraphEdges(graphProjectId as number),
-    enabled: graphProjectId !== null,
+    queryKey: ["graph-edges", effectiveProjectId],
+    queryFn: () => listGraphEdges(effectiveProjectId),
+    enabled: graphMode === "standalone" || graphProjectId !== null,
+  });
+
+  // Query project signals for auto-generation (only in project mode)
+  const projectSignalsQuery = useQuery({
+    queryKey: ["project-signals", graphProjectId],
+    queryFn: () => listProjectSignals(graphProjectId as number),
+    enabled: graphMode === "project" && graphProjectId !== null,
   });
 
   const nodes = nodesQuery.data ?? [];
@@ -192,6 +215,10 @@ export function GraphView() {
   useEffect(() => {
     viewportStateRef.current = viewport;
   }, [viewport]);
+
+  useEffect(() => {
+    edgeDragStateRef.current = edgeDragState;
+  }, [edgeDragState]);
 
   const visualNodes = useMemo(
     () =>
@@ -309,14 +336,14 @@ export function GraphView() {
 
     async function handlePointerUp() {
       const dragState = dragStateRef.current;
-      if (dragState && graphProjectId) {
+      if (dragState && (graphMode === "standalone" || graphProjectId)) {
         dragStateRef.current = null;
         const finalPosition = dragPositionsRef.current[dragState.nodeId];
 
         if (finalPosition) {
           try {
             await updateGraphNodePosition({
-              projectId: graphProjectId,
+              projectId: effectiveProjectId,
               nodeId: dragState.nodeId,
               position: finalPosition,
             });
@@ -333,6 +360,11 @@ export function GraphView() {
       if (panStateRef.current) {
         panStateRef.current = null;
       }
+      
+      // Cancel edge drag on pointer up if not dropped on a target
+      if (edgeDragStateRef.current) {
+        setEdgeDragState(null);
+      }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -342,6 +374,7 @@ export function GraphView() {
       if (event.key === "Escape") {
         setPlaceMode(false);
         setConnectSourceId(null);
+        setEdgeDragState(null);
         setSelectedEdgeId(null);
         setSelectedNodeId(null);
       }
@@ -369,17 +402,17 @@ export function GraphView() {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [graphProjectId, nodesQuery, selectedEdgeId, selectedNodeId]);
+  }, [graphMode, graphProjectId, effectiveProjectId, nodesQuery, selectedEdgeId, selectedNodeId]);
 
   async function handleCreateNode(position?: Point) {
-    if (!graphProjectId || !createLabel.trim()) return;
+    if ((graphMode === "project" && !graphProjectId) || !createLabel.trim()) return;
 
     try {
       setErrorMessage(null);
       setStatusMessage(null);
 
       await createGraphNode({
-        projectId: graphProjectId,
+        projectId: effectiveProjectId,
         nodeId: crypto.randomUUID(),
         label: createLabel.trim(),
         entityType: createEntityType,
@@ -396,7 +429,7 @@ export function GraphView() {
   }
 
   async function handleCreateEdge(sourceNodeId: string, targetNodeId: string) {
-    if (!graphProjectId) return;
+    if (graphMode === "project" && !graphProjectId) return;
     if (!sourceNodeId || !targetNodeId || sourceNodeId === targetNodeId) return;
 
     const duplicate = edges.some(
@@ -415,7 +448,7 @@ export function GraphView() {
       setStatusMessage(null);
 
       await createGraphEdge({
-        projectId: graphProjectId,
+        projectId: effectiveProjectId,
         edgeId: crypto.randomUUID(),
         sourceNodeId,
         targetNodeId,
@@ -432,14 +465,14 @@ export function GraphView() {
   }
 
   async function handleSaveSelectedNode() {
-    if (!graphProjectId || !selectedNode || !nodeDraftLabel.trim()) return;
+    if ((graphMode === "project" && !graphProjectId) || !selectedNode || !nodeDraftLabel.trim()) return;
 
     try {
       setErrorMessage(null);
       setStatusMessage(null);
 
       await updateGraphNode({
-        projectId: graphProjectId,
+        projectId: effectiveProjectId,
         nodeId: selectedNode.node_id,
         label: nodeDraftLabel.trim(),
         entityType: nodeDraftType,
@@ -453,14 +486,14 @@ export function GraphView() {
   }
 
   async function handleSaveSelectedEdge() {
-    if (!graphProjectId || !selectedEdge) return;
+    if ((graphMode === "project" && !graphProjectId) || !selectedEdge) return;
 
     try {
       setErrorMessage(null);
       setStatusMessage(null);
 
       await updateGraphEdge({
-        projectId: graphProjectId,
+        projectId: effectiveProjectId,
         edgeId: selectedEdge.edge_id,
         label: edgeDraftLabel.trim() || null,
       });
@@ -473,7 +506,7 @@ export function GraphView() {
   }
 
   async function handleDeleteNode(nodeId: string) {
-    if (!graphProjectId) return;
+    if (graphMode === "project" && !graphProjectId) return;
 
     try {
       setErrorMessage(null);
@@ -484,10 +517,10 @@ export function GraphView() {
         .map((edge) => edge.edge_id);
 
       if (relatedEdgeIds.length > 0) {
-        await deleteGraphEdges({ projectId: graphProjectId, edgeIds: relatedEdgeIds });
+        await deleteGraphEdges({ projectId: effectiveProjectId, edgeIds: relatedEdgeIds });
       }
 
-      await deleteGraphNodes({ projectId: graphProjectId, nodeIds: [nodeId] });
+      await deleteGraphNodes({ projectId: effectiveProjectId, nodeIds: [nodeId] });
       await nodesQuery.refetch();
       await edgesQuery.refetch();
       setSelectedNodeId(null);
@@ -500,13 +533,13 @@ export function GraphView() {
   }
 
   async function handleDeleteEdge(edgeId: string) {
-    if (!graphProjectId) return;
+    if (graphMode === "project" && !graphProjectId) return;
 
     try {
       setErrorMessage(null);
       setStatusMessage(null);
 
-      await deleteGraphEdges({ projectId: graphProjectId, edgeIds: [edgeId] });
+      await deleteGraphEdges({ projectId: effectiveProjectId, edgeIds: [edgeId] });
       await edgesQuery.refetch();
       setSelectedEdgeId(null);
       setStatusMessage("Deleted connection.");
@@ -516,7 +549,7 @@ export function GraphView() {
   }
 
   async function handleTidyLayout() {
-    if (!graphProjectId || visualNodes.length === 0) return;
+    if ((graphMode === "project" && !graphProjectId) || visualNodes.length === 0) return;
 
     try {
       setErrorMessage(null);
@@ -539,7 +572,7 @@ export function GraphView() {
       await Promise.all(
         visualNodes.map((node, index) =>
           updateGraphNodePosition({
-            projectId: graphProjectId,
+            projectId: effectiveProjectId,
             nodeId: node.node_id,
             position: getNextNodePosition(index),
           }),
@@ -559,6 +592,188 @@ export function GraphView() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to tidy layout.");
     }
+  }
+
+  // Auto-generate graph from project signals using entity extraction
+  async function handleAutoGenerateFromProject() {
+    if (graphMode !== "project" || !graphProjectId) return;
+    
+    const projectSignals = projectSignalsQuery.data;
+    if (!projectSignals || projectSignals.length === 0) {
+      setErrorMessage("No signals in this project to analyze.");
+      return;
+    }
+
+    try {
+      setIsAutoGenerating(true);
+      setErrorMessage(null);
+      setStatusMessage("Analyzing signals for entities...");
+
+      // Extract entities from signal content using simple pattern matching
+      // In a full implementation, this would call an NLP service or LLM
+      const extractedEntities = extractEntitiesFromSignals(projectSignals);
+      
+      if (extractedEntities.length === 0) {
+        setStatusMessage("No entities found in project signals.");
+        setIsAutoGenerating(false);
+        return;
+      }
+
+      // Create nodes for extracted entities
+      const existingLabels = new Set(nodes.map(n => n.label.toLowerCase()));
+      const newNodes: Array<{ label: string; type: GraphEntityType }> = [];
+      
+      for (const entity of extractedEntities) {
+        if (!existingLabels.has(entity.label.toLowerCase())) {
+          newNodes.push(entity);
+          existingLabels.add(entity.label.toLowerCase());
+        }
+      }
+
+      // Batch create nodes
+      const nodePositions = calculateAutoLayoutPositions(newNodes.length, visualNodes.length);
+      const createdNodeIds: string[] = [];
+      
+      for (let i = 0; i < newNodes.length; i++) {
+        const entity = newNodes[i];
+        const nodeId = crypto.randomUUID();
+        await createGraphNode({
+          projectId: graphProjectId,
+          nodeId,
+          label: entity.label,
+          entityType: entity.type,
+          position: nodePositions[i],
+        });
+        createdNodeIds.push(nodeId);
+      }
+
+      // Create edges based on co-occurrence in signals
+      const edgesCreated = await createEdgesFromCooccurrence(
+        projectSignals, 
+        createdNodeIds, 
+        graphProjectId
+      );
+
+      await nodesQuery.refetch();
+      await edgesQuery.refetch();
+      
+      setStatusMessage(`Generated ${newNodes.length} nodes and ${edgesCreated} connections from project signals.`);
+      fitViewToNodes(
+        [...visualNodes, ...newNodes.map((_, i) => ({ position: nodePositions[i] }))],
+        viewportRef.current,
+        setViewport,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
+    } finally {
+      setIsAutoGenerating(false);
+    }
+  }
+
+  // Extract entities from signal content using pattern matching
+  function extractEntitiesFromSignals(signals: ProjectSignal[]): Array<{ label: string; type: GraphEntityType }> {
+    const entities: Array<{ label: string; type: GraphEntityType }> = [];
+    const seen = new Set<string>();
+    
+    // Common entity patterns
+    const patterns = {
+      person: /\b([A-Z][a-z]+ [A-Z][a-z]+)\b/g,
+      organisation: /\b([A-Z][a-z]*(?:\s+[A-Z][a-z]*)+(?:\s+(?:Inc|Ltd|LLC|Corp|Corporation|Company|Group|Fund|Capital|Partners))?\b)/g,
+      location: /\b(?:in|at|from)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/gi,
+    };
+    
+    for (const ps of signals) {
+      const content = ps.intel_signals?.title + " " + ps.intel_signals?.snippet;
+      if (!content) continue;
+      
+      // Extract people (capitalized names)
+      let match;
+      while ((match = patterns.person.exec(content)) !== null) {
+        const name = match[1];
+        if (name.length > 3 && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          entities.push({ label: name, type: "person" });
+        }
+      }
+      
+      // Extract organizations
+      patterns.organisation.lastIndex = 0;
+      while ((match = patterns.organisation.exec(content)) !== null) {
+        const org = match[1];
+        if (org.length > 3 && !seen.has(org.toLowerCase()) && !entities.find(e => e.label === org)) {
+          seen.add(org.toLowerCase());
+          entities.push({ label: org, type: "organisation" });
+        }
+      }
+    }
+    
+    return entities.slice(0, 20); // Limit to 20 entities
+  }
+
+  // Calculate positions for auto-layout
+  function calculateAutoLayoutPositions(count: number, existingCount: number): Point[] {
+    const positions: Point[] = [];
+    const startX = 100 + (existingCount % 5) * 240;
+    const startY = 100 + Math.floor(existingCount / 5) * 156;
+    
+    for (let i = 0; i < count; i++) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      positions.push({
+        x: clamp(startX + col * 240, WORLD_MARGIN, WORLD_WIDTH - NODE_WIDTH - WORLD_MARGIN),
+        y: clamp(startY + row * 156, WORLD_MARGIN, WORLD_HEIGHT - NODE_HEIGHT - WORLD_MARGIN),
+      });
+    }
+    return positions;
+  }
+
+  // Create edges based on entity co-occurrence in signals
+  async function createEdgesFromCooccurrence(
+    signals: ProjectSignal[], 
+    _newNodeIds: string[],
+    projectId: number
+  ): Promise<number> {
+    // Get all nodes including newly created ones
+    const allNodes = await listGraphNodes(projectId);
+    let edgeCount = 0;
+    
+    // For each signal, find entities that appear together and create edges
+    for (const ps of signals) {
+      const content = (ps.intel_signals?.title + " " + ps.intel_signals?.snippet).toLowerCase();
+      if (!content) continue;
+      
+      // Find which entities appear in this signal
+      const entitiesInSignal = allNodes.filter(n => 
+        content.includes(n.label.toLowerCase())
+      );
+      
+      // Create edges between co-occurring entities
+      for (let i = 0; i < entitiesInSignal.length; i++) {
+        for (let j = i + 1; j < entitiesInSignal.length; j++) {
+          const source = entitiesInSignal[i];
+          const target = entitiesInSignal[j];
+          
+          // Check if edge already exists
+          const existingEdge = edges.find(e => 
+            (e.source_node_id === source.node_id && e.target_node_id === target.node_id) ||
+            (e.source_node_id === target.node_id && e.target_node_id === source.node_id)
+          );
+          
+          if (!existingEdge) {
+            await createGraphEdge({
+              projectId,
+              edgeId: crypto.randomUUID(),
+              sourceNodeId: source.node_id,
+              targetNodeId: target.node_id,
+              label: "mentioned together",
+            });
+            edgeCount++;
+          }
+        }
+      }
+    }
+    
+    return edgeCount;
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -631,24 +846,101 @@ export function GraphView() {
           <CardTitle>Graph controls</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <select
-            className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
-            value={graphProjectId ?? ""}
-            onChange={(event) => setGraphProjectId(Number(event.target.value))}
-          >
-            {(projects ?? []).map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--muted-foreground)]">
-            Active project:{" "}
-            <span className="text-[var(--foreground)]">
-              {selectedProject?.name ?? "none"}
-            </span>
+          {/* Graph Mode Selector */}
+          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGraphMode("standalone");
+                setGraphProjectId(null);
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+                setConnectSourceId(null);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                graphMode === "standalone"
+                  ? "bg-[var(--surface-strong)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <GitBranch className="h-4 w-4" />
+              Manual
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGraphMode("project");
+                if (projects && projects.length > 0 && !graphProjectId) {
+                  setGraphProjectId(projects[0].id);
+                }
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+                setConnectSourceId(null);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                graphMode === "project"
+                  ? "bg-[var(--surface-strong)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <FolderKanban className="h-4 w-4" />
+              Project
+            </button>
           </div>
+
+          {/* Project Selector (only in project mode) */}
+          {graphMode === "project" && (
+            <>
+              <select
+                className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
+                value={graphProjectId ?? ""}
+                onChange={(event) => setGraphProjectId(Number(event.target.value))}
+                disabled={!projects || projects.length === 0}
+              >
+                {!projects || projects.length === 0 ? (
+                  <option value="">No projects available</option>
+                ) : (
+                  projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))
+                )}
+              </select>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--muted-foreground)]">
+                Active project:{" "}
+                <span className="text-[var(--foreground)]">
+                  {selectedProject?.name ?? "none"}
+                </span>
+              </div>
+              
+              {/* Auto-generate from project signals */}
+              <Button
+                variant="secondary"
+                onClick={() => void handleAutoGenerateFromProject()}
+                disabled={isAutoGenerating || !graphProjectId || (projectSignalsQuery.data?.length ?? 0) === 0}
+                className="w-full"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isAutoGenerating ? "Analyzing..." : "Auto-generate from signals"}
+              </Button>
+              
+              {projectSignalsQuery.data && projectSignalsQuery.data.length > 0 && (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {projectSignalsQuery.data.length} signal{projectSignalsQuery.data.length !== 1 ? 's' : ''} available for analysis
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Standalone mode indicator */}
+          {graphMode === "standalone" && (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--muted-foreground)]">
+              <span className="text-[var(--accent)]">Standalone mode:</span>{" "}
+              Build a free-form graph not tied to any project.
+            </div>
+          )}
 
           <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4">
             <p className="text-sm font-medium text-[var(--foreground)]">Create node</p>
@@ -670,14 +962,14 @@ export function GraphView() {
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => void handleCreateNode()}
-                disabled={!graphProjectId || !createLabel.trim()}
+                disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
               >
                 Add now
               </Button>
               <Button
                 variant={placeMode ? "primary" : "secondary"}
                 onClick={() => setPlaceMode((current) => !current)}
-                disabled={!graphProjectId || !createLabel.trim()}
+                disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
               >
                 <Crosshair className="h-4 w-4" />
                 {placeMode ? "Cancel placement" : "Place on canvas"}
@@ -731,7 +1023,15 @@ export function GraphView() {
               <Move className="h-4 w-4" />
               Drag nodes. Drag empty canvas to pan. Use wheel to zoom.
             </div>
-            <p>Click nodes or edges to edit them. Press `Esc` to cancel modes and `Delete` to remove the current selection.</p>
+            <p>
+              <strong>Drag the blue dot</strong> on any node to create connections. 
+              Click nodes or edges to edit. Press `Esc` to cancel, `Delete` to remove.
+            </p>
+            {graphMode === "project" && (
+              <p className="text-[var(--accent)]">
+                Use "Auto-generate" to extract entities from project signals automatically.
+              </p>
+            )}
           </div>
 
           {statusMessage ? (
@@ -750,6 +1050,9 @@ export function GraphView() {
             <Badge variant="neutral">Nodes {visualNodes.length}</Badge>
             <Badge variant="neutral">Edges {edges.length}</Badge>
             <Badge variant="neutral">Zoom {Math.round(viewport.scale * 100)}%</Badge>
+            {graphMode === "standalone" && (
+              <Badge variant="accent">Standalone</Badge>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -759,9 +1062,15 @@ export function GraphView() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle>{selectedProject?.name ?? "Graph canvas"}</CardTitle>
+                <CardTitle>
+                  {graphMode === "standalone" 
+                    ? "Standalone Graph" 
+                    : selectedProject?.name ?? "Select a project"}
+                </CardTitle>
                 <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                  Manual intelligence graph with canvas placement, direct linking, and node editing.
+                  {graphMode === "standalone"
+                    ? "Free-form entity graph for ad-hoc investigation and relationship mapping."
+                    : "Project-linked intelligence graph mapping entities within this case."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -893,6 +1202,7 @@ export function GraphView() {
                     );
                   })}
 
+                  {/* Edge preview for connection mode */}
                   {connectSourceId && pointerWorld ? (
                     <path
                       d={buildEdgePreviewPath(nodeLookup.get(connectSourceId), pointerWorld)}
@@ -902,58 +1212,80 @@ export function GraphView() {
                       strokeDasharray="8 6"
                     />
                   ) : null}
+                  
+                  {/* Edge preview for drag-to-connect */}
+                  {edgeDragState && pointerWorld && (
+                    <path
+                      d={buildEdgePreviewPath(nodeLookup.get(edgeDragState.sourceNodeId), pointerWorld)}
+                      fill="none"
+                      stroke="#7fe6ca"
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                    />
+                  )}
                 </svg>
 
                 {visualNodes.map((node) => {
                   const style = ENTITY_STYLES[node.entity_type];
                   const isSelected = node.node_id === selectedNodeId;
                   const isConnectSource = node.node_id === connectSourceId;
+                  const isEdgeDragSource = edgeDragState?.sourceNodeId === node.node_id;
 
                   return (
-                    <button
+                    <div
                       key={node.node_id}
-                      type="button"
                       data-graph-interactive="true"
-                      className="absolute flex flex-col items-start justify-between rounded-[22px] border p-4 text-left shadow-[0_18px_60px_rgba(2,8,9,0.36)] transition-transform hover:scale-[1.01]"
+                      className="absolute rounded-[22px] border shadow-[0_18px_60px_rgba(2,8,9,0.36)] transition-transform"
                       style={{
                         left: node.position.x,
                         top: node.position.y,
                         width: NODE_WIDTH,
                         height: NODE_HEIGHT,
                         background: style.fill,
-                        borderColor: isConnectSource
+                        borderColor: isConnectSource || isEdgeDragSource
                           ? "#7fe6ca"
                           : isSelected
                             ? "#b1f4e2"
                             : style.border,
                         color: style.text,
-                        boxShadow: isSelected || isConnectSource
+                        boxShadow: isSelected || isConnectSource || isEdgeDragSource
                           ? "0 0 0 1px rgba(127,230,202,0.35), 0 18px 60px rgba(2,8,9,0.36)"
                           : "0 18px 60px rgba(2,8,9,0.36)",
-                        cursor: connectSourceId && connectSourceId !== node.node_id ? "copy" : "grab",
-                      }}
-                      onPointerDown={(event) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-
-                        if (connectSourceId) {
-                          if (connectSourceId !== node.node_id) {
-                            void handleCreateEdge(connectSourceId, node.node_id);
-                          }
-                          return;
-                        }
-
-                        setSelectedEdgeId(null);
-                        setSelectedNodeId(node.node_id);
-                        dragStateRef.current = {
-                          nodeId: node.node_id,
-                          originX: node.position.x,
-                          originY: node.position.y,
-                          startClientX: event.clientX,
-                          startClientY: event.clientY,
-                        };
                       }}
                     >
+                      {/* Node content - clickable for selection and drag */}
+                      <button
+                        type="button"
+                        className="h-full w-full flex flex-col items-start justify-between p-4 text-left"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          event.preventDefault();
+
+                          if (connectSourceId) {
+                            if (connectSourceId !== node.node_id) {
+                              void handleCreateEdge(connectSourceId, node.node_id);
+                            }
+                            return;
+                          }
+
+                          // Handle edge drop if dragging
+                          if (edgeDragState && edgeDragState.sourceNodeId !== node.node_id) {
+                            void handleCreateEdge(edgeDragState.sourceNodeId, node.node_id);
+                            setEdgeDragState(null);
+                            return;
+                          }
+
+                          setSelectedEdgeId(null);
+                          setSelectedNodeId(node.node_id);
+                          dragStateRef.current = {
+                            nodeId: node.node_id,
+                            originX: node.position.x,
+                            originY: node.position.y,
+                            startClientX: event.clientX,
+                            startClientY: event.clientY,
+                          };
+                        }}
+                      >
                       <div className="pointer-events-none">
                         <div
                           className="inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]"
@@ -967,8 +1299,32 @@ export function GraphView() {
                         {Math.round(node.position.x)}, {Math.round(node.position.y)}
                       </p>
                     </button>
-                  );
-                })}
+                    
+                    {/* Connection handle - drag to create edge */}
+                    <div
+                      className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-4 rounded-full bg-[var(--accent)] border-2 border-[var(--surface-strong)] cursor-crosshair hover:scale-125 transition-transform shadow-lg"
+                      style={{ zIndex: 10 }}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        
+                        // Start edge drag
+                        const nodeCenter = {
+                          x: node.position.x + NODE_WIDTH / 2,
+                          y: node.position.y + NODE_HEIGHT / 2,
+                        };
+                        setEdgeDragState({
+                          sourceNodeId: node.node_id,
+                          startX: nodeCenter.x,
+                          startY: nodeCenter.y,
+                        });
+                        setSelectedNodeId(node.node_id);
+                      }}
+                      title="Drag to connect"
+                    />
+                  </div>
+                );
+              })}
               </div>
             </div>
 

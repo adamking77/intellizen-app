@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  FileText,
   FolderKanban,
   GitBranch,
   Radar,
   Search,
+  Target,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
@@ -18,6 +20,8 @@ const NAV_ITEMS = [
   { label: "Projects", to: "/projects", icon: FolderKanban },
   { label: "Monitors", to: "/monitors", icon: Activity },
   { label: "Graph", to: "/graph", icon: GitBranch },
+  { label: "Investigate", to: "/investigate", icon: Target },
+  { label: "Reports", to: "/reports", icon: FileText },
 ];
 
 export function Sidebar() {

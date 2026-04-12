@@ -4,12 +4,15 @@ import type {
   GraphEdgeRecord,
   GraphNodeRecord,
   IntelSignal,
+  Investigation,
+  InvestigationSignal,
   Monitor,
   MonitorInsert,
   Project,
   ProjectSignal,
   SearchResultItem,
   SignalDraft,
+  VaultFile,
 } from "@/lib/types";
 import { signalDraftFromDeepResearch, signalDraftFromSearchResult } from "@/lib/exa";
 import { exa } from "@/lib/exa";
@@ -330,30 +333,42 @@ export async function refreshInbox() {
   return inserted;
 }
 
-export async function listGraphNodes(projectId: number) {
-  const { data, error } = await supabase
+export async function listGraphNodes(projectId: number | null) {
+  let query = supabase
     .from("graph_nodes")
     .select("*")
-    .eq("project_id", projectId)
     .order("created_at", { ascending: true });
+  
+  if (projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", projectId);
+  }
 
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as GraphNodeRecord[];
 }
 
-export async function listGraphEdges(projectId: number) {
-  const { data, error } = await supabase
+export async function listGraphEdges(projectId: number | null) {
+  let query = supabase
     .from("graph_edges")
     .select("*")
-    .eq("project_id", projectId)
     .order("created_at", { ascending: true });
+  
+  if (projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", projectId);
+  }
 
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as GraphEdgeRecord[];
 }
 
 export async function createGraphNode(input: {
-  projectId: number;
+  projectId: number | null;
   nodeId: string;
   label: string;
   entityType: GraphEntityType;
@@ -379,60 +394,76 @@ export async function createGraphNode(input: {
 }
 
 export async function updateGraphNodePosition(input: {
-  projectId: number;
+  projectId: number | null;
   nodeId: string;
   position: { x: number; y: number };
 }) {
-  const { error } = await supabase
+  let query = supabase
     .from("graph_nodes")
     .update({
       position_x: input.position.x,
       position_y: input.position.y,
     })
-    .eq("project_id", input.projectId)
     .eq("node_id", input.nodeId);
+  
+  if (input.projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", input.projectId);
+  }
 
+  const { error } = await query;
   if (error) throw error;
 }
 
 export async function updateGraphNode(input: {
-  projectId: number;
+  projectId: number | null;
   nodeId: string;
   label: string;
   entityType: GraphEntityType;
 }) {
-  const { data, error } = await supabase
+  let query = supabase
     .from("graph_nodes")
     .update({
       label: input.label,
       entity_type: input.entityType,
     })
-    .eq("project_id", input.projectId)
-    .eq("node_id", input.nodeId)
-    .select("*")
-    .single();
+    .eq("node_id", input.nodeId);
+  
+  if (input.projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", input.projectId);
+  }
 
+  const { data, error } = await query.select("*").single();
   if (error) throw error;
   return data as GraphNodeRecord;
 }
 
 export async function deleteGraphNodes(input: {
-  projectId: number;
+  projectId: number | null;
   nodeIds: string[];
 }) {
   if (input.nodeIds.length === 0) return;
 
-  const { error } = await supabase
+  let query = supabase
     .from("graph_nodes")
     .delete()
-    .eq("project_id", input.projectId)
     .in("node_id", input.nodeIds);
+  
+  if (input.projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", input.projectId);
+  }
 
+  const { error } = await query;
   if (error) throw error;
 }
 
 export async function createGraphEdge(input: {
-  projectId: number;
+  projectId: number | null;
   edgeId: string;
   sourceNodeId: string;
   targetNodeId: string;
@@ -457,35 +488,244 @@ export async function createGraphEdge(input: {
 }
 
 export async function updateGraphEdge(input: {
-  projectId: number;
+  projectId: number | null;
   edgeId: string;
   label: string | null;
 }) {
-  const { data, error } = await supabase
+  let query = supabase
     .from("graph_edges")
     .update({
       label: input.label,
     })
-    .eq("project_id", input.projectId)
-    .eq("edge_id", input.edgeId)
-    .select("*")
-    .single();
+    .eq("edge_id", input.edgeId);
+  
+  if (input.projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", input.projectId);
+  }
 
+  const { data, error } = await query.select("*").single();
   if (error) throw error;
   return data as GraphEdgeRecord;
 }
 
 export async function deleteGraphEdges(input: {
-  projectId: number;
+  projectId: number | null;
   edgeIds: string[];
 }) {
   if (input.edgeIds.length === 0) return;
 
-  const { error } = await supabase
+  let query = supabase
     .from("graph_edges")
     .delete()
-    .eq("project_id", input.projectId)
     .in("edge_id", input.edgeIds);
+  
+  if (input.projectId === null) {
+    query = query.is("project_id", null);
+  } else {
+    query = query.eq("project_id", input.projectId);
+  }
+
+  const { error } = await query;
+  if (error) throw error;
+}
+
+// ============================
+// V2: Investigations
+// ============================
+
+export async function listInvestigations() {
+  const { data, error } = await supabase
+    .from("investigations")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
+  return (data ?? []) as Investigation[];
+}
+
+export async function getInvestigation(caseId: string) {
+  const { data, error } = await supabase
+    .from("investigations")
+    .select("*")
+    .eq("case_id", caseId)
+    .single();
+
+  if (error) throw error;
+  return data as Investigation;
+}
+
+export async function createInvestigation(input: {
+  name: string;
+  projectId?: number | null;
+}) {
+  const caseId = `case-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
+  
+  const { data, error } = await supabase
+    .from("investigations")
+    .insert([
+      {
+        case_id: caseId,
+        name: input.name,
+        project_id: input.projectId ?? null,
+        current_phase: 1,
+        status: "active",
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Investigation;
+}
+
+export async function updateInvestigation(
+  caseId: string,
+  input: Partial<Omit<Investigation, "id" | "case_id" | "created_at" | "updated_at">>
+) {
+  const { data, error } = await supabase
+    .from("investigations")
+    .update(input)
+    .eq("case_id", caseId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Investigation;
+}
+
+export async function updateInvestigationPhase(
+  caseId: string,
+  phase: number,
+  gateData?: Record<string, boolean>
+) {
+  const { data, error } = await supabase
+    .from("investigations")
+    .update({
+      current_phase: phase,
+      ...(gateData ? { phase_gates: gateData } : {}),
+    })
+    .eq("case_id", caseId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Investigation;
+}
+
+// Phase 1: Plan
+export async function saveInvestigationPlan(
+  caseId: string,
+  plan: {
+    subjectDefinition: string;
+    investigationScope: string;
+    proportionality: boolean;
+    legality: boolean;
+    accountability: boolean;
+    necessity: boolean;
+    seedEntities: string[];
+    knownHypotheses: string[];
+  }
+) {
+  const { data, error } = await supabase
+    .from("investigations")
+    .update({
+      subject_definition: plan.subjectDefinition,
+      investigation_scope: plan.investigationScope,
+      plan_proportionality: plan.proportionality,
+      plan_legality: plan.legality,
+      plan_accountability: plan.accountability,
+      plan_necessity: plan.necessity,
+      seed_entities: plan.seedEntities,
+      known_hypotheses: plan.knownHypotheses,
+      current_phase: 2, // Auto-advance to Collect phase
+    })
+    .eq("case_id", caseId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Investigation;
+}
+
+// Investigation Signals (Phase 2: Collect)
+export async function listInvestigationSignals(investigationId: number) {
+  const { data, error } = await supabase
+    .from("investigation_signals")
+    .select("*, intel_signals(*)")
+    .eq("investigation_id", investigationId)
+    .order("added_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as unknown as InvestigationSignal[];
+}
+
+export async function addSignalToInvestigation(input: {
+  investigationId: number;
+  signalId: number;
+  notes?: string;
+}) {
+  const { error } = await supabase
+    .from("investigation_signals")
+    .upsert(
+      [
+        {
+          investigation_id: input.investigationId,
+          signal_id: input.signalId,
+          notes: input.notes ?? null,
+        },
+      ],
+      { onConflict: "investigation_id,signal_id", ignoreDuplicates: true }
+    );
+
+  if (error) throw error;
+}
+
+export async function removeSignalFromInvestigation(id: number) {
+  const { error } = await supabase
+    .from("investigation_signals")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+// Vault Files (Reports)
+export async function listVaultFiles(caseId: string) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .select("*")
+    .eq("case_id", caseId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as VaultFile[];
+}
+
+export async function createVaultFile(input: {
+  caseId: string;
+  phase?: number;
+  fileType: VaultFile["file_type"];
+  filePath: string;
+  fileName: string;
+  reportType?: VaultFile["report_type"];
+}) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .insert([
+      {
+        case_id: input.caseId,
+        phase: input.phase ?? null,
+        file_type: input.fileType,
+        file_path: input.filePath,
+        file_name: input.fileName,
+        report_type: input.reportType ?? null,
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as VaultFile;
 }
