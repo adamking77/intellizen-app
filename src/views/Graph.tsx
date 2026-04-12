@@ -264,7 +264,7 @@ function GraphWorkspace() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <Card>
+      <Card className="relative z-20">
         <CardHeader>
           <CardTitle>Graph controls</CardTitle>
         </CardHeader>
@@ -353,60 +353,62 @@ function GraphWorkspace() {
         </CardContent>
       </Card>
 
-      <Card className="min-h-[720px]">
+      <Card className="relative z-0 min-h-[720px] overflow-hidden">
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>{selectedProject?.name ?? "No project selected"}</CardTitle>
             {selectedProject ? <Badge variant="accent">{selectedProject.type}</Badge> : null}
           </div>
         </CardHeader>
-        <CardContent className="h-[640px]">
+        <CardContent className="relative h-[640px] overflow-hidden">
           {nodesQuery.error || edgesQuery.error ? (
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-5 text-sm text-[var(--muted-foreground)]">
               {(nodesQuery.error ?? edgesQuery.error)?.message}
             </div>
           ) : (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={(connection) => void handleConnect(connection)}
-              onPaneClick={(event) => {
-                if (!label.trim()) return;
-                const position = screenToFlowPosition({
-                  x: event.clientX,
-                  y: event.clientY,
-                });
-                void placeNodeAt(position);
-              }}
-              onNodesDelete={(deleted) => void handleNodesDelete(deleted)}
-              onEdgesDelete={(deleted) => void handleEdgesDelete(deleted)}
-              onNodeDragStop={(event, node) => void handleNodeDragStop(event, node)}
-              fitView
-              deleteKeyCode={["Delete", "Backspace"]}
-              defaultEdgeOptions={{
-                markerEnd: {
-                  type: MarkerType.ArrowClosed,
-                  color: "#8dbfc1",
-                },
-                style: {
-                  stroke: "#8dbfc1",
-                  strokeWidth: 1.5,
-                },
-              }}
-              className="rounded-[28px] border border-[var(--border)] bg-[radial-gradient(circle_at_top,rgba(42,85,92,0.24),transparent_55%),linear-gradient(180deg,rgba(14,24,27,0.92),rgba(8,15,17,0.98))]"
-            >
-              <MiniMap
-                pannable
-                zoomable
-                style={{
-                  background: "rgba(8, 17, 19, 0.96)",
+            <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-[var(--border)]">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={(connection) => void handleConnect(connection)}
+                onPaneClick={(event) => {
+                  if (!label.trim()) return;
+                  const position = screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                  void placeNodeAt(position);
                 }}
-              />
-              <Controls />
-              <Background gap={24} color="rgba(141, 191, 193, 0.13)" />
-            </ReactFlow>
+                onNodesDelete={(deleted) => void handleNodesDelete(deleted)}
+                onEdgesDelete={(deleted) => void handleEdgesDelete(deleted)}
+                onNodeDragStop={(event, node) => void handleNodeDragStop(event, node)}
+                fitView
+                deleteKeyCode={["Delete", "Backspace"]}
+                defaultEdgeOptions={{
+                  markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: "#8dbfc1",
+                  },
+                  style: {
+                    stroke: "#8dbfc1",
+                    strokeWidth: 1.5,
+                  },
+                }}
+                className="h-full w-full bg-[radial-gradient(circle_at_top,rgba(42,85,92,0.24),transparent_55%),linear-gradient(180deg,rgba(14,24,27,0.92),rgba(8,15,17,0.98))]"
+              >
+                <MiniMap
+                  pannable
+                  zoomable
+                  style={{
+                    background: "rgba(8, 17, 19, 0.96)",
+                  }}
+                />
+                <Controls />
+                <Background gap={24} color="rgba(141, 191, 193, 0.13)" />
+              </ReactFlow>
+            </div>
           )}
         </CardContent>
         <CardContent className="border-t border-[var(--border)] pt-5">
