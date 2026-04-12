@@ -4,6 +4,7 @@ import {
   addEdge,
   Background,
   Controls,
+  Handle,
   Position,
   MiniMap,
   ReactFlow,
@@ -15,9 +16,11 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type NodeProps,
 } from "@xyflow/react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -107,9 +110,10 @@ function GraphWorkspace() {
   const [label, setLabel] = useState("");
   const [entityType, setEntityType] = useState<GraphEntityType>("person");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<CanvasEdge>([]);
-  const { screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
 
   const { data: projects } = useQuery({
     queryKey: ["projects"],
@@ -147,69 +151,114 @@ function GraphWorkspace() {
     setEdges((edgesQuery.data ?? []).map(mapEdgeRecordToCanvasEdge));
   }, [edgesQuery.data, setEdges]);
 
+  useEffect(() => {
+    window.setTimeout(() => {
+      fitView({ duration: 300, padding: 0.18 });
+    }, 0);
+  }, [fitView, graphProjectId, nodes.length, edges.length]);
+
   async function placeNodeAt(point: { x: number; y: number }) {
     if (!graphProjectId || !label.trim()) return;
 
-    const created = await createGraphNode({
-      projectId: graphProjectId,
-      nodeId: crypto.randomUUID(),
-      label: label.trim(),
-      entityType,
-      position: point,
-    });
+    try {
+      setErrorMessage(null);
+      const created = await createGraphNode({
+        projectId: graphProjectId,
+        nodeId: crypto.randomUUID(),
+        label: label.trim(),
+        entityType,
+        position: point,
+      });
 
-    setNodes((current) => [...current, mapNodeRecordToCanvasNode(created)]);
-    setLabel("");
-    setStatusMessage(`Added ${entityType} node to ${selectedProject?.name ?? "project"}.`);
+      setNodes((current) => [...current, mapNodeRecordToCanvasNode(created)]);
+      setLabel("");
+      setStatusMessage(`Added ${entityType} node to ${selectedProject?.name ?? "project"}.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create node.");
+    }
   }
 
   async function handleConnect(connection: Connection) {
     if (!graphProjectId || !connection.source || !connection.target) return;
 
-    const relationship = window.prompt("Relationship label", "")?.trim() ?? "";
-    const created = await createGraphEdge({
-      projectId: graphProjectId,
-      edgeId: crypto.randomUUID(),
-      sourceNodeId: connection.source,
-      targetNodeId: connection.target,
-      label: relationship || null,
-    });
+    try {
+      setErrorMessage(null);
+      const relationship = window.prompt("Relationship label", "")?.trim() ?? "";
+      const created = await createGraphEdge({
+        projectId: graphProjectId,
+        edgeId: crypto.randomUUID(),
+        sourceNodeId: connection.source,
+        targetNodeId: connection.target,
+        label: relationship || null,
+      });
 
-    setEdges((current) => addEdge(mapEdgeRecordToCanvasEdge(created), current));
-    setStatusMessage("Connection saved.");
+      setEdges((current) => addEdge(mapEdgeRecordToCanvasEdge(created), current));
+      setStatusMessage("Connection saved.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create edge.");
+    }
   }
 
   async function handleNodesDelete(deletedNodes: CanvasNode[]) {
     if (!graphProjectId || deletedNodes.length === 0) return;
 
-    const nodeIds = deletedNodes.map((node) => node.id);
-    const relatedEdgeIds = edges
-      .filter((edge) => nodeIds.includes(edge.source) || nodeIds.includes(edge.target))
-      .map((edge) => edge.id);
+    try {
+      setErrorMessage(null);
+      const nodeIds = deletedNodes.map((node) => node.id);
+      const relatedEdgeIds = edges
+        .filter((edge) => nodeIds.includes(edge.source) || nodeIds.includes(edge.target))
+        .map((edge) => edge.id);
 
-    await deleteGraphNodes({ projectId: graphProjectId, nodeIds });
-    await deleteGraphEdges({ projectId: graphProjectId, edgeIds: relatedEdgeIds });
-    setStatusMessage(`Deleted ${deletedNodes.length} node${deletedNodes.length === 1 ? "" : "s"}.`);
+      await deleteGraphNodes({ projectId: graphProjectId, nodeIds });
+      await deleteGraphEdges({ projectId: graphProjectId, edgeIds: relatedEdgeIds });
+      setStatusMessage(
+        `Deleted ${deletedNodes.length} node${deletedNodes.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete node.");
+    }
   }
 
   async function handleEdgesDelete(deletedEdges: CanvasEdge[]) {
     if (!graphProjectId || deletedEdges.length === 0) return;
 
-    await deleteGraphEdges({
-      projectId: graphProjectId,
-      edgeIds: deletedEdges.map((edge) => edge.id),
-    });
-    setStatusMessage(`Deleted ${deletedEdges.length} edge${deletedEdges.length === 1 ? "" : "s"}.`);
+    try {
+      setErrorMessage(null);
+      await deleteGraphEdges({
+        projectId: graphProjectId,
+        edgeIds: deletedEdges.map((edge) => edge.id),
+      });
+      setStatusMessage(
+        `Deleted ${deletedEdges.length} edge${deletedEdges.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete edge.");
+    }
   }
 
   async function handleNodeDragStop(_: React.MouseEvent, node: CanvasNode) {
     if (!graphProjectId) return;
 
-    await updateGraphNodePosition({
-      projectId: graphProjectId,
-      nodeId: node.id,
-      position: node.position,
-    });
+    try {
+      setErrorMessage(null);
+      await updateGraphNodePosition({
+        projectId: graphProjectId,
+        nodeId: node.id,
+        position: node.position,
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save node position.");
+    }
+  }
+
+  function placeNodeAutomatically() {
+    const index = nodes.length;
+    const position = {
+      x: 120 + (index % 4) * 190,
+      y: 100 + Math.floor(index / 4) * 140,
+    };
+
+    void placeNodeAt(position);
   }
 
   return (
@@ -251,15 +300,30 @@ function GraphWorkspace() {
           </select>
 
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/40 p-4 text-sm leading-6 text-[var(--muted-foreground)]">
-            Enter a label and entity type, then click an empty area of the canvas
-            to place the node. Drag between nodes to create a labeled edge. Use
+            Enter a label and entity type, then click
+            <span className="px-1 text-[var(--foreground)]">Add node</span>
+            or click an empty area of the canvas to place it. Drag between node
+            handles to create a labeled edge. Use
             <span className="px-1 text-[var(--foreground)]">Delete</span>
             to remove selected nodes or edges.
           </div>
 
+          <Button
+            onClick={placeNodeAutomatically}
+            disabled={!graphProjectId || !label.trim()}
+          >
+            Add node
+          </Button>
+
           {statusMessage ? (
             <Badge variant="success" className="w-full justify-center py-2">
               {statusMessage}
+            </Badge>
+          ) : null}
+
+          {errorMessage ? (
+            <Badge variant="warning" className="w-full justify-center py-2">
+              {errorMessage}
             </Badge>
           ) : null}
 
@@ -286,6 +350,7 @@ function GraphWorkspace() {
             <ReactFlow
               nodes={nodes}
               edges={edges}
+              nodeTypes={NODE_TYPES}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={(connection) => void handleConnect(connection)}
@@ -332,9 +397,6 @@ function GraphWorkspace() {
 }
 
 function mapNodeRecordToCanvasNode(record: GraphNodeRecord): CanvasNode {
-  const style = ENTITY_STYLES[record.entity_type];
-  const rotated = record.entity_type === "location";
-
   return {
     id: record.node_id,
     position: {
@@ -345,32 +407,12 @@ function mapNodeRecordToCanvasNode(record: GraphNodeRecord): CanvasNode {
       label: record.label,
       entityType: record.entity_type,
     },
-    style: {
-      background: style.fill,
-      border: `1px solid ${style.border}`,
-      color: style.text,
-      fontSize: 12,
-      fontWeight: 600,
-      padding: "12px 16px",
-      boxShadow: "0 12px 40px rgba(4, 10, 11, 0.34)",
-      ...style.shape,
-    },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     draggable: true,
     deletable: true,
     selectable: true,
-    type: "default",
-    ...(rotated
-      ? {
-          data: {
-            ...{
-              label: `◇ ${record.label}`,
-              entityType: record.entity_type,
-            },
-          },
-        }
-      : {}),
+    type: "intelNode",
   };
 }
 
@@ -401,3 +443,69 @@ function mapEdgeRecordToCanvasEdge(record: GraphEdgeRecord): CanvasEdge {
     labelBgBorderRadius: 999,
   };
 }
+
+function EntityNode({ data, selected }: NodeProps<CanvasNode>) {
+  const style = ENTITY_STYLES[data.entityType];
+  const isLocation = data.entityType === "location";
+  const shapeStyle: React.CSSProperties = isLocation
+    ? {
+        width: 110,
+        height: 110,
+        transform: "rotate(45deg)",
+        borderRadius: 14,
+      }
+    : {
+        minWidth: data.entityType === "organisation" ? 148 : 132,
+        minHeight: 68,
+      };
+
+  return (
+    <div className="relative">
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{ background: "#8dbfc1", width: 10, height: 10, border: 0 }}
+      />
+      <div
+        style={{
+          background: style.fill,
+          border: `1px solid ${selected ? "#dff8ee" : style.border}`,
+          color: style.text,
+          boxShadow: selected
+            ? "0 0 0 1px rgba(223,248,238,0.55), 0 18px 50px rgba(4,10,11,0.42)"
+            : "0 12px 40px rgba(4, 10, 11, 0.34)",
+          clipPath:
+            data.entityType === "event"
+              ? "polygon(14% 0%, 86% 0%, 100% 50%, 86% 100%, 14% 100%, 0% 50%)"
+              : undefined,
+          borderRadius: data.entityType === "person" ? 999 : 18,
+          ...shapeStyle,
+        }}
+        className="grid place-items-center px-4 py-3 text-center text-xs font-semibold"
+      >
+        <span
+          style={
+            isLocation
+              ? {
+                  transform: "rotate(-45deg)",
+                  display: "block",
+                  maxWidth: 72,
+                }
+              : undefined
+          }
+        >
+          {data.label}
+        </span>
+      </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{ background: "#8dbfc1", width: 10, height: 10, border: 0 }}
+      />
+    </div>
+  );
+}
+
+const NODE_TYPES = {
+  intelNode: EntityNode,
+};
