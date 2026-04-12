@@ -395,6 +395,27 @@ export async function updateGraphNodePosition(input: {
   if (error) throw error;
 }
 
+export async function updateGraphNode(input: {
+  projectId: number;
+  nodeId: string;
+  label: string;
+  entityType: GraphEntityType;
+}) {
+  const { data, error } = await supabase
+    .from("graph_nodes")
+    .update({
+      label: input.label,
+      entity_type: input.entityType,
+    })
+    .eq("project_id", input.projectId)
+    .eq("node_id", input.nodeId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as GraphNodeRecord;
+}
+
 export async function deleteGraphNodes(input: {
   projectId: number;
   nodeIds: string[];
@@ -428,6 +449,25 @@ export async function createGraphEdge(input: {
         label: input.label,
       },
     ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as GraphEdgeRecord;
+}
+
+export async function updateGraphEdge(input: {
+  projectId: number;
+  edgeId: string;
+  label: string | null;
+}) {
+  const { data, error } = await supabase
+    .from("graph_edges")
+    .update({
+      label: input.label,
+    })
+    .eq("project_id", input.projectId)
+    .eq("edge_id", input.edgeId)
     .select("*")
     .single();
 
