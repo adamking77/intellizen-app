@@ -1,0 +1,275 @@
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Archive, FolderSearch, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import { SignalCard } from "@/components/signals/signal-card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  createProject,
+  listProjectSignals,
+  listProjects,
+  removeSignalFromProject,
+  updateProject,
+} from "@/lib/data";
+import type { ProjectType } from "@/lib/types";
+import { useAppStore } from "@/store";
+
+export function ProjectsView() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<ProjectType>("research");
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
+  const setSearchTargetProjectId = useAppStore((state) => state.setSearchTargetProjectId);
+
+  const { data: projects, error } = useQuery({
+    queryKey: ["projects"],
+    queryFn: listProjects,
+  });
+
+  useEffect(() => {
+    if (!selectedProjectId && projects && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
+
+  const selectedProject = useMemo(
+    () => projects?.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
+
+  useEffect(() => {
+    setNotesDraft(selectedProject?.notes ?? "");
+  }, [selectedProject]);
+
+  const { data: projectSignals } = useQuery({
+    queryKey: ["project-signals", selectedProjectId],
+    queryFn: () => listProjectSignals(selectedProjectId as number),
+    enabled: selectedProjectId !== null,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => createProject({ name, type }),
+    onSuccess: async (project) => {
+      setName("");
+      setType("research");
+      setSelectedProjectId(project.id);
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const saveNotesMutation = useMutation({
+    mutationFn: () =>
+      updateProject(selectedProjectId as number, {
+        notes: notesDraft,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["project-signals", selectedProjectId],
+      });
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: () =>
+      updateProject(selectedProjectId as number, {
+        status: selectedProject?.status === "active" ? "archived" : "active",
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const removeSignalMutation = useMutation({
+    mutationFn: removeSignalFromProject,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["project-signals", selectedProjectId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Projects unavailable</CardTitle>
+        </CardHeader>
+        <CardContent>{error.message}</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <Card>
+        <CardHeader>
+          <CardTitle>New project</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            placeholder="Project name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <select
+            className="h-10 rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
+            value={type}
+            onChange={(event) => setType(event.target.value as ProjectType)}
+          >
+            <option value="report">Report</option>
+            <option value="scoping">Scoping</option>
+            <option value="research">Research</option>
+            <option value="client_case">Client Case</option>
+          </select>
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!name.trim() || createMutation.isPending}
+          >
+            Create project
+          </Button>
+        </CardContent>
+
+        <CardContent className="grid gap-3 pt-0">
+          {(projects ?? []).map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              className={`rounded-2xl border p-4 text-left transition ${
+                project.id === selectedProjectId
+                  ? "border-[var(--accent-border)] bg-[var(--surface)]"
+                  : "border-[var(--border)] bg-[var(--surface)]/40 hover:bg-[var(--surface)]"
+              }`}
+              onClick={() => setSelectedProjectId(project.id)}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium text-[var(--foreground)]">{project.name}</p>
+                <Badge variant={project.status === "active" ? "success" : "neutral"}>
+                  {project.status}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                {project.type.replace("_", " ")}
+              </p>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        {selectedProject ? (
+          <>
+            <CardHeader className="gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-2xl">{selectedProject.name}</CardTitle>
+                    <Badge variant="accent">
+                      {selectedProject.type.replace("_", " ")}
+                    </Badge>
+                    <Badge variant={selectedProject.status === "active" ? "success" : "neutral"}>
+                      {selectedProject.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+                    Every saved signal in this project becomes working material for
+                    search, graphing, and later report analysis.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSearchTargetProjectId(selectedProject.id);
+                      navigate("/search");
+                    }}
+                  >
+                    <FolderSearch className="h-4 w-4" />
+                    Add from Search
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => toggleStatusMutation.mutate()}
+                  >
+                    <Archive className="h-4 w-4" />
+                    {selectedProject.status === "active" ? "Archive" : "Reactivate"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[var(--foreground)]">Notes</p>
+                  <Button
+                    size="sm"
+                    onClick={() => saveNotesMutation.mutate()}
+                    disabled={saveNotesMutation.isPending}
+                  >
+                    Save notes
+                  </Button>
+                </div>
+                <Textarea
+                  value={notesDraft}
+                  onChange={(event) => setNotesDraft(event.target.value)}
+                  placeholder="Capture scope, hypotheses, or analyst notes."
+                />
+              </div>
+
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[var(--foreground)]">
+                    Attached signals
+                  </p>
+                  <Badge variant="neutral">{projectSignals?.length ?? 0}</Badge>
+                </div>
+                {(projectSignals ?? []).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)]/40 p-8 text-center text-sm text-[var(--muted-foreground)]">
+                    No saved signals yet. Route something in from Inbox or Search.
+                  </div>
+                ) : (
+                  (projectSignals ?? []).map((projectSignal) =>
+                    projectSignal.intel_signals ? (
+                      <SignalCard
+                        key={projectSignal.id}
+                        title={projectSignal.intel_signals.title}
+                        url={projectSignal.intel_signals.url}
+                        source={projectSignal.intel_signals.source}
+                        publishedAt={projectSignal.intel_signals.published_at}
+                        watchDomain={projectSignal.intel_signals.watch_domain}
+                        snippet={projectSignal.intel_signals.snippet}
+                        score={projectSignal.intel_signals.exa_score}
+                        actions={
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeSignalMutation.mutate(projectSignal.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Remove from project
+                          </Button>
+                        }
+                      />
+                    ) : null,
+                  )
+                )}
+              </div>
+            </CardContent>
+          </>
+        ) : (
+          <CardContent className="p-6 text-sm text-[var(--muted-foreground)]">
+            Select a project from the list to inspect its saved intelligence.
+          </CardContent>
+        )}
+      </Card>
+    </div>
+  );
+}

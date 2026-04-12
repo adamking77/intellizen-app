@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+:root {
+  color-scheme: dark;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --background: #081113;
+  --panel: #091719;
+  --surface: rgba(17, 31, 34, 0.92);
+  --surface-strong: rgba(21, 38, 42, 0.98);
+  --foreground: #edf4f1;
+  --muted-foreground: #91a9a4;
+  --accent: #7fe6ca;
+  --accent-strong: #57d2b0;
+  --accent-foreground: #041514;
+  --accent-soft: rgba(127, 230, 202, 0.12);
+  --accent-border: rgba(127, 230, 202, 0.34);
+  --border: rgba(118, 154, 148, 0.22);
+  --ring: rgba(127, 230, 202, 0.66);
+  --danger: #c25e58;
+  --danger-strong: #ab4a44;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(65, 131, 136, 0.14), transparent 24%),
+    radial-gradient(circle at top right, rgba(141, 80, 56, 0.11), transparent 28%),
+    linear-gradient(180deg, #091214 0%, #081113 100%);
+  color: var(--foreground);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+pre {
+  margin: 0;
+}
