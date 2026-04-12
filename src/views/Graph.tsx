@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link2, Trash2 } from "lucide-react";
+import { Link2, Move, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,65 @@ import {
   listGraphEdges,
   listGraphNodes,
   listProjects,
+  updateGraphNodePosition,
 } from "@/lib/data";
-import type { GraphEntityType } from "@/lib/types";
+import type {
+  GraphEntityType,
+  GraphNodeRecord,
+} from "@/lib/types";
 
-const ENTITY_COLORS: Record<GraphEntityType, string> = {
-  person: "rgba(127, 230, 202, 0.14)",
-  organisation: "rgba(117, 166, 255, 0.14)",
-  location: "rgba(242, 193, 86, 0.16)",
-  event: "rgba(210, 128, 110, 0.16)",
+const ENTITY_STYLES: Record<
+  GraphEntityType,
+  {
+    chip: string;
+    fill: string;
+    border: string;
+    text: string;
+  }
+> = {
+  person: {
+    chip: "rgba(127, 230, 202, 0.18)",
+    fill: "rgba(127, 230, 202, 0.14)",
+    border: "rgba(127, 230, 202, 0.38)",
+    text: "#def6ef",
+  },
+  organisation: {
+    chip: "rgba(117, 166, 255, 0.18)",
+    fill: "rgba(117, 166, 255, 0.14)",
+    border: "rgba(117, 166, 255, 0.4)",
+    text: "#dce8ff",
+  },
+  location: {
+    chip: "rgba(242, 193, 86, 0.2)",
+    fill: "rgba(242, 193, 86, 0.16)",
+    border: "rgba(242, 193, 86, 0.42)",
+    text: "#fff0c3",
+  },
+  event: {
+    chip: "rgba(210, 128, 110, 0.18)",
+    fill: "rgba(210, 128, 110, 0.14)",
+    border: "rgba(210, 128, 110, 0.42)",
+    text: "#ffe2d8",
+  },
+};
+
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 88;
+const WORKSPACE_WIDTH = 1400;
+const WORKSPACE_HEIGHT = 860;
+const NODE_MARGIN = 24;
+
+type DragState = {
+  nodeId: string;
+  originX: number;
+  originY: number;
+  startClientX: number;
+  startClientY: number;
+} | null;
+
+type Point = {
+  x: number;
+  y: number;
 };
 
 export function GraphView() {
@@ -33,6 +84,10 @@ export function GraphView() {
   const [edgeLabel, setEdgeLabel] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [dragPositions, setDragPositions] = useState<Record<string, Point>>({});
+  const dragStateRef = useRef<DragState>(null);
 
   const { data: projects } = useQuery({
     queryKey: ["projects"],
@@ -40,7 +95,11 @@ export function GraphView() {
   });
 
   useEffect(() => {
-    if ((graphProjectId === null || !projects?.some((p) => p.id === graphProjectId)) && projects && projects.length > 0) {
+    if (
+      (graphProjectId === null || !projects?.some((project) => project.id === graphProjectId)) &&
+      projects &&
+      projects.length > 0
+    ) {
       setGraphProjectId(projects[0].id);
     }
   }, [graphProjectId, projects]);
@@ -66,10 +125,133 @@ export function GraphView() {
   const edges = edgesQuery.data ?? [];
 
   useEffect(() => {
+    setDragPositions((current) => {
+      const next: Record<string, Point> = {};
+      let changed = false;
+
+      for (const node of nodes) {
+        if (current[node.node_id]) {
+          next[node.node_id] = current[node.node_id];
+          if (!changed && next[node.node_id] !== current[node.node_id]) {
+            changed = true;
+          }
+        }
+      }
+
+      if (Object.keys(current).length !== Object.keys(next).length) {
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [nodes]);
+
+  useEffect(() => {
+    if (!selectedNodeId || nodes.some((node) => node.node_id === selectedNodeId)) return;
+    setSelectedNodeId(null);
+  }, [nodes, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeId || edges.some((edge) => edge.edge_id === selectedEdgeId)) return;
+    setSelectedEdgeId(null);
+  }, [edges, selectedEdgeId]);
+
+  useEffect(() => {
     if (!edgeSourceId && nodes[0]) setEdgeSourceId(nodes[0].node_id);
     if (!edgeTargetId && nodes[1]) setEdgeTargetId(nodes[1].node_id);
     if (nodes.length === 1 && !edgeTargetId) setEdgeTargetId(nodes[0].node_id);
   }, [nodes, edgeSourceId, edgeTargetId]);
+
+  const visualNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        position: dragPositions[node.node_id] ?? {
+          x: node.position_x,
+          y: node.position_y,
+        },
+      })),
+    [dragPositions, nodes],
+  );
+
+  const nodeLookup = useMemo(
+    () =>
+      new Map(
+        visualNodes.map((node) => [
+          node.node_id,
+          {
+            ...node,
+            centerX: node.position.x + NODE_WIDTH / 2,
+            centerY: node.position.y + NODE_HEIGHT / 2,
+          },
+        ]),
+      ),
+    [visualNodes],
+  );
+
+  const selectedNode = useMemo(
+    () => visualNodes.find((node) => node.node_id === selectedNodeId) ?? null,
+    [selectedNodeId, visualNodes],
+  );
+
+  const selectedEdge = useMemo(
+    () => edges.find((edge) => edge.edge_id === selectedEdgeId) ?? null,
+    [edges, selectedEdgeId],
+  );
+
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const dragState = dragStateRef.current;
+      if (!dragState) return;
+
+      const nextX = clamp(
+        dragState.originX + event.clientX - dragState.startClientX,
+        NODE_MARGIN,
+        WORKSPACE_WIDTH - NODE_WIDTH - NODE_MARGIN,
+      );
+      const nextY = clamp(
+        dragState.originY + event.clientY - dragState.startClientY,
+        NODE_MARGIN,
+        WORKSPACE_HEIGHT - NODE_HEIGHT - NODE_MARGIN,
+      );
+
+      setDragPositions((current) => ({
+        ...current,
+        [dragState.nodeId]: { x: nextX, y: nextY },
+      }));
+    }
+
+    async function handlePointerUp() {
+      const dragState = dragStateRef.current;
+      if (!dragState || !graphProjectId) return;
+
+      dragStateRef.current = null;
+      const finalPosition = dragPositions[dragState.nodeId];
+      if (!finalPosition) return;
+
+      try {
+        await updateGraphNodePosition({
+          projectId: graphProjectId,
+          nodeId: dragState.nodeId,
+          position: finalPosition,
+        });
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to save node position.",
+        );
+      } finally {
+        void nodesQuery.refetch();
+      }
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragPositions, graphProjectId, nodesQuery]);
 
   async function handleAddNode() {
     if (!graphProjectId || !label.trim()) return;
@@ -78,15 +260,14 @@ export function GraphView() {
       setErrorMessage(null);
       setStatusMessage(null);
 
+      const nextPosition = getNextNodePosition(visualNodes.length);
+
       await createGraphNode({
         projectId: graphProjectId,
         nodeId: crypto.randomUUID(),
         label: label.trim(),
         entityType,
-        position: {
-          x: 80 + (nodes.length % 4) * 160,
-          y: 80 + Math.floor(nodes.length / 4) * 120,
-        },
+        position: nextPosition,
       });
 
       await nodesQuery.refetch();
@@ -138,6 +319,7 @@ export function GraphView() {
       await deleteGraphNodes({ projectId: graphProjectId, nodeIds: [nodeId] });
       await nodesQuery.refetch();
       await edgesQuery.refetch();
+      setSelectedNodeId(null);
       setStatusMessage("Deleted node.");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to delete node.");
@@ -153,6 +335,7 @@ export function GraphView() {
 
       await deleteGraphEdges({ projectId: graphProjectId, edgeIds: [edgeId] });
       await edgesQuery.refetch();
+      setSelectedEdgeId(null);
       setStatusMessage("Deleted connection.");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to delete connection.");
@@ -195,9 +378,7 @@ export function GraphView() {
             <select
               className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
               value={entityType}
-              onChange={(event) =>
-                setEntityType(event.target.value as GraphEntityType)
-              }
+              onChange={(event) => setEntityType(event.target.value as GraphEntityType)}
             >
               <option value="person">Person</option>
               <option value="organisation">Organisation</option>
@@ -217,7 +398,7 @@ export function GraphView() {
               onChange={(event) => setEdgeSourceId(event.target.value)}
             >
               <option value="">Source node</option>
-              {nodes.map((node) => (
+              {visualNodes.map((node) => (
                 <option key={node.node_id} value={node.node_id}>
                   {node.label}
                 </option>
@@ -229,7 +410,7 @@ export function GraphView() {
               onChange={(event) => setEdgeTargetId(event.target.value)}
             >
               <option value="">Target node</option>
-              {nodes.map((node) => (
+              {visualNodes.map((node) => (
                 <option key={node.node_id} value={node.node_id}>
                   {node.label}
                 </option>
@@ -250,6 +431,14 @@ export function GraphView() {
             </Button>
           </div>
 
+          <div className="grid gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-4 text-sm text-[var(--muted-foreground)]">
+            <div className="flex items-center gap-2 text-[var(--foreground)]">
+              <Move className="h-4 w-4" />
+              Drag nodes on the canvas to reposition them
+            </div>
+            <p>Click a node or edge to inspect it. Delete acts on the current selection.</p>
+          </div>
+
           {statusMessage ? (
             <Badge variant="success" className="w-full justify-center py-2">
               {statusMessage}
@@ -263,7 +452,7 @@ export function GraphView() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <Badge variant="neutral">Nodes {nodes.length}</Badge>
+            <Badge variant="neutral">Nodes {visualNodes.length}</Badge>
             <Badge variant="neutral">Edges {edges.length}</Badge>
           </div>
 
@@ -283,82 +472,225 @@ export function GraphView() {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Nodes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {nodes.length === 0 ? (
-              <p className="text-sm text-[var(--muted-foreground)]">
-                No nodes stored for this project.
-              </p>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {nodes.map((node) => (
-                  <div
-                    key={node.node_id}
-                    className="rounded-2xl border border-[var(--border)] p-4"
-                    style={{ background: ENTITY_COLORS[node.entity_type] }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-[var(--foreground)]">{node.label}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                          {node.entity_type}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void handleDeleteNode(node.node_id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <p className="mt-3 text-xs text-[var(--muted-foreground)]">
-                      Position {Math.round(node.position_x)}, {Math.round(node.position_y)}
-                    </p>
-                  </div>
-                ))}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>{selectedProject?.name ?? "Graph canvas"}</CardTitle>
+                <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+                  Real node layout with live connection lines and drag persistence.
+                </p>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Connections</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {edges.length === 0 ? (
-              <p className="text-sm text-[var(--muted-foreground)]">
-                No connections stored for this project.
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                {edges.map((edge) => (
-                  <div
-                    key={edge.edge_id}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4"
+              <div className="flex flex-wrap gap-2">
+                {selectedNode ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => void handleDeleteNode(selectedNode.node_id)}
                   >
-                    <div>
-                      <p className="font-medium text-[var(--foreground)]">
-                        {findNodeLabel(nodes, edge.source_node_id)} →{" "}
-                        {findNodeLabel(nodes, edge.target_node_id)}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                        {edge.label ?? "Unlabeled relationship"}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void handleDeleteEdge(edge.edge_id)}
+                    <Trash2 className="h-4 w-4" />
+                    Delete node
+                  </Button>
+                ) : null}
+                {selectedEdge ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => void handleDeleteEdge(selectedEdge.edge_id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete edge
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="overflow-x-auto overflow-y-hidden rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(15,25,27,0.98),rgba(9,17,19,0.98))]">
+              <div
+                className="relative"
+                style={{
+                  width: WORKSPACE_WIDTH,
+                  height: WORKSPACE_HEIGHT,
+                  backgroundImage:
+                    "linear-gradient(rgba(137,170,164,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(137,170,164,0.08) 1px, transparent 1px)",
+                  backgroundSize: "36px 36px",
+                }}
+                onPointerDown={() => {
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                }}
+              >
+                <svg className="absolute inset-0 h-full w-full">
+                  <defs>
+                    <marker
+                      id="graph-arrow"
+                      markerWidth="10"
+                      markerHeight="10"
+                      refX="8"
+                      refY="5"
+                      orient="auto"
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <path d="M0,0 L10,5 L0,10 z" fill="#8abec0" />
+                    </marker>
+                  </defs>
+
+                  {edges.map((edge) => {
+                    const source = nodeLookup.get(edge.source_node_id);
+                    const target = nodeLookup.get(edge.target_node_id);
+                    if (!source || !target) return null;
+
+                    const path = buildEdgePath(source, target);
+                    const labelPosition = getEdgeLabelPosition(source, target);
+                    const isSelected = edge.edge_id === selectedEdgeId;
+
+                    return (
+                      <g key={edge.edge_id}>
+                        <path
+                          d={path}
+                          fill="none"
+                          stroke={isSelected ? "#7fe6ca" : "#8abec0"}
+                          strokeWidth={isSelected ? 3 : 2}
+                          markerEnd="url(#graph-arrow)"
+                        />
+                        <path
+                          d={path}
+                          fill="none"
+                          stroke="transparent"
+                          strokeWidth={18}
+                          style={{ cursor: "pointer" }}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                            setSelectedNodeId(null);
+                            setSelectedEdgeId(edge.edge_id);
+                          }}
+                        />
+                        {edge.label ? (
+                          <g transform={`translate(${labelPosition.x}, ${labelPosition.y})`}>
+                            <rect
+                              x={-54}
+                              y={-12}
+                              width={108}
+                              height={24}
+                              rx={12}
+                              fill="rgba(8, 17, 19, 0.94)"
+                              stroke="rgba(138, 190, 192, 0.26)"
+                            />
+                            <text
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill="#dce8e5"
+                              fontSize="11"
+                              fontWeight="600"
+                            >
+                              {truncateLabel(edge.label, 20)}
+                            </text>
+                          </g>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {visualNodes.map((node) => {
+                  const style = ENTITY_STYLES[node.entity_type];
+                  const isSelected = node.node_id === selectedNodeId;
+
+                  return (
+                    <button
+                      key={node.node_id}
+                      type="button"
+                      className="absolute flex flex-col items-start justify-between rounded-[22px] border p-4 text-left shadow-[0_18px_60px_rgba(2,8,9,0.36)] transition-transform hover:scale-[1.01]"
+                      style={{
+                        left: node.position.x,
+                        top: node.position.y,
+                        width: NODE_WIDTH,
+                        height: NODE_HEIGHT,
+                        background: style.fill,
+                        borderColor: isSelected ? "#7fe6ca" : style.border,
+                        color: style.text,
+                        boxShadow: isSelected
+                          ? "0 0 0 1px rgba(127,230,202,0.35), 0 18px 60px rgba(2,8,9,0.36)"
+                          : "0 18px 60px rgba(2,8,9,0.36)",
+                        cursor: "grab",
+                      }}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        setSelectedEdgeId(null);
+                        setSelectedNodeId(node.node_id);
+                        dragStateRef.current = {
+                          nodeId: node.node_id,
+                          originX: node.position.x,
+                          originY: node.position.y,
+                          startClientX: event.clientX,
+                          startClientY: event.clientY,
+                        };
+                      }}
+                    >
+                      <div>
+                        <div
+                          className="inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]"
+                          style={{ background: style.chip }}
+                        >
+                          {node.entity_type}
+                        </div>
+                        <p className="mt-3 text-sm font-semibold leading-5">{node.label}</p>
+                      </div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                        {Math.round(node.position.x)}, {Math.round(node.position.y)}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="border border-[var(--border)] bg-[var(--surface)]/35">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Selected node</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedNode ? (
+                    <div className="space-y-2 text-sm">
+                      <p className="font-medium text-[var(--foreground)]">{selectedNode.label}</p>
+                      <p className="text-[var(--muted-foreground)]">
+                        Type: {selectedNode.entity_type}
+                      </p>
+                      <p className="text-[var(--muted-foreground)]">
+                        Position: {Math.round(selectedNode.position.x)},{" "}
+                        {Math.round(selectedNode.position.y)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      Click a node on the canvas.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border border-[var(--border)] bg-[var(--surface)]/35">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Selected edge</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedEdge ? (
+                    <div className="space-y-2 text-sm">
+                      <p className="font-medium text-[var(--foreground)]">
+                        {findNodeLabel(nodes, selectedEdge.source_node_id)} →{" "}
+                        {findNodeLabel(nodes, selectedEdge.target_node_id)}
+                      </p>
+                      <p className="text-[var(--muted-foreground)]">
+                        Label: {selectedEdge.label ?? "Unlabeled relationship"}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      Click a connection line on the canvas.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -366,8 +698,52 @@ export function GraphView() {
   );
 }
 
+function buildEdgePath(
+  source: { centerX: number; centerY: number },
+  target: { centerX: number; centerY: number },
+) {
+  const deltaX = Math.abs(target.centerX - source.centerX);
+  const controlOffset = Math.max(60, deltaX / 2);
+
+  return [
+    `M ${source.centerX} ${source.centerY}`,
+    `C ${source.centerX + controlOffset} ${source.centerY},`,
+    `${target.centerX - controlOffset} ${target.centerY},`,
+    `${target.centerX} ${target.centerY}`,
+  ].join(" ");
+}
+
+function getEdgeLabelPosition(
+  source: { centerX: number; centerY: number },
+  target: { centerX: number; centerY: number },
+) {
+  return {
+    x: (source.centerX + target.centerX) / 2,
+    y: (source.centerY + target.centerY) / 2 - 18,
+  };
+}
+
+function getNextNodePosition(index: number) {
+  const columns = 4;
+  const x = 72 + (index % columns) * 260;
+  const y = 72 + Math.floor(index / columns) * 160;
+
+  return {
+    x: clamp(x, NODE_MARGIN, WORKSPACE_WIDTH - NODE_WIDTH - NODE_MARGIN),
+    y: clamp(y, NODE_MARGIN, WORKSPACE_HEIGHT - NODE_HEIGHT - NODE_MARGIN),
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function truncateLabel(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
 function findNodeLabel(
-  nodes: Array<{ node_id: string; label: string }>,
+  nodes: Array<Pick<GraphNodeRecord, "node_id" | "label">>,
   nodeId: string,
 ) {
   return nodes.find((node) => node.node_id === nodeId)?.label ?? nodeId;
