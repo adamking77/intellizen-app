@@ -1,5 +1,6 @@
 import type {
   DeepResearchResult,
+  GraphEntityType,
   GraphEdgeRecord,
   GraphNodeRecord,
   IntelSignal,
@@ -232,12 +233,15 @@ async function findSignalByUrl(url: string) {
 async function insertSignal(input: SignalDraft) {
   const { data, error } = await supabase
     .from("intel_signals")
-    .insert([
+    .upsert([
       {
         ...input,
         status: input.status ?? "new",
       },
-    ])
+    ], {
+      onConflict: "url",
+      ignoreDuplicates: true,
+    })
     .select("*")
     .single();
 
@@ -262,9 +266,13 @@ export async function runMonitorNow(monitor: Monitor) {
     },
   });
 
-  const drafts = response.results
-    .filter((result) => !seen.has(result.url))
-    .map<SignalDraft>((result) => ({
+  const drafts: SignalDraft[] = [];
+
+  for (const result of response.results) {
+    if (seen.has(result.url)) continue;
+
+    seen.add(result.url);
+    drafts.push({
       title: result.title ?? safeHostname(result.url),
       url: result.url,
       source: safeHostname(result.url),
@@ -273,31 +281,42 @@ export async function runMonitorNow(monitor: Monitor) {
       watch_domain: monitor.watch_domain,
       exa_score: result.score ?? null,
       raw_payload: result,
-    }));
+    });
+  }
+
+  let insertedCount = 0;
 
   if (drafts.length > 0) {
-    const { error: insertError } = await supabase.from("intel_signals").insert(
-      drafts.map((draft) => ({
-        ...draft,
-        monitor_id: monitor.id,
-        status: "new",
-      })),
-    );
+    const { data: insertedRows, error: insertError } = await supabase
+      .from("intel_signals")
+      .upsert(
+        drafts.map((draft) => ({
+          ...draft,
+          monitor_id: monitor.id,
+          status: "new",
+        })),
+        {
+          onConflict: "url",
+          ignoreDuplicates: true,
+        },
+      )
+      .select("id");
 
     if (insertError) throw insertError;
+    insertedCount = insertedRows?.length ?? 0;
   }
 
   const { error: updateError } = await supabase
     .from("monitors")
     .update({
       last_run: new Date().toISOString(),
-      signal_count: monitor.signal_count + drafts.length,
+      signal_count: monitor.signal_count + insertedCount,
     })
     .eq("id", monitor.id);
 
   if (updateError) throw updateError;
 
-  return drafts.length;
+  return insertedCount;
 }
 
 export async function refreshInbox() {
@@ -331,4 +350,102 @@ export async function listGraphEdges(projectId: number) {
 
   if (error) throw error;
   return (data ?? []) as GraphEdgeRecord[];
+}
+
+export async function createGraphNode(input: {
+  projectId: number;
+  nodeId: string;
+  label: string;
+  entityType: GraphEntityType;
+  position: { x: number; y: number };
+}) {
+  const { data, error } = await supabase
+    .from("graph_nodes")
+    .insert([
+      {
+        project_id: input.projectId,
+        node_id: input.nodeId,
+        label: input.label,
+        entity_type: input.entityType,
+        position_x: input.position.x,
+        position_y: input.position.y,
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as GraphNodeRecord;
+}
+
+export async function updateGraphNodePosition(input: {
+  projectId: number;
+  nodeId: string;
+  position: { x: number; y: number };
+}) {
+  const { error } = await supabase
+    .from("graph_nodes")
+    .update({
+      position_x: input.position.x,
+      position_y: input.position.y,
+    })
+    .eq("project_id", input.projectId)
+    .eq("node_id", input.nodeId);
+
+  if (error) throw error;
+}
+
+export async function deleteGraphNodes(input: {
+  projectId: number;
+  nodeIds: string[];
+}) {
+  if (input.nodeIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("graph_nodes")
+    .delete()
+    .eq("project_id", input.projectId)
+    .in("node_id", input.nodeIds);
+
+  if (error) throw error;
+}
+
+export async function createGraphEdge(input: {
+  projectId: number;
+  edgeId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  label: string | null;
+}) {
+  const { data, error } = await supabase
+    .from("graph_edges")
+    .insert([
+      {
+        project_id: input.projectId,
+        edge_id: input.edgeId,
+        source_node_id: input.sourceNodeId,
+        target_node_id: input.targetNodeId,
+        label: input.label,
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as GraphEdgeRecord;
+}
+
+export async function deleteGraphEdges(input: {
+  projectId: number;
+  edgeIds: string[];
+}) {
+  if (input.edgeIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("graph_edges")
+    .delete()
+    .eq("project_id", input.projectId)
+    .in("edge_id", input.edgeIds);
+
+  if (error) throw error;
 }
