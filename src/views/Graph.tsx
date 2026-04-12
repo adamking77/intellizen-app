@@ -36,7 +36,6 @@ import type {
   GraphEntityType,
   GraphNodeRecord,
 } from "@/lib/types";
-import { useAppStore } from "@/store";
 
 type CanvasNodeData = {
   label: string;
@@ -103,8 +102,7 @@ export function GraphView() {
 }
 
 function GraphWorkspace() {
-  const graphProjectId = useAppStore((state) => state.graphProjectId);
-  const setGraphProjectId = useAppStore((state) => state.setGraphProjectId);
+  const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
   const [label, setLabel] = useState("");
   const [entityType, setEntityType] = useState<GraphEntityType>("person");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -119,10 +117,10 @@ function GraphWorkspace() {
   });
 
   useEffect(() => {
-    if (graphProjectId === null && projects && projects.length > 0) {
+    if ((graphProjectId === null || !projects?.some((p) => p.id === graphProjectId)) && projects && projects.length > 0) {
       setGraphProjectId(projects[0].id);
     }
-  }, [graphProjectId, projects, setGraphProjectId]);
+  }, [graphProjectId, projects]);
 
   const selectedProject = useMemo(
     () => projects?.find((project) => project.id === graphProjectId) ?? null,
@@ -336,6 +334,12 @@ function GraphWorkspace() {
             <Badge variant="neutral">Edges {(edgesQuery.data ?? []).length}</Badge>
           </div>
 
+          {selectedProject ? (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--muted-foreground)]">
+              Active project: <span className="text-[var(--foreground)]">{selectedProject.name}</span>
+            </div>
+          ) : null}
+
           <Button
             variant="secondary"
             onClick={() => {
@@ -404,6 +408,24 @@ function GraphWorkspace() {
               <Background gap={24} color="rgba(141, 191, 193, 0.13)" />
             </ReactFlow>
           )}
+        </CardContent>
+        <CardContent className="border-t border-[var(--border)] pt-5">
+          <div className="grid gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
+              Stored nodes
+            </p>
+            {(nodesQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-[var(--muted-foreground)]">No nodes stored for this project.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(nodesQuery.data ?? []).map((node) => (
+                  <Badge key={node.node_id} variant="neutral">
+                    {node.label}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
