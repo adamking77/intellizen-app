@@ -4,7 +4,6 @@ import {
   addEdge,
   Background,
   Controls,
-  Handle,
   Position,
   MiniMap,
   ReactFlow,
@@ -16,7 +15,6 @@ import {
   type Connection,
   type Edge,
   type Node,
-  type NodeProps,
 } from "@xyflow/react";
 
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +169,7 @@ function GraphWorkspace() {
       });
 
       setNodes((current) => [...current, mapNodeRecordToCanvasNode(created)]);
+      await nodesQuery.refetch();
       setLabel("");
       setStatusMessage(`Added ${entityType} node to ${selectedProject?.name ?? "project"}.`);
     } catch (error) {
@@ -193,6 +192,7 @@ function GraphWorkspace() {
       });
 
       setEdges((current) => addEdge(mapEdgeRecordToCanvasEdge(created), current));
+      await edgesQuery.refetch();
       setStatusMessage("Connection saved.");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to create edge.");
@@ -211,6 +211,8 @@ function GraphWorkspace() {
 
       await deleteGraphNodes({ projectId: graphProjectId, nodeIds });
       await deleteGraphEdges({ projectId: graphProjectId, edgeIds: relatedEdgeIds });
+      await nodesQuery.refetch();
+      await edgesQuery.refetch();
       setStatusMessage(
         `Deleted ${deletedNodes.length} node${deletedNodes.length === 1 ? "" : "s"}.`,
       );
@@ -228,6 +230,7 @@ function GraphWorkspace() {
         projectId: graphProjectId,
         edgeIds: deletedEdges.map((edge) => edge.id),
       });
+      await edgesQuery.refetch();
       setStatusMessage(
         `Deleted ${deletedEdges.length} edge${deletedEdges.length === 1 ? "" : "s"}.`,
       );
@@ -328,9 +331,21 @@ function GraphWorkspace() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
+            <Badge variant="neutral">Project {selectedProject?.id ?? "none"}</Badge>
             <Badge variant="neutral">Nodes {(nodesQuery.data ?? []).length}</Badge>
             <Badge variant="neutral">Edges {(edgesQuery.data ?? []).length}</Badge>
           </div>
+
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void nodesQuery.refetch();
+              void edgesQuery.refetch();
+            }}
+            disabled={!graphProjectId}
+          >
+            Reload graph
+          </Button>
         </CardContent>
       </Card>
 
@@ -350,7 +365,6 @@ function GraphWorkspace() {
             <ReactFlow
               nodes={nodes}
               edges={edges}
-              nodeTypes={NODE_TYPES}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={(connection) => void handleConnect(connection)}
@@ -407,12 +421,29 @@ function mapNodeRecordToCanvasNode(record: GraphNodeRecord): CanvasNode {
       label: record.label,
       entityType: record.entity_type,
     },
+    style: {
+      background: ENTITY_STYLES[record.entity_type].fill,
+      border: `1px solid ${ENTITY_STYLES[record.entity_type].border}`,
+      color: ENTITY_STYLES[record.entity_type].text,
+      fontSize: 12,
+      fontWeight: 600,
+      padding: "12px 16px",
+      boxShadow: "0 12px 40px rgba(4, 10, 11, 0.34)",
+      borderRadius: record.entity_type === "person" ? 999 : 18,
+      minWidth:
+        record.entity_type === "organisation"
+          ? 148
+          : record.entity_type === "event"
+            ? 152
+            : 132,
+      minHeight: 64,
+    },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     draggable: true,
     deletable: true,
     selectable: true,
-    type: "intelNode",
+    type: "default",
   };
 }
 
@@ -443,69 +474,3 @@ function mapEdgeRecordToCanvasEdge(record: GraphEdgeRecord): CanvasEdge {
     labelBgBorderRadius: 999,
   };
 }
-
-function EntityNode({ data, selected }: NodeProps<CanvasNode>) {
-  const style = ENTITY_STYLES[data.entityType];
-  const isLocation = data.entityType === "location";
-  const shapeStyle: React.CSSProperties = isLocation
-    ? {
-        width: 110,
-        height: 110,
-        transform: "rotate(45deg)",
-        borderRadius: 14,
-      }
-    : {
-        minWidth: data.entityType === "organisation" ? 148 : 132,
-        minHeight: 68,
-      };
-
-  return (
-    <div className="relative">
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{ background: "#8dbfc1", width: 10, height: 10, border: 0 }}
-      />
-      <div
-        style={{
-          background: style.fill,
-          border: `1px solid ${selected ? "#dff8ee" : style.border}`,
-          color: style.text,
-          boxShadow: selected
-            ? "0 0 0 1px rgba(223,248,238,0.55), 0 18px 50px rgba(4,10,11,0.42)"
-            : "0 12px 40px rgba(4, 10, 11, 0.34)",
-          clipPath:
-            data.entityType === "event"
-              ? "polygon(14% 0%, 86% 0%, 100% 50%, 86% 100%, 14% 100%, 0% 50%)"
-              : undefined,
-          borderRadius: data.entityType === "person" ? 999 : 18,
-          ...shapeStyle,
-        }}
-        className="grid place-items-center px-4 py-3 text-center text-xs font-semibold"
-      >
-        <span
-          style={
-            isLocation
-              ? {
-                  transform: "rotate(-45deg)",
-                  display: "block",
-                  maxWidth: 72,
-                }
-              : undefined
-          }
-        >
-          {data.label}
-        </span>
-      </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{ background: "#8dbfc1", width: 10, height: 10, border: 0 }}
-      />
-    </div>
-  );
-}
-
-const NODE_TYPES = {
-  intelNode: EntityNode,
-};
