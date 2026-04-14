@@ -7,11 +7,11 @@ export type NodeAnchorSide = "top" | "right" | "bottom" | "left";
 export const NODE_WIDTH = 188;
 export const NODE_HEIGHT = 92;
 export const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
-export const WORLD_WIDTH = 2200;
-export const WORLD_HEIGHT = 1400;
+export const WORLD_WIDTH = 6000;
+export const WORLD_HEIGHT = 4000;
 export const WORLD_MARGIN = 32;
 export const VIEWPORT_HEIGHT = 780;
-export const DEFAULT_VIEW: ViewportState = { x: 140, y: 90, scale: 1 };
+export const DEFAULT_VIEW: ViewportState = { x: -2800, y: -1850, scale: 1 };
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -203,8 +203,12 @@ export function buildMinimapViewportRect(
 
 export function getNextNodePosition(index: number): Point {
   const columns = 5;
-  const x = 72 + (index % columns) * 240;
-  const y = 72 + Math.floor(index / columns) * 156;
+  const colW = 240;
+  const rowH = 156;
+  const startX = WORLD_WIDTH / 2 - (columns * colW) / 2;
+  const startY = WORLD_HEIGHT / 2 - 200;
+  const x = startX + (index % columns) * colW;
+  const y = startY + Math.floor(index / columns) * rowH;
 
   return {
     x: clamp(x, WORLD_MARGIN, WORLD_WIDTH - NODE_WIDTH - WORLD_MARGIN),
@@ -234,7 +238,7 @@ export function computeFitViewToNodes(
       viewportElement.clientWidth / contentWidth,
       viewportElement.clientHeight / contentHeight,
     ),
-    0.5,
+    0.25,
     1.4,
   );
 

@@ -2,23 +2,28 @@ import { cn } from "@/lib/utils";
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "default" | "glass" | "hud" | "elevated";
+  interactive?: boolean;
 }
 
+/**
+ * Flat, glow-free card. 1px border, 12px radius, Surface0 bg.
+ * Variant kept for API compatibility; all variants now render identically.
+ */
 export function Card({
   className,
   variant = "default",
+  interactive = false,
   ...props
 }: CardProps) {
-  const variants = {
-    default: "bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-[var(--shadow)]",
-    glass: "bg-[var(--surface-glass)] border border-[var(--border)] rounded-2xl backdrop-blur-xl shadow-[var(--shadow-lg)]",
-    hud: "bg-gradient-to-b from-[var(--panel)] to-[rgba(15,21,28,0.98)] border border-[var(--border)] rounded-xl relative overflow-hidden",
-    elevated: "bg-[var(--surface-strong)] border border-[var(--border-strong)] rounded-2xl shadow-[var(--shadow-lg)]",
-  };
-
+  void variant;
   return (
     <div
-      className={cn(variants[variant], className)}
+      className={cn(
+        "bg-[var(--base)] border border-[var(--border)] rounded-xl",
+        interactive &&
+          "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[var(--border-strong)] cursor-pointer",
+        className
+      )}
       {...props}
     />
   );
@@ -30,7 +35,7 @@ export function CardHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex flex-col space-y-1.5 p-6", className)}
+      className={cn("flex flex-col space-y-1.5 px-5 pt-5 pb-3", className)}
       {...props}
     />
   );
@@ -42,7 +47,10 @@ export function CardTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn("text-lg font-semibold tracking-tight text-[var(--foreground)]", className)}
+      className={cn(
+        "font-ui text-[18px] font-semibold tracking-[-0.01em] text-[var(--text)]",
+        className
+      )}
       {...props}
     />
   );
@@ -54,7 +62,7 @@ export function CardDescription({
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
     <p
-      className={cn("text-sm text-[var(--foreground-muted)]", className)}
+      className={cn("text-[13px] text-[var(--subtext-0)]", className)}
       {...props}
     />
   );
@@ -64,7 +72,7 @@ export function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-6 pt-0", className)} {...props} />;
+  return <div className={cn("px-5 pb-5 pt-0", className)} {...props} />;
 }
 
 export function CardFooter({
@@ -73,7 +81,10 @@ export function CardFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-center p-6 pt-0", className)}
+      className={cn(
+        "flex items-center px-5 pb-5 pt-0 border-t border-[var(--border-subtle)]",
+        className
+      )}
       {...props}
     />
   );

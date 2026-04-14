@@ -2,34 +2,42 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium font-ui select-none " +
+    "transition-[background-color,border-color,color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+    "active:scale-[0.98] " +
+    "disabled:pointer-events-none disabled:opacity-50 " +
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
   {
     variants: {
       variant: {
-        default: 
-          "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-dim)] text-[var(--background)] font-semibold shadow-[0_0_0_1px_rgba(0,212,170,0.3),0_4px_12px_rgba(0,212,170,0.2)] hover:shadow-[0_0_0_1px_rgba(0,212,170,0.5),0_6px_20px_rgba(0,212,170,0.3)] hover:-translate-y-0.5",
-        primary: 
-          "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-dim)] text-[var(--background)] font-semibold shadow-[0_0_0_1px_rgba(0,212,170,0.3),0_4px_12px_rgba(0,212,170,0.2)] hover:shadow-[0_0_0_1px_rgba(0,212,170,0.5),0_6px_20px_rgba(0,212,170,0.3)] hover:-translate-y-0.5",
+        primary:
+          "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
+        default:
+          "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
         secondary:
-          "bg-[var(--surface-strong)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[rgba(255,255,255,0.05)] hover:border-[var(--border-strong)]",
-        ghost:
-          "text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[rgba(255,255,255,0.03)]",
+          "bg-[var(--mantle)] text-[var(--text)] border border-[var(--border)] " +
+          "hover:border-[var(--border-strong)] hover:bg-[var(--base)]",
         outline:
-          "border border-[var(--border)] bg-transparent hover:bg-[var(--surface)] hover:border-[var(--border-strong)]",
+          "bg-transparent text-[var(--text)] border border-[var(--border)] " +
+          "hover:bg-[var(--surface-wash)] hover:border-[var(--border-strong)]",
+        ghost:
+          "bg-transparent text-[var(--subtext-0)] border border-transparent " +
+          "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
         destructive:
-          "bg-gradient-to-r from-[var(--danger)] to-[#dc2626] text-white shadow-[0_0_0_1px_rgba(239,68,68,0.3),0_4px_12px_rgba(239,68,68,0.2)]",
-        glow: 
-          "bg-[var(--surface)] border border-[var(--accent-border)] text-[var(--accent)] shadow-[0_0_20px_rgba(0,212,170,0.1)] hover:shadow-[0_0_30px_rgba(0,212,170,0.2)]",
+          "bg-[var(--danger)] text-[var(--crust)] hover:bg-[#f5a1b6]",
+        glow:
+          "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
+          "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
       },
       size: {
-        default: "h-10 px-4 py-2",
+        default: "h-9 px-3.5 text-[13px]",
         sm: "h-8 px-3 text-xs",
-        lg: "h-12 px-6 text-base",
-        icon: "h-10 w-10",
+        lg: "h-11 px-5 text-sm",
+        icon: "h-9 w-9",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "primary",
       size: "default",
     },
   }
@@ -39,12 +47,7 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {}
 
-export function Button({
-  className,
-  variant,
-  size,
-  ...props
-}: ButtonProps) {
+export function Button({ className, variant, size, ...props }: ButtonProps) {
   return (
     <button
       className={cn(buttonVariants({ variant, size, className }))}
@@ -52,3 +55,5 @@ export function Button({
     />
   );
 }
+
+export { buttonVariants };

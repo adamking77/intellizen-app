@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCcw } from "lucide-react";
 
@@ -7,11 +7,13 @@ import { AttachInvestigationDialog } from "@/components/signals/attach-investiga
 import { SignalCard } from "@/components/signals/signal-card";
 import { SignalDetail } from "@/components/signals/signal-detail";
 import { Button } from "@/components/ui/button";
+import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
 import { cn } from "@/lib/utils";
 import {
   addSignalToInvestigation,
   dismissSignal,
   listInvestigations,
+  listMonitors,
   listSignals,
   refreshInbox,
   saveSignalToProject,
@@ -20,6 +22,20 @@ import type { IntelSignal } from "@/lib/types";
 
 type InboxFilter = "all" | "new" | "saved";
 
+function formatElapsed(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "just now";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 export function InboxView() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<InboxFilter>("all");
@@ -27,6 +43,8 @@ export function InboxView() {
   const [saveTarget, setSaveTarget] = useState<IntelSignal | null>(null);
   const [attachTarget, setAttachTarget] = useState<IntelSignal | null>(null);
   const [attachCaseId, setAttachCaseId] = useState<string | null>(null);
+
+  const feedRef = useRef<HTMLDivElement>(null);
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals"],
@@ -38,8 +56,14 @@ export function InboxView() {
     queryFn: listInvestigations,
   });
 
+  const { data: monitors } = useQuery({
+    queryKey: ["monitors"],
+    queryFn: listMonitors,
+    staleTime: 30_000,
+  });
+
   const activeInvestigations = useMemo(
-    () => (investigations ?? []).filter((investigation) => investigation.status === "active"),
+    () => (investigations ?? []).filter((i) => i.status === "active"),
     [investigations],
   );
 
@@ -69,89 +93,176 @@ export function InboxView() {
     },
   });
 
-  const { grouped, counts } = useMemo(() => {
+  const { grouped, visible, counts } = useMemo(() => {
     const all = signals ?? [];
     const counts = {
       all: all.length,
       new: all.filter((s) => s.status === "new").length,
       saved: all.filter((s) => s.status === "saved").length,
     };
-
     const visible = filter === "all" ? all : all.filter((s) => s.status === filter);
-
     const grouped = visible.reduce<Record<string, IntelSignal[]>>((acc, signal) => {
       const key = signal.watch_domain ?? "Manual";
       acc[key] = [...(acc[key] ?? []), signal];
       return acc;
     }, {});
-
-    return { grouped, counts };
+    return { grouped, visible, counts };
   }, [filter, signals]);
 
-  const FILTERS: { value: InboxFilter; label: string }[] = [
-    { value: "all",   label: `All ${counts.all}`   },
-    { value: "new",   label: `New ${counts.new}`   },
-    { value: "saved", label: `Saved ${counts.saved}` },
+  // Monitor telemetry
+  const monitorStats = useMemo(() => {
+    const list = monitors ?? [];
+    const active = list.filter((m) => m.status === "active").length;
+    const lastRun = list
+      .map((m) => m.last_run)
+      .filter(Boolean)
+      .sort()
+      .pop();
+    return { active, total: list.length, lastRun };
+  }, [monitors]);
+
+  const indicators: IndicatorItem[] = [
+    {
+      label: "Unread",
+      value: counts.new,
+      status: counts.new > 0 ? "accent" : "neutral",
+    },
+    { label: "Total", value: counts.all },
+    {
+      label: "Monitors",
+      value: `${monitorStats.active}/${monitorStats.total}`,
+      status: monitorStats.active > 0 ? "active" : "neutral",
+    },
+    {
+      label: "Last refresh",
+      value: formatElapsed(monitorStats.lastRun),
+      status: "neutral",
+    },
+  ];
+
+  // Keyboard navigation (j/k + e/a + enter + esc)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+      if (inField) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const list = visible;
+      if (list.length === 0) return;
+
+      const currentIdx = selectedSignal
+        ? list.findIndex((s) => s.id === selectedSignal.id)
+        : -1;
+
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = list[Math.min(list.length - 1, currentIdx + 1)] ?? list[0];
+        setSelectedSignal(next);
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = list[Math.max(0, currentIdx - 1)] ?? list[0];
+        setSelectedSignal(prev);
+      } else if (e.key === "Escape") {
+        setSelectedSignal(null);
+      } else if (e.key === "a" && selectedSignal) {
+        e.preventDefault();
+        dismissMutation.mutate(selectedSignal.id);
+      } else if (e.key === "e" && selectedSignal) {
+        e.preventDefault();
+        setAttachTarget(selectedSignal);
+        setAttachCaseId((c) => c ?? activeInvestigations[0]?.case_id ?? null);
+      } else if (e.key === "s" && selectedSignal) {
+        e.preventDefault();
+        setSaveTarget(selectedSignal);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible, selectedSignal, dismissMutation, activeInvestigations]);
+
+  const FILTERS: { value: InboxFilter; label: string; count: number }[] = [
+    { value: "all", label: "All", count: counts.all },
+    { value: "new", label: "New", count: counts.new },
+    { value: "saved", label: "Saved", count: counts.saved },
   ];
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      {/* Header bar */}
-      <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)]/80 px-5 backdrop-blur-sm">
-        <div className="flex items-center gap-1">
-          <span className="mr-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--foreground-dim)]">
-            Inbox
-          </span>
-          {FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setFilter(value)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-[12px] font-medium transition-all duration-150",
-                filter === value
-                  ? "bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20"
-                  : "text-[var(--foreground-dim)] hover:text-[var(--foreground-muted)] hover:bg-white/[0.03]"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+      {/* Header: IndicatorStrip + filters + refresh */}
+      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <div className="flex flex-col gap-3">
+          <span className="text-label">Inbox</span>
+          <IndicatorStrip items={indicators} />
         </div>
 
-        <div className="flex items-center gap-2">
-          {refreshMutation.data != null ? (
-            <span className="text-[11px] text-[var(--success)]">
-              +{refreshMutation.data} new
-            </span>
-          ) : null}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            className="gap-2"
-          >
-            <RefreshCcw
-              className={cn("h-3.5 w-3.5", refreshMutation.isPending && "animate-spin")}
-            />
-            {refreshMutation.isPending ? "Refreshing…" : "Refresh"}
-          </Button>
+        <div className="flex items-center gap-4 pt-1">
+          <div className="flex items-center gap-1">
+            {FILTERS.map(({ value, label, count }) => (
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1",
+                  "font-ui text-[12px] font-medium",
+                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  filter === value
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "text-[var(--subtext-0)] hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
+                )}
+              >
+                <span>{label}</span>
+                <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {refreshMutation.data != null ? (
+              <span className="font-mono text-[11px] text-[var(--success)]">
+                +{refreshMutation.data} new
+              </span>
+            ) : null}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+              className="gap-1.5"
+            >
+              <RefreshCcw
+                className={cn("h-3 w-3", refreshMutation.isPending && "animate-spin")}
+              />
+              {refreshMutation.isPending ? "Refreshing…" : "Refresh"}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Content: feed + detail panel */}
       <div className="flex flex-1 overflow-hidden">
         {/* Signal feed */}
-        <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--border)]">
+        <div
+          ref={feedRef}
+          className="flex flex-1 flex-col overflow-hidden"
+        >
           {isLoading ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-sm text-[var(--foreground-dim)]">Loading signals…</p>
+              <p className="font-ui text-[13px] text-[var(--overlay-1)]">
+                Loading signals…
+              </p>
             </div>
           ) : Object.keys(grouped).length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-              <p className="text-sm font-medium text-[var(--foreground-muted)]">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+              <p className="text-label">No signals</p>
+              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
                 {filter === "all"
-                  ? "No signals yet — run Refresh to pull from active monitors."
+                  ? "Run Refresh to pull from active monitors."
                   : `No ${filter} signals.`}
               </p>
             </div>
@@ -159,17 +270,14 @@ export function InboxView() {
             <div className="flex-1 overflow-y-auto">
               {Object.entries(grouped).map(([domain, items]) => (
                 <section key={domain}>
-                  {/* Domain group header */}
-                  <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--background)]/90 px-4 py-2 backdrop-blur-sm">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--foreground-dim)]">
-                      {domain}
-                    </span>
-                    <span className="rounded-full bg-[var(--surface-strong)] px-1.5 py-px text-[10px] font-semibold text-[var(--foreground-dim)]">
+                  {/* Domain group header — flat */}
+                  <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4 py-2">
+                    <span className="text-label">{domain}</span>
+                    <span className="font-mono text-[10px] text-[var(--overlay-1)]">
                       {items.length}
                     </span>
                   </div>
 
-                  {/* Signal rows */}
                   {items.map((signal) => (
                     <SignalCard
                       key={signal.id}
@@ -183,7 +291,7 @@ export function InboxView() {
                       isActive={selectedSignal?.id === signal.id}
                       onClick={() =>
                         setSelectedSignal((prev) =>
-                          prev?.id === signal.id ? null : signal
+                          prev?.id === signal.id ? null : signal,
                         )
                       }
                       onSave={() => setSaveTarget(signal)}
@@ -194,23 +302,36 @@ export function InboxView() {
               ))}
             </div>
           )}
+
+          {/* Keyboard hint footer */}
+          <div className="flex shrink-0 items-center gap-4 border-t border-[var(--border)] bg-[var(--base)] px-4 py-2">
+            <KeyHint keys="j k" label="Navigate" />
+            <KeyHint keys="s" label="Save" />
+            <KeyHint keys="e" label="Attach" />
+            <KeyHint keys="a" label="Archive" />
+            <KeyHint keys="esc" label="Close" />
+          </div>
         </div>
 
-        {/* Detail panel */}
-        <div className="w-[360px] shrink-0 overflow-hidden xl:w-[400px]">
-          <SignalDetail
-            signal={selectedSignal}
-            onSave={(signal) => setSaveTarget(signal)}
-            onAttach={(signal) => {
-              setAttachTarget(signal);
-              setAttachCaseId((current) => current ?? activeInvestigations[0]?.case_id ?? null);
-            }}
-            onDismiss={(id) => dismissMutation.mutate(id)}
-          />
-        </div>
+        {/* Detail panel — slides in when a signal is selected */}
+        {selectedSignal ? (
+          <aside
+            key={selectedSignal.id}
+            className="inbox-detail-panel w-[320px] shrink-0 overflow-hidden border-l border-[var(--border)] bg-[var(--base)] lg:w-[360px] xl:w-[400px]"
+          >
+            <SignalDetail
+              signal={selectedSignal}
+              onSave={(signal) => setSaveTarget(signal)}
+              onAttach={(signal) => {
+                setAttachTarget(signal);
+                setAttachCaseId((current) => current ?? activeInvestigations[0]?.case_id ?? null);
+              }}
+              onDismiss={(id) => dismissMutation.mutate(id)}
+            />
+          </aside>
+        ) : null}
       </div>
 
-      {/* Project picker drawer */}
       <ProjectPickerDrawer
         open={saveTarget !== null}
         onClose={() => setSaveTarget(null)}
@@ -248,5 +369,18 @@ export function InboxView() {
         isSubmitting={attachMutation.isPending}
       />
     </div>
+  );
+}
+
+function KeyHint({ keys, label }: { keys: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <kbd className="inline-flex min-w-[16px] items-center justify-center rounded border border-[var(--border)] bg-[var(--mantle)] px-1 font-mono text-[10px] text-[var(--subtext-0)]">
+        {keys}
+      </kbd>
+      <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        {label}
+      </span>
+    </span>
   );
 }

@@ -1,31 +1,35 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+/**
+ * Flat badge — 6px radius, uppercase 10px Satoshi 600, tracking-[0.14em].
+ * Tinted bg @ 15% + full-strength text color. No borders unless outline.
+ */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+  "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] font-ui select-none",
   {
     variants: {
       variant: {
-        default: 
-          "border-transparent bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20",
-        secondary:
-          "border-transparent bg-[var(--surface-strong)] text-[var(--foreground-muted)] border border-[var(--border)]",
-        destructive:
-          "border-transparent bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20",
-        outline: 
-          "text-[var(--foreground-muted)] border-[var(--border)]",
-        success:
-          "border-transparent bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20",
-        warning:
-          "border-transparent bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20",
-        info:
-          "border-transparent bg-[var(--info)]/10 text-[var(--info)] border border-[var(--info)]/20",
-        glow:
-          "border-transparent bg-[var(--accent)]/5 text-[var(--accent)] border border-[var(--accent)]/30 shadow-[0_0_10px_rgba(0,212,170,0.1)]",
+        default:
+          "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
         accent:
-          "border-transparent bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20",
+          "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
+        glow:
+          "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
+        secondary:
+          "bg-[var(--mantle)] text-[var(--subtext-0)]",
         neutral:
-          "border-transparent bg-[var(--surface-strong)] text-[var(--foreground-muted)] border border-[var(--border)]",
+          "bg-[var(--mantle)] text-[var(--subtext-0)]",
+        outline:
+          "bg-transparent text-[var(--subtext-0)] border border-[var(--border)]",
+        success:
+          "bg-[color-mix(in_srgb,var(--success)_15%,transparent)] text-[var(--success)]",
+        warning:
+          "bg-[color-mix(in_srgb,var(--warning)_15%,transparent)] text-[var(--warning)]",
+        info:
+          "bg-[color-mix(in_srgb,var(--info)_15%,transparent)] text-[var(--info)]",
+        destructive:
+          "bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] text-[var(--danger)]",
       },
     },
     defaultVariants: {

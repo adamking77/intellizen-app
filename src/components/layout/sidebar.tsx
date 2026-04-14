@@ -1,28 +1,36 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Activity,
-  FileText,
-  FolderKanban,
-  GitBranch,
-  Radar,
-  Search,
-  Target,
-  Zap,
-} from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { getUnreadSignalCount } from "@/lib/data";
+import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { useCommandPalette } from "./command-palette";
 
-const NAV_ITEMS = [
-  { label: "Inbox",      to: "/inbox",       icon: Radar,        key: "inbox"       },
-  { label: "Search",     to: "/search",      icon: Search,       key: "search"      },
-  { label: "Projects",   to: "/projects",    icon: FolderKanban, key: "projects"    },
-  { label: "Monitors",   to: "/monitors",    icon: Activity,     key: "monitors"    },
-  { label: "Graph",      to: "/graph",       icon: GitBranch,    key: "graph"       },
-  { label: "Investigate",to: "/investigate", icon: Target,       key: "investigate" },
-  { label: "Reports",    to: "/reports",     icon: FileText,     key: "reports"     },
+type NavItem = { label: string; to: string; key: string };
+
+const NAV_ITEMS: NavItem[] = [
+  { label: "Inbox", to: "/inbox", key: "inbox" },
+  { label: "Monitors", to: "/monitors", key: "monitors" },
+  { label: "Search", to: "/search", key: "search" },
+  { label: "Projects", to: "/projects", key: "projects" },
+  { label: "Graph", to: "/graph", key: "graph" },
+  { label: "Investigate", to: "/investigate", key: "investigate" },
+  { label: "Reports", to: "/reports", key: "reports" },
 ];
+
+const APP_VERSION = "v0.4.0";
+const STORAGE_KEY = "intelizen:sidebar-collapsed";
+const WIDTH_EXPANDED = 216;
+const WIDTH_COLLAPSED = 56;
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function Sidebar() {
   const { data: unreadCount } = useQuery({
@@ -30,74 +38,189 @@ export function Sidebar() {
     queryFn: getUnreadSignalCount,
     staleTime: 30_000,
   });
+  const { open } = useCommandPalette();
+  const { isCramped } = useWindowSize();
+
+  const [userCollapsed, setUserCollapsed] = useState<boolean>(() => readCollapsed());
+  const collapsed = userCollapsed || isCramped;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, userCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [userCollapsed]);
+
+  const toggle = () => setUserCollapsed((c) => !c);
 
   return (
-    <aside className="group/sb relative z-10 flex h-dvh w-14 shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--panel)] transition-[width] duration-300 ease-in-out hover:w-52">
-      {/* Logo */}
-      <div className="flex h-14 shrink-0 items-center border-b border-[var(--border)] px-[13px]">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--accent-dim)] shadow-[0_0_16px_rgba(0,212,170,0.25)]">
-          <Zap className="h-4 w-4 text-[#080c10]" />
-        </div>
-        <div className="ml-3 overflow-hidden">
-          <p className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent)] opacity-0 transition-opacity duration-200 group-hover/sb:opacity-100">
+    <aside
+      style={{ width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED }}
+      className={cn(
+        "relative z-10 flex h-dvh shrink-0 flex-col border-r border-[var(--border)] bg-[var(--mantle)]",
+        "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+      )}
+    >
+      {/* Header */}
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-[var(--border)]",
+          collapsed ? "justify-center px-0" : "justify-between px-4",
+        )}
+      >
+        {!collapsed && (
+          <span className="font-ui text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
             InteliZen
-          </p>
-          <p className="whitespace-nowrap text-[11px] font-medium text-[var(--foreground-dim)] opacity-0 transition-opacity duration-200 group-hover/sb:opacity-100">
-            Intel Platform
-          </p>
-        </div>
+          </span>
+        )}
+        {!isCramped && (
+          <button
+            type="button"
+            onClick={toggle}
+            className={cn(
+              "inline-flex h-6 w-6 items-center justify-center rounded",
+              "font-ui text-[13px] text-[var(--overlay-1)]",
+              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? "›" : "‹"}
+          </button>
+        )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-hidden p-2 pt-3">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                "relative flex items-center gap-3 overflow-hidden rounded-lg px-[9px] py-2.5 text-sm transition-all duration-150",
-                isActive
-                  ? "bg-[var(--accent)]/[0.08] border border-[var(--accent)]/20 text-[var(--accent)]"
-                  : "border border-transparent text-[var(--foreground-dim)] hover:border-[var(--border)] hover:bg-white/[0.025] hover:text-[var(--foreground-muted)]"
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
-                )}
-                <item.icon
-                  className={cn(
-                    "h-[18px] w-[18px] shrink-0 transition-colors duration-150",
-                    isActive ? "text-[var(--accent)]" : "text-current"
+      {/* ⌘K trigger — separate row so it stays accessible in both states */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center border-b border-[var(--border)]",
+          collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
+        )}
+      >
+        <button
+          type="button"
+          onClick={open}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--base)]",
+            "font-mono text-[11px] text-[var(--subtext-0)]",
+            "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "hover:text-[var(--text)] hover:border-[var(--border-strong)]",
+            collapsed ? "h-7 w-7 justify-center" : "w-full justify-between px-2 py-1",
+          )}
+          aria-label="Open command palette"
+          title="Command palette (⌘K)"
+        >
+          {collapsed ? (
+            <span>⌘K</span>
+          ) : (
+            <>
+              <span className="font-ui text-[11px] text-[var(--overlay-1)]">Search</span>
+              <span>⌘K</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav
+        className={cn(
+          "flex flex-1 flex-col gap-0.5 overflow-y-auto pb-4 pt-3",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
+        {NAV_ITEMS.map((item) => {
+          const showCount = item.key === "inbox" && unreadCount;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              title={collapsed ? item.label : undefined}
+              className={({ isActive }) =>
+                cn(
+                  "relative flex items-center rounded",
+                  "font-ui font-medium",
+                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+                  collapsed
+                    ? "h-9 justify-center px-0 text-[12px]"
+                    : "justify-between px-4 py-2 text-[13px]",
+                  isActive
+                    ? "text-[var(--text)]"
+                    : "text-[var(--subtext-0)] hover:text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span
+                      aria-hidden
+                      className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 bg-[var(--accent)]"
+                    />
                   )}
-                />
-                <span className="flex flex-1 items-center justify-between overflow-hidden">
-                  <span className="whitespace-nowrap text-[13px] font-medium opacity-0 transition-opacity duration-200 group-hover/sb:opacity-100">
-                    {item.label}
-                  </span>
-                  {item.key === "inbox" && unreadCount ? (
-                    <span className="ml-2 shrink-0 whitespace-nowrap rounded-full bg-[var(--accent)]/15 px-1.5 py-0.5 text-[10px] font-bold text-[var(--accent)] opacity-0 transition-opacity duration-200 group-hover/sb:opacity-100">
-                      {unreadCount}
+                  {collapsed ? (
+                    <span
+                      className={cn(
+                        "font-ui text-[13px] font-semibold uppercase tracking-[0.05em]",
+                        isActive && "text-[var(--accent)]",
+                      )}
+                    >
+                      {item.label[0]}
                     </span>
+                  ) : (
+                    <>
+                      <span>{item.label}</span>
+                      {showCount ? (
+                        <span className="font-mono text-[10px] text-[var(--accent)]">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                  {collapsed && showCount ? (
+                    <span
+                      aria-hidden
+                      className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+                    />
                   ) : null}
-                </span>
-              </>
-            )}
-          </NavLink>
-        ))}
+                </>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Footer */}
-      <div className="shrink-0 border-t border-[var(--border)] p-3">
-        <div className="flex items-center gap-3 px-[3px]">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)] shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-          <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--foreground-dim)] opacity-0 transition-opacity duration-200 group-hover/sb:opacity-100">
-            Systems nominal
-          </span>
-        </div>
+      <div
+        className={cn(
+          "flex shrink-0 border-t border-[var(--border)] py-3",
+          collapsed ? "justify-center px-0" : "items-center justify-between px-4",
+        )}
+      >
+        {collapsed ? (
+          <span
+            aria-hidden
+            title="Systems nominal"
+            className="h-1.5 w-1.5 rounded-full bg-[var(--success)]"
+          />
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-[var(--success)]"
+              />
+              <span className="font-ui text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--overlay-1)]">
+                Systems nominal
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+              {APP_VERSION}
+            </span>
+          </>
+        )}
       </div>
     </aside>
   );

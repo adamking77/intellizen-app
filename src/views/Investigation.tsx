@@ -1,24 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   AlertCircle,
   CheckCircle2,
   ChevronRight,
-  Clock,
+  FileText,
   FolderOpen,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Play,
   Save,
   Target,
   Trash2,
+  X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { useWindowSize } from "@/lib/use-window-size";
 import {
   addSignalToInvestigation,
   createInvestigation,
@@ -206,6 +212,42 @@ export function InvestigationView() {
 
   // Report type selection
   const [selectedReportType, setSelectedReportType] = useState<typeof REPORT_TYPES[number]["id"]>("internal");
+
+  // Layout state — Graph-style rails
+  const { isCramped } = useWindowSize();
+  const [leftOpen, setLeftOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("intelizen:investigate-left-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [rightOpen, setRightOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("intelizen:investigate-right-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [railTab, setRailTab] = useState<"status" | "output">("status");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("intelizen:investigate-left-open", leftOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [leftOpen]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("intelizen:investigate-right-open", rightOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [rightOpen]);
+  useEffect(() => {
+    if (isCramped) setRightOpen(false);
+  }, [isCramped]);
 
   const { data: investigations, isLoading } = useQuery({
     queryKey: ["investigations"],
@@ -539,523 +581,825 @@ export function InvestigationView() {
     );
   }
 
+  const runDisabled =
+    isRunningPhase ||
+    !selectedInvestigation ||
+    !hasRequiredPhaseGates(selectedPhase, selectedPhaseGates) ||
+    (selectedPhase === 1 && !planGateComplete) ||
+    (selectedPhase === 2 && !collectGateComplete) ||
+    (selectedPhase === 4 && !collateGateComplete) ||
+    (selectedPhase === 5 && !timelineGateComplete) ||
+    (selectedPhase === 6 && !achGateComplete);
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-      {/* Sidebar - Case List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Investigations</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              placeholder="New case name..."
-              value={newCaseName}
-              onChange={(e) => setNewCaseName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newCaseName.trim()) {
-                  createMutation.mutate({ name: newCaseName.trim() });
-                }
-              }}
-            />
-            <Button
-              className="w-full"
-              onClick={() => createMutation.mutate({ name: newCaseName })}
-              disabled={!newCaseName.trim() || createMutation.isPending}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Case
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            {(investigations ?? []).map((inv) => {
-              const gateStatus = getPhaseGateStatus(inv.current_phase, inv.phase_gates ?? {});
-
-              return (
-                <button
-                  key={inv.case_id}
-                  onClick={() => setSelectedCaseId(inv.case_id)}
-                  className={`w-full text-left rounded-2xl border p-4 transition ${
-                    selectedCaseId === inv.case_id
-                      ? "border-[var(--accent)] bg-[var(--surface)]"
-                      : "border-[var(--border)] hover:bg-[var(--surface)]/50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-[var(--foreground)]">{inv.name}</p>
-                      <p className="text-xs text-[var(--foreground-muted)]">{inv.case_id}</p>
-                    </div>
-                    <Badge variant={inv.status === "active" ? "success" : "neutral"}>
-                      {inv.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Clock className="h-3 w-3 text-[var(--foreground-muted)]" />
-                    <span className="text-xs text-[var(--foreground-muted)]">
-                      Phase {inv.current_phase}: {PHASES[inv.current_phase - 1]?.name}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em]">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        gateStatus === "green"
-                          ? "bg-green-500"
-                          : gateStatus === "amber"
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                      }`}
-                    />
-                    <span className="text-[var(--foreground-dim)]">Gate {gateStatus}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content */}
-      <div className="space-y-6">
-        {selectedInvestigation ? (
+    <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--base)]">
+      {/* ============================================================
+          LEFT RAIL — Cases
+          ============================================================ */}
+      <aside
+        style={{ width: leftOpen ? 260 : 0 }}
+        className={cn(
+          "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--mantle)]",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        )}
+      >
+        {leftOpen && (
           <>
-            {/* Phase Stepper */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  {PHASES.map((phase, idx) => {
-                    const isActive = phase.id === selectedPhase;
-                    const isCompleted = phase.id < selectedPhase;
-                    const isLocked = phase.id > selectedPhase;
-                    const gateStatus = getPhaseGateStatus(phase.id, selectedPhaseGates);
-
-                    return (
-                      <div key={phase.id} className="flex items-center">
-                        <button
-                          onClick={() => {
-                            if (!isLocked) {
-                              // Allow viewing previous phases
-                            }
-                          }}
-                          className={`flex flex-col items-center gap-2 transition ${
-                            isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                          }`}
-                          disabled={isLocked}
-                        >
-                          <div
-                            className={`h-10 w-10 rounded-full flex items-center justify-center border-2 ${
-                              isActive
-                                ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                                : isCompleted
-                                ? "border-green-500 bg-green-500/10 text-green-500"
-                                : "border-[var(--border)] text-[var(--foreground-muted)]"
-                            }`}
-                          >
-                            {isCompleted ? (
-                              <CheckCircle2 className="h-5 w-5" />
-                            ) : (
-                              <span className="text-sm font-semibold">{phase.id}</span>
-                            )}
-                          </div>
-                          <div className="text-center">
-                            <p
-                              className={`text-xs font-medium ${
-                                isActive ? "text-[var(--foreground)]" : "text-[var(--foreground-muted)]"
-                              }`}
-                            >
-                              {phase.name}
-                            </p>
-                            <p
-                              className={`text-[10px] uppercase tracking-[0.12em] ${
-                                gateStatus === "green"
-                                  ? "text-green-500"
-                                  : gateStatus === "amber"
-                                  ? "text-amber-500"
-                                  : "text-red-500"
-                              }`}
-                            >
-                              {gateStatus}
-                            </p>
-                          </div>
-                        </button>
-                        {idx < PHASES.length - 1 && (
-                          <ChevronRight className="h-4 w-4 text-[var(--border)] mx-2" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Phase Content */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>
-                      Phase {selectedPhase}: {PHASES[selectedPhase - 1]?.name}
-                    </CardTitle>
-                    <p className="text-sm text-[var(--foreground-muted)] mt-1">
-                      {PHASES[selectedPhase - 1]?.description}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleRunPhase(selectedPhase)}
-                      disabled={
-                        isRunningPhase ||
-                        !hasRequiredPhaseGates(selectedPhase, selectedPhaseGates) ||
-                        (selectedPhase === 1 && !planGateComplete) ||
-                        (selectedPhase === 2 && !collectGateComplete) ||
-                        (selectedPhase === 4 && !collateGateComplete) ||
-                        (selectedPhase === 5 && !timelineGateComplete) ||
-                        (selectedPhase === 6 && !achGateComplete)
-                      }
-                    >
-                      {isRunningPhase ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Running...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Run Phase
-                        </>
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
+              <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                Cases
+              </span>
+              <button
+                type="button"
+                onClick={() => setLeftOpen(false)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Hide cases"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--border)] p-3">
+              <Input
+                placeholder="New case name"
+                value={newCaseName}
+                onChange={(e) => setNewCaseName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newCaseName.trim()) {
+                    createMutation.mutate({ name: newCaseName.trim() });
+                  }
+                }}
+              />
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={() => createMutation.mutate({ name: newCaseName })}
+                disabled={!newCaseName.trim() || createMutation.isPending}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {(investigations ?? []).length === 0 ? (
+                <p className="px-2 py-6 text-center font-ui text-[11px] text-[var(--overlay-1)]">
+                  No investigations yet.
+                </p>
+              ) : (
+                (investigations ?? []).map((inv) => {
+                  const gateStatus = getPhaseGateStatus(inv.current_phase, inv.phase_gates ?? {});
+                  const isSelected = selectedCaseId === inv.case_id;
+                  return (
+                    <button
+                      key={inv.case_id}
+                      type="button"
+                      onClick={() => setSelectedCaseId(inv.case_id)}
+                      className={cn(
+                        "group mb-1 w-full rounded-md border px-3 py-2.5 text-left font-ui transition-colors",
+                        isSelected
+                          ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                          : "border-transparent hover:bg-[var(--surface-wash)]",
                       )}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {!hasRequiredPhaseGates(selectedPhase, selectedPhaseGates) && (
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-200">
-                    <AlertCircle className="h-4 w-4" />
-                    This phase is locked until all earlier phase gates are completed.
-                  </div>
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p
+                          className={cn(
+                            "truncate text-[12.5px] font-medium",
+                            isSelected ? "text-[var(--text)]" : "text-[var(--subtext-1)]",
+                          )}
+                        >
+                          {inv.name}
+                        </p>
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
+                            gateStatus === "green"
+                              ? "bg-[var(--success)]"
+                              : gateStatus === "amber"
+                                ? "bg-[var(--warning)]"
+                                : "bg-[var(--danger)]",
+                          )}
+                        />
+                      </div>
+                      <p className="mt-1 truncate font-mono text-[10px] text-[var(--overlay-1)]">
+                        P{inv.current_phase} · {PHASES[inv.current_phase - 1]?.name ?? ""}
+                      </p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+      </aside>
+
+      {/* ============================================================
+          MAIN COLUMN — Topbar + phase workspace
+          ============================================================ */}
+      <div className="relative flex flex-1 min-w-0 flex-col">
+        {/* Topbar */}
+        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {!leftOpen && (
+              <button
+                type="button"
+                onClick={() => setLeftOpen(true)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Show cases"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            )}
+            {!isCramped && (
+              <div className="flex min-w-0 items-center gap-1.5 font-ui text-[12px]">
+                <span className="text-[var(--overlay-1)]">Investigate</span>
+                {selectedInvestigation && (
+                  <>
+                    <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
+                    <span className="truncate text-[var(--text)]">{selectedInvestigation.name}</span>
+                  </>
                 )}
+              </div>
+            )}
+          </div>
 
-                {/* Phase 1: Plan Form */}
-                {selectedPhase === 1 && (
-                  <div className="space-y-4">
-                    <div className="grid gap-4">
-                      <div>
-                        <label className="text-sm font-medium">Subject Definition</label>
-                        <Textarea
-                          value={planForm.subjectDefinition}
-                          onChange={(e) => setPlanForm({ ...planForm, subjectDefinition: e.target.value })}
-                          placeholder="Who or what is the target of this investigation?"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Investigation Scope</label>
-                        <Textarea
-                          value={planForm.investigationScope}
-                          onChange={(e) => setPlanForm({ ...planForm, investigationScope: e.target.value })}
-                          placeholder="What are the boundaries of this investigation?"
-                        />
-                      </div>
+          {/* Phase stepper pill */}
+          {selectedInvestigation ? (
+            <div className="flex items-center gap-0.5 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--mantle)] p-0.5">
+              {PHASES.map((phase) => {
+                const isActive = phase.id === selectedPhase;
+                const isLocked = !hasRequiredPhaseGates(phase.id, selectedPhaseGates);
+                const gateStatus = getPhaseGateStatus(phase.id, selectedPhaseGates);
+                return (
+                  <button
+                    key={phase.id}
+                    type="button"
+                    onClick={() => {
+                      if (!isLocked && !isActive) {
+                        void advancePhaseMutation.mutateAsync({
+                          phase: phase.id,
+                          gateData: selectedPhaseGates,
+                        });
+                      }
+                    }}
+                    disabled={isLocked}
+                    title={`${phase.name} — ${phase.description}`}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-ui text-[11px] font-medium transition-colors",
+                      isActive
+                        ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+                        : isLocked
+                          ? "text-[var(--overlay-0)] cursor-not-allowed"
+                          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        gateStatus === "green"
+                          ? "bg-[var(--success)]"
+                          : gateStatus === "amber"
+                            ? "bg-[var(--warning)]"
+                            : "bg-[var(--danger)]",
+                      )}
+                    />
+                    <span className="whitespace-nowrap">
+                      <span className="font-mono text-[10px] text-[var(--overlay-1)]">{phase.id}</span>{" "}
+                      {phase.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex items-center gap-1.5">
+            {selectedInvestigation && (
+              <button
+                type="button"
+                onClick={() => void handleRunPhase(selectedPhase)}
+                disabled={runDisabled}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md border px-3 font-ui text-[11px] font-medium transition-colors",
+                  runDisabled
+                    ? "border-[var(--border)] bg-[var(--mantle)] text-[var(--overlay-1)]"
+                    : "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
+                )}
+              >
+                {isRunningPhase ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Play className="h-3 w-3" />
+                )}
+                Run phase
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setRightOpen((o) => !o)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              title={rightOpen ? "Hide rail" : "Show rail"}
+            >
+              {rightOpen ? (
+                <PanelRightClose className="h-4 w-4" />
+              ) : (
+                <PanelRightOpen className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Workspace */}
+        <div className="flex-1 overflow-y-auto">
+          {selectedInvestigation ? (
+            <div className="mx-auto max-w-[880px] px-6 py-6">
+              {/* Phase header */}
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    Phase {selectedPhase}
+                  </p>
+                  <h2 className="mt-1 font-ui text-[20px] font-semibold text-[var(--text)]">
+                    {PHASES[selectedPhase - 1]?.name}
+                  </h2>
+                  <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                    {PHASES[selectedPhase - 1]?.description}
+                  </p>
+                </div>
+              </div>
+
+              {!hasRequiredPhaseGates(selectedPhase, selectedPhaseGates) && (
+                <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 font-ui text-[12px] text-[var(--warning)]">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  Locked — complete earlier phase gates first.
+                </div>
+              )}
+
+              {/* Phase 1: Plan */}
+              {selectedPhase === 1 && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Subject definition
+                    </label>
+                    <Textarea
+                      value={planForm.subjectDefinition}
+                      onChange={(e) =>
+                        setPlanForm({ ...planForm, subjectDefinition: e.target.value })
+                      }
+                      placeholder="Who or what is the target of this investigation?"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Investigation scope
+                    </label>
+                    <Textarea
+                      value={planForm.investigationScope}
+                      onChange={(e) =>
+                        setPlanForm({ ...planForm, investigationScope: e.target.value })
+                      }
+                      placeholder="What are the boundaries of this investigation?"
+                    />
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      PLAN validation
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                      {[
+                        { key: "proportionality", label: "Proportionality — Response matches the issue" },
+                        { key: "legality", label: "Legality — Within legal and ethical boundaries" },
+                        { key: "accountability", label: "Accountability — Clear ownership and oversight" },
+                        { key: "necessity", label: "Necessity — Required and justified" },
+                      ].map((item) => (
+                        <label
+                          key={item.key}
+                          className="flex cursor-pointer items-center gap-2 font-ui text-[12.5px] text-[var(--subtext-1)]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={planForm[item.key as keyof typeof planForm] as boolean}
+                            onChange={(e) =>
+                              setPlanForm({ ...planForm, [item.key]: e.target.checked })
+                            }
+                            className="rounded border-[var(--border)]"
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
                     </div>
+                  </div>
 
-                    <div className="rounded-2xl border border-[var(--border)] p-4">
-                      <p className="text-sm font-medium mb-3">PLAN Validation</p>
-                      <div className="grid gap-2">
-                        {[
-                          { key: "proportionality", label: "Proportionality — Response matches the issue" },
-                          { key: "legality", label: "Legality — Within legal and ethical boundaries" },
-                          { key: "accountability", label: "Accountability — Clear ownership and oversight" },
-                          { key: "necessity", label: "Necessity — Required and justified" },
-                        ].map((item) => (
-                          <label key={item.key} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={planForm[item.key as keyof typeof planForm] as boolean}
-                              onChange={(e) =>
-                                setPlanForm({ ...planForm, [item.key]: e.target.checked })
-                              }
-                              className="rounded border-[var(--border)]"
-                            />
-                            <span className="text-sm">{item.label}</span>
-                          </label>
-                        ))}
-                      </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Seed entities (one per line)
+                      </label>
+                      <Textarea
+                        rows={4}
+                        value={planForm.seedEntities}
+                        onChange={(e) => setPlanForm({ ...planForm, seedEntities: e.target.value })}
+                        placeholder="People, organisations, or entities to investigate..."
+                      />
                     </div>
-
-                    <div className="grid gap-4">
-                      <div>
-                        <label className="text-sm font-medium">Seed Entities (one per line)</label>
-                        <Textarea
-                          value={planForm.seedEntities}
-                          onChange={(e) => setPlanForm({ ...planForm, seedEntities: e.target.value })}
-                          placeholder="People, organizations, or entities to investigate..."
-                          rows={3}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Known Hypotheses (one per line)</label>
-                        <Textarea
-                          value={planForm.knownHypotheses}
-                          onChange={(e) => setPlanForm({ ...planForm, knownHypotheses: e.target.value })}
-                          placeholder="Initial theories or questions to test..."
-                          rows={3}
-                        />
-                      </div>
+                    <div className="space-y-1.5">
+                      <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Known hypotheses (one per line)
+                      </label>
+                      <Textarea
+                        rows={4}
+                        value={planForm.knownHypotheses}
+                        onChange={(e) =>
+                          setPlanForm({ ...planForm, knownHypotheses: e.target.value })
+                        }
+                        placeholder="Initial theories or questions to test..."
+                      />
                     </div>
+                  </div>
 
+                  <div className="flex items-center gap-3">
                     <Button
                       onClick={() => {
                         void handleSavePlan();
                       }}
                       disabled={
-                        !planGateComplete || savePlanMutation.isPending || advancePhaseMutation.isPending
+                        !planGateComplete ||
+                        savePlanMutation.isPending ||
+                        advancePhaseMutation.isPending
                       }
                     >
                       <Save className="h-4 w-4 mr-2" />
-                      Save Plan & Advance
+                      Save plan & advance
                     </Button>
-
                     {!planGateComplete && (
-                      <div className="flex items-center gap-2 text-sm text-amber-500">
-                        <AlertCircle className="h-4 w-4" />
-                        Complete all PLAN validations and required fields to proceed
-                      </div>
+                      <span className="flex items-center gap-1.5 font-ui text-[12px] text-[var(--warning)]">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Complete all fields and validations
+                      </span>
                     )}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Phase 2: Collect */}
-                {selectedPhase === 2 && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-[var(--foreground-muted)]">
-                      Attach saved signals and review them before running collection.
+              {/* Phase 2: Collect */}
+              {selectedPhase === 2 && (
+                <div className="space-y-4">
+                  <p className="font-ui text-[12.5px] text-[var(--subtext-0)]">
+                    Attach saved signals and review them before running collection.
+                  </p>
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
+                    <p className="font-medium text-[var(--text)]">
+                      Collection gate: {reviewedSignalCount}/{COLLECT_MIN_SIGNALS} reviewed
                     </p>
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3 text-sm">
-                      <p className="font-medium text-[var(--foreground)]">
-                        Collection gate: {reviewedSignalCount}/{COLLECT_MIN_SIGNALS} reviewed
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-                        Require at least {COLLECT_MIN_SIGNALS} attached and reviewed signals.
-                      </p>
-                    </div>
+                    <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
+                      Require at least {COLLECT_MIN_SIGNALS} attached and reviewed signals.
+                    </p>
+                  </div>
 
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                        Attached Signals
+                  <div className="space-y-2">
+                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Attached signals
+                    </p>
+                    {(investigationSignals ?? []).length === 0 ? (
+                      <p className="py-6 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                        No signals attached yet.
                       </p>
-                      {(investigationSignals ?? []).length === 0 ? (
-                        <div className="text-center py-8 text-[var(--foreground-muted)]">
-                          No signals attached yet.
-                        </div>
-                      ) : (
-                        (investigationSignals ?? []).map((sig) => (
-                          <div
-                            key={sig.id}
-                            className="rounded-xl border border-[var(--border)] p-3 space-y-2"
-                          >
-                            <p className="font-medium text-sm text-[var(--foreground)]">
-                              {sig.intel_signals?.title}
-                            </p>
-                            <p className="text-xs text-[var(--foreground-muted)]">
-                              {sig.intel_signals?.source}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant={isSignalReviewed(sig.notes) ? "secondary" : "ghost"}
-                                onClick={() =>
-                                  reviewSignalMutation.mutate({
-                                    investigationSignalId: sig.id,
-                                    reviewed: !isSignalReviewed(sig.notes),
-                                    notes: sig.notes ?? null,
-                                  })
-                                }
-                                disabled={reviewSignalMutation.isPending}
-                              >
-                                {isSignalReviewed(sig.notes) ? "Reviewed" : "Mark reviewed"}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => removeSignalMutation.mutate(sig.id)}
-                                disabled={removeSignalMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                        Import Saved Signals
-                      </p>
-                      {importableSavedSignals.length === 0 ? (
-                        <div className="text-center py-6 text-[var(--foreground-muted)]">
-                          No additional saved signals available.
-                        </div>
-                      ) : (
-                        importableSavedSignals.map((signal) => (
-                          <div
-                            key={signal.id}
-                            className="rounded-xl border border-[var(--border)] p-3 flex items-start justify-between gap-3"
-                          >
-                            <div>
-                              <p className="font-medium text-sm text-[var(--foreground)]">{signal.title}</p>
-                              <p className="text-xs text-[var(--foreground-muted)]">{signal.source}</p>
-                            </div>
+                    ) : (
+                      (investigationSignals ?? []).map((sig) => (
+                        <div
+                          key={sig.id}
+                          className="space-y-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
+                        >
+                          <p className="font-ui text-[12.5px] font-medium text-[var(--text)]">
+                            {sig.intel_signals?.title}
+                          </p>
+                          <p className="font-mono text-[11px] text-[var(--overlay-1)]">
+                            {sig.intel_signals?.source}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
                             <Button
                               size="sm"
-                              onClick={() => addSignalMutation.mutate(signal.id)}
-                              disabled={addSignalMutation.isPending}
+                              variant={isSignalReviewed(sig.notes) ? "secondary" : "ghost"}
+                              onClick={() =>
+                                reviewSignalMutation.mutate({
+                                  investigationSignalId: sig.id,
+                                  reviewed: !isSignalReviewed(sig.notes),
+                                  notes: sig.notes ?? null,
+                                })
+                              }
+                              disabled={reviewSignalMutation.isPending}
                             >
-                              Add
+                              {isSignalReviewed(sig.notes) ? "Reviewed" : "Mark reviewed"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => removeSignalMutation.mutate(sig.id)}
+                              disabled={removeSignalMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Remove
                             </Button>
                           </div>
-                        ))
-                      )}
-                    </div>
-
-                    {!collectGateComplete && (
-                      <div className="flex items-center gap-2 text-sm text-amber-500">
-                        <AlertCircle className="h-4 w-4" />
-                        Attach and review at least {COLLECT_MIN_SIGNALS} signals to unlock Phase 2 run.
-                      </div>
+                        </div>
+                      ))
                     )}
                   </div>
-                )}
 
-                {/* Phase 3-5: Artifact-aware views */}
-                {selectedPhase >= 3 && selectedPhase <= 5 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 p-4 rounded-xl bg-[var(--surface)]/50">
-                      <Target className="h-5 w-5 text-[var(--accent)]" />
-                      <p className="text-sm">
-                        Review the current artifact quality before running the next analytical phase.
+                  <div className="space-y-2">
+                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Import saved signals
+                    </p>
+                    {importableSavedSignals.length === 0 ? (
+                      <p className="py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                        No additional saved signals available.
                       </p>
-                    </div>
-
-                    {selectedPhase === 3 ? (
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3 text-sm">
-                        <p className="font-medium text-[var(--foreground)]">
-                          Entity register: {collateMetrics.total} extracted
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-                          Persons {collateMetrics.person} · Organisations {collateMetrics.organisation} · Locations {collateMetrics.location} · Events {collateMetrics.event}
-                        </p>
-                        {!collateGateComplete ? (
-                          <p className="mt-2 text-xs text-amber-500">
-                            Gate requires at least 3 extracted entities.
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {selectedPhase === 4 ? (
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3 text-sm">
-                        <p className="font-medium text-[var(--foreground)]">
-                          Timeline quality: {timelineMetrics.eventCount} dated events
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-                          Unresolved contradictions: {timelineMetrics.unresolvedContradictions}
-                        </p>
-                        {!timelineGateComplete ? (
-                          <p className="mt-2 text-xs text-amber-500">
-                            Gate requires at least 3 events and zero unresolved contradictions.
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {selectedPhase === 5 ? (
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3 text-sm">
-                        <p className="font-medium text-[var(--foreground)]">
-                          ACH matrix: {achMetrics.hypothesisCount} hypotheses
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-                          Evidence assessments: {achMetrics.assessmentCells}
-                        </p>
-                        {!achGateComplete ? (
-                          <p className="mt-2 text-xs text-amber-500">
-                            Gate requires at least 3 hypotheses and assessed evidence cells.
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--foreground-muted)] mb-2">
-                        Current Artifact
-                      </p>
-                      {isLoadingCurrentArtifact ? (
-                        <div className="flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading artifact...
+                    ) : (
+                      importableSavedSignals.map((signal) => (
+                        <div
+                          key={signal.id}
+                          className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                              {signal.title}
+                            </p>
+                            <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                              {signal.source}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => addSignalMutation.mutate(signal.id)}
+                            disabled={addSignalMutation.isPending}
+                          >
+                            Add
+                          </Button>
                         </div>
-                      ) : currentArtifactContent ? (
-                        <pre className="text-xs text-[var(--foreground-muted)] whitespace-pre-wrap overflow-auto max-h-80">
-                          {currentArtifactContent}
-                        </pre>
-                      ) : (
-                        <p className="text-sm text-[var(--foreground-muted)]">
-                          No artifact file found yet for this phase.
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 3-5: Artifact viewer */}
+              {selectedPhase >= 3 && selectedPhase <= 5 && (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                    <Target className="h-4 w-4 shrink-0 text-[var(--accent)]" />
+                    <p className="font-ui text-[12.5px] text-[var(--subtext-1)]">
+                      Review the current artifact quality before running the next analytical phase.
+                    </p>
+                  </div>
+
+                  {selectedPhase === 3 && (
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
+                      <p className="font-medium text-[var(--text)]">
+                        Entity register: {collateMetrics.total} extracted
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
+                        Persons {collateMetrics.person} · Organisations {collateMetrics.organisation} ·
+                        Locations {collateMetrics.location} · Events {collateMetrics.event}
+                      </p>
+                      {!collateGateComplete && (
+                        <p className="mt-2 text-[11px] text-[var(--warning)]">
+                          Gate requires at least 3 extracted entities.
                         </p>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {/* Phase 6: Report */}
-                {selectedPhase === 6 && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium">Report Type</label>
-                      <select
-                        className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
-                        value={selectedReportType}
-                        onChange={(e) => setSelectedReportType(e.target.value as typeof selectedReportType)}
-                      >
-                        {REPORT_TYPES.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.label}
-                          </option>
-                        ))}
-                      </select>
+                  )}
+                  {selectedPhase === 4 && (
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
+                      <p className="font-medium text-[var(--text)]">
+                        Timeline quality: {timelineMetrics.eventCount} dated events
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
+                        Unresolved contradictions: {timelineMetrics.unresolvedContradictions}
+                      </p>
+                      {!timelineGateComplete && (
+                        <p className="mt-2 text-[11px] text-[var(--warning)]">
+                          Gate requires at least 3 events and zero unresolved contradictions.
+                        </p>
+                      )}
                     </div>
-                    <p className="text-sm text-[var(--foreground-muted)]">
-                      Generate the final intelligence report based on all previous phases.
-                    </p>
-                  </div>
-                )}
+                  )}
+                  {selectedPhase === 5 && (
+                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
+                      <p className="font-medium text-[var(--text)]">
+                        ACH matrix: {achMetrics.hypothesisCount} hypotheses
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
+                        Evidence assessments: {achMetrics.assessmentCells}
+                      </p>
+                      {!achGateComplete && (
+                        <p className="mt-2 text-[11px] text-[var(--warning)]">
+                          Gate requires at least 3 hypotheses and assessed evidence cells.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                {/* Phase Output */}
-                {phaseOutput && (
-                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/50 p-4">
-                    <p className="text-sm font-medium mb-2">Phase Output</p>
-                    <pre className="text-xs text-[var(--foreground-muted)] whitespace-pre-wrap overflow-auto max-h-64">
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Current artifact
+                    </p>
+                    {isLoadingCurrentArtifact ? (
+                      <div className="mt-2 flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading artifact...
+                      </div>
+                    ) : currentArtifactContent ? (
+                      <pre className="mt-2 max-h-[60vh] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-[var(--subtext-1)]">
+                        {currentArtifactContent}
+                      </pre>
+                    ) : (
+                      <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                        No artifact file found yet for this phase.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 6: Report */}
+              {selectedPhase === 6 && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Report type
+                    </label>
+                    <select
+                      className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12.5px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                      value={selectedReportType}
+                      onChange={(e) =>
+                        setSelectedReportType(e.target.value as typeof selectedReportType)
+                      }
+                    >
+                      {REPORT_TYPES.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="font-ui text-[12.5px] text-[var(--subtext-0)]">
+                    Generate the final intelligence report based on all previous phases.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center p-10">
+              <div className="max-w-[380px] text-center">
+                <FolderOpen className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
+                <p className="font-ui text-[15px] font-medium text-[var(--text)]">
+                  Select an investigation
+                </p>
+                <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                  Choose a case from the left or create a new one to begin.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ============================================================
+          RIGHT RAIL — Status / Output
+          ============================================================ */}
+      <aside
+        style={{ width: rightOpen ? 320 : 0 }}
+        className={cn(
+          "relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--mantle)]",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        )}
+      >
+        {rightOpen && (
+          <>
+            <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
+              <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
+                <InvRailTab
+                  active={railTab === "status"}
+                  onClick={() => setRailTab("status")}
+                  icon={<Activity className="h-3 w-3" />}
+                  label="Status"
+                />
+                <InvRailTab
+                  active={railTab === "output"}
+                  onClick={() => setRailTab("output")}
+                  icon={<FileText className="h-3 w-3" />}
+                  label="Output"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setRightOpen(false)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Close rail"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {!selectedInvestigation ? (
+                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                  Select a case to see status and output.
+                </p>
+              ) : railTab === "status" ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Phase gates
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {PHASES.map((phase) => {
+                        const status = getPhaseGateStatus(phase.id, selectedPhaseGates);
+                        const complete = selectedPhaseGates[getPhaseGateKey(phase.id)] ?? false;
+                        return (
+                          <div
+                            key={phase.id}
+                            className="flex items-center justify-between rounded px-2 py-1.5 font-ui text-[12px]"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                aria-hidden
+                                className={cn(
+                                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                                  status === "green"
+                                    ? "bg-[var(--success)]"
+                                    : status === "amber"
+                                      ? "bg-[var(--warning)]"
+                                      : "bg-[var(--danger)]",
+                                )}
+                              />
+                              <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+                                {phase.id}
+                              </span>
+                              <span className="truncate text-[var(--subtext-1)]">{phase.name}</span>
+                            </div>
+                            {complete && (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-[var(--success)]" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[var(--border)] pt-4">
+                    <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Current phase metrics
+                    </p>
+                    <div className="mt-2 space-y-1.5 font-ui text-[12px]">
+                      {selectedPhase === 1 && (
+                        <InvMetric
+                          label="Plan complete"
+                          value={planGateComplete ? "Yes" : "No"}
+                          tone={planGateComplete ? "good" : "warn"}
+                        />
+                      )}
+                      {selectedPhase === 2 && (
+                        <>
+                          <InvMetric
+                            label="Attached"
+                            value={String(investigationSignals?.length ?? 0)}
+                          />
+                          <InvMetric
+                            label="Reviewed"
+                            value={`${reviewedSignalCount}/${COLLECT_MIN_SIGNALS}`}
+                            tone={collectGateComplete ? "good" : "warn"}
+                          />
+                        </>
+                      )}
+                      {selectedPhase === 3 && (
+                        <>
+                          <InvMetric label="Persons" value={String(collateMetrics.person)} />
+                          <InvMetric
+                            label="Organisations"
+                            value={String(collateMetrics.organisation)}
+                          />
+                          <InvMetric label="Locations" value={String(collateMetrics.location)} />
+                          <InvMetric label="Events" value={String(collateMetrics.event)} />
+                          <InvMetric
+                            label="Total entities"
+                            value={String(collateMetrics.total)}
+                            tone={collateGateComplete ? "good" : "warn"}
+                          />
+                        </>
+                      )}
+                      {selectedPhase === 4 && (
+                        <>
+                          <InvMetric
+                            label="Dated events"
+                            value={String(timelineMetrics.eventCount)}
+                          />
+                          <InvMetric
+                            label="Unresolved"
+                            value={String(timelineMetrics.unresolvedContradictions)}
+                            tone={timelineGateComplete ? "good" : "warn"}
+                          />
+                        </>
+                      )}
+                      {selectedPhase === 5 && (
+                        <>
+                          <InvMetric
+                            label="Hypotheses"
+                            value={String(achMetrics.hypothesisCount)}
+                          />
+                          <InvMetric
+                            label="Assessments"
+                            value={String(achMetrics.assessmentCells)}
+                            tone={achGateComplete ? "good" : "warn"}
+                          />
+                        </>
+                      )}
+                      {selectedPhase === 6 && (
+                        <InvMetric
+                          label="Report type"
+                          value={
+                            REPORT_TYPES.find((t) => t.id === selectedReportType)?.label ?? ""
+                          }
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    Latest phase output
+                  </p>
+                  {phaseOutput ? (
+                    <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">
                       {phaseOutput}
                     </pre>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                      No output yet. Run a phase to see Claude's response here.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </>
-        ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <FolderOpen className="h-12 w-12 mx-auto text-[var(--foreground-muted)] mb-4" />
-              <p className="text-lg font-medium text-[var(--foreground)]">Select an investigation</p>
-              <p className="text-sm text-[var(--foreground-muted)]">
-                Choose a case from the sidebar or create a new one to begin.
-              </p>
-            </CardContent>
-          </Card>
         )}
-      </div>
+      </aside>
+    </div>
+  );
+}
+
+function InvRailTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded px-2 py-1 font-ui text-[11px] font-medium transition-colors",
+        active
+          ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function InvMetric({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "warn" | "neutral";
+}) {
+  const color =
+    tone === "good"
+      ? "text-[var(--success)]"
+      : tone === "warn"
+        ? "text-[var(--warning)]"
+        : "text-[var(--text)]";
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[var(--overlay-1)]">{label}</span>
+      <span className={cn("font-mono text-[12px]", color)}>{value}</span>
     </div>
   );
 }

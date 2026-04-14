@@ -1,18 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronRight,
   FileText,
+  FileClock,
   FolderOpen,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Sparkles,
-  FileClock,
+  X,
 } from "lucide-react";
 
-
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ensureInvestigationDirectory, readVaultDirectory, readVaultFile, writeVaultFile } from "@/lib/vault";
+import { cn } from "@/lib/utils";
+import { useWindowSize } from "@/lib/use-window-size";
+import {
+  ensureInvestigationDirectory,
+  readVaultDirectory,
+  readVaultFile,
+  writeVaultFile,
+} from "@/lib/vault";
 import { createVaultFile, listInvestigations, listSignals } from "@/lib/data";
 import { spawnClaude, buildReportPrompt } from "@/lib/shell";
 import type { VaultEntry } from "@/lib/vault";
@@ -38,17 +49,50 @@ export function ReportsView() {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [selectedSignals, setSelectedSignals] = useState<Set<number>>(new Set());
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [selectedReportType, setSelectedReportType] = useState<typeof REPORT_TYPES[number]["id"]>("internal");
+  const [selectedReportType, setSelectedReportType] =
+    useState<typeof REPORT_TYPES[number]["id"]>("internal");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationOutput, setGenerationOutput] = useState<string | null>(null);
 
-  // Query vault directory
+  const { isCramped } = useWindowSize();
+  const [leftOpen, setLeftOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("intelizen:reports-left-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [rightOpen, setRightOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("intelizen:reports-right-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("intelizen:reports-left-open", leftOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [leftOpen]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("intelizen:reports-right-open", rightOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [rightOpen]);
+  useEffect(() => {
+    if (isCramped) setRightOpen(false);
+  }, [isCramped]);
+
   const { data: vaultEntries, isLoading: isLoadingVault } = useQuery({
     queryKey: ["vault-entries"],
     queryFn: () => readVaultDirectory(),
   });
 
-  // Query investigations for context
   const { data: investigations } = useQuery({
     queryKey: ["investigations"],
     queryFn: listInvestigations,
@@ -61,7 +105,6 @@ export function ReportsView() {
     }
   }, [investigations, selectedCaseId]);
 
-  // Query saved signals for trigger analysis
   const { data: savedSignals } = useQuery({
     queryKey: ["signals", "saved"],
     queryFn: async () => {
@@ -70,30 +113,31 @@ export function ReportsView() {
     },
   });
 
-  // Read selected file
   useEffect(() => {
     if (!selectedPath) {
       setFileContent(null);
       return;
     }
-
     void (async () => {
       const content = await readVaultFile(selectedPath);
       setFileContent(content);
     })();
   }, [selectedPath]);
 
-  // Organize vault entries
   const organizedEntries = useMemo(() => {
     if (!vaultEntries) return { investigations: [], reports: [], other: [] };
-
     return {
-      investigations: vaultEntries.filter((e) => e.isDirectory && e.name === "investigations"),
+      investigations: vaultEntries.filter(
+        (e) => e.isDirectory && e.name === "investigations",
+      ),
       reports: vaultEntries.filter(
-        (e) => !e.isDirectory && (e.name.endsWith(".md") || e.name.endsWith(".txt"))
+        (e) => !e.isDirectory && (e.name.endsWith(".md") || e.name.endsWith(".txt")),
       ),
       other: vaultEntries.filter(
-        (e) => e.name !== "investigations" && !e.name.endsWith(".md") && !e.name.endsWith(".txt")
+        (e) =>
+          e.name !== "investigations" &&
+          !e.name.endsWith(".md") &&
+          !e.name.endsWith(".txt"),
       ),
     };
   }, [vaultEntries]);
@@ -116,7 +160,7 @@ export function ReportsView() {
           title: s.title,
           snippet: s.snippet ?? "",
           source: s.source ?? "unknown",
-        }))
+        })),
       );
 
       const result = await spawnClaude({ prompt });
@@ -127,7 +171,9 @@ export function ReportsView() {
         const fileName = `${selectedReportType}-${timestamp}.md`;
         const casePath = `investigations/${selectedCaseId}`;
         const filePath = `${casePath}/${fileName}`;
-        const content = `# ${REPORT_TYPES.find((type) => type.id === selectedReportType)?.label ?? "Report"}\n\nGenerated at: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
+        const content = `# ${
+          REPORT_TYPES.find((type) => type.id === selectedReportType)?.label ?? "Report"
+        }\n\nGenerated at: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
 
         await ensureInvestigationDirectory(selectedCaseId);
         await writeVaultFile(filePath, content);
@@ -146,7 +192,9 @@ export function ReportsView() {
         setGenerationOutput(`Error: ${result.error}`);
       }
     } catch (error) {
-      setGenerationOutput(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setGenerationOutput(
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -155,38 +203,55 @@ export function ReportsView() {
   function toggleSignal(id: number) {
     setSelectedSignals((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
+  const fileName = selectedPath ? selectedPath.split("/").pop() ?? selectedPath : null;
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-      {/* Sidebar */}
-      <div className="space-y-4">
-        {/* Vault Browser */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Vault</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingVault ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-[var(--accent)]" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Investigations */}
-                {organizedEntries.investigations.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
-                      Investigations
-                    </p>
-                    <div className="space-y-1">
+    <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--base)]">
+      {/* ============================================================
+          LEFT RAIL — Vault browser
+          ============================================================ */}
+      <aside
+        style={{ width: leftOpen ? 260 : 0 }}
+        className={cn(
+          "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--mantle)]",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        )}
+      >
+        {leftOpen && (
+          <>
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
+              <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                Vault
+              </span>
+              <button
+                type="button"
+                onClick={() => setLeftOpen(false)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Hide vault"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {isLoadingVault ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+                </div>
+              ) : vaultEntries?.length === 0 ? (
+                <div className="px-2 py-6 text-center">
+                  <FolderOpen className="mx-auto mb-2 h-6 w-6 text-[var(--overlay-1)]" />
+                  <p className="font-ui text-[11px] text-[var(--overlay-1)]">Vault is empty</p>
+                </div>
+              ) : (
+                <>
+                  {organizedEntries.investigations.length > 0 && (
+                    <VaultGroup label="Investigations">
                       {organizedEntries.investigations.map((entry) => (
                         <VaultEntryItem
                           key={entry.path}
@@ -196,17 +261,10 @@ export function ReportsView() {
                           investigations={investigations}
                         />
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Reports */}
-                {organizedEntries.reports.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
-                      Reports
-                    </p>
-                    <div className="space-y-1">
+                    </VaultGroup>
+                  )}
+                  {organizedEntries.reports.length > 0 && (
+                    <VaultGroup label="Reports">
                       {organizedEntries.reports.map((entry) => (
                         <VaultEntryItem
                           key={entry.path}
@@ -215,17 +273,10 @@ export function ReportsView() {
                           onSelect={setSelectedPath}
                         />
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Other Files */}
-                {organizedEntries.other.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
-                      Other
-                    </p>
-                    <div className="space-y-1">
+                    </VaultGroup>
+                  )}
+                  {organizedEntries.other.length > 0 && (
+                    <VaultGroup label="Other">
                       {organizedEntries.other.map((entry) => (
                         <VaultEntryItem
                           key={entry.path}
@@ -234,165 +285,255 @@ export function ReportsView() {
                           onSelect={setSelectedPath}
                         />
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {vaultEntries?.length === 0 && (
-                  <div className="text-center py-4 text-[var(--foreground-muted)]">
-                    <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Vault is empty</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Trigger Analysis */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Trigger Analysis</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-[var(--foreground-muted)]">
-              Select saved signals and generate a report.
-            </p>
-
-            <div className="space-y-2 max-h-48 overflow-auto">
-              {(savedSignals ?? []).length === 0 ? (
-                <p className="text-sm text-[var(--foreground-muted)] text-center py-4">
-                  No saved signals
-                </p>
-              ) : (
-                (savedSignals ?? []).map((signal) => (
-                  <label
-                    key={signal.id}
-                    className="flex items-start gap-2 p-2 rounded-lg hover:bg-[var(--surface)] cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={selectedSignals.has(signal.id)}
-                      onCheckedChange={() => toggleSignal(signal.id)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{signal.title}</p>
-                      <p className="text-xs text-[var(--foreground-muted)]">{signal.source}</p>
-                    </div>
-                  </label>
-                ))
+                    </VaultGroup>
+                  )}
+                </>
               )}
             </div>
+          </>
+        )}
+      </aside>
 
-            <div>
-              <label className="text-xs font-medium">Investigation Case</label>
-              <select
-                className="h-9 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-2 text-sm mt-1"
-                value={selectedCaseId ?? ""}
-                onChange={(e) => setSelectedCaseId(e.target.value || null)}
+      {/* ============================================================
+          MAIN COLUMN — Topbar + reader
+          ============================================================ */}
+      <div className="relative flex flex-1 min-w-0 flex-col">
+        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {!leftOpen && (
+              <button
+                type="button"
+                onClick={() => setLeftOpen(true)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Show vault"
               >
-                {(investigations ?? []).length === 0 ? (
-                  <option value="">No investigations available</option>
-                ) : (
-                  (investigations ?? []).map((investigation) => (
-                    <option key={investigation.case_id} value={investigation.case_id}>
-                      {investigation.name} ({investigation.case_id})
-                    </option>
-                  ))
-                )}
-              </select>
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            )}
+            <div className="flex min-w-0 items-center gap-1.5 font-ui text-[12px]">
+              <span className="text-[var(--overlay-1)]">Reports</span>
+              {fileName && !isCramped && (
+                <>
+                  <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
+                  <span className="truncate text-[var(--text)]">{fileName}</span>
+                </>
+              )}
             </div>
+          </div>
 
-            <div>
-              <label className="text-xs font-medium">Report Type</label>
-              <select
-                className="h-9 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-2 text-sm mt-1"
-                value={selectedReportType}
-                onChange={(e) => setSelectedReportType(e.target.value as typeof selectedReportType)}
+          <div className="flex items-center gap-1.5">
+            {selectedPath && (
+              <button
+                type="button"
+                onClick={() => setSelectedPath(null)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[11px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                title="Close file"
               >
-                {REPORT_TYPES.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <Button
-              className="w-full"
-              onClick={handleGenerateReport}
-              disabled={selectedSignals.size === 0 || isGenerating || !selectedCaseId}
+                <X className="h-3 w-3" />
+                Close
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setRightOpen((o) => !o)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              title={rightOpen ? "Hide rail" : "Show rail"}
             >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
+              {rightOpen ? (
+                <PanelRightClose className="h-4 w-4" />
               ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Report ({selectedSignals.size})
-                </>
+                <PanelRightOpen className="h-4 w-4" />
               )}
-            </Button>
+            </button>
+          </div>
+        </div>
 
-            {generationOutput && (
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/50 p-3">
-                <p className="text-xs font-medium mb-1">Output Preview</p>
-                <pre className="text-xs text-[var(--foreground-muted)] whitespace-pre-wrap max-h-32 overflow-auto">
-                  {generationOutput.slice(0, 500)}
-                  {generationOutput.length > 500 && "..."}
-                </pre>
+        <div className="flex-1 overflow-y-auto">
+          {selectedPath && fileContent !== null ? (
+            <div className="mx-auto max-w-[880px] px-6 py-8">
+              <p className="font-mono text-[11px] text-[var(--overlay-1)]">{selectedPath}</p>
+              <pre className="mt-4 whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-[var(--subtext-1)]">
+                {fileContent}
+              </pre>
+            </div>
+          ) : selectedPath ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center p-10">
+              <div className="max-w-[380px] text-center">
+                <FileClock className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
+                <p className="font-ui text-[15px] font-medium text-[var(--text)]">
+                  Select a file to view
+                </p>
+                <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                  Browse the vault on the left or generate a new report from the right.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Main Content - File Viewer */}
-      <Card className="flex flex-col">
-        {selectedPath && fileContent !== null ? (
-          <>
-            <CardHeader className="border-b border-[var(--border)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-[var(--accent)]" />
-                  <CardTitle className="text-lg">{selectedPath}</CardTitle>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedPath(null)}>
-                  Close
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-auto p-6">
-              <div className="prose prose-invert prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap font-mono text-sm text-[var(--foreground)]">
-                  {fileContent}
-                </pre>
-              </div>
-            </CardContent>
-          </>
-        ) : selectedPath ? (
-          <CardContent className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)] mx-auto mb-4" />
-              <p className="text-[var(--foreground-muted)]">Loading...</p>
-            </div>
-          </CardContent>
-        ) : (
-          <CardContent className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-            <FileClock className="h-16 w-16 text-[var(--foreground-muted)] mb-4" />
-            <p className="text-lg font-medium text-[var(--foreground)]">Select a file to view</p>
-            <p className="text-sm text-[var(--foreground-muted)] max-w-sm">
-              Browse the vault on the left to view intelligence products, or use Trigger Analysis to generate new reports.
-            </p>
-          </CardContent>
+      {/* ============================================================
+          RIGHT RAIL — Generate report
+          ============================================================ */}
+      <aside
+        style={{ width: rightOpen ? 340 : 0 }}
+        className={cn(
+          "relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--mantle)]",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
         )}
-      </Card>
+      >
+        {rightOpen && (
+          <>
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-3">
+              <div className="flex items-center gap-1.5 font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+                Generate report
+              </div>
+              <button
+                type="button"
+                onClick={() => setRightOpen(false)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Close rail"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+                Select saved signals and generate a report.
+              </p>
+
+              <div className="mt-3 space-y-1">
+                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Signals
+                </p>
+                <div className="max-h-[220px] space-y-1 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--base)] p-1">
+                  {(savedSignals ?? []).length === 0 ? (
+                    <p className="py-4 text-center font-ui text-[11px] text-[var(--overlay-1)]">
+                      No saved signals
+                    </p>
+                  ) : (
+                    (savedSignals ?? []).map((signal) => (
+                      <label
+                        key={signal.id}
+                        className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 transition-colors hover:bg-[var(--surface-wash)]"
+                      >
+                        <Checkbox
+                          checked={selectedSignals.has(signal.id)}
+                          onCheckedChange={() => toggleSignal(signal.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-ui text-[12px] text-[var(--text)]">
+                            {signal.title}
+                          </p>
+                          <p className="truncate font-mono text-[10px] text-[var(--overlay-1)]">
+                            {signal.source}
+                          </p>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-1.5">
+                <label className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Investigation case
+                </label>
+                <select
+                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  value={selectedCaseId ?? ""}
+                  onChange={(e) => setSelectedCaseId(e.target.value || null)}
+                >
+                  {(investigations ?? []).length === 0 ? (
+                    <option value="">No investigations available</option>
+                  ) : (
+                    (investigations ?? []).map((investigation) => (
+                      <option key={investigation.case_id} value={investigation.case_id}>
+                        {investigation.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="mt-3 space-y-1.5">
+                <label className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Report type
+                </label>
+                <select
+                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  value={selectedReportType}
+                  onChange={(e) =>
+                    setSelectedReportType(e.target.value as typeof selectedReportType)
+                  }
+                >
+                  {REPORT_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="font-ui text-[10.5px] text-[var(--overlay-1)]">
+                  {REPORT_TYPES.find((t) => t.id === selectedReportType)?.description}
+                </p>
+              </div>
+
+              <Button
+                className="mt-4 w-full"
+                onClick={handleGenerateReport}
+                disabled={selectedSignals.size === 0 || isGenerating || !selectedCaseId}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate ({selectedSignals.size})
+                  </>
+                )}
+              </Button>
+
+              {generationOutput && (
+                <div className="mt-4 rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
+                  <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    Output preview
+                  </p>
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">
+                    {generationOutput.slice(0, 500)}
+                    {generationOutput.length > 500 && "..."}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </aside>
     </div>
   );
 }
 
-// Vault entry item component
+function VaultGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <p className="px-2 pb-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        {label}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
 function VaultEntryItem({
   entry,
   selectedPath,
@@ -409,7 +550,6 @@ function VaultEntryItem({
   const [isExpanded, setIsExpanded] = useState(false);
   const isSelected = selectedPath === entry.path;
 
-  // Try to find investigation name for investigations folder
   const investigationName = useMemo(() => {
     if (!investigations || entry.name === "investigations") return null;
     const inv = investigations.find((i) => entry.name.includes(i.case_id));
@@ -420,15 +560,16 @@ function VaultEntryItem({
     return (
       <div>
         <button
+          type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 w-full p-2 rounded-lg hover:bg-[var(--surface)] text-left"
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-1)] transition-colors hover:bg-[var(--surface-wash)]"
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
         >
-          <FolderOpen className="h-4 w-4 text-[var(--accent)]" />
-          <span className="text-sm font-medium">{investigationName || entry.name}</span>
+          <FolderOpen className="h-3.5 w-3.5 text-[var(--accent)]" />
+          <span className="truncate">{investigationName || entry.name}</span>
         </button>
         {isExpanded && entry.children && (
-          <div className="mt-1">
+          <div>
             {entry.children.map((child) => (
               <VaultEntryItem
                 key={child.path}
@@ -447,14 +588,18 @@ function VaultEntryItem({
 
   return (
     <button
+      type="button"
       onClick={() => onSelect(entry.path)}
-      className={`flex items-center gap-2 w-full p-2 rounded-lg text-left transition ${
-        isSelected ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "hover:bg-[var(--surface)]"
-      }`}
+      className={cn(
+        "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-ui text-[12px] transition-colors",
+        isSelected
+          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+          : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+      )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
     >
-      <FileText className="h-4 w-4 opacity-50" />
-      <span className="text-sm truncate">{entry.name}</span>
+      <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+      <span className="truncate">{entry.name}</span>
     </button>
   );
 }

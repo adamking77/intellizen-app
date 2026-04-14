@@ -320,44 +320,101 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
           width={size.width}
           height={size.height}
           graphData={graphData}
-          backgroundColor="#0b1517"
+          backgroundColor="#11111b"
           nodeId="id"
           nodeRelSize={5.2}
           nodeVal={(node) => node.val}
           nodeColor={(node) => {
-            const selected = node.id === props.selectedNodeId || selectedNodeSet.has(node.id);
-            const onPath = pathNodeSet.has(node.id);
-            const isEgoCenter = props.egoCenterNodeId === node.id;
             const isContextVisible = !contextualNodeSet || contextualNodeSet.has(node.id);
-
-            if (!isContextVisible) return "rgba(120,150,150,0.24)";
-            if (selected) return "#7fe6ca";
-            if (isEgoCenter || onPath) return "#f2cf74";
+            if (!isContextVisible) return "rgba(127, 132, 156, 0.22)";
             return node.color;
           }}
           nodeCanvasObjectMode={() => "after"}
           nodeCanvasObject={(node, ctx, globalScale) => {
+            const selected = node.id === props.selectedNodeId || selectedNodeSet.has(node.id);
+            const onPath = pathNodeSet.has(node.id);
+            const isEgoCenter = props.egoCenterNodeId === node.id;
+            const x = node.x ?? 0;
+            const y = node.y ?? 0;
+            const radius = Math.sqrt(node.val ?? 1) * 5.2;
+
+            // Selected halo — 1px accent ring at 4px offset
+            if (selected || isEgoCenter || onPath) {
+              ctx.beginPath();
+              ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
+              ctx.strokeStyle = selected ? "#89b4fa" : "#b4befe";
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+
             if (globalScale < 0.8 && props.labelMode === "context") return;
             if (!shouldShowLabel(node)) return;
-            const fontSize = clamp(11.5 / globalScale, 10.5, 14);
-            const label = node.label.length > 26 ? `${node.label.slice(0, 25)}…` : node.label;
-            const x = node.x ?? 0;
-            const y = (node.y ?? 0) + 12;
-            ctx.font = `${fontSize}px sans-serif`;
+
+            const fontSize = clamp(11 / globalScale, 10, 13);
+            const label = node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label;
+            ctx.font = `500 ${fontSize}px Satoshi, system-ui, sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "top";
-            ctx.fillStyle = "rgba(223, 238, 234, 0.64)";
-            ctx.fillText(label, x, y);
+
+            // Label pill background (only for selected / on-path / ego)
+            if (selected || onPath || isEgoCenter) {
+              const metrics = ctx.measureText(label);
+              const padX = 6;
+              const padY = 3;
+              const w = metrics.width + padX * 2;
+              const h = fontSize + padY * 2;
+              const px = x - w / 2;
+              const py = y + radius + 6;
+              ctx.fillStyle = "#181825";
+              ctx.strokeStyle = "rgba(69, 71, 90, 0.6)";
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              // rounded rect
+              const r = 4;
+              ctx.moveTo(px + r, py);
+              ctx.lineTo(px + w - r, py);
+              ctx.quadraticCurveTo(px + w, py, px + w, py + r);
+              ctx.lineTo(px + w, py + h - r);
+              ctx.quadraticCurveTo(px + w, py + h, px + w - r, py + h);
+              ctx.lineTo(px + r, py + h);
+              ctx.quadraticCurveTo(px, py + h, px, py + h - r);
+              ctx.lineTo(px, py + r);
+              ctx.quadraticCurveTo(px, py, px + r, py);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+              ctx.fillStyle = "#cdd6f4";
+              ctx.fillText(label, x, py + padY);
+            } else {
+              ctx.fillStyle = "rgba(166, 173, 200, 0.55)";
+              ctx.fillText(label, x, y + radius + 6);
+            }
           }}
           linkColor={(link) => {
             const selected = link.id === props.selectedEdgeId || selectedEdgeSet.has(link.id);
             const onPath = pathEdgeSet.has(link.id);
-            return selected ? "#7fe6ca" : onPath ? "#f2cf74" : "rgba(138,190,192,0.6)";
+            if (selected) return "#89b4fa";
+            if (onPath) return "#b4befe";
+            // Entity-hue tint when incident to an active selection
+            const activeSelection = props.selectedNodeId || selectedNodeSet.size > 0;
+            if (activeSelection) {
+              const sourceId = typeof link.source === "object" ? (link.source as GraphNode).id : (link.source as string);
+              const targetId = typeof link.target === "object" ? (link.target as GraphNode).id : (link.target as string);
+              if (
+                sourceId === props.selectedNodeId ||
+                targetId === props.selectedNodeId ||
+                selectedNodeSet.has(sourceId) ||
+                selectedNodeSet.has(targetId)
+              ) {
+                return "rgba(137, 180, 250, 0.8)";
+              }
+            }
+            return "rgba(108, 112, 134, 0.4)";
           }}
           linkWidth={(link) => {
             const selected = link.id === props.selectedEdgeId || selectedEdgeSet.has(link.id);
             const onPath = pathEdgeSet.has(link.id);
-            return selected ? 2.8 : onPath ? 2.4 : 1.2;
+            return selected ? 2 : onPath ? 1.5 : 1;
           }}
           linkDirectionalArrowLength={4}
           linkDirectionalArrowRelPos={0.96}

@@ -24,13 +24,14 @@ export function Checkbox({
       />
       <div
         className={cn(
-          "h-4 w-4 rounded border transition-colors",
+          "h-4 w-4 rounded-[4px] border inline-flex items-center justify-center",
+          "transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
           checked
             ? "bg-[var(--accent)] border-[var(--accent)]"
-            : "bg-[var(--surface-strong)] border-[var(--border)] hover:border-[var(--accent)]"
+            : "bg-[var(--mantle)] border-[var(--surface-1)] hover:border-[var(--accent)]"
         )}
       >
-        {checked && <Check className="h-3 w-3 text-white m-auto" />}
+        {checked && <Check className="h-3 w-3 text-[var(--crust)]" strokeWidth={3} />}
       </div>
     </label>
   );

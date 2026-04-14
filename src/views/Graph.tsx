@@ -2,27 +2,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
+  Building2,
+  CalendarClock,
+  ChevronRight,
   Crosshair,
-  FolderKanban,
-  GitBranch,
   Link2,
-  Move,
+  MapPin,
+  Maximize2,
+  MoreHorizontal,
   Orbit,
+  PanelRightClose,
+  PanelRightOpen,
   Redo2,
   Route,
-  ScanSearch,
+  Search,
   Sparkles,
   Trash2,
-  Unlink,
   Undo2,
+  Unlink,
+  User,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   buildEdgePath,
   buildEdgePreviewPath,
@@ -45,7 +51,6 @@ import {
   NODE_HEIGHT,
   NODE_WIDTH,
   truncateLabel,
-  VIEWPORT_HEIGHT,
   WORLD_HEIGHT,
   WORLD_MARGIN,
   WORLD_WIDTH,
@@ -53,6 +58,7 @@ import {
   type Point,
   type ViewportState,
 } from "@/lib/graph-geometry";
+import { useWindowSize } from "@/lib/use-window-size";
 import {
   createGraphEdge,
   createGraphNode,
@@ -82,39 +88,58 @@ const ENTITY_STYLES: Record<
     fill: string;
     border: string;
     text: string;
+    accent: string;
   }
 > = {
   person: {
-    chip: "rgba(127, 230, 202, 0.18)",
-    fill: "rgba(127, 230, 202, 0.14)",
-    border: "rgba(127, 230, 202, 0.38)",
-    text: "#def6ef",
+    chip: "rgba(148, 226, 213, 0.16)",
+    fill: "var(--base)",
+    border: "rgba(148, 226, 213, 0.35)",
+    text: "var(--text)",
+    accent: "#94e2d5",
   },
   organisation: {
-    chip: "rgba(117, 166, 255, 0.18)",
-    fill: "rgba(117, 166, 255, 0.14)",
-    border: "rgba(117, 166, 255, 0.4)",
-    text: "#dce8ff",
+    chip: "rgba(116, 199, 236, 0.16)",
+    fill: "var(--base)",
+    border: "rgba(116, 199, 236, 0.35)",
+    text: "var(--text)",
+    accent: "#74c7ec",
   },
   location: {
-    chip: "rgba(242, 193, 86, 0.2)",
-    fill: "rgba(242, 193, 86, 0.16)",
-    border: "rgba(242, 193, 86, 0.42)",
-    text: "#fff0c3",
+    chip: "rgba(250, 179, 135, 0.16)",
+    fill: "var(--base)",
+    border: "rgba(250, 179, 135, 0.35)",
+    text: "var(--text)",
+    accent: "#fab387",
   },
   event: {
-    chip: "rgba(210, 128, 110, 0.18)",
-    fill: "rgba(210, 128, 110, 0.14)",
-    border: "rgba(210, 128, 110, 0.42)",
-    text: "#ffe2d8",
+    chip: "rgba(243, 139, 168, 0.16)",
+    fill: "var(--base)",
+    border: "rgba(243, 139, 168, 0.35)",
+    text: "var(--text)",
+    accent: "#f38ba8",
   },
 };
 
 const INSIGHT_NODE_COLORS: Record<GraphEntityType, string> = {
-  person: "#4ebea5",
-  organisation: "#6f95e9",
-  location: "#dfaa49",
-  event: "#c77769",
+  person: "#94e2d5",
+  organisation: "#74c7ec",
+  location: "#fab387",
+  event: "#f38ba8",
+};
+
+const ENTITY_ICON: Record<GraphEntityType, typeof User> = {
+  person: User,
+  organisation: Building2,
+  location: MapPin,
+  event: CalendarClock,
+};
+
+const ENTITY_LABEL: Record<GraphEntityType, string> = {
+  person: "Person",
+  organisation: "Organisation",
+  location: "Location",
+  event: "Event",
 };
 
 const EMPTY_STRING_SET = new Set<string>();
@@ -217,6 +242,37 @@ export function GraphView() {
   const [insightCenterPull, setInsightCenterPull] = useState(0.03);
   const [insightLabelMode, setInsightLabelMode] = useState<"context" | "selected" | "all">("all");
   const [insightLayoutTick, setInsightLayoutTick] = useState(0);
+  const [railOpen, setRailOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("intelizen:graph-rail-open") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [railTab, setRailTab] = useState<"inspect" | "controls">("inspect");
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const { isCramped } = useWindowSize();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("intelizen:graph-rail-open", railOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [railOpen]);
+
+  // Auto-close the rail when the window gets cramped; user can still re-open.
+  useEffect(() => {
+    if (isCramped) setRailOpen(false);
+  }, [isCramped]);
+
+  // Auto-swap rail to inspect when a selection is made
+  useEffect(() => {
+    if (selectedNodeId || selectedEdgeId || selectedNodeIds.length > 0 || selectedEdgeIds.length > 0) {
+      setRailTab("inspect");
+      setRailOpen(true);
+    }
+  }, [selectedNodeId, selectedEdgeId, selectedNodeIds.length, selectedEdgeIds.length]);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState>(null);
@@ -780,11 +836,6 @@ export function GraphView() {
     () => new Map(renderedFilteredNodes.map((node) => [node.node_id, node.position])),
     [renderedFilteredNodes],
   );
-
-  const selectedNodeDisplayPosition = useMemo(() => {
-    if (!selectedNode || isInsightMode) return null;
-    return visibleNodePositionMap.get(selectedNode.node_id) ?? selectedNode.position;
-  }, [isInsightMode, selectedNode, visibleNodePositionMap]);
 
   const hoveredEdgeDragTargetNodeId = useMemo(() => {
     if (!edgeDragState || !pointerWorld) return null;
@@ -1820,7 +1871,7 @@ export function GraphView() {
 
     const nextScale = clamp(
       viewportStateRef.current.scale * (event.deltaY < 0 ? 1.08 : 0.92),
-      0.5,
+      0.25,
       1.75,
     );
 
@@ -1831,1533 +1882,1650 @@ export function GraphView() {
     });
   }
 
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <Card className="transition-all duration-300 hover:border-[var(--accent)]/10 hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
-        <CardHeader>
-          <CardTitle className="tracking-tight">Graph controls</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Graph Mode Selector */}
-          <div className="relative grid grid-cols-2 gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-1.5">
-            <div
-              className="absolute top-1.5 bottom-1.5 rounded-xl bg-[var(--surface-strong)] shadow-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-              style={{
-                width: "calc(50% - 6px)",
-                left: graphMode === "standalone" ? "6px" : "calc(50%)",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setGraphMode("standalone");
-                setInteractionMode("construct");
-                setGraphProjectId(null);
-                clearSelection();
-                clearPathAnalysis();
-                handleClearEgoNetwork();
-                setConnectSourceId(null);
-              }}
-              className={`relative z-10 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ${
-                graphMode === "standalone"
-                  ? "text-[var(--foreground)]"
-                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
-              }`}
-            >
-              <GitBranch className="h-4 w-4" />
-              Manual
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setGraphMode("project");
-                setInteractionMode("insight");
-                if (projects && projects.length > 0 && !graphProjectId) {
-                  setGraphProjectId(projects[0].id);
+    <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--crust)]">
+      {/* ============================================================
+          Main column: topbar + full-bleed canvas
+          ============================================================ */}
+      <div className="relative flex flex-1 min-w-0 flex-col">
+        {/* ---------- TOP BAR ---------- */}
+        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+          {/* Left — breadcrumb + scope */}
+          <div className="flex min-w-0 items-center gap-3">
+            {!isCramped && (
+              <div className="flex items-center gap-1.5 font-ui text-[12px]">
+                <span className="text-[var(--overlay-1)]">Graph</span>
+                <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
+                <span className="truncate text-[var(--text)]">
+                  {graphMode === "standalone"
+                    ? "Standalone"
+                    : selectedProject?.name ?? "Select project"}
+                </span>
+              </div>
+            )}
+            <select
+              value={graphMode === "standalone" ? "standalone" : String(graphProjectId ?? "")}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "standalone") {
+                  setGraphMode("standalone");
+                  setInteractionMode("construct");
+                  setGraphProjectId(null);
+                } else {
+                  setGraphMode("project");
+                  setInteractionMode("insight");
+                  setGraphProjectId(Number(v));
                 }
                 clearSelection();
                 clearPathAnalysis();
                 handleClearEgoNetwork();
                 setConnectSourceId(null);
               }}
-              className={`relative z-10 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ${
-                graphMode === "project"
-                  ? "text-[var(--foreground)]"
-                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
-              }`}
+              className="h-7 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
             >
-              <FolderKanban className="h-4 w-4" />
-              Project
+              <option value="standalone">Standalone</option>
+              {projects?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Center — Insight | Construct */}
+          <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-0.5">
+            <button
+              type="button"
+              onClick={() => setInteractionMode("insight")}
+              className={cn(
+                "rounded px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+                isInsightMode
+                  ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+                  : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+              )}
+            >
+              Insight
+            </button>
+            <button
+              type="button"
+              onClick={() => setInteractionMode("construct")}
+              className={cn(
+                "rounded px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+                isConstructMode
+                  ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+                  : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+              )}
+            >
+              Construct
             </button>
           </div>
 
-          <div className="grid transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
-            {/* Project Selector (only in project mode) */}
-            {graphMode === "project" && (
-              <div className="grid gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                <select
-                  className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                  value={graphProjectId ?? ""}
-                  onChange={(event) => setGraphProjectId(Number(event.target.value))}
-                  disabled={!projects || projects.length === 0}
-                >
-                  {!projects || projects.length === 0 ? (
-                    <option value="">No projects available</option>
-                  ) : (
-                    projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--foreground-muted)] backdrop-blur-sm">
-                  Active project:{" "}
-                  <span className="font-medium text-[var(--foreground)]">
-                    {selectedProject?.name ?? "none"}
-                  </span>
-                </div>
-                
-                {/* Auto-generate from project signals */}
-                <Button
-                  variant="secondary"
-                  onClick={() => void handleAutoGenerateFromProject()}
-                  disabled={isAutoGenerating || !graphProjectId || (projectSignalsQuery.data?.length ?? 0) === 0}
-                  className="w-full transition-all duration-200 active:scale-[0.98]"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {isAutoGenerating ? "Analyzing..." : "Auto-generate from signals"}
-                </Button>
-                
-                {projectSignalsQuery.data && projectSignalsQuery.data.length > 0 && (
-                  <p className="text-xs text-[var(--foreground-muted)]">
-                    {projectSignalsQuery.data.length} signal{projectSignalsQuery.data.length !== 1 ? 's' : ''} available for analysis
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Standalone mode indicator */}
-            {graphMode === "standalone" && (
-              <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-3 text-xs leading-5 text-[var(--foreground-muted)] backdrop-blur-sm">
-                <span className="font-medium text-[var(--accent)]">Standalone mode:</span>{" "}
-                Build a free-form graph not tied to any project.
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">Interaction mode</p>
-              <Badge variant={isConstructMode ? "accent" : "neutral"} className="transition-all duration-300">
-                {isConstructMode ? "Construct" : "Insight"}
-              </Badge>
-            </div>
-            <div className="relative grid grid-cols-2 gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)]/30 p-1">
-              <div
-                className="absolute top-1 bottom-1 rounded-lg bg-[var(--surface-strong)] shadow-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                style={{
-                  width: "calc(50% - 4px)",
-                  left: interactionMode === "insight" ? "4px" : "calc(50%)",
-                }}
-              />
-              <button
-                type="button"
-                className={`relative z-10 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
-                  interactionMode === "insight"
-                    ? "text-[var(--foreground)]"
-                    : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
-                }`}
-                onClick={() => setInteractionMode("insight")}
-              >
-                Insight view
-              </button>
-              <button
-                type="button"
-                className={`relative z-10 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
-                  interactionMode === "construct"
-                    ? "text-[var(--foreground)]"
-                    : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
-                }`}
-                onClick={() => setInteractionMode("construct")}
-              >
-                Construct
-              </button>
-            </div>
-            <p className="text-xs text-[var(--foreground-muted)] transition-opacity duration-300">
-              {interactionMode === "insight"
-                ? "Insight keeps the graph read-first, like an investigation map."
-                : "Construct enables manual add/edit/delete and connector workflows."}
-            </p>
-          </div>
-
-          <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">Explore graph</p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={focusMode === "selection" ? "primary" : "secondary"}
-                  onClick={() =>
-                    setFocusMode((current) =>
-                      current === "selection" ? "all" : "selection",
-                    )
-                  }
-                  disabled={activeSelectedNodeIds.length === 0}
-                  className="transition-all duration-200 active:scale-[0.98]"
-                >
-                  {focusMode === "selection" ? "Selection focus" : "Focus selection"}
-                </Button>
-                <Button size="sm" variant="secondary" onClick={fitVisibleGraph} className="transition-all duration-200 active:scale-[0.98]">
-                  Fit visible
-                </Button>
-              </div>
-            </div>
-            <Input
-              ref={searchInputRef}
-              placeholder="Search nodes (/)"
-              value={nodeSearch}
-              onChange={(event) => setNodeSearch(event.target.value)}
-              className="transition focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/20"
-            />
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(ENTITY_STYLES) as GraphEntityType[]).map((type) => (
-                <Button
-                  key={type}
-                  size="sm"
-                  variant={entityTypeFilters[type] ? "primary" : "secondary"}
-                  onClick={() => toggleEntityTypeFilter(type)}
-                  className="capitalize transition-all duration-200 active:scale-[0.96]"
-                >
-                  {type}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={showEdgeLabels ? "primary" : "secondary"}
-                onClick={() => setShowEdgeLabels((current) => !current)}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                {showEdgeLabels ? "Hide edge labels" : "Show edge labels"}
-              </Button>
-              <Button
-                size="sm"
-                variant={showMinimap ? "primary" : "secondary"}
-                onClick={() => setShowMinimap((current) => !current)}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                {showMinimap ? "Hide minimap" : "Show minimap"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Insight layout panel with smooth expand/collapse */}
-          <div
-            className="grid grid-rows-[1fr] transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-            style={{ gridTemplateRows: isInsightMode ? "1fr" : "0fr" }}
-          >
-            <div className="overflow-hidden">
-              <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-[var(--foreground)]">Insight layout</p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={insightAutoLayout ? "primary" : "secondary"}
-                      onClick={() => setInsightAutoLayout((current) => !current)}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      {insightAutoLayout ? "Live physics" : "Physics paused"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setInsightLayoutTick((current) => current + 1)}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      Reflow now
-                    </Button>
-                  </div>
-                </div>
-                <label className="grid gap-1.5 text-xs text-[var(--foreground-muted)]">
-                  Spread ({insightRepulsion.toFixed(2)})
-                  <input
-                    type="range"
-                    min={0.8}
-                    max={3.2}
-                    step={0.05}
-                    value={insightRepulsion}
-                    onChange={(event) => setInsightRepulsion(Number(event.target.value))}
-                    className="accent-[var(--accent)]"
-                  />
-                </label>
-                <label className="grid gap-1.5 text-xs text-[var(--foreground-muted)]">
-                  Link distance ({Math.round(insightLinkDistance)})
-                  <input
-                    type="range"
-                    min={140}
-                    max={520}
-                    step={10}
-                    value={insightLinkDistance}
-                    onChange={(event) => setInsightLinkDistance(Number(event.target.value))}
-                    className="accent-[var(--accent)]"
-                  />
-                </label>
-                <label className="grid gap-1.5 text-xs text-[var(--foreground-muted)]">
-                  Center pull ({insightCenterPull.toFixed(2)})
-                  <input
-                    type="range"
-                    min={0.01}
-                    max={0.2}
-                    step={0.01}
-                    value={insightCenterPull}
-                    onChange={(event) => setInsightCenterPull(Number(event.target.value))}
-                    className="accent-[var(--accent)]"
-                  />
-                </label>
-                <label className="grid gap-1.5 text-xs text-[var(--foreground-muted)]">
-                  Label density
-                  <select
-                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface-strong)] px-2 text-sm text-[var(--foreground)] transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                    value={insightLabelMode}
-                    onChange={(event) =>
-                      setInsightLabelMode(event.target.value as "context" | "selected" | "all")
-                    }
-                  >
-                    <option value="context">Contextual</option>
-                    <option value="selected">Only selected/hovered</option>
-                    <option value="all">Show all labels</option>
-                  </select>
-                </label>
-                <p className="text-xs text-[var(--foreground-muted)]">
-                  Hover a node to emphasize its local neighborhood.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--foreground)]">Selection tools</p>
-              <Badge variant="neutral" className="transition-all duration-300">
-                {selectedNodeIds.length} nodes / {selectedEdgeIds.length} edges
-              </Badge>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={clearSelection}
-                disabled={selectedNodeIds.length === 0 && selectedEdgeIds.length === 0}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                Clear selection
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => void handleDeleteNodes(selectedNodeIds)}
-                disabled={!isConstructMode || selectedNodeIds.length === 0}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete nodes
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => void handleDeleteEdges(selectedEdgeIds)}
-                disabled={!isConstructMode || selectedEdgeIds.length === 0}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete edges
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => void handleUndo()}
-                disabled={!isConstructMode || historyStats.undoCount === 0}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                <Undo2 className="h-4 w-4" />
-                Undo
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => void handleRedo()}
-                disabled={!isConstructMode || historyStats.redoCount === 0}
-                className="transition-all duration-200 active:scale-[0.98]"
-              >
-                <Redo2 className="h-4 w-4" />
-                Redo
-              </Button>
-              <Badge variant="neutral" className="transition-all duration-300">
-                {historyStats.undoCount} undo / {historyStats.redoCount} redo
-              </Badge>
-            </div>
-          </div>
-
-          <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-            <p className="text-sm font-medium text-[var(--foreground)]">Analysis tools</p>
-            <div className="grid gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                Shortest path
-              </p>
-              <select
-                className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                value={pathFromNodeId ?? ""}
-                onChange={(event) => setPathFromNodeId(event.target.value || null)}
-              >
-                <option value="">From node</option>
-                {visualNodes.map((node) => (
-                  <option key={`path-from-${node.node_id}`} value={node.node_id}>
-                    {node.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                value={pathToNodeId ?? ""}
-                onChange={(event) => setPathToNodeId(event.target.value || null)}
-              >
-                <option value="">To node</option>
-                {visualNodes.map((node) => (
-                  <option key={`path-to-${node.node_id}`} value={node.node_id}>
-                    {node.label}
-                  </option>
-                ))}
-              </select>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={handleUseSelectedForPath} className="transition-all duration-200 active:scale-[0.98]">
-                  <Route className="h-4 w-4" />
-                  Use selection
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleFindShortestPath}
-                  disabled={!pathFromNodeId || !pathToNodeId}
-                  className="transition-all duration-200 active:scale-[0.98]"
-                >
-                  <Route className="h-4 w-4" />
-                  Find route
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={clearPathAnalysis}
-                  disabled={shortestPathNodeIds.length === 0}
-                  className="transition-all duration-200 active:scale-[0.98]"
-                >
-                  Clear route
-                </Button>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                Ego network
-              </p>
-              <select
-                className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                value={egoCenterNodeId ?? ""}
-                onChange={(event) => setEgoCenterNodeId(event.target.value || null)}
-              >
-                <option value="">Center node</option>
-                {visualNodes.map((node) => (
-                  <option key={`ego-${node.node_id}`} value={node.node_id}>
-                    {node.label}
-                  </option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={4}
-                  value={egoDepth}
-                  onChange={(event) => setEgoDepth(clamp(Number(event.target.value) || 1, 1, 4))}
-                  className="transition focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/20"
+          {/* Right — search + actions */}
+          <div className="flex items-center gap-1.5">
+            {!isCramped && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--overlay-1)]" />
+                <input
+                  ref={searchInputRef}
+                  value={nodeSearch}
+                  onChange={(e) => setNodeSearch(e.target.value)}
+                  placeholder="Search ( / )"
+                  className="h-7 w-[160px] rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
                 />
-                <span className="text-xs text-[var(--foreground-muted)]">Depth 1-4 hops</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={handleApplyEgoFromSelection} className="transition-all duration-200 active:scale-[0.98]">
-                  <Orbit className="h-4 w-4" />
-                  Use selection
-                </Button>
-                <Button size="sm" variant="ghost" onClick={handleClearEgoNetwork} disabled={!egoCenterNodeId} className="transition-all duration-200 active:scale-[0.98]">
-                  Clear ego
-                </Button>
-              </div>
-            </div>
-          </div>
+            )}
 
-          {/* Construct mode panels with smooth cross-fade */}
-          <div className="relative">
-            {isConstructMode ? (
-              <div className="grid gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-                  <p className="text-sm font-medium text-[var(--foreground)]">Create node</p>
-                  <Input
-                    placeholder="Node label"
-                    value={createLabel}
-                    onChange={(event) => setCreateLabel(event.target.value)}
-                    className="transition focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/20"
-                  />
-                  <select
-                    className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm transition focus:border-[var(--accent)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
-                    value={createEntityType}
-                    onChange={(event) => setCreateEntityType(event.target.value as GraphEntityType)}
-                  >
-                    <option value="person">Person</option>
-                    <option value="organisation">Organisation</option>
-                    <option value="location">Location</option>
-                    <option value="event">Event</option>
-                  </select>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => void handleCreateNode()}
-                      disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      Add now
-                    </Button>
-                    <Button
-                      variant={placeMode ? "primary" : "secondary"}
-                      onClick={() => setPlaceMode((current) => !current)}
-                      disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      <Crosshair className="h-4 w-4" />
-                      {placeMode ? "Cancel placement" : "Place on canvas"}
-                    </Button>
-                  </div>
-                </div>
+            <TopbarIconBtn
+              title="Zoom in"
+              onClick={() => {
+                if (isInsightMode) insightGraphRef.current?.zoomBy(1.12);
+                else
+                  setViewport((c) => ({
+                    ...c,
+                    scale: clamp(c.scale * 1.12, 0.25, 1.75),
+                  }));
+              }}
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </TopbarIconBtn>
+            <TopbarIconBtn
+              title="Zoom out"
+              onClick={() => {
+                if (isInsightMode) insightGraphRef.current?.zoomBy(0.88);
+                else
+                  setViewport((c) => ({
+                    ...c,
+                    scale: clamp(c.scale * 0.88, 0.25, 1.75),
+                  }));
+              }}
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </TopbarIconBtn>
+            <TopbarIconBtn title="Fit view" onClick={fitVisibleGraph}>
+              <Maximize2 className="h-3.5 w-3.5" />
+            </TopbarIconBtn>
 
-                <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-[var(--foreground)]">Connection mode</p>
-                    {connectSourceId ? (
-                      <Badge variant="accent" className="animate-in fade-in zoom-in duration-200">
-                        From {findNodeLabel(nodes, connectSourceId)}
-                      </Badge>
-                    ) : (
-                      <Badge variant="neutral">Idle</Badge>
+            {/* Overflow */}
+            <div className="relative">
+              <TopbarIconBtn title="More" onClick={() => setOverflowOpen((o) => !o)}>
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </TopbarIconBtn>
+              {overflowOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setOverflowOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-[220px] rounded-md border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[var(--shadow-elevated)]">
+                    <OverflowItem
+                      label="Reset view"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        if (isInsightMode) insightGraphRef.current?.zoomToFit(64);
+                        else setViewport(DEFAULT_VIEW);
+                      }}
+                    />
+                    <OverflowItem
+                      label="Tidy layout"
+                      disabled={!isConstructMode || visualNodes.length === 0}
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        void handleTidyLayout();
+                      }}
+                    />
+                    <OverflowItem
+                      label="Reflow (Insight)"
+                      disabled={!isInsightMode}
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setInsightLayoutTick((c) => c + 1);
+                      }}
+                    />
+                    {graphMode === "project" && (
+                      <OverflowItem
+                        label={isAutoGenerating ? "Generating…" : "Generate from signals"}
+                        disabled={
+                          isAutoGenerating ||
+                          !graphProjectId ||
+                          (projectSignalsQuery.data?.length ?? 0) === 0
+                        }
+                        onClick={() => {
+                          setOverflowOpen(false);
+                          void handleAutoGenerateFromProject();
+                        }}
+                      />
                     )}
                   </div>
-                  <Input
-                    placeholder="Relationship label"
-                    value={connectLabel}
-                    onChange={(event) => setConnectLabel(event.target.value)}
-                    className="transition focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/20"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        if (!selectedNode && activeSelectedNodeIds.length === 0) return;
-                        const sourceNodeId = selectedNode?.node_id ?? activeSelectedNodeIds[0];
-                        if (!sourceNodeId) return;
-                        setConnectSourceId(sourceNodeId);
-                        setSelectedEdgeId(null);
-                        setSelectedEdgeIds([]);
-                        setStatusMessage(`Select a target for ${findNodeLabel(nodes, sourceNodeId)}.`);
-                      }}
-                      disabled={!selectedNode && activeSelectedNodeIds.length === 0}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      <Link2 className="h-4 w-4" />
-                      Link from selected node
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setConnectSourceId(null)}
-                      disabled={!connectSourceId}
-                      className="transition-all duration-200 active:scale-[0.98]"
-                    >
-                      <Unlink className="h-4 w-4" />
-                      Cancel link
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-4 text-sm text-[var(--foreground-muted)] backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                <p>
-                  Insight mode is active. Switch to <span className="font-medium text-[var(--foreground)]">Construct</span> to add nodes, draw connections, or edit graph structure.
-                </p>
-                <Button size="sm" variant="secondary" onClick={() => setInteractionMode("construct")} className="transition-all duration-200 active:scale-[0.98]">
-                  Switch to Construct
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/35 p-4 text-sm text-[var(--foreground-muted)] backdrop-blur-sm transition-all duration-300 hover:border-[var(--accent)]/10">
-            <div className="flex items-center gap-2 text-[var(--foreground)]">
-              <Move className="h-4 w-4" />
-              {isConstructMode
-                ? "Drag nodes. Drag empty canvas to pan. Use wheel to zoom."
-                : "Pan, zoom, search, and inspect relationships in a read-first map view."}
-            </div>
-            <p className="transition-opacity duration-300">
-              {isConstructMode ? (
-                <>
-                  <strong>Click a node to reveal connectors on all edges</strong>, then drag any connector to another node.
-                  Shift/Cmd-click to multi-select. Press <kbd className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--foreground)]">Esc</kbd> to clear selection, <kbd className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--foreground)]">Delete</kbd> to remove.
-                </>
-              ) : (
-                <>
-                  <strong>Insight mode mirrors an Obsidian-style graph experience</strong> for understanding relationships.
-                  Switch to Construct mode when you need manual graph editing.
                 </>
               )}
-            </p>
-            <p className="transition-opacity duration-300">
-              {isConstructMode
-                ? "Click an edge to select it, then use inline × or Delete to remove. Shortcuts: /, F, G, 0, Cmd/Ctrl+Z."
-                : "Shortcuts: / search, F fit, G center selected node, 0 reset view."}
-            </p>
-            {graphMode === "project" && (
-              <p className="text-[var(--accent)] transition-opacity duration-300">
-                Use "Auto-generate" to extract entities from project signals automatically.
-              </p>
-            )}
+            </div>
+
+            <TopbarIconBtn
+              title={railOpen ? "Hide rail" : "Show rail"}
+              onClick={() => setRailOpen((o) => !o)}
+            >
+              {railOpen ? (
+                <PanelRightClose className="h-3.5 w-3.5" />
+              ) : (
+                <PanelRightOpen className="h-3.5 w-3.5" />
+              )}
+            </TopbarIconBtn>
           </div>
+        </div>
 
-          {statusMessage ? (
-            <Badge variant="success" className="w-full justify-center py-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              {statusMessage}
-            </Badge>
-          ) : null}
-
-          {errorMessage ? (
-            <Badge variant="warning" className="w-full justify-center py-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              {errorMessage}
-            </Badge>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="neutral" className="transition-all duration-200 hover:bg-[var(--surface-strong)]">
-              Nodes {filteredNodes.length}/{visualNodes.length}
-            </Badge>
-            <Badge variant="neutral" className="transition-all duration-200 hover:bg-[var(--surface-strong)]">
-              Edges {filteredEdges.length}/{edges.length}
-            </Badge>
-            <Badge variant="neutral" className="transition-all duration-200 hover:bg-[var(--surface-strong)]">
-              Zoom {Math.round(viewport.scale * 100)}%
-            </Badge>
-            <Badge variant="neutral" className="transition-all duration-200 hover:bg-[var(--surface-strong)]">
-              Density {(graphMetrics.edgeDensity * 100).toFixed(1)}%
-            </Badge>
-            {(selectedNodeIds.length > 0 || selectedEdgeIds.length > 0) && (
-              <Badge variant="accent" className="animate-in fade-in zoom-in duration-200">
-                Selected {selectedNodeIds.length}N/{selectedEdgeIds.length}E
-              </Badge>
+        {/* ---------- CANVAS AREA ---------- */}
+        <div className="relative min-h-0 flex-1">
+          {/* Insight mode */}
+          <div
+            className={cn(
+              "absolute inset-0 transition-opacity duration-150",
+              isInsightMode ? "z-20 opacity-100" : "z-0 pointer-events-none opacity-0",
             )}
-            {shortestPathNodeIds.length > 1 && (
-              <Badge variant="accent" className="animate-in fade-in zoom-in duration-200">
-                Route {shortestPathNodeIds.length - 1} hop{shortestPathNodeIds.length - 1 === 1 ? "" : "s"}
-              </Badge>
-            )}
-            {egoCenterNodeId && (
-              <Badge variant="accent" className="animate-in fade-in zoom-in duration-200">Ego d{egoDepth}</Badge>
-            )}
-            {graphMode === "standalone" && (
-              <Badge variant="accent" className="animate-in fade-in zoom-in duration-200">Standalone</Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6">
-        <Card className="transition-all duration-300 hover:border-[var(--accent)]/10 hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>
-                  {graphMode === "standalone" 
-                    ? "Standalone Graph" 
-                    : selectedProject?.name ?? "Select a project"}
-                </CardTitle>
-                <p className="mt-2 text-sm text-[var(--foreground-muted)]">
-                  {graphMode === "standalone"
-                    ? "Free-form entity graph for ad-hoc investigation and relationship mapping."
-                    : "Project-linked intelligence graph mapping entities within this case."}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  <Badge variant="neutral">P {graphMetrics.typeCounts.person}</Badge>
-                  <Badge variant="neutral">O {graphMetrics.typeCounts.organisation}</Badge>
-                  <Badge variant="neutral">L {graphMetrics.typeCounts.location}</Badge>
-                  <Badge variant="neutral">E {graphMetrics.typeCounts.event}</Badge>
-                  <Badge variant="neutral">
-                    Labeled edges {graphMetrics.labeledEdges}/{filteredEdges.length}
-                  </Badge>
-                  <Badge variant={isConstructMode ? "accent" : "neutral"}>
-                    {isConstructMode ? "Construct" : "Insight"}
-                  </Badge>
+          >
+            <ObsidianGraph
+              ref={insightGraphRef}
+              nodes={insightGraphData.nodes}
+              links={insightGraphData.links}
+              positionSeedByNodeId={insightNodePositionSeedRef.current}
+              selectedNodeId={selectedNodeId}
+              selectedNodeIds={selectedNodeIds}
+              selectedEdgeId={selectedEdgeId}
+              selectedEdgeIds={selectedEdgeIds}
+              shortestPathNodeIds={shortestPathNodeIds}
+              shortestPathEdgeIds={shortestPathEdgeIds}
+              egoCenterNodeId={egoCenterNodeId}
+              labelMode={insightLabelMode}
+              autoLayout={insightAutoLayout}
+              repulsion={insightRepulsion}
+              linkDistance={insightLinkDistance}
+              centerPull={insightCenterPull}
+              layoutTick={insightLayoutTick}
+              onPositionSnapshot={(positions) => {
+                insightNodePositionSeedRef.current = positions;
+              }}
+              onNodeClick={(_id, event) => {
+                if (event.shiftKey || event.metaKey || event.ctrlKey) {
+                  toggleNodeSelection(_id);
+                } else {
+                  selectSingleNode(_id);
+                }
+              }}
+              onLinkClick={(_id, event) => {
+                if (event.shiftKey || event.metaKey || event.ctrlKey) {
+                  toggleEdgeSelection(_id);
+                } else {
+                  selectSingleEdge(_id);
+                }
+              }}
+              onBackgroundClick={() => {
+                clearSelection();
+                clearPathAnalysis();
+              }}
+            />
+            {isInsightMode && graphMode === "project" && visualNodes.length === 0 ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
+                <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
+                  <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent)]" />
+                  <p className="font-ui text-[14px] font-medium text-[var(--text)]">
+                    This project graph is empty
+                  </p>
+                  <p className="mt-2 font-ui text-[12px] text-[var(--subtext-0)]">
+                    Build a relationship map from project signals, then inspect it here.
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void handleAutoGenerateFromProject()}
+                      disabled={
+                        isAutoGenerating ||
+                        !graphProjectId ||
+                        (projectSignalsQuery.data?.length ?? 0) === 0
+                      }
+                    >
+                      <Sparkles className="mr-2 h-3.5 w-3.5" />
+                      {isAutoGenerating ? "Generating…" : "Generate from signals"}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setInteractionMode("construct")}>
+                      Switch to Construct
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    if (isInsightMode) {
-                      insightGraphRef.current?.zoomBy(1.12);
-                    } else {
-                      setViewport((current) => ({ ...current, scale: clamp(current.scale * 1.12, 0.5, 1.75) }));
-                    }
-                  }}
-                >
-                  <ZoomIn className="h-4 w-4" />
-                  Zoom in
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    if (isInsightMode) {
-                      insightGraphRef.current?.zoomBy(0.88);
-                    } else {
-                      setViewport((current) => ({ ...current, scale: clamp(current.scale * 0.88, 0.5, 1.75) }));
-                    }
-                  }}
-                >
-                  <ZoomOut className="h-4 w-4" />
-                  Zoom out
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={fitVisibleGraph}
-                  disabled={filteredNodes.length === 0 && visualNodes.length === 0}
-                >
-                  <ScanSearch className="h-4 w-4" />
-                  Fit view
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void handleTidyLayout()}
-                  disabled={!isConstructMode || visualNodes.length === 0}
-                >
-                  Tidy layout
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    if (isInsightMode) {
-                      insightGraphRef.current?.zoomToFit(64);
-                    } else {
-                      setViewport(DEFAULT_VIEW);
-                    }
-                  }}
-                >
-                  Reset view
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void handleUndo()}
-                  disabled={!isConstructMode || historyStats.undoCount === 0}
-                >
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void handleRedo()}
-                  disabled={!isConstructMode || historyStats.redoCount === 0}
-                >
-                  <Redo2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            ) : null}
+          </div>
+
+          {/* Construct mode */}
+          <div
+            ref={viewportRef}
+            data-graph-interactive="true"
+            className={cn(
+              "absolute inset-0 transition-opacity duration-150",
+              placeMode
+                ? "cursor-crosshair"
+                : panStateRef.current
+                  ? "cursor-grabbing"
+                  : "cursor-grab",
+              isInsightMode
+                ? "z-0 pointer-events-none opacity-0"
+                : "z-20 pointer-events-auto opacity-100",
+            )}
+            style={{ touchAction: "none" }}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onWheel={handleCanvasWheel}
+          >
             <div
-              data-graph-interactive="true"
-              className="relative overflow-hidden rounded-[28px] border border-[var(--border)] bg-[#0b1517]"
-              style={{ height: VIEWPORT_HEIGHT, width: "100%" }}
-            >
-              <div
-                className={`absolute inset-0 transition-opacity duration-150 ${
-                  isInsightMode ? "z-20 opacity-100" : "z-0 pointer-events-none opacity-0"
-                }`}
-              >
-                <ObsidianGraph
-                  ref={insightGraphRef}
-                  nodes={insightGraphData.nodes}
-                  links={insightGraphData.links}
-                  positionSeedByNodeId={insightNodePositionSeedRef.current}
-                  selectedNodeId={selectedNodeId}
-                  selectedNodeIds={selectedNodeIds}
-                  selectedEdgeId={selectedEdgeId}
-                  selectedEdgeIds={selectedEdgeIds}
-                  shortestPathNodeIds={shortestPathNodeIds}
-                  shortestPathEdgeIds={shortestPathEdgeIds}
-                  egoCenterNodeId={egoCenterNodeId}
-                  labelMode={insightLabelMode}
-                  autoLayout={insightAutoLayout}
-                  repulsion={insightRepulsion}
-                  linkDistance={insightLinkDistance}
-                  centerPull={insightCenterPull}
-                  layoutTick={insightLayoutTick}
-                  onPositionSnapshot={(positions) => {
-                    insightNodePositionSeedRef.current = positions;
-                  }}
-                  onNodeClick={(_id, event) => {
-                    if (event.shiftKey || event.metaKey || event.ctrlKey) {
-                      toggleNodeSelection(_id);
-                    } else {
-                      selectSingleNode(_id);
-                    }
-                  }}
-                  onLinkClick={(_id, event) => {
-                    if (event.shiftKey || event.metaKey || event.ctrlKey) {
-                      toggleEdgeSelection(_id);
-                    } else {
-                      selectSingleEdge(_id);
-                    }
-                  }}
-                  onBackgroundClick={() => {
-                    clearSelection();
-                    clearPathAnalysis();
-                  }}
-                />
-                {isInsightMode && graphMode === "project" && visualNodes.length === 0 ? (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-                    <div className="w-full max-w-[560px] rounded-2xl border border-[var(--border)] bg-[rgba(9,17,19,0.85)] p-6 text-center backdrop-blur-md shadow-[0_20px_60px_rgba(0,0,0,0.35)] animate-subtle-float">
-                      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                        <Sparkles className="h-5 w-5 text-[var(--accent)]" />
-                      </div>
-                      <p className="text-sm font-semibold text-[var(--foreground)]">
-                        This project graph is empty
-                      </p>
-                      <p className="mt-2 text-sm text-[var(--foreground-muted)]">
-                        Build a relationship map from project signals, then inspect it in Insight view.
-                      </p>
-                      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                        <Button
-                          variant="secondary"
-                          onClick={() => void handleAutoGenerateFromProject()}
-                          disabled={
-                            isAutoGenerating ||
-                            !graphProjectId ||
-                            (projectSignalsQuery.data?.length ?? 0) === 0
-                          }
-                          className="transition-all duration-200 active:scale-[0.98]"
-                        >
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          {isAutoGenerating ? "Generating..." : "Generate from project signals"}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setInteractionMode("construct")} className="transition-all duration-200 active:scale-[0.98]">
-                          Switch to Construct
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div
-              ref={viewportRef}
-              className={`absolute inset-0 transition-opacity duration-150 ${placeMode ? "cursor-crosshair" : panStateRef.current ? "cursor-grabbing" : "cursor-grab"} ${
-                isInsightMode ? "z-0 pointer-events-none opacity-0" : "z-20 pointer-events-auto opacity-100"
-              }`}
+              className="absolute left-0 top-0"
               style={{
-                touchAction: "none",
+                width: WORLD_WIDTH,
+                height: WORLD_HEIGHT,
+                transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
+                transformOrigin: "top left",
               }}
-              onPointerDown={handleCanvasPointerDown}
-              onPointerMove={handleCanvasPointerMove}
-              onWheel={handleCanvasWheel}
             >
-              <div
-                className="absolute left-0 top-0"
-                style={{
-                  width: WORLD_WIDTH,
-                  height: WORLD_HEIGHT,
-                  transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                <svg className="absolute inset-0 h-full w-full overflow-visible">
-                  <defs>
-                    <marker
-                      id="graph-arrow"
-                      markerWidth="10"
-                      markerHeight="10"
-                      refX="8"
-                      refY="5"
-                      orient="auto"
-                    >
-                      <path d="M0,0 L10,5 L0,10 z" fill="#8abec0" />
-                    </marker>
-                  </defs>
+              <svg className="absolute inset-0 h-full w-full overflow-visible">
+                <defs>
+                  <marker
+                    id="graph-arrow"
+                    markerWidth="10"
+                    markerHeight="10"
+                    refX="8"
+                    refY="5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L10,5 L0,10 z" fill="var(--overlay-0)" />
+                  </marker>
+                </defs>
 
-                  {filteredEdges.map((edge) => {
-                    const source = visibleNodeLookup.get(edge.source_node_id);
-                    const target = visibleNodeLookup.get(edge.target_node_id);
-                    if (!source || !target) return null;
+                {filteredEdges.map((edge) => {
+                  const source = visibleNodeLookup.get(edge.source_node_id);
+                  const target = visibleNodeLookup.get(edge.target_node_id);
+                  if (!source || !target) return null;
 
-                    const sourceAnchorPoint = isConstructMode
-                      ? (getNodeAnchorPoint(source, getAutoAnchorSides(source, target).sourceSide) ?? {
-                          x: source.centerX,
-                          y: source.centerY,
-                        })
-                      : { x: source.centerX, y: source.centerY };
-                    const targetAnchorPoint = isConstructMode
-                      ? (getNodeAnchorPoint(target, getAutoAnchorSides(source, target).targetSide) ?? {
-                          x: target.centerX,
-                          y: target.centerY,
-                        })
-                      : { x: target.centerX, y: target.centerY };
-                    const path = buildEdgePath(sourceAnchorPoint, targetAnchorPoint);
-                    const labelPosition = getEdgeLabelPosition(sourceAnchorPoint, targetAnchorPoint);
-                    const isSelected =
-                      edge.edge_id === selectedEdgeId || selectedEdgeIdSet.has(edge.edge_id);
-                    const isOnRoute = shortestPathEdgeIdSet.has(edge.edge_id);
-                    const linkedToSelectedNode =
-                      activeSelectedNodeIds.length === 0 ||
-                      activeSelectedNodeIds.includes(edge.source_node_id) ||
-                      activeSelectedNodeIds.includes(edge.target_node_id);
-                    const edgeOpacity = linkedToSelectedNode ? 1 : 0.22;
-
-                    return (
-                      <g key={edge.edge_id}>
-                        <path
-                          d={path}
-                          fill="none"
-                          stroke={isSelected ? "#7fe6ca" : isOnRoute ? "#f2cf74" : "#8abec0"}
-                          strokeWidth={
-                            isInsightMode
-                              ? isSelected
-                                ? 2.8
-                                : isOnRoute
-                                  ? 2.3
-                                  : 1.2
-                              : isSelected
-                                ? 3.5
-                                : isOnRoute
-                                  ? 3
-                                  : 2
-                          }
-                          opacity={edgeOpacity}
-                          markerEnd={isConstructMode ? "url(#graph-arrow)" : undefined}
-                        />
-                        <path
-                          d={path}
-                          fill="none"
-                          stroke="transparent"
-                          strokeWidth={18}
-                          style={{ cursor: "pointer" }}
-                          data-graph-interactive="true"
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                            const isMultiToggle = event.shiftKey || event.metaKey || event.ctrlKey;
-                            if (isMultiToggle) {
-                              toggleEdgeSelection(edge.edge_id);
-                            } else {
-                              selectSingleEdge(edge.edge_id);
-                            }
-                          }}
-                        />
-                        {showEdgeLabels && edge.label ? (
-                          <g transform={`translate(${labelPosition.x}, ${labelPosition.y})`}>
-                            <rect
-                              x={-56}
-                              y={-12}
-                              width={112}
-                              height={24}
-                              rx={12}
-                              fill="rgba(8, 17, 19, 0.94)"
-                              stroke="rgba(138, 190, 192, 0.26)"
-                            />
-                            <text
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fill="#dce8e5"
-                              fontSize="11"
-                              fontWeight="600"
-                            >
-                              {truncateLabel(edge.label, 22)}
-                            </text>
-                          </g>
-                        ) : null}
-                        {isConstructMode && isSelected ? (
-                          <g transform={`translate(${labelPosition.x + 62}, ${labelPosition.y - 12})`}>
-                            <circle
-                              r={10}
-                              fill="rgba(187, 80, 80, 0.92)"
-                              stroke="rgba(255, 203, 203, 0.65)"
-                              strokeWidth={1.25}
-                              style={{ cursor: "pointer" }}
-                              data-graph-interactive="true"
-                              onPointerDown={(event) => {
-                                event.stopPropagation();
-                                event.preventDefault();
-                                void handleDeleteEdge(edge.edge_id);
-                              }}
-                            />
-                            <text
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fill="#fff4f4"
-                              fontSize="12"
-                              fontWeight="700"
-                              style={{ pointerEvents: "none" }}
-                            >
-                              ×
-                            </text>
-                          </g>
-                        ) : null}
-                      </g>
-                    );
-                  })}
-
-                  {/* Edge preview for connection mode */}
-                  {isConstructMode && connectSourceId && pointerWorld ? (
-                    <path
-                      d={buildEdgePreviewPath(
-                        getNodeAnchorPoint(
-                          nodeLookup.get(connectSourceId),
-                          getClosestAnchorSide(nodeLookup.get(connectSourceId), pointerWorld),
-                        ),
-                        pointerWorld,
-                      )}
-                      fill="none"
-                      stroke="#7fe6ca"
-                      strokeWidth={2}
-                      strokeDasharray="8 6"
-                    />
-                  ) : null}
-                  
-                  {/* Edge preview for drag-to-connect */}
-                  {isConstructMode && edgeDragState && pointerWorld && (
-                    <path
-                      d={buildEdgePreviewPath(
-                        getNodeAnchorPoint(
-                          nodeLookup.get(edgeDragState.sourceNodeId),
-                          edgeDragState.sourceAnchor,
-                        ),
-                        pointerWorld,
-                      )}
-                      fill="none"
-                      stroke="#7fe6ca"
-                      strokeWidth={2}
-                      strokeDasharray="6 4"
-                    />
-                  )}
-                </svg>
-
-                {renderedFilteredNodes.map((node) => {
-                  const style = ENTITY_STYLES[node.entity_type];
+                  const sourceAnchorPoint = isConstructMode
+                    ? (getNodeAnchorPoint(
+                        source,
+                        getAutoAnchorSides(source, target).sourceSide,
+                      ) ?? { x: source.centerX, y: source.centerY })
+                    : { x: source.centerX, y: source.centerY };
+                  const targetAnchorPoint = isConstructMode
+                    ? (getNodeAnchorPoint(
+                        target,
+                        getAutoAnchorSides(source, target).targetSide,
+                      ) ?? { x: target.centerX, y: target.centerY })
+                    : { x: target.centerX, y: target.centerY };
+                  const path = buildEdgePath(sourceAnchorPoint, targetAnchorPoint);
+                  const labelPosition = getEdgeLabelPosition(
+                    sourceAnchorPoint,
+                    targetAnchorPoint,
+                  );
                   const isSelected =
-                    node.node_id === selectedNodeId || selectedNodeIdSet.has(node.node_id);
-                  const isOnRoute = shortestPathNodeIdSet.has(node.node_id);
-                  const isEgoCenter = egoCenterNodeId === node.node_id;
-                  const isConnectSource = node.node_id === connectSourceId;
-                  const isEdgeDragSource = edgeDragState?.sourceNodeId === node.node_id;
-                  const isConnectorTarget =
-                    node.node_id === hoveredEdgeDragTargetNodeId ||
-                    node.node_id === hoveredConnectTargetNodeId;
+                    edge.edge_id === selectedEdgeId || selectedEdgeIdSet.has(edge.edge_id);
+                  const isOnRoute = shortestPathEdgeIdSet.has(edge.edge_id);
                   const linkedToSelectedNode =
-                    activeSelectedNodeIds.length === 0 || selectedNodeNeighborIds.has(node.node_id);
-                  const nodeOpacity = linkedToSelectedNode ? 1 : 0.3;
-                  const showConnectorHandles =
-                    isConstructMode &&
-                    (isSelected || isConnectSource || Boolean(edgeDragState) || Boolean(connectSourceId));
+                    activeSelectedNodeIds.length === 0 ||
+                    activeSelectedNodeIds.includes(edge.source_node_id) ||
+                    activeSelectedNodeIds.includes(edge.target_node_id);
+                  const edgeOpacity = linkedToSelectedNode ? 1 : 0.22;
 
                   return (
-                    <div
-                      key={node.node_id}
-                      data-graph-interactive="true"
-                      className="absolute rounded-[22px] border shadow-[0_18px_60px_rgba(2,8,9,0.36)] transition-transform"
-                      style={{
-                        left: node.position.x,
-                        top: node.position.y,
-                        width: NODE_WIDTH,
-                        height: NODE_HEIGHT,
-                        background: style.fill,
-                        borderColor: isConnectSource || isEdgeDragSource
-                          ? "#7fe6ca"
-                          : isEgoCenter
-                            ? "#f2cf74"
-                          : isSelected
-                            ? "#b1f4e2"
-                            : style.border,
-                        color: style.text,
-                        opacity: nodeOpacity,
-                        boxShadow: isSelected || isConnectSource || isEdgeDragSource
-                          ? "0 0 0 1px rgba(127,230,202,0.35), 0 18px 60px rgba(2,8,9,0.36)"
-                          : isOnRoute
-                            ? "0 0 0 1px rgba(242,207,116,0.45), 0 18px 60px rgba(2,8,9,0.36)"
-                          : "0 18px 60px rgba(2,8,9,0.36)",
-                      }}
-                    >
-                      {/* Node content - clickable for selection and drag */}
-                      <button
-                        type="button"
-                        className="h-full w-full flex flex-col items-start justify-between p-4 text-left"
+                    <g key={edge.edge_id}>
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={
+                          isSelected
+                            ? "var(--accent)"
+                            : isOnRoute
+                              ? "#b4befe"
+                              : "var(--overlay-0)"
+                        }
+                        strokeWidth={isSelected ? 2 : isOnRoute ? 1.5 : 1}
+                        opacity={edgeOpacity}
+                        markerEnd={isConstructMode ? "url(#graph-arrow)" : undefined}
+                      />
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={18}
+                        style={{ cursor: "pointer" }}
+                        data-graph-interactive="true"
                         onPointerDown={(event) => {
                           event.stopPropagation();
-                          event.preventDefault();
-
-                          if (connectSourceId) {
-                            if (connectSourceId !== node.node_id) {
-                              void handleCreateEdge(connectSourceId, node.node_id);
-                            }
-                            return;
-                          }
-
-                          // Handle edge drop if dragging
-                          if (edgeDragState && edgeDragState.sourceNodeId !== node.node_id) {
-                            void handleCreateEdge(edgeDragState.sourceNodeId, node.node_id);
-                            edgeDragStateRef.current = null;
-                            setEdgeDragState(null);
-                            return;
-                          }
-
-                          const isMultiToggle = event.shiftKey || event.metaKey || event.ctrlKey;
-                          if (isMultiToggle) {
-                            toggleNodeSelection(node.node_id);
-                            return;
-                          } else {
-                            selectSingleNode(node.node_id);
-                          }
-                          dragStateRef.current = {
-                            nodeId: node.node_id,
-                            originX: node.position.x,
-                            originY: node.position.y,
-                            startClientX: event.clientX,
-                            startClientY: event.clientY,
-                          };
+                          const isMultiToggle =
+                            event.shiftKey || event.metaKey || event.ctrlKey;
+                          if (isMultiToggle) toggleEdgeSelection(edge.edge_id);
+                          else selectSingleEdge(edge.edge_id);
                         }}
-                      >
-                        <div className="pointer-events-none">
-                          <div
-                            className="inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]"
-                            style={{ background: style.chip }}
+                      />
+                      {showEdgeLabels && edge.label ? (
+                        <g transform={`translate(${labelPosition.x}, ${labelPosition.y})`}>
+                          <rect
+                            x={-56}
+                            y={-12}
+                            width={112}
+                            height={24}
+                            rx={4}
+                            fill="#181825"
+                            stroke="rgba(69, 71, 90, 0.6)"
+                          />
+                          <text
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fill="#cdd6f4"
+                            fontSize="11"
+                            fontWeight="500"
                           >
-                            {node.entity_type}
-                          </div>
-                          <p className="mt-3 text-sm font-semibold leading-5">{node.label}</p>
-                        </div>
-                        <p className="pointer-events-none text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
-                          {Math.round(node.position.x)}, {Math.round(node.position.y)}
-                        </p>
-                      </button>
-
-                      {showConnectorHandles &&
-                        NODE_ANCHOR_SIDES.map((anchorSide) => (
-                          <button
-                            key={`${node.node_id}-connector-${anchorSide}`}
-                            type="button"
+                            {truncateLabel(edge.label, 22)}
+                          </text>
+                        </g>
+                      ) : null}
+                      {isConstructMode && isSelected ? (
+                        <g
+                          transform={`translate(${labelPosition.x + 62}, ${labelPosition.y - 12})`}
+                        >
+                          <circle
+                            r={9}
+                            fill="#f38ba8"
+                            style={{ cursor: "pointer" }}
                             data-graph-interactive="true"
-                            className="absolute h-4 w-4 rounded-full border-2 cursor-crosshair transition-transform shadow-lg hover:scale-125"
-                            style={{
-                              ...getNodeConnectorHandleStyle(anchorSide),
-                              zIndex: 10,
-                              background: isConnectorTarget
-                                ? "#f2cf74"
-                                : isConnectSource || isEdgeDragSource
-                                  ? "#7fe6ca"
-                                  : "var(--accent)",
-                              borderColor: "var(--surface-strong)",
-                              opacity: edgeDragState && !isEdgeDragSource ? 0.92 : 1,
-                            }}
                             onPointerDown={(event) => {
                               event.stopPropagation();
                               event.preventDefault();
-
-                              if (edgeDragState && edgeDragState.sourceNodeId !== node.node_id) {
-                                void handleCreateEdge(edgeDragState.sourceNodeId, node.node_id);
-                                edgeDragStateRef.current = null;
-                                setEdgeDragState(null);
-                                return;
-                              }
-
-                              setEdgeDragState({
-                                sourceNodeId: node.node_id,
-                                sourceAnchor: anchorSide,
-                              });
-                              selectSingleNode(node.node_id);
+                              void handleDeleteEdge(edge.edge_id);
                             }}
-                            title={`Drag from ${anchorSide} edge to connect`}
                           />
-                        ))}
-                    </div>
+                          <text
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fill="#11111b"
+                            fontSize="12"
+                            fontWeight="700"
+                            style={{ pointerEvents: "none" }}
+                          >
+                            ×
+                          </text>
+                        </g>
+                      ) : null}
+                    </g>
                   );
                 })}
 
-                {graphMode === "project" && visualNodes.length === 0 ? (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-                    <div className="w-full max-w-[560px] rounded-2xl border border-[var(--border)] bg-[rgba(9,17,19,0.92)] p-5 text-center">
-                      <p className="text-sm font-semibold text-[var(--foreground)]">
-                        This project graph is empty
-                      </p>
-                      <p className="mt-2 text-sm text-[var(--foreground-muted)]">
-                        Build a relationship map from project signals, then inspect it in Insight view.
-                      </p>
-                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                        <Button
-                          variant="secondary"
-                          onClick={() => void handleAutoGenerateFromProject()}
-                          disabled={
-                            isAutoGenerating ||
-                            !graphProjectId ||
-                            (projectSignalsQuery.data?.length ?? 0) === 0
-                          }
-                        >
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          {isAutoGenerating ? "Generating..." : "Generate from project signals"}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setInteractionMode("construct")}>
-                          Switch to Construct
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                {isConstructMode && connectSourceId && pointerWorld ? (
+                  <path
+                    d={buildEdgePreviewPath(
+                      getNodeAnchorPoint(
+                        nodeLookup.get(connectSourceId),
+                        getClosestAnchorSide(nodeLookup.get(connectSourceId), pointerWorld),
+                      ),
+                      pointerWorld,
+                    )}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 4"
+                  />
                 ) : null}
-              </div>
-              {!isInsightMode && showMinimap ? (
-                <div
-                  data-graph-interactive="true"
-                  className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border border-[var(--border)] bg-[rgba(7,14,16,0.94)] p-2 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    const target = event.currentTarget.getBoundingClientRect();
-                    const viewportElement = viewportRef.current;
-                    if (!viewportElement) return;
+                {isConstructMode && edgeDragState && pointerWorld && (
+                  <path
+                    d={buildEdgePreviewPath(
+                      getNodeAnchorPoint(
+                        nodeLookup.get(edgeDragState.sourceNodeId),
+                        edgeDragState.sourceAnchor,
+                      ),
+                      pointerWorld,
+                    )}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 4"
+                  />
+                )}
+              </svg>
 
-                    const nx = (event.clientX - target.left) / target.width;
-                    const ny = (event.clientY - target.top) / target.height;
-                    const worldX = clamp(nx, 0, 1) * WORLD_WIDTH;
-                    const worldY = clamp(ny, 0, 1) * WORLD_HEIGHT;
+              {renderedFilteredNodes.map((node) => {
+                const style = ENTITY_STYLES[node.entity_type];
+                const isSelected =
+                  node.node_id === selectedNodeId ||
+                  selectedNodeIdSet.has(node.node_id);
+                const isOnRoute = shortestPathNodeIdSet.has(node.node_id);
+                const isEgoCenter = egoCenterNodeId === node.node_id;
+                const isConnectSource = node.node_id === connectSourceId;
+                const isEdgeDragSource =
+                  edgeDragState?.sourceNodeId === node.node_id;
+                const isConnectorTarget =
+                  node.node_id === hoveredEdgeDragTargetNodeId ||
+                  node.node_id === hoveredConnectTargetNodeId;
+                const linkedToSelectedNode =
+                  activeSelectedNodeIds.length === 0 ||
+                  selectedNodeNeighborIds.has(node.node_id);
+                const nodeOpacity = linkedToSelectedNode ? 1 : 0.3;
+                const showConnectorHandles =
+                  isConstructMode &&
+                  (isSelected ||
+                    isConnectSource ||
+                    Boolean(edgeDragState) ||
+                    Boolean(connectSourceId));
 
-                    setViewport((current) => ({
-                      ...current,
-                      x: viewportElement.clientWidth / 2 - worldX * current.scale,
-                      y: viewportElement.clientHeight / 2 - worldY * current.scale,
-                    }));
-                  }}
-                >
-                  <div className="relative h-[140px] w-[220px] overflow-hidden rounded-md bg-[rgba(11,24,26,0.9)]">
-                    {renderedFilteredNodes.map((node) => (
-                      <span
-                        key={`mini-${node.node_id}`}
-                        className="absolute h-1.5 w-1.5 rounded-full"
-                        style={{
-                          left: `${(node.position.x / WORLD_WIDTH) * 100}%`,
-                          top: `${(node.position.y / WORLD_HEIGHT) * 100}%`,
-                          background:
-                            selectedNodeIdSet.has(node.node_id) || node.node_id === selectedNodeId
-                              ? "#7fe6ca"
-                              : shortestPathNodeIdSet.has(node.node_id)
-                                ? "#f2cf74"
-                                : "rgba(188, 216, 210, 0.8)",
-                        }}
-                      />
-                    ))}
-                    <div
-                      className="pointer-events-none absolute border border-[rgba(127,230,202,0.85)] bg-[rgba(127,230,202,0.08)]"
-                      style={buildMinimapViewportRect(viewport, viewportRef.current)}
-                    />
+                return (
+                  <div
+                    key={node.node_id}
+                    data-graph-interactive="true"
+                    className="absolute rounded-lg border transition-transform"
+                    style={{
+                      left: node.position.x,
+                      top: node.position.y,
+                      width: NODE_WIDTH,
+                      height: NODE_HEIGHT,
+                      background: style.fill,
+                      borderColor:
+                        isConnectSource || isEdgeDragSource
+                          ? "var(--accent)"
+                          : isEgoCenter
+                            ? "#b4befe"
+                            : isSelected
+                              ? "var(--accent)"
+                              : style.border,
+                      color: style.text,
+                      opacity: nodeOpacity,
+                      boxShadow:
+                        isSelected || isConnectSource || isEdgeDragSource
+                          ? "0 0 0 1px var(--accent-border)"
+                          : isOnRoute
+                            ? "0 0 0 1px rgba(180, 190, 254, 0.45)"
+                            : "none",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="flex h-full w-full items-center gap-3 p-3 text-left"
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+
+                        if (connectSourceId) {
+                          if (connectSourceId !== node.node_id) {
+                            void handleCreateEdge(connectSourceId, node.node_id);
+                          }
+                          return;
+                        }
+
+                        if (
+                          edgeDragState &&
+                          edgeDragState.sourceNodeId !== node.node_id
+                        ) {
+                          void handleCreateEdge(
+                            edgeDragState.sourceNodeId,
+                            node.node_id,
+                          );
+                          edgeDragStateRef.current = null;
+                          setEdgeDragState(null);
+                          return;
+                        }
+
+                        const isMultiToggle =
+                          event.shiftKey || event.metaKey || event.ctrlKey;
+                        if (isMultiToggle) {
+                          toggleNodeSelection(node.node_id);
+                          return;
+                        } else {
+                          selectSingleNode(node.node_id);
+                        }
+                        dragStateRef.current = {
+                          nodeId: node.node_id,
+                          originX: node.position.x,
+                          originY: node.position.y,
+                          startClientX: event.clientX,
+                          startClientY: event.clientY,
+                        };
+                      }}
+                    >
+                      <div
+                        className="pointer-events-none flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+                        style={{ background: style.chip, color: style.accent }}
+                      >
+                        {(() => {
+                          const Icon = ENTITY_ICON[node.entity_type];
+                          return <Icon className="h-4 w-4" />;
+                        })()}
+                      </div>
+                      <div className="pointer-events-none min-w-0 flex-1">
+                        <p className="truncate font-ui text-[12.5px] font-medium leading-tight text-[var(--text)]">
+                          {node.label}
+                        </p>
+                        <p className="mt-0.5 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
+                          {ENTITY_LABEL[node.entity_type]}
+                        </p>
+                      </div>
+                    </button>
+
+                    {showConnectorHandles &&
+                      NODE_ANCHOR_SIDES.map((anchorSide) => (
+                        <button
+                          key={`${node.node_id}-connector-${anchorSide}`}
+                          type="button"
+                          data-graph-interactive="true"
+                          className="absolute h-3 w-3 rounded-full border cursor-crosshair transition-transform hover:scale-125"
+                          style={{
+                            ...getNodeConnectorHandleStyle(anchorSide),
+                            zIndex: 10,
+                            background: isConnectorTarget
+                              ? "#b4befe"
+                              : isConnectSource || isEdgeDragSource
+                                ? "var(--accent)"
+                                : "var(--accent)",
+                            borderColor: "var(--mantle)",
+                            opacity:
+                              edgeDragState && !isEdgeDragSource ? 0.92 : 1,
+                          }}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                            event.preventDefault();
+
+                            if (
+                              edgeDragState &&
+                              edgeDragState.sourceNodeId !== node.node_id
+                            ) {
+                              void handleCreateEdge(
+                                edgeDragState.sourceNodeId,
+                                node.node_id,
+                              );
+                              edgeDragStateRef.current = null;
+                              setEdgeDragState(null);
+                              return;
+                            }
+
+                            setEdgeDragState({
+                              sourceNodeId: node.node_id,
+                              sourceAnchor: anchorSide,
+                            });
+                            selectSingleNode(node.node_id);
+                          }}
+                          title={`Drag from ${anchorSide} edge to connect`}
+                        />
+                      ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            {graphMode === "project" && visualNodes.length === 0 ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
+                <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
+                  <p className="font-ui text-[14px] font-medium text-[var(--text)]">
+                    This project graph is empty
+                  </p>
+                  <p className="mt-2 font-ui text-[12px] text-[var(--subtext-0)]">
+                    Build a relationship map from project signals, then inspect it here.
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void handleAutoGenerateFromProject()}
+                      disabled={
+                        isAutoGenerating ||
+                        !graphProjectId ||
+                        (projectSignalsQuery.data?.length ?? 0) === 0
+                      }
+                    >
+                      <Sparkles className="mr-2 h-3.5 w-3.5" />
+                      {isAutoGenerating ? "Generating…" : "Generate from signals"}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setInteractionMode("construct")}>
+                      Switch to Construct
+                    </Button>
                   </div>
                 </div>
-              ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Minimap (construct only) */}
+          {!isInsightMode && showMinimap ? (
+            <div
+              data-graph-interactive="true"
+              className="absolute bottom-4 right-4 z-30 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1.5"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                const target = event.currentTarget.getBoundingClientRect();
+                const viewportElement = viewportRef.current;
+                if (!viewportElement) return;
+
+                const nx = (event.clientX - target.left) / target.width;
+                const ny = (event.clientY - target.top) / target.height;
+                const worldX = clamp(nx, 0, 1) * WORLD_WIDTH;
+                const worldY = clamp(ny, 0, 1) * WORLD_HEIGHT;
+
+                setViewport((current) => ({
+                  ...current,
+                  x: viewportElement.clientWidth / 2 - worldX * current.scale,
+                  y: viewportElement.clientHeight / 2 - worldY * current.scale,
+                }));
+              }}
+            >
+              <div className="relative h-[120px] w-[180px] overflow-hidden rounded bg-[var(--crust)]">
+                {renderedFilteredNodes.map((node) => (
+                  <span
+                    key={`mini-${node.node_id}`}
+                    className="absolute h-1 w-1 rounded-full"
+                    style={{
+                      left: `${(node.position.x / WORLD_WIDTH) * 100}%`,
+                      top: `${(node.position.y / WORLD_HEIGHT) * 100}%`,
+                      background:
+                        selectedNodeIdSet.has(node.node_id) ||
+                        node.node_id === selectedNodeId
+                          ? "var(--accent)"
+                          : shortestPathNodeIdSet.has(node.node_id)
+                            ? "#b4befe"
+                            : "var(--overlay-1)",
+                    }}
+                  />
+                ))}
+                <div
+                  className="pointer-events-none absolute border border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                  style={buildMinimapViewportRect(viewport, viewportRef.current)}
+                />
+              </div>
             </div>
+          ) : null}
+
+          {/* Floating construct toolbar (construct only) */}
+          {isConstructMode && (
+            <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 -translate-x-1/2">
+              <div className="flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)]">
+                <ToolbarBtn
+                  title="Create node"
+                  onClick={() => {
+                    setRailTab("controls");
+                    setRailOpen(true);
+                  }}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="font-ui text-[11px] font-medium">New</span>
+                </ToolbarBtn>
+                <ToolbarBtn
+                  title={placeMode ? "Cancel placement" : "Place node on canvas"}
+                  active={placeMode}
+                  disabled={
+                    (graphMode === "project" && !graphProjectId) ||
+                    !createLabel.trim()
+                  }
+                  onClick={() => setPlaceMode((c) => !c)}
+                >
+                  <Crosshair className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <ToolbarBtn
+                  title="Start link from selected"
+                  disabled={!selectedNode && activeSelectedNodeIds.length === 0}
+                  active={Boolean(connectSourceId)}
+                  onClick={() => {
+                    if (!selectedNode && activeSelectedNodeIds.length === 0) return;
+                    const sourceNodeId =
+                      selectedNode?.node_id ?? activeSelectedNodeIds[0];
+                    if (!sourceNodeId) return;
+                    setConnectSourceId(sourceNodeId);
+                    setSelectedEdgeId(null);
+                    setSelectedEdgeIds([]);
+                    setStatusMessage(
+                      `Select a target for ${findNodeLabel(nodes, sourceNodeId)}.`,
+                    );
+                  }}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+                <ToolbarBtn
+                  title="Cancel link"
+                  disabled={!connectSourceId}
+                  onClick={() => setConnectSourceId(null)}
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <ToolbarBtn
+                  title="Undo"
+                  disabled={historyStats.undoCount === 0}
+                  onClick={() => void handleUndo()}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+                <ToolbarBtn
+                  title="Redo"
+                  disabled={historyStats.redoCount === 0}
+                  onClick={() => void handleRedo()}
+                >
+                  <Redo2 className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <ToolbarBtn
+                  title="Delete selected"
+                  disabled={
+                    selectedNodeIds.length === 0 && selectedEdgeIds.length === 0
+                  }
+                  onClick={() => {
+                    if (selectedNodeIds.length > 0)
+                      void handleDeleteNodes(selectedNodeIds);
+                    if (selectedEdgeIds.length > 0)
+                      void handleDeleteEdges(selectedEdgeIds);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </ToolbarBtn>
+              </div>
+            </div>
+          )}
+
+          {/* Floating status (bottom-left) */}
+          {(statusMessage || errorMessage) && (
+            <div className="pointer-events-none absolute bottom-4 left-4 z-30">
+              <div
+                className={cn(
+                  "rounded-md border px-3 py-1.5 font-ui text-[11px] backdrop-blur",
+                  errorMessage
+                    ? "border-[rgba(243,139,168,0.4)] bg-[rgba(243,139,168,0.1)] text-[#f38ba8]"
+                    : "border-[rgba(166,227,161,0.4)] bg-[rgba(166,227,161,0.1)] text-[#a6e3a1]",
+                )}
+              >
+                {errorMessage ?? statusMessage}
+              </div>
+            </div>
+          )}
+
+          {/* Graph stats strip (top-left of canvas) */}
+          <div className="pointer-events-none absolute left-4 top-4 z-30 flex gap-2">
+            <StatChip label="Nodes" value={`${filteredNodes.length}/${visualNodes.length}`} />
+            <StatChip label="Edges" value={`${filteredEdges.length}/${edges.length}`} />
+            {isInsightMode ? null : (
+              <StatChip label="Zoom" value={`${Math.round(viewport.scale * 100)}%`} />
+            )}
+            {shortestPathNodeIds.length > 1 && (
+              <StatChip
+                label="Route"
+                value={`${shortestPathNodeIds.length - 1}h`}
+                accent
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================
+          Right rail — tabbed Inspect | Controls
+          ============================================================ */}
+      <aside
+        className={cn(
+          "relative z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]",
+          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        )}
+        style={{ width: railOpen ? 340 : 0 }}
+      >
+        {railOpen && (
+          <>
+            {/* Tab toggle */}
+            <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+              <RailTab
+                label="Inspect"
+                active={railTab === "inspect"}
+                onClick={() => setRailTab("inspect")}
+              />
+              <RailTab
+                label="Controls"
+                active={railTab === "controls"}
+                onClick={() => setRailTab("controls")}
+              />
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setRailOpen(false)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Hide"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Card className="border border-[var(--border)] bg-[var(--surface)]/35">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Selected node</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {selectedNodeIds.length > 1 ? (
-                    <>
-                      <p className="text-sm text-[var(--foreground)]">
-                        {selectedNodeIds.length} nodes selected.
+            {/* Panel body */}
+            <div className="flex-1 overflow-y-auto">
+              {railTab === "inspect" ? (
+                /* ============ INSPECT PANEL ============ */
+                <div className="flex flex-col divide-y divide-[var(--border)]">
+                  {/* Multi-select */}
+                  {selectedNodeIds.length > 1 || selectedEdgeIds.length > 1 ? (
+                    <div className="flex flex-col gap-3 px-4 py-4">
+                      <span className="text-label">Multi-selection</span>
+                      <p className="font-ui text-[12px] text-[var(--subtext-0)]">
+                        {selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} /{" "}
+                        {selectedEdgeIds.length} edge{selectedEdgeIds.length === 1 ? "" : "s"}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="secondary" onClick={handleUseSelectedForPath}>
-                          <Route className="h-4 w-4" />
-                          Use for route
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleUseSelectedForPath}
+                          disabled={selectedNodeIds.length < 2}
+                        >
+                          <Route className="mr-1.5 h-3 w-3" />
+                          Route
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={handleApplyEgoFromSelection}>
-                          <Orbit className="h-4 w-4" />
-                          Use for ego
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleApplyEgoFromSelection}
+                          disabled={selectedNodeIds.length === 0}
+                        >
+                          <Orbit className="mr-1.5 h-3 w-3" />
+                          Ego
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => void handleDeleteNodes(selectedNodeIds)}
                           disabled={!isConstructMode}
+                          onClick={() => {
+                            if (selectedNodeIds.length > 0)
+                              void handleDeleteNodes(selectedNodeIds);
+                            if (selectedEdgeIds.length > 0)
+                              void handleDeleteEdges(selectedEdgeIds);
+                          }}
                         >
-                          <Trash2 className="h-4 w-4" />
-                          Delete selected
+                          <Trash2 className="mr-1.5 h-3 w-3" />
+                          Delete
                         </Button>
                       </div>
-                    </>
+                    </div>
                   ) : selectedNode ? (
-                    isInsightMode ? (
-                      <>
-                        <p className="text-sm font-semibold text-[var(--foreground)]">
-                          {selectedNode.label}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="neutral">{selectedNode.entity_type}</Badge>
-                          <Badge variant="neutral">{selectedNodeRelations.length} relations</Badge>
-                        </div>
-                        {selectedNodeDisplayPosition ? (
-                          <p className="text-xs text-[var(--foreground-muted)]">
-                            Position {Math.round(selectedNodeDisplayPosition.x)}, {Math.round(selectedNodeDisplayPosition.y)}
-                          </p>
-                        ) : null}
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => centerViewportOnNode(selectedNode.node_id)}
+                    /* Single node */
+                    <>
+                      <div className="flex flex-col gap-2 px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              background: ENTITY_STYLES[selectedNode.entity_type].accent,
+                            }}
+                          />
+                          <span
+                            className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em]"
+                            style={{
+                              color: ENTITY_STYLES[selectedNode.entity_type].accent,
+                            }}
                           >
-                            Center
-                          </Button>
+                            {selectedNode.entity_type}
+                          </span>
+                        </div>
+                        {isConstructMode ? (
+                          <Input
+                            value={nodeDraftLabel}
+                            onChange={(e) => setNodeDraftLabel(e.target.value)}
+                            placeholder="Node label"
+                          />
+                        ) : (
+                          <p className="font-ui text-[15px] font-medium leading-tight text-[var(--text)]">
+                            {selectedNode.label}
+                          </p>
+                        )}
+                        {isConstructMode && (
+                          <select
+                            className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                            value={nodeDraftType}
+                            onChange={(e) =>
+                              setNodeDraftType(e.target.value as GraphEntityType)
+                            }
+                          >
+                            <option value="person">Person</option>
+                            <option value="organisation">Organisation</option>
+                            <option value="location">Location</option>
+                            <option value="event">Event</option>
+                          </select>
+                        )}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {isConstructMode && (
+                            <Button
+                              size="sm"
+                              onClick={() => void handleSaveSelectedNode()}
+                              disabled={!nodeDraftLabel.trim()}
+                            >
+                              Save
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="secondary"
                             onClick={() => {
-                              setPathFromNodeId(selectedNode.node_id);
-                              setStatusMessage(`Set route start to ${selectedNode.label}.`);
+                              if (isInsightMode)
+                                insightGraphRef.current?.centerAt(selectedNode.node_id);
+                              else centerViewportOnNode(selectedNode.node_id);
                             }}
                           >
-                            Route from node
+                            Center
                           </Button>
-                        </div>
-                        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3">
-                          <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                            Relationships ({selectedNodeRelations.length})
-                          </p>
-                          {selectedNodeRelations.length === 0 ? (
-                            <p className="text-xs text-[var(--foreground-muted)]">
-                              No linked entities yet.
-                            </p>
-                          ) : (
-                            <div className="grid max-h-32 gap-1 overflow-y-auto">
-                              {selectedNodeRelations.map((relation) => (
-                                <button
-                                  key={relation.edgeId}
-                                  type="button"
-                                  className="flex items-center justify-between rounded-md px-2 py-1 text-left text-xs hover:bg-[var(--surface-strong)]"
-                                  onClick={() => {
-                                    selectSingleNode(relation.otherNodeId);
-                                    setSelectedEdgeId(relation.edgeId);
-                                    setSelectedEdgeIds([relation.edgeId]);
-                                    centerViewportOnNode(relation.otherNodeId);
-                                  }}
-                                >
-                                  <span className="truncate">
-                                    {relation.direction === "in" ? "←" : "→"} {relation.otherLabel}
-                                  </span>
-                                  <span className="ml-2 truncate text-[var(--foreground-muted)]">
-                                    {truncateLabel(relation.label, 18)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
+                          {isConstructMode && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setConnectSourceId(selectedNode.node_id);
+                                  setSelectedEdgeId(null);
+                                  setSelectedEdgeIds([]);
+                                }}
+                              >
+                                <Link2 className="mr-1 h-3 w-3" />
+                                Link
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => void handleDeleteNode(selectedNode.node_id)}
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Delete
+                              </Button>
+                            </>
                           )}
                         </div>
-                      </>
-                    ) : (
-                      <>
-                      <Input
-                        value={nodeDraftLabel}
-                        onChange={(event) => setNodeDraftLabel(event.target.value)}
-                        placeholder="Node label"
-                        readOnly={!isConstructMode}
-                        disabled={!isConstructMode}
-                      />
-                      <select
-                        className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
-                        value={nodeDraftType}
-                        onChange={(event) => setNodeDraftType(event.target.value as GraphEntityType)}
-                        disabled={!isConstructMode}
-                      >
-                        <option value="person">Person</option>
-                        <option value="organisation">Organisation</option>
-                        <option value="location">Location</option>
-                        <option value="event">Event</option>
-                      </select>
-                      {selectedNodeDisplayPosition ? (
-                        <p className="text-xs text-[var(--foreground-muted)]">
-                          Position {Math.round(selectedNodeDisplayPosition.x)}, {Math.round(selectedNodeDisplayPosition.y)}
-                        </p>
-                      ) : null}
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => void handleSaveSelectedNode()}
-                          disabled={!isConstructMode || !nodeDraftLabel.trim()}
-                        >
-                          Save node
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => centerViewportOnNode(selectedNode.node_id)}
-                        >
-                          Center
-                        </Button>
-                        {isConstructMode ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setConnectSourceId(selectedNode.node_id);
-                                setSelectedEdgeId(null);
-                                setSelectedEdgeIds([]);
-                              }}
-                            >
-                              <Link2 className="h-4 w-4" />
-                              Start link
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => void handleDeleteNode(selectedNode.node_id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </Button>
-                          </>
-                        ) : null}
                       </div>
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3">
-                        <p className="mb-2 text-xs uppercase tracking-[0.16em] text-[var(--foreground-muted)]">
-                          Relationships ({selectedNodeRelations.length})
-                        </p>
+
+                      <div className="flex flex-col gap-2 px-4 py-4">
+                        <span className="text-label">
+                          Connections ({selectedNodeRelations.length})
+                        </span>
                         {selectedNodeRelations.length === 0 ? (
-                          <p className="text-xs text-[var(--foreground-muted)]">
+                          <p className="font-ui text-[11px] text-[var(--overlay-1)]">
                             No linked entities yet.
                           </p>
                         ) : (
-                          <div className="grid max-h-32 gap-1 overflow-y-auto">
+                          <div className="flex flex-col gap-0.5">
                             {selectedNodeRelations.map((relation) => (
                               <button
                                 key={relation.edgeId}
                                 type="button"
-                                className="flex items-center justify-between rounded-md px-2 py-1 text-left text-xs hover:bg-[var(--surface-strong)]"
+                                className="flex items-center justify-between rounded px-1.5 py-1 text-left transition-colors duration-150 hover:bg-[var(--surface-wash)]"
                                 onClick={() => {
                                   selectSingleNode(relation.otherNodeId);
                                   setSelectedEdgeId(relation.edgeId);
                                   setSelectedEdgeIds([relation.edgeId]);
-                                  centerViewportOnNode(relation.otherNodeId);
+                                  if (isInsightMode)
+                                    insightGraphRef.current?.centerAt(relation.otherNodeId);
+                                  else centerViewportOnNode(relation.otherNodeId);
                                 }}
                               >
-                                <span className="truncate">
-                                  {relation.direction === "in" ? "←" : "→"} {relation.otherLabel}
+                                <span className="flex items-center gap-1.5 truncate font-ui text-[12px] text-[var(--subtext-1)]">
+                                  <span className="text-[var(--overlay-0)]">
+                                    {relation.direction === "in" ? "←" : "→"}
+                                  </span>
+                                  <span className="truncate">{relation.otherLabel}</span>
                                 </span>
-                                <span className="ml-2 truncate text-[var(--foreground-muted)]">
-                                  {truncateLabel(relation.label, 18)}
-                                </span>
+                                {relation.label && (
+                                  <span className="ml-2 truncate font-mono text-[10px] text-[var(--overlay-1)]">
+                                    {truncateLabel(relation.label, 16)}
+                                  </span>
+                                )}
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
                     </>
-                    )
-                  ) : (
-                    <p className="text-sm text-[var(--foreground-muted)]">
-                      {isConstructMode
-                        ? "Click a node to edit it, or multi-select nodes for bulk actions."
-                        : "Click a node to inspect it, then switch to Construct to edit graph structure."}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border border-[var(--border)] bg-[var(--surface)]/35">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Selected edge</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {selectedEdgeIds.length > 1 ? (
-                    <>
-                      <p className="text-sm text-[var(--foreground)]">
-                        {selectedEdgeIds.length} connections selected.
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => void handleDeleteEdges(selectedEdgeIds)}
-                        disabled={!isConstructMode}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete selected edges
-                      </Button>
-                    </>
                   ) : selectedEdge ? (
-                    isInsightMode ? (
-                      <>
-                        <p className="text-sm font-medium text-[var(--foreground)]">
-                          {findNodeLabel(nodes, selectedEdge.source_node_id)} →{" "}
-                          {findNodeLabel(nodes, selectedEdge.target_node_id)}
-                        </p>
-                        <p className="text-xs text-[var(--foreground-muted)]">
-                          {selectedEdge.label?.trim() ? selectedEdge.label : "Unlabeled relationship"}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                      <p className="text-sm font-medium text-[var(--foreground)]">
-                        {findNodeLabel(nodes, selectedEdge.source_node_id)} →{" "}
+                    /* Single edge */
+                    <div className="flex flex-col gap-3 px-4 py-4">
+                      <span className="text-label">Connection</span>
+                      <p className="font-ui text-[13px] font-medium text-[var(--text)]">
+                        {findNodeLabel(nodes, selectedEdge.source_node_id)}{" "}
+                        <span className="text-[var(--overlay-0)]">→</span>{" "}
                         {findNodeLabel(nodes, selectedEdge.target_node_id)}
                       </p>
+                      {isConstructMode ? (
+                        <>
+                          <Input
+                            value={edgeDraftLabel}
+                            onChange={(e) => setEdgeDraftLabel(e.target.value)}
+                            placeholder="Relationship label"
+                          />
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button
+                              size="sm"
+                              onClick={() => void handleSaveSelectedEdge()}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => void handleDeleteEdge(selectedEdge.edge_id)}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Delete
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="font-ui text-[12px] text-[var(--subtext-0)]">
+                          {selectedEdge.label?.trim() ?? "Unlabeled relationship"}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    /* No selection — stats */
+                    <>
+                      <div className="flex flex-col gap-3 px-4 py-4">
+                        <span className="text-label">Overview</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <StatBlock label="Nodes" value={visualNodes.length} />
+                          <StatBlock label="Edges" value={edges.length} />
+                          <StatBlock
+                            label="Density"
+                            value={`${(graphMetrics.edgeDensity * 100).toFixed(1)}%`}
+                          />
+                          <StatBlock
+                            label="Labeled"
+                            value={`${graphMetrics.labeledEdges}/${filteredEdges.length}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 px-4 py-4">
+                        <span className="text-label">Entities</span>
+                        <div className="flex flex-col gap-1">
+                          {(
+                            Object.keys(ENTITY_STYLES) as GraphEntityType[]
+                          ).map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => toggleEntityTypeFilter(type)}
+                              className={cn(
+                                "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-150",
+                                entityTypeFilters[type]
+                                  ? "hover:bg-[var(--surface-wash)]"
+                                  : "opacity-50 hover:opacity-80 hover:bg-[var(--surface-wash)]",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className="h-2 w-2 rounded-full"
+                                  style={{ background: ENTITY_STYLES[type].accent }}
+                                />
+                                <span className="font-ui text-[12px] capitalize text-[var(--subtext-1)]">
+                                  {type}
+                                </span>
+                              </span>
+                              <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                                {graphMetrics.typeCounts[type]}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="px-4 py-4">
+                        <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+                          Click a node or edge to inspect. Shift-click to multi-select.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* ============ CONTROLS PANEL ============ */
+                <div className="flex flex-col divide-y divide-[var(--border)]">
+                  {/* Create node (construct only) */}
+                  {isConstructMode && (
+                    <div className="flex flex-col gap-2 px-4 py-4">
+                      <span className="text-label">New node</span>
                       <Input
-                        value={edgeDraftLabel}
-                        onChange={(event) => setEdgeDraftLabel(event.target.value)}
-                        placeholder="Relationship label"
-                        readOnly={!isConstructMode}
-                        disabled={!isConstructMode}
+                        placeholder="Node label"
+                        value={createLabel}
+                        onChange={(e) => setCreateLabel(e.target.value)}
                       />
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={() => void handleSaveSelectedEdge()} disabled={!isConstructMode}>
-                          Save edge
+                      <select
+                        className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                        value={createEntityType}
+                        onChange={(e) =>
+                          setCreateEntityType(e.target.value as GraphEntityType)
+                        }
+                      >
+                        <option value="person">Person</option>
+                        <option value="organisation">Organisation</option>
+                        <option value="location">Location</option>
+                        <option value="event">Event</option>
+                      </select>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          onClick={() => void handleCreateNode()}
+                          disabled={
+                            (graphMode === "project" && !graphProjectId) ||
+                            !createLabel.trim()
+                          }
+                        >
+                          Add
                         </Button>
                         <Button
                           size="sm"
-                          variant="destructive"
-                          onClick={() => void handleDeleteEdge(selectedEdge.edge_id)}
-                          disabled={!isConstructMode}
+                          variant={placeMode ? "primary" : "secondary"}
+                          onClick={() => setPlaceMode((c) => !c)}
+                          disabled={
+                            (graphMode === "project" && !graphProjectId) ||
+                            !createLabel.trim()
+                          }
                         >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
+                          <Crosshair className="mr-1 h-3 w-3" />
+                          {placeMode ? "Cancel" : "Place"}
                         </Button>
                       </div>
-                    </>
-                    )
-                  ) : (
-                    <p className="text-sm text-[var(--foreground-muted)]">
-                      {isConstructMode
-                        ? "Click a connection to edit it, or multi-select for bulk delete."
-                        : "Click a connection to inspect relationship details."}
-                    </p>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
+
+                  {/* Connection label (construct only) */}
+                  {isConstructMode && (
+                    <div className="flex flex-col gap-2 px-4 py-4">
+                      <span className="text-label">Next link label</span>
+                      <Input
+                        placeholder="Relationship label"
+                        value={connectLabel}
+                        onChange={(e) => setConnectLabel(e.target.value)}
+                      />
+                      <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+                        Applied to the next connection you create.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Filters */}
+                  <div className="flex flex-col gap-2 px-4 py-4">
+                    <span className="text-label">Filters</span>
+                    <div className="flex flex-col gap-1">
+                      {(Object.keys(ENTITY_STYLES) as GraphEntityType[]).map((type) => (
+                        <label
+                          key={type}
+                          className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--surface-wash)]"
+                        >
+                          <span className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={entityTypeFilters[type]}
+                              onChange={() => toggleEntityTypeFilter(type)}
+                              className="accent-[var(--accent)]"
+                            />
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{ background: ENTITY_STYLES[type].accent }}
+                            />
+                            <span className="font-ui text-[12px] capitalize text-[var(--subtext-1)]">
+                              {type}
+                            </span>
+                          </span>
+                          <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                            {graphMetrics.typeCounts[type]}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={showEdgeLabels}
+                          onChange={() => setShowEdgeLabels((c) => !c)}
+                          className="accent-[var(--accent)]"
+                        />
+                        <span className="font-ui text-[12px] text-[var(--subtext-1)]">
+                          Edge labels
+                        </span>
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={showMinimap}
+                          onChange={() => setShowMinimap((c) => !c)}
+                          className="accent-[var(--accent)]"
+                        />
+                        <span className="font-ui text-[12px] text-[var(--subtext-1)]">
+                          Minimap (Construct)
+                        </span>
+                      </label>
+                      <Button
+                        size="sm"
+                        variant={focusMode === "selection" ? "primary" : "secondary"}
+                        className="mt-1 w-full"
+                        onClick={() =>
+                          setFocusMode((c) => (c === "selection" ? "all" : "selection"))
+                        }
+                        disabled={activeSelectedNodeIds.length === 0}
+                      >
+                        {focusMode === "selection" ? "Selection focus on" : "Focus selection"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Insight layout (insight only) */}
+                  {isInsightMode && (
+                    <div className="flex flex-col gap-3 px-4 py-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-label">Layout</span>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant={insightAutoLayout ? "primary" : "secondary"}
+                            onClick={() => setInsightAutoLayout((c) => !c)}
+                          >
+                            {insightAutoLayout ? "Live" : "Paused"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setInsightLayoutTick((c) => c + 1)}
+                          >
+                            Reflow
+                          </Button>
+                        </div>
+                      </div>
+                      <SliderRow
+                        label={`Spread (${insightRepulsion.toFixed(2)})`}
+                        value={insightRepulsion}
+                        min={0.8}
+                        max={3.2}
+                        step={0.05}
+                        onChange={setInsightRepulsion}
+                      />
+                      <SliderRow
+                        label={`Link distance (${Math.round(insightLinkDistance)})`}
+                        value={insightLinkDistance}
+                        min={140}
+                        max={520}
+                        step={10}
+                        onChange={setInsightLinkDistance}
+                      />
+                      <SliderRow
+                        label={`Center pull (${insightCenterPull.toFixed(2)})`}
+                        value={insightCenterPull}
+                        min={0.01}
+                        max={0.2}
+                        step={0.01}
+                        onChange={setInsightCenterPull}
+                      />
+                      <div className="flex flex-col gap-1.5">
+                        <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Label density
+                        </span>
+                        <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
+                          {(["context", "selected", "all"] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setInsightLabelMode(mode)}
+                              className={cn(
+                                "flex-1 rounded px-2 py-1 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
+                                insightLabelMode === mode
+                                  ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+                                  : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+                              )}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shortest path */}
+                  <div className="flex flex-col gap-2 px-4 py-4">
+                    <span className="text-label">Shortest path</span>
+                    <select
+                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                      value={pathFromNodeId ?? ""}
+                      onChange={(e) => setPathFromNodeId(e.target.value || null)}
+                    >
+                      <option value="">From…</option>
+                      {visualNodes.map((n) => (
+                        <option key={`pf-${n.node_id}`} value={n.node_id}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                      value={pathToNodeId ?? ""}
+                      onChange={(e) => setPathToNodeId(e.target.value || null)}
+                    >
+                      <option value="">To…</option>
+                      {visualNodes.map((n) => (
+                        <option key={`pt-${n.node_id}`} value={n.node_id}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleUseSelectedForPath}
+                      >
+                        Use selection
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleFindShortestPath}
+                        disabled={!pathFromNodeId || !pathToNodeId}
+                      >
+                        Find
+                      </Button>
+                      {shortestPathNodeIds.length > 0 && (
+                        <Button size="sm" variant="ghost" onClick={clearPathAnalysis}>
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ego network */}
+                  <div className="flex flex-col gap-2 px-4 py-4">
+                    <span className="text-label">Ego network</span>
+                    <select
+                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                      value={egoCenterNodeId ?? ""}
+                      onChange={(e) => setEgoCenterNodeId(e.target.value || null)}
+                    >
+                      <option value="">Center…</option>
+                      {visualNodes.map((n) => (
+                        <option key={`ego-${n.node_id}`} value={n.node_id}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={4}
+                        value={egoDepth}
+                        onChange={(e) =>
+                          setEgoDepth(clamp(Number(e.target.value) || 1, 1, 4))
+                        }
+                        className="h-8 w-20"
+                      />
+                      <span className="font-ui text-[11px] text-[var(--overlay-1)]">
+                        Depth (1–4)
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleApplyEgoFromSelection}
+                      >
+                        Use selection
+                      </Button>
+                      {egoCenterNodeId && (
+                        <Button size="sm" variant="ghost" onClick={handleClearEgoNetwork}>
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </>
+        )}
+      </aside>
     </div>
+  );
+}
+
+// ============================================================
+// Topbar / rail / toolbar primitives
+// ============================================================
+
+function TopbarIconBtn({
+  children,
+  onClick,
+  title,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={cn(
+        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)]",
+        "transition-colors duration-150",
+        "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--overlay-1)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OverflowItem({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[12px] transition-colors duration-150",
+        disabled
+          ? "cursor-not-allowed text-[var(--overlay-0)]"
+          : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RailTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded px-2.5 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+        active
+          ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ToolbarBtn({
+  children,
+  onClick,
+  title,
+  active,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded px-2 transition-colors duration-150",
+        active
+          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+          : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1.5 rounded-md border px-2 py-1 backdrop-blur",
+        accent
+          ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+          : "border-[var(--border)] bg-[rgba(24,24,37,0.85)]",
+      )}
+    >
+      <span
+        className={cn(
+          "font-ui text-[9px] font-semibold uppercase tracking-[0.14em]",
+          accent ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          "font-mono text-[11px] tabular-nums",
+          accent ? "text-[var(--accent)]" : "text-[var(--text)]",
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatBlock({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        {label}
+      </span>
+      <span className="font-mono text-[16px] tabular-nums text-[var(--text)]">{value}</span>
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="font-ui text-[11px] text-[var(--overlay-1)]">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="accent-[var(--accent)]"
+      />
+    </label>
   );
 }
