@@ -1,4 +1,6 @@
-# IntelliZen V1 Agent Guide
+# IntelliZen Agent Guide (historical V1 freeze)
+
+> **Status:** This document describes the original V1 freeze. The current build has promoted Investigation and Reports out of V2 with approval (2026-04-07) and now ships seven screens, spawns `claude -p` via the Tauri shell plugin, reads/writes the vault via the Tauri fs plugin, and uses `react-force-graph-2d` for the graph canvas instead of React Flow. Read [CLAUDE.md](CLAUDE.md) for the current build contract. The sections below stay here as product-intent context for the V1 loop.
 
 ## Mission
 

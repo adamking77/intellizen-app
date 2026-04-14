@@ -50,104 +50,126 @@ export function SearchView() {
 
   const results = searchMutation.data;
 
+  const canRunSearch = query.trim().length > 0 && !searchMutation.isPending;
+
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Exa search</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {SEARCH_MODES.map((item) => (
-              <Button
-                key={item.value}
-                size="sm"
-                variant={mode === item.value ? "primary" : "secondary"}
-                onClick={() => setMode(item.value)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_160px]">
-            <Input
-              placeholder={
-                mode === "deep_research"
-                  ? "Write a natural-language research brief"
-                  : "Enter a search query"
-              }
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              disabled={mode !== "news"}
-            />
-            <Button
-              onClick={() => searchMutation.mutate()}
-              disabled={!query.trim() || searchMutation.isPending}
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)]/80 px-5 backdrop-blur-sm">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--foreground-dim)]">
+          Search
+        </span>
+        {targetProject ? (
+          <div className="flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
+            <Badge variant="accent">Target project</Badge>
+            <span>{targetProject.name}</span>
+            <button
+              type="button"
+              className="text-[var(--accent)]"
+              onClick={() => setSearchTargetProjectId(null)}
             >
-              {searchMutation.isPending ? "Searching..." : "Run search"}
-            </Button>
+              Clear
+            </button>
           </div>
-          {targetProject ? (
-            <div className="flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
-              <Badge variant="accent">Target project</Badge>
-              <span>{targetProject.name}</span>
-              <button
-                type="button"
-                className="text-[var(--accent)]"
-                onClick={() => setSearchTargetProjectId(null)}
+        ) : null}
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-5xl flex-col gap-5 p-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Exa search</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {SEARCH_MODES.map((item) => (
+                  <Button
+                    key={item.value}
+                    size="sm"
+                    variant={mode === item.value ? "primary" : "secondary"}
+                    onClick={() => setMode(item.value)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+              <form
+                className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_160px]"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!canRunSearch) return;
+                  searchMutation.mutate();
+                }}
               >
-                Clear
-              </button>
+                <Input
+                  placeholder={
+                    mode === "deep_research"
+                      ? "Write a natural-language research brief"
+                      : "Enter a search query"
+                  }
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  disabled={mode !== "news"}
+                />
+                <Button type="submit" disabled={!canRunSearch}>
+                  {searchMutation.isPending ? "Searching..." : "Run search"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {searchMutation.error ? (
+            <div className="rounded-2xl border border-[var(--danger-border)] bg-[var(--danger-soft)] p-5 text-sm text-[var(--danger)]">
+              {searchMutation.error.message}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
 
-      {searchMutation.error ? (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--foreground-muted)]">
-          {searchMutation.error.message}
+          {Array.isArray(results) ? (
+            results.length === 0 ? (
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--foreground-muted)]">
+                No results.
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {results.map((result) => (
+                  <SignalCard
+                    key={result.url}
+                    title={result.title}
+                    url={result.url}
+                    source={result.source}
+                    publishedAt={result.published_at}
+                    snippet={result.snippet}
+                    score={result.exa_score}
+                    onSave={() => setPendingResult(result)}
+                  />
+                ))}
+              </div>
+            )
+          ) : results ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{results.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Badge variant="accent">Deep Research</Badge>
+                  <Badge variant="neutral">{results.source}</Badge>
+                </div>
+                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-[var(--foreground-muted)]">
+                    {results.content}
+                  </pre>
+                </div>
+                <Button onClick={() => setPendingResult(results)}>Add to Project</Button>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
-      ) : null}
-
-      {Array.isArray(results) ? (
-        <div className="grid gap-4">
-          {results.map((result) => (
-            <SignalCard
-              key={result.url}
-              title={result.title}
-              url={result.url}
-              source={result.source}
-              publishedAt={result.published_at}
-              snippet={result.snippet}
-              score={result.exa_score}
-              onSave={() => setPendingResult(result)}
-            />
-          ))}
-        </div>
-      ) : results ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{results.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Badge variant="accent">Deep Research</Badge>
-              <Badge variant="neutral">{results.source}</Badge>
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-[var(--foreground-muted)]">
-                {results.content}
-              </pre>
-            </div>
-            <Button onClick={() => setPendingResult(results)}>Add to Project</Button>
-          </CardContent>
-        </Card>
-      ) : null}
+      </div>
 
       <ProjectPickerDrawer
         open={pendingResult !== null}
@@ -162,6 +184,6 @@ export function SearchView() {
         }}
         title={pendingResult ? `Attach "${pendingResult.title}"` : "Attach to project"}
       />
-    </>
+    </div>
   );
 }

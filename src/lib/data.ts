@@ -1,3 +1,7 @@
+import {
+  signalDraftFromDeepResearch,
+  signalDraftFromSearchResult,
+} from "@/lib/exa";
 import type {
   DeepResearchResult,
   GraphEntityType,
@@ -214,38 +218,10 @@ export async function saveSearchResultToProject(input: {
 }) {
   const draft =
     "content" in input.result
-      ? signalDraftFromDeepResearchResult(input.result)
-      : signalDraftFromSearchResultItem(input.result);
+      ? signalDraftFromDeepResearch(input.result)
+      : signalDraftFromSearchResult(input.result);
 
   return saveDraftToProject({ projectId: input.projectId, draft });
-}
-
-function signalDraftFromSearchResultItem(result: SearchResultItem): SignalDraft {
-  return {
-    title: result.title,
-    url: result.url,
-    source: result.source,
-    published_at: result.published_at,
-    snippet: result.snippet,
-    watch_domain: "manual",
-    exa_score: result.exa_score,
-    raw_payload: result.raw_payload,
-    status: "saved",
-  };
-}
-
-function signalDraftFromDeepResearchResult(result: DeepResearchResult): SignalDraft {
-  return {
-    title: result.title,
-    url: result.url,
-    source: result.source,
-    published_at: new Date().toISOString(),
-    snippet: result.snippet,
-    watch_domain: "manual",
-    exa_score: null,
-    raw_payload: result.raw_payload,
-    status: "saved",
-  };
 }
 
 async function findSignalByUrl(url: string) {
@@ -281,13 +257,6 @@ async function insertSignal(input: SignalDraft) {
 export async function runMonitorNow(monitor: Monitor) {
   const { exa } = await import("@/lib/exa");
 
-  const { data: existing, error: existingError } = await supabase
-    .from("intel_signals")
-    .select("url");
-
-  if (existingError) throw existingError;
-
-  const seen = new Set((existing ?? []).map((row) => row.url as string));
   const response = await exa.searchAndContents(monitor.query, {
     type: "auto",
     numResults: 10,
@@ -297,12 +266,12 @@ export async function runMonitorNow(monitor: Monitor) {
     },
   });
 
+  const seenInBatch = new Set<string>();
   const drafts: SignalDraft[] = [];
 
   for (const result of response.results) {
-    if (seen.has(result.url)) continue;
-
-    seen.add(result.url);
+    if (seenInBatch.has(result.url)) continue;
+    seenInBatch.add(result.url);
     drafts.push({
       title: result.title ?? safeHostname(result.url),
       url: result.url,

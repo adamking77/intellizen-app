@@ -1,4 +1,5 @@
 import { Bookmark, ExternalLink, X } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -132,16 +133,17 @@ export function SignalCard({
 
       {/* Hover actions */}
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100">
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void openUrl(url);
+          }}
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--foreground-dim)] hover:bg-white/[0.06] hover:text-[var(--foreground)]"
           title="Open URL"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        </button>
         {onSave ? (
           <button
             onClick={(e) => { e.stopPropagation(); onSave(); }}

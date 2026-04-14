@@ -1,6 +1,19 @@
 # InteliZen — Build Context
 
-macOS-only Tauri v2 desktop intelligence platform for GenZen. Full spec in `intellizen-tauri-spec.md`. Read it before writing any code.
+macOS-only Tauri v2 desktop intelligence platform for GenZen. Original V1 spec in `intellizen-tauri-spec.md`; the current build has promoted several V2 capabilities into the app. Read the rest of this file before the spec.
+
+## Current scope (actual build, not frozen spec)
+
+**7 screens**, grouped as 4 operational layers:
+
+| Layer | Routes |
+|---|---|
+| Monitoring | `/inbox`, `/monitors` |
+| Search | `/search` |
+| Organize | `/projects`, `/graph` |
+| Analyse | `/investigate`, `/reports` |
+
+Investigation (6-phase flow: Plan → Collect → Collate → Timeline → ACH → Report) and Reports (sweep / assessment / deep / brief) were promoted from V2 on 2026-04-07 with approval. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 freeze — they are kept for product-intent context, not as implementation contracts.
 
 ## Credentials
 
@@ -10,51 +23,46 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 VITE_EXA_API_KEY=ca04e163-e55b-49ca-9b40-3454d11a35d6
 ```
 
-These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project.
+These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project and do not alter Brain tables (`documents`, `chunks`, `cases`, `decisions`, `config`, `taste_preferences`).
 
 ## Stack
 
-Tauri v2 · React 18 + TypeScript + Vite · Tailwind CSS v4 · shadcn/ui · Zustand · TanStack Query · Supabase JS v2 · Exa JavaScript SDK (`exa-js`) · React Flow · pnpm
+Tauri v2 · React 18 + TypeScript + Vite · Tailwind CSS v4 · hand-rolled UI primitives in `src/components/ui/` (follow the shadcn/ui API but are not CLI-initialized) · Zustand · TanStack Query · Supabase JS v2 · Exa JS SDK (`exa-js`) · `react-force-graph-2d` + `d3-force` for the Insight graph view; custom SVG/DOM canvas for Construct mode · pnpm
 
-## Build Sequence
+Tauri plugins: `opener`, `fs` (scoped to `$HOME/vault/**`), `shell` (whitelisted to `claude -p`).
 
-Follow this order exactly:
+## Database
 
-1. Run Supabase migrations — 4 tables: `intel_signals`, `projects`, `project_signals`, `monitors` (SQL in spec)
-2. Scaffold Tauri v2 app with Vite + React + TypeScript
-3. Install all deps — Tailwind v4, shadcn/ui init, Zustand, TanStack Query, Supabase client, Exa SDK, React Flow
-4. Sidebar nav layout, 5-screen routing skeleton, `.env.local` wired
-5. Monitors screen — CRUD, seed 7 default Watch domains
-6. Inbox screen — Exa pull on Refresh, signal cards, triage actions, project selector drawer
-7. Projects screen — list view, create, detail view
-8. Search screen — all 7 Exa modes, add-to-project flow
-9. Graph migrations (`graph_nodes` + `graph_edges`), then Graph screen — React Flow, manual mode
+Five additive migrations in `supabase/migrations/`:
 
-## Key Decisions (do not re-litigate)
+1. `init_intellizen_v1_schema` — `intel_signals`, `projects`, `project_signals`, `monitors` + `update_updated_at()` trigger fn.
+2. `add_graph_tables` — `graph_nodes`, `graph_edges`.
+3. `dedupe_intel_signals_and_enforce_unique_urls` — collapses duplicate URLs and adds `intel_signals_url_uidx`.
+4. `add_standalone_graph_mode` — nullable `project_id` on graph tables so graphs can exist outside a project.
+5. `add_investigations_schema` — `investigations`, `investigation_signals`, `vault_files`.
 
-- **No Anthropic API. No `claude -p` subprocess.** Exa handles all data collection. Claude is external.
-- **No Vercel webhook in V1.** Signals are pulled from Exa on demand when Inbox refreshes.
-- **shadcn/ui, not HeroUI.** Copy components into `src/components/ui/`.
-- **Tailwind v4**, not v3.
-- **Single user, no auth.** Supabase anon key, RLS disabled on InteliZen tables.
-- **macOS only.** No cross-platform build targets.
-- **Supabase project is shared with GenZen Brain.** Add the 4 new tables without touching existing Brain tables (`documents`, `chunks`, `cases`, `decisions`, `config`, `taste_preferences`).
+RLS is disabled on InteliZen tables (single user, local desktop).
 
-## V1 Screens (5)
+## Investigation + Reports integration
 
-| Screen | Route | Purpose |
-|---|---|---|
-| Inbox | `/inbox` | Daily signal feed from Monitors, triage |
-| Search | `/search` | All 7 Exa search modes, save to Projects |
-| Projects | `/projects` | Organize saved intel by use case |
-| Monitors | `/monitors` | Manage search templates |
-| Graph | `/graph` | React Flow canvas, manual node/edge creation |
+- **Claude execution**: [src/lib/shell.ts](src/lib/shell.ts) wraps `Command.create("claude", ...)` via the Tauri shell plugin. Prompts per phase are built in `buildPhasePrompt` / `buildReportPrompt`.
+- **Vault I/O**: [src/lib/vault.ts](src/lib/vault.ts) wraps the Tauri fs plugin. Reads/writes under `$HOME/vault/intelligence/investigations/<case-id>/`.
+- **Artifact tracking**: every `claude -p` run that produces a file also inserts a row into `vault_files` keyed to `case_id`.
+
+## Graph implementation
+
+Uses **`react-force-graph-2d`** (not React Flow). Two modes inside `src/views/Graph.tsx`:
+
+- **Insight mode** — force-directed Obsidian-style canvas ([src/components/graph/obsidian-graph.tsx](src/components/graph/obsidian-graph.tsx)).
+- **Construct mode** — custom SVG/DOM canvas with drag, pan, zoom, connector handles, edge drag, multi-select, undo/redo, shortest-path, ego network, minimap.
+
+Graphs can be project-linked or standalone (`project_id = null`).
 
 ## Exa Integration Reference
 
 Install: `pnpm add exa-js`
 
-### Client setup (`src/lib/exa.ts`)
+### Client setup ([src/lib/exa.ts](src/lib/exa.ts))
 
 ```typescript
 import Exa from "exa-js"
@@ -65,7 +73,7 @@ export const exa = new Exa(import.meta.env.VITE_EXA_API_KEY)
 
 **Web** (semantic, autoprompt):
 ```typescript
-const results = await exa.searchAndContents(query, {
+await exa.searchAndContents(query, {
   type: 'auto',
   useAutoprompt: true,
   numResults: 10,
@@ -75,147 +83,56 @@ const results = await exa.searchAndContents(query, {
 
 **News** (date-filterable):
 ```typescript
-const results = await exa.searchAndContents(query, {
+await exa.searchAndContents(query, {
   type: 'auto',
   category: 'news',
   numResults: 10,
   highlights: { numSentences: 3, highlightsPerUrl: 1 },
-  startPublishedDate: startDate // optional ISO 8601, e.g. '2026-01-01T00:00:00Z'
+  startPublishedDate: startDate
 })
 ```
 
-**Research Papers:**
-```typescript
-const results = await exa.searchAndContents(query, {
-  category: 'research paper',
-  numResults: 10,
-  highlights: { numSentences: 3, highlightsPerUrl: 1 }
-})
-```
+**Research Papers:** `category: 'research paper'` with highlights.
 
-**Company:**
-```typescript
-const results = await exa.search(query, {
-  category: 'company',
-  numResults: 10
-})
-```
+**Company:** `exa.search(query, { category: 'company', numResults: 10 })`.
 
-**People** (LinkedIn + personal sites):
-```typescript
-const results = await exa.search(query, {
-  category: 'personal site',
-  numResults: 10
-})
-```
+**People:** `category: 'personal site'`.
 
-**Financial Reports:**
-```typescript
-const results = await exa.search(query, {
-  category: 'financial report',
-  numResults: 10
-})
-```
+**Financial Reports:** `category: 'financial report'`.
 
 **Deep Research** (async — REST API, not in SDK):
 ```typescript
-// Fire
 const res = await fetch('https://api.exa.ai/research/v1', {
   method: 'POST',
   headers: {
     'x-api-key': import.meta.env.VITE_EXA_API_KEY,
     'Content-Type': 'application/json'
   },
-  body: JSON.stringify({
-    instructions: query,
-    model: 'exa-research'
-  })
+  body: JSON.stringify({ instructions: query, model: 'exa-research' })
 })
 const { id } = await res.json()
-
-// Poll until complete (2s interval)
-async function pollResearch(id: string): Promise<string> {
-  const res = await fetch(`https://api.exa.ai/research/v1/${id}`, {
-    headers: { 'x-api-key': import.meta.env.VITE_EXA_API_KEY }
-  })
-  const data = await res.json()
-  if (data.status === 'completed') return data.data
-  if (data.status === 'failed') throw new Error(data.error)
-  await new Promise(r => setTimeout(r, 2000))
-  return pollResearch(id)
-}
+// Poll GET /research/v1/:id every 2s until status === 'completed'
 ```
 
-Deep Research returns a markdown string, not a results array. Display as formatted text, not a card list.
+Deep Research returns a markdown string, not a results array.
 
-### Exa result shape
+### Exa category rules
 
-```typescript
-interface ExaResult {
-  id: string
-  url: string
-  title: string
-  publishedDate: string | null
-  author: string | null
-  score: number
-  highlights?: string[]
-  highlightScores?: number[]
-  text?: string
-}
-```
-
-### Mapping Exa result → `intel_signals` row
-
-```typescript
-function toSignal(result: ExaResult, monitorId: number | null, watchDomain: string) {
-  return {
-    monitor_id: monitorId,
-    title: result.title,
-    url: result.url,
-    source: new URL(result.url).hostname,
-    published_at: result.publishedDate ?? null,
-    snippet: result.highlights?.[0] ?? result.text?.slice(0, 300) ?? null,
-    watch_domain: watchDomain,
-    exa_score: result.score,
-    raw_payload: result,
-    status: 'new'
-  }
-}
-```
+The **Tauri SDK** uses `category: 'news'` for News and `category: 'personal site'` for People. The MCP server uses `category: 'people'`. Do not copy MCP categories into the app.
 
 ### Inbox Refresh logic
 
-```typescript
-async function refreshInbox(monitors: Monitor[]) {
-  const active = monitors.filter(m => m.status === 'active')
+`listMonitors()` → for each `active` monitor, call Exa, upsert results into `intel_signals` with `onConflict: "url", ignoreDuplicates: true`, update `last_run` and `signal_count`. The unique index on `url` does the dedup.
 
-  const { data: existing } = await supabase
-    .from('intel_signals')
-    .select('url')
-  const seen = new Set(existing?.map(r => r.url) ?? [])
+## Key engineering rules
 
-  for (const monitor of active) {
-    const results = await exa.searchAndContents(monitor.query, {
-      type: 'auto',
-      numResults: 10,
-      highlights: { numSentences: 3, highlightsPerUrl: 1 }
-    })
+- Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
+- Preserve `raw_payload` on signals so Exa response evolution doesn't force schema churn.
+- Build for resilience around partial data, null publish dates, sparse Deep Research output.
+- TanStack Query for server state; Zustand only for UI state that doesn't belong in query cache.
+- Migrations are additive and reviewable — no destructive edits to live contracts.
+- Never commit `.env.local`.
 
-    const newSignals = results.results
-      .filter(r => !seen.has(r.url))
-      .map(r => toSignal(r, monitor.id, monitor.watch_domain))
+## Out of scope (still not built)
 
-    if (newSignals.length > 0) {
-      await supabase.from('intel_signals').insert(newSignals)
-      await supabase
-        .from('monitors')
-        .update({ last_run: new Date().toISOString() })
-        .eq('id', monitor.id)
-    }
-  }
-}
-```
-
-## V2 (out of scope — do not build)
-
-Reports page, Triggers, Exa Monitor webhooks, Auto Graph, 6-phase Investigation workflow, Vault sync.
+Vercel webhook receivers · Exa Monitor API push delivery · auto-graph generation · multi-user auth · cross-platform targets · vault-sync to the Brain Supabase project (manual export only).

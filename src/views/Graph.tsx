@@ -24,6 +24,36 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  buildEdgePath,
+  buildEdgePreviewPath,
+  buildMinimapViewportRect,
+  canonicalEdgePair,
+  clamp,
+  clampNodePosition,
+  clientToWorldPoint,
+  computeFitViewToNodes,
+  DEFAULT_VIEW,
+  findNodeAtWorldPoint,
+  findNodeLabel,
+  getAutoAnchorSides,
+  getClosestAnchorSide,
+  getEdgeLabelPosition,
+  getNextNodePosition,
+  getNodeAnchorPoint,
+  getNodeConnectorHandleStyle,
+  NODE_ANCHOR_SIDES,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  truncateLabel,
+  VIEWPORT_HEIGHT,
+  WORLD_HEIGHT,
+  WORLD_MARGIN,
+  WORLD_WIDTH,
+  type NodeAnchorSide,
+  type Point,
+  type ViewportState,
+} from "@/lib/graph-geometry";
+import {
   createGraphEdge,
   createGraphNode,
   deleteGraphEdges,
@@ -39,7 +69,6 @@ import {
 import type {
   GraphEdgeRecord,
   GraphEntityType,
-  GraphNodeRecord,
   ProjectSignal,
 } from "@/lib/types";
 
@@ -88,26 +117,7 @@ const INSIGHT_NODE_COLORS: Record<GraphEntityType, string> = {
   event: "#c77769",
 };
 
-const NODE_WIDTH = 188;
-const NODE_HEIGHT = 92;
-const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
-const WORLD_WIDTH = 2200;
-const WORLD_HEIGHT = 1400;
-const WORLD_MARGIN = 32;
-const VIEWPORT_HEIGHT = 780;
-const DEFAULT_VIEW = { x: 140, y: 90, scale: 1 };
 const EMPTY_STRING_SET = new Set<string>();
-
-type Point = {
-  x: number;
-  y: number;
-};
-
-type ViewportState = {
-  x: number;
-  y: number;
-  scale: number;
-};
 
 type DragState = {
   nodeId: string;
@@ -123,8 +133,6 @@ type PanState = {
   startClientX: number;
   startClientY: number;
 } | null;
-
-type NodeAnchorSide = "top" | "right" | "bottom" | "left";
 
 type EdgeDragState = {
   sourceNodeId: string;
@@ -970,7 +978,7 @@ export function GraphView() {
       return;
     }
     const targetNodes = renderedFilteredNodes.length > 0 ? renderedFilteredNodes : visualNodes;
-    fitViewToNodes(targetNodes, viewportRef.current, setViewport);
+    setViewport(computeFitViewToNodes(targetNodes, viewportRef.current));
   }
 
   function centerViewportOnNode(nodeId: string) {
@@ -1553,13 +1561,14 @@ export function GraphView() {
       );
 
       await nodesQuery.refetch();
-      fitViewToNodes(
-        visualNodes.map((node, index) => ({
-          ...node,
-          position: getNextNodePosition(index),
-        })),
-        viewportRef.current,
-        setViewport,
+      setViewport(
+        computeFitViewToNodes(
+          visualNodes.map((node, index) => ({
+            ...node,
+            position: getNextNodePosition(index),
+          })),
+          viewportRef.current,
+        ),
       );
       setStatusMessage("Applied tidy layout.");
     } catch (error) {
@@ -1626,10 +1635,11 @@ export function GraphView() {
       await edgesQuery.refetch();
       
       setStatusMessage(`Generated ${newNodes.length} nodes and ${edgesCreated} connections from project signals.`);
-      fitViewToNodes(
-        [...visualNodes, ...newNodes.map((_, i) => ({ position: nodePositions[i] }))],
-        viewportRef.current,
-        setViewport,
+      setViewport(
+        computeFitViewToNodes(
+          [...visualNodes, ...newNodes.map((_, i) => ({ position: nodePositions[i] }))],
+          viewportRef.current,
+        ),
       );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
@@ -3350,257 +3360,4 @@ export function GraphView() {
       </div>
     </div>
   );
-}
-
-function clientToWorldPoint(
-  viewportElement: HTMLDivElement,
-  clientX: number,
-  clientY: number,
-  viewport: ViewportState,
-) {
-  const rect = viewportElement.getBoundingClientRect();
-  return {
-    x: (clientX - rect.left - viewport.x) / viewport.scale,
-    y: (clientY - rect.top - viewport.y) / viewport.scale,
-  };
-}
-
-function clampNodePosition(point: Point) {
-  return {
-    x: clamp(point.x - NODE_WIDTH / 2, WORLD_MARGIN, WORLD_WIDTH - NODE_WIDTH - WORLD_MARGIN),
-    y: clamp(point.y - NODE_HEIGHT / 2, WORLD_MARGIN, WORLD_HEIGHT - NODE_HEIGHT - WORLD_MARGIN),
-  };
-}
-
-function buildEdgePath(source: Point, target: Point) {
-  const deltaX = Math.abs(target.x - source.x);
-  const deltaY = Math.abs(target.y - source.y);
-  const controlOffset = Math.max(42, Math.max(deltaX, deltaY) / 2);
-
-  if (deltaX >= deltaY) {
-    return [
-      `M ${source.x} ${source.y}`,
-      `C ${source.x + controlOffset} ${source.y},`,
-      `${target.x - controlOffset} ${target.y},`,
-      `${target.x} ${target.y}`,
-    ].join(" ");
-  }
-
-  return [
-    `M ${source.x} ${source.y}`,
-    `C ${source.x} ${source.y + controlOffset},`,
-    `${target.x} ${target.y - controlOffset},`,
-    `${target.x} ${target.y}`,
-  ].join(" ");
-}
-
-function buildEdgePreviewPath(source: Point | undefined, pointer: Point) {
-  if (!source) return "";
-
-  const target = {
-    x: clamp(pointer.x, 0, WORLD_WIDTH),
-    y: clamp(pointer.y, 0, WORLD_HEIGHT),
-  };
-
-  return buildEdgePath(source, target);
-}
-
-function getEdgeLabelPosition(
-  source: Point,
-  target: Point,
-) {
-  return {
-    x: (source.x + target.x) / 2,
-    y: (source.y + target.y) / 2 - 18,
-  };
-}
-
-function getAutoAnchorSides(
-  source: { centerX: number; centerY: number },
-  target: { centerX: number; centerY: number },
-) {
-  const dx = target.centerX - source.centerX;
-  const dy = target.centerY - source.centerY;
-
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0
-      ? { sourceSide: "right" as NodeAnchorSide, targetSide: "left" as NodeAnchorSide }
-      : { sourceSide: "left" as NodeAnchorSide, targetSide: "right" as NodeAnchorSide };
-  }
-
-  return dy >= 0
-    ? { sourceSide: "bottom" as NodeAnchorSide, targetSide: "top" as NodeAnchorSide }
-    : { sourceSide: "top" as NodeAnchorSide, targetSide: "bottom" as NodeAnchorSide };
-}
-
-function getNodeAnchorPoint(
-  node:
-    | {
-        position: Point;
-        centerX: number;
-        centerY: number;
-      }
-    | undefined,
-  side: NodeAnchorSide | undefined,
-) {
-  if (!node || !side) return undefined;
-
-  switch (side) {
-    case "top":
-      return { x: node.centerX, y: node.position.y };
-    case "right":
-      return { x: node.position.x + NODE_WIDTH, y: node.centerY };
-    case "bottom":
-      return { x: node.centerX, y: node.position.y + NODE_HEIGHT };
-    case "left":
-      return { x: node.position.x, y: node.centerY };
-    default:
-      return { x: node.centerX, y: node.centerY };
-  }
-}
-
-function getClosestAnchorSide(
-  node:
-    | {
-        position: Point;
-        centerX: number;
-        centerY: number;
-      }
-    | undefined,
-  point: Point,
-): NodeAnchorSide {
-  if (!node) return "right";
-
-  let bestSide: NodeAnchorSide = "right";
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (const side of NODE_ANCHOR_SIDES) {
-    const anchor = getNodeAnchorPoint(node, side);
-    if (!anchor) continue;
-    const dx = anchor.x - point.x;
-    const dy = anchor.y - point.y;
-    const distanceSquared = dx * dx + dy * dy;
-    if (distanceSquared < bestDistance) {
-      bestDistance = distanceSquared;
-      bestSide = side;
-    }
-  }
-  return bestSide;
-}
-
-function getNodeConnectorHandleStyle(side: NodeAnchorSide): React.CSSProperties {
-  switch (side) {
-    case "top":
-      return { left: "50%", top: 0, transform: "translate(-50%, -50%)" };
-    case "right":
-      return { right: 0, top: "50%", transform: "translate(50%, -50%)" };
-    case "bottom":
-      return { left: "50%", bottom: 0, transform: "translate(-50%, 50%)" };
-    case "left":
-      return { left: 0, top: "50%", transform: "translate(-50%, -50%)" };
-    default:
-      return { right: 0, top: "50%", transform: "translate(50%, -50%)" };
-  }
-}
-
-function findNodeAtWorldPoint(
-  nodes: Array<{ node_id: string; position: Point }>,
-  point: Point,
-) {
-  return nodes.find(
-    (node) =>
-      point.x >= node.position.x &&
-      point.x <= node.position.x + NODE_WIDTH &&
-      point.y >= node.position.y &&
-      point.y <= node.position.y + NODE_HEIGHT,
-  );
-}
-
-function buildMinimapViewportRect(
-  viewport: ViewportState,
-  viewportElement: HTMLDivElement | null,
-) {
-  const viewportWidth = viewportElement?.clientWidth ?? WORLD_WIDTH;
-  const viewportHeight = viewportElement?.clientHeight ?? VIEWPORT_HEIGHT;
-
-  const visibleWorldWidth = viewportWidth / viewport.scale;
-  const visibleWorldHeight = viewportHeight / viewport.scale;
-  const visibleWorldX = -viewport.x / viewport.scale;
-  const visibleWorldY = -viewport.y / viewport.scale;
-
-  const left = clamp((visibleWorldX / WORLD_WIDTH) * 100, 0, 100);
-  const top = clamp((visibleWorldY / WORLD_HEIGHT) * 100, 0, 100);
-  const width = clamp((visibleWorldWidth / WORLD_WIDTH) * 100, 4, 100);
-  const height = clamp((visibleWorldHeight / WORLD_HEIGHT) * 100, 4, 100);
-
-  return {
-    left: `${left}%`,
-    top: `${top}%`,
-    width: `${width}%`,
-    height: `${height}%`,
-  };
-}
-
-function getNextNodePosition(index: number) {
-  const columns = 5;
-  const x = 72 + (index % columns) * 240;
-  const y = 72 + Math.floor(index / columns) * 156;
-
-  return {
-    x: clamp(x, WORLD_MARGIN, WORLD_WIDTH - NODE_WIDTH - WORLD_MARGIN),
-    y: clamp(y, WORLD_MARGIN, WORLD_HEIGHT - NODE_HEIGHT - WORLD_MARGIN),
-  };
-}
-
-function fitViewToNodes(
-  nodes: Array<{
-    position: Point;
-  }>,
-  viewportElement: HTMLDivElement | null,
-  setViewport: React.Dispatch<React.SetStateAction<ViewportState>>,
-) {
-  if (!viewportElement || nodes.length === 0) {
-    setViewport(DEFAULT_VIEW);
-    return;
-  }
-
-  const minX = Math.min(...nodes.map((node) => node.position.x));
-  const maxX = Math.max(...nodes.map((node) => node.position.x + NODE_WIDTH));
-  const minY = Math.min(...nodes.map((node) => node.position.y));
-  const maxY = Math.max(...nodes.map((node) => node.position.y + NODE_HEIGHT));
-
-  const padding = 100;
-  const contentWidth = maxX - minX + padding * 2;
-  const contentHeight = maxY - minY + padding * 2;
-
-  const scale = clamp(
-    Math.min(viewportElement.clientWidth / contentWidth, viewportElement.clientHeight / contentHeight),
-    0.5,
-    1.4,
-  );
-
-  setViewport({
-    scale,
-    x: (viewportElement.clientWidth - contentWidth * scale) / 2 - (minX - padding) * scale,
-    y: (viewportElement.clientHeight - contentHeight * scale) / 2 - (minY - padding) * scale,
-  });
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function truncateLabel(value: string, maxLength: number) {
-  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
-}
-
-function findNodeLabel(
-  nodes: Array<Pick<GraphNodeRecord, "node_id" | "label">>,
-  nodeId: string,
-) {
-  return nodes.find((node) => node.node_id === nodeId)?.label ?? nodeId;
-}
-
-function canonicalEdgePair(sourceNodeId: string, targetNodeId: string) {
-  return [sourceNodeId, targetNodeId].sort().join("::");
 }

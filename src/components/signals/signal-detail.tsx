@@ -1,4 +1,5 @@
 import { Bookmark, ExternalLink, Radar, Target, X } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
@@ -62,17 +63,16 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
             </span>
           ) : null}
         </div>
-        <a
-          href={signal.url}
-          target="_blank"
-          rel="noreferrer"
-          className="group/link inline-flex items-start gap-2 hover:text-[var(--accent)]"
+        <button
+          type="button"
+          onClick={() => void openUrl(signal.url)}
+          className="group/link inline-flex items-start gap-2 text-left hover:text-[var(--accent)]"
         >
           <h2 className="text-[15px] font-semibold leading-snug text-[var(--foreground)] transition-colors duration-100 group-hover/link:text-[var(--accent)]">
             {signal.title}
           </h2>
           <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--foreground-dim)] group-hover/link:text-[var(--accent)]" />
-        </a>
+        </button>
       </div>
 
       {/* Meta row */}

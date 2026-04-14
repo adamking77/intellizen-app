@@ -44,7 +44,24 @@ export default defineConfig(async () => ({
             return "vendor-supabase";
           }
 
-          if (id.includes("@xyflow/react") || id.includes("recharts")) {
+          if (
+            id.includes("react-force-graph-2d") ||
+            id.includes("d3-force") ||
+            id.includes("d3-quadtree") ||
+            id.includes("d3-selection") ||
+            id.includes("d3-zoom") ||
+            id.includes("d3-drag") ||
+            id.includes("d3-timer") ||
+            id.includes("d3-dispatch") ||
+            id.includes("d3-interpolate") ||
+            id.includes("d3-color") ||
+            id.includes("d3-ease") ||
+            id.includes("d3-format") ||
+            id.includes("d3-scale") ||
+            id.includes("d3-array") ||
+            id.includes("d3-path") ||
+            id.includes("d3-shape")
+          ) {
             return "vendor-viz";
           }
 

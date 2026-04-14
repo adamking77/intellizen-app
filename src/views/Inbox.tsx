@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCcw } from "lucide-react";
 
 import { ProjectPickerDrawer } from "@/components/projects/project-picker-drawer";
+import { AttachInvestigationDialog } from "@/components/signals/attach-investigation-dialog";
 import { SignalCard } from "@/components/signals/signal-card";
 import { SignalDetail } from "@/components/signals/signal-detail";
 import { Button } from "@/components/ui/button";
@@ -92,9 +93,6 @@ export function InboxView() {
     { value: "new",   label: `New ${counts.new}`   },
     { value: "saved", label: `Saved ${counts.saved}` },
   ];
-
-  const selectedAttachInvestigation =
-    activeInvestigations.find((investigation) => investigation.case_id === attachCaseId) ?? null;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -226,65 +224,29 @@ export function InboxView() {
         title={saveTarget ? `Save "${saveTarget.title}"` : "Attach to project"}
       />
 
-      {attachTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-[520px] rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
-            <p className="text-sm font-semibold text-[var(--foreground)]">Attach Signal to Investigation</p>
-            <p className="mt-1 text-xs text-[var(--foreground-muted)]">{attachTarget.title}</p>
-
-            <div className="mt-4">
-              <label className="text-xs font-medium text-[var(--foreground-muted)]">Investigation</label>
-              <select
-                className="mt-1 h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
-                value={attachCaseId ?? ""}
-                onChange={(event) => setAttachCaseId(event.target.value || null)}
-              >
-                {activeInvestigations.length === 0 ? (
-                  <option value="">No active investigations</option>
-                ) : (
-                  activeInvestigations.map((investigation) => (
-                    <option key={investigation.case_id} value={investigation.case_id}>
-                      {investigation.name} ({investigation.case_id})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setAttachTarget(null);
-                  setAttachCaseId(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!attachTarget || !selectedAttachInvestigation) return;
-                  attachMutation.mutate(
-                    {
-                      investigationId: selectedAttachInvestigation.id,
-                      signalId: attachTarget.id,
-                    },
-                    {
-                      onSuccess: () => {
-                        setAttachTarget(null);
-                        setAttachCaseId(null);
-                      },
-                    },
-                  );
-                }}
-                disabled={!selectedAttachInvestigation || attachMutation.isPending}
-              >
-                {attachMutation.isPending ? "Attaching..." : "Attach"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AttachInvestigationDialog
+        signal={attachTarget}
+        investigations={activeInvestigations}
+        selectedCaseId={attachCaseId}
+        onSelectCaseId={setAttachCaseId}
+        onCancel={() => {
+          setAttachTarget(null);
+          setAttachCaseId(null);
+        }}
+        onConfirm={(investigationId) => {
+          if (!attachTarget) return;
+          attachMutation.mutate(
+            { investigationId, signalId: attachTarget.id },
+            {
+              onSuccess: () => {
+                setAttachTarget(null);
+                setAttachCaseId(null);
+              },
+            },
+          );
+        }}
+        isSubmitting={attachMutation.isPending}
+      />
     </div>
   );
 }
