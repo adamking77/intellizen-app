@@ -14,8 +14,6 @@ import type {
   SignalDraft,
   VaultFile,
 } from "@/lib/types";
-import { signalDraftFromDeepResearch, signalDraftFromSearchResult } from "@/lib/exa";
-import { exa } from "@/lib/exa";
 import { safeHostname } from "@/lib/utils";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import { supabase } from "@/lib/supabase";
@@ -216,10 +214,38 @@ export async function saveSearchResultToProject(input: {
 }) {
   const draft =
     "content" in input.result
-      ? signalDraftFromDeepResearch(input.result)
-      : signalDraftFromSearchResult(input.result);
+      ? signalDraftFromDeepResearchResult(input.result)
+      : signalDraftFromSearchResultItem(input.result);
 
   return saveDraftToProject({ projectId: input.projectId, draft });
+}
+
+function signalDraftFromSearchResultItem(result: SearchResultItem): SignalDraft {
+  return {
+    title: result.title,
+    url: result.url,
+    source: result.source,
+    published_at: result.published_at,
+    snippet: result.snippet,
+    watch_domain: "manual",
+    exa_score: result.exa_score,
+    raw_payload: result.raw_payload,
+    status: "saved",
+  };
+}
+
+function signalDraftFromDeepResearchResult(result: DeepResearchResult): SignalDraft {
+  return {
+    title: result.title,
+    url: result.url,
+    source: result.source,
+    published_at: new Date().toISOString(),
+    snippet: result.snippet,
+    watch_domain: "manual",
+    exa_score: null,
+    raw_payload: result.raw_payload,
+    status: "saved",
+  };
 }
 
 async function findSignalByUrl(url: string) {
@@ -253,6 +279,8 @@ async function insertSignal(input: SignalDraft) {
 }
 
 export async function runMonitorNow(monitor: Monitor) {
+  const { exa } = await import("@/lib/exa");
+
   const { data: existing, error: existingError } = await supabase
     .from("intel_signals")
     .select("url");
@@ -560,24 +588,47 @@ export async function createInvestigation(input: {
   name: string;
   projectId?: number | null;
 }) {
-  const caseId = `case-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
-  
-  const { data, error } = await supabase
-    .from("investigations")
-    .insert([
-      {
-        case_id: caseId,
-        name: input.name,
-        project_id: input.projectId ?? null,
-        current_phase: 1,
-        status: "active",
-      },
-    ])
-    .select("*")
-    .single();
+  const MAX_CASE_ID_ATTEMPTS = 5;
 
-  if (error) throw error;
-  return data as Investigation;
+  for (let attempt = 0; attempt < MAX_CASE_ID_ATTEMPTS; attempt += 1) {
+    const caseId = generateCaseId();
+    const { data, error } = await supabase
+      .from("investigations")
+      .insert([
+        {
+          case_id: caseId,
+          name: input.name,
+          project_id: input.projectId ?? null,
+          current_phase: 1,
+          status: "active",
+        },
+      ])
+      .select("*")
+      .single();
+
+    if (!error) return data as Investigation;
+
+    const isLastAttempt = attempt === MAX_CASE_ID_ATTEMPTS - 1;
+    if (!isInvestigationCaseIdConflict(error) || isLastAttempt) {
+      throw error;
+    }
+  }
+
+  throw new Error("Failed to create investigation with a unique case ID.");
+}
+
+function generateCaseId() {
+  const year = new Date().getFullYear();
+  const millis = Date.now().toString(36).slice(-4).toUpperCase();
+  const random = Math.floor(Math.random() * 1_000_000)
+    .toString()
+    .padStart(6, "0");
+  return `case-${year}-${millis}-${random}`;
+}
+
+function isInvestigationCaseIdConflict(error: { code?: string; message?: string }) {
+  if (error.code === "23505") return true;
+  return (error.message ?? "").toLowerCase().includes("case_id");
 }
 
 export async function updateInvestigation(
@@ -639,7 +690,6 @@ export async function saveInvestigationPlan(
       plan_necessity: plan.necessity,
       seed_entities: plan.seedEntities,
       known_hypotheses: plan.knownHypotheses,
-      current_phase: 2, // Auto-advance to Collect phase
     })
     .eq("case_id", caseId)
     .select("*")
@@ -689,6 +739,27 @@ export async function removeSignalFromInvestigation(id: number) {
     .eq("id", id);
 
   if (error) throw error;
+}
+
+export async function updateInvestigationSignal(
+  id: number,
+  input: {
+    notes?: string | null;
+    phaseAdded?: number;
+  },
+) {
+  const { data, error } = await supabase
+    .from("investigation_signals")
+    .update({
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.phaseAdded !== undefined ? { phase_added: input.phaseAdded } : {}),
+    })
+    .eq("id", id)
+    .select("*, intel_signals(*)")
+    .single();
+
+  if (error) throw error;
+  return data as unknown as InvestigationSignal;
 }
 
 // Vault Files (Reports)

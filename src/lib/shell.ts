@@ -1,5 +1,6 @@
 // Tauri shell plugin integration for spawning claude -p
 import { Command } from "@tauri-apps/plugin-shell";
+import type { ReportType } from "@/lib/types";
 
 export interface ClaudeInvocation {
   prompt: string;
@@ -76,6 +77,7 @@ export function buildPhasePrompt(
     investigationScope?: string;
     seedEntities?: string[];
     signals?: { title: string; snippet: string }[];
+    reportType?: ReportType;
   }
 ): string {
   const basePath = `~/vault/intelligence/investigations/${caseId}`;
@@ -143,9 +145,23 @@ Output: Create ${basePath}/ach.md with:
 4. Most Likely Hypothesis Assessment`;
 
     case 6: // Report
+      const reportType = context.reportType ?? "internal";
+      const reportTypeInstructions: Record<ReportType, string> = {
+        internal:
+          "Internal Sweep Summary: analyst-facing, include methodology, confidence levels, and explicit gaps.",
+        client:
+          "Initial Client Assessment: concise implications-first framing, avoid disclosing detailed methodology.",
+        deep:
+          "Deep Case Report: full methodology, evidence register, competing hypotheses, and confidence scoring.",
+        public:
+          "Public Brief: accessible language, explain context, keep sourcing clear and non-technical.",
+      };
+
       return `You are an intelligence analyst. Assemble final report for investigation ${caseId}.
 
 Synthesize all phases into coherent intelligence product.
+Report type: ${reportType}
+Guidance: ${reportTypeInstructions[reportType]}
 
 Output: Create ${basePath}/report.md with:
 1. Executive Summary

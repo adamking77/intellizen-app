@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FolderSearch, Trash2 } from "lucide-react";
+import { Archive, FolderSearch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { SignalCard } from "@/components/signals/signal-card";
@@ -156,7 +156,7 @@ export function ProjectsView() {
                   {project.status}
                 </Badge>
               </div>
-              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
                 {project.type.replace("_", " ")}
               </p>
             </button>
@@ -179,7 +179,7 @@ export function ProjectsView() {
                       {selectedProject.status}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+                  <p className="mt-2 text-sm text-[var(--foreground-muted)]">
                     Every saved signal in this project becomes working material for
                     search, graphing, and later report analysis.
                   </p>
@@ -232,7 +232,7 @@ export function ProjectsView() {
                   <Badge variant="neutral">{projectSignals?.length ?? 0}</Badge>
                 </div>
                 {(projectSignals ?? []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)]/40 p-8 text-center text-sm text-[var(--muted-foreground)]">
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)]/40 p-8 text-center text-sm text-[var(--foreground-muted)]">
                     No saved signals yet. Route something in from Inbox or Search.
                   </div>
                 ) : (
@@ -247,16 +247,7 @@ export function ProjectsView() {
                         watchDomain={projectSignal.intel_signals.watch_domain}
                         snippet={projectSignal.intel_signals.snippet}
                         score={projectSignal.intel_signals.exa_score}
-                        actions={
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeSignalMutation.mutate(projectSignal.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove from project
-                          </Button>
-                        }
+                        onDismiss={() => removeSignalMutation.mutate(projectSignal.id)}
                       />
                     ) : null,
                   )
@@ -265,7 +256,7 @@ export function ProjectsView() {
             </CardContent>
           </>
         ) : (
-          <CardContent className="p-6 text-sm text-[var(--muted-foreground)]">
+          <CardContent className="p-6 text-sm text-[var(--foreground-muted)]">
             Select a project from the list to inspect its saved intelligence.
           </CardContent>
         )}

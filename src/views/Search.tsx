@@ -93,7 +93,7 @@ export function SearchView() {
             </Button>
           </div>
           {targetProject ? (
-            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+            <div className="flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
               <Badge variant="accent">Target project</Badge>
               <span>{targetProject.name}</span>
               <button
@@ -109,7 +109,7 @@ export function SearchView() {
       </Card>
 
       {searchMutation.error ? (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted-foreground)]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--foreground-muted)]">
           {searchMutation.error.message}
         </div>
       ) : null}
@@ -125,11 +125,7 @@ export function SearchView() {
               publishedAt={result.published_at}
               snippet={result.snippet}
               score={result.exa_score}
-              actions={
-                <Button size="sm" onClick={() => setPendingResult(result)}>
-                  Add to Project
-                </Button>
-              }
+              onSave={() => setPendingResult(result)}
             />
           ))}
         </div>
@@ -144,7 +140,7 @@ export function SearchView() {
               <Badge variant="neutral">{results.source}</Badge>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-[var(--muted-foreground)]">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-[var(--foreground-muted)]">
                 {results.content}
               </pre>
             </div>

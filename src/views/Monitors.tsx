@@ -169,12 +169,12 @@ export function MonitorsView() {
             </CardHeader>
             <CardContent className="grid gap-4">
               {isLoading ? (
-                <div className="flex items-center gap-3 text-sm text-[var(--muted-foreground)]">
+                <div className="flex items-center gap-3 text-sm text-[var(--foreground-muted)]">
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                   Loading monitors...
                 </div>
               ) : monitorsByFrequency[frequency].length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">
+                <p className="text-sm text-[var(--foreground-muted)]">
                   No {frequency} monitors yet.
                 </p>
               ) : (
@@ -262,7 +262,7 @@ function MonitorCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-medium text-[var(--foreground)]">{monitor.name}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
+          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--foreground-muted)]">
             {monitor.watch_domain} · {monitor.status} · {monitor.signal_count} signals
           </p>
         </div>
@@ -300,13 +300,13 @@ function MonitorCard({
             </div>
           </div>
         ) : (
-          <p className="text-sm leading-6 text-[var(--muted-foreground)]">
+          <p className="text-sm leading-6 text-[var(--foreground-muted)]">
             {monitor.query}
           </p>
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+      <div className="mt-4 flex flex-wrap gap-4 text-xs uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
         <span>Frequency {monitor.frequency}</span>
         <span>Last run {formatDateTime(monitor.last_run)}</span>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   FolderOpen,
@@ -12,11 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { readVaultDirectory, readVaultFile } from "@/lib/vault";
-import { listInvestigations, listSignals } from "@/lib/data";
+import { ensureInvestigationDirectory, readVaultDirectory, readVaultFile, writeVaultFile } from "@/lib/vault";
+import { createVaultFile, listInvestigations, listSignals } from "@/lib/data";
 import { spawnClaude, buildReportPrompt } from "@/lib/shell";
 import type { VaultEntry } from "@/lib/vault";
-import type { Investigation } from "@/lib/types";
+import type { Investigation, VaultFileType } from "@/lib/types";
 
 const REPORT_TYPES = [
   { id: "internal", label: "Internal Sweep", description: "Analyst-facing summary" },
@@ -25,10 +25,19 @@ const REPORT_TYPES = [
   { id: "public", label: "Public Brief", description: "Accessible language" },
 ] as const;
 
+const REPORT_FILE_TYPES: Record<(typeof REPORT_TYPES)[number]["id"], VaultFileType> = {
+  internal: "sweep",
+  client: "assessment",
+  deep: "report",
+  public: "brief",
+};
+
 export function ReportsView() {
+  const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [selectedSignals, setSelectedSignals] = useState<Set<number>>(new Set());
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedReportType, setSelectedReportType] = useState<typeof REPORT_TYPES[number]["id"]>("internal");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationOutput, setGenerationOutput] = useState<string | null>(null);
@@ -44,6 +53,13 @@ export function ReportsView() {
     queryKey: ["investigations"],
     queryFn: listInvestigations,
   });
+
+  useEffect(() => {
+    if (!investigations?.length) return;
+    if (!selectedCaseId || !investigations.some((inv) => inv.case_id === selectedCaseId)) {
+      setSelectedCaseId(investigations[0].case_id);
+    }
+  }, [investigations, selectedCaseId]);
 
   // Query saved signals for trigger analysis
   const { data: savedSignals } = useQuery({
@@ -84,6 +100,10 @@ export function ReportsView() {
 
   async function handleGenerateReport() {
     if (selectedSignals.size === 0) return;
+    if (!selectedCaseId) {
+      setGenerationOutput("Select an investigation case before generating a report.");
+      return;
+    }
 
     setIsGenerating(true);
     setGenerationOutput(null);
@@ -102,7 +122,26 @@ export function ReportsView() {
       const result = await spawnClaude({ prompt });
 
       if (result.success) {
-        setGenerationOutput(result.output ?? "Report generated successfully.");
+        const output = result.output?.trim() || "Report generated successfully.";
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const fileName = `${selectedReportType}-${timestamp}.md`;
+        const casePath = `investigations/${selectedCaseId}`;
+        const filePath = `${casePath}/${fileName}`;
+        const content = `# ${REPORT_TYPES.find((type) => type.id === selectedReportType)?.label ?? "Report"}\n\nGenerated at: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
+
+        await ensureInvestigationDirectory(selectedCaseId);
+        await writeVaultFile(filePath, content);
+        await createVaultFile({
+          caseId: selectedCaseId,
+          fileType: REPORT_FILE_TYPES[selectedReportType],
+          filePath,
+          fileName,
+          reportType: selectedReportType,
+        });
+
+        setSelectedPath(filePath);
+        setGenerationOutput(output);
+        void queryClient.invalidateQueries({ queryKey: ["vault-entries"] });
       } else {
         setGenerationOutput(`Error: ${result.error}`);
       }
@@ -144,7 +183,7 @@ export function ReportsView() {
                 {/* Investigations */}
                 {organizedEntries.investigations.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
                       Investigations
                     </p>
                     <div className="space-y-1">
@@ -164,7 +203,7 @@ export function ReportsView() {
                 {/* Reports */}
                 {organizedEntries.reports.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
                       Reports
                     </p>
                     <div className="space-y-1">
@@ -183,7 +222,7 @@ export function ReportsView() {
                 {/* Other Files */}
                 {organizedEntries.other.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)] mb-2">
                       Other
                     </p>
                     <div className="space-y-1">
@@ -200,7 +239,7 @@ export function ReportsView() {
                 )}
 
                 {vaultEntries?.length === 0 && (
-                  <div className="text-center py-4 text-[var(--muted-foreground)]">
+                  <div className="text-center py-4 text-[var(--foreground-muted)]">
                     <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Vault is empty</p>
                   </div>
@@ -216,13 +255,13 @@ export function ReportsView() {
             <CardTitle>Trigger Analysis</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-xs text-[var(--muted-foreground)]">
+            <p className="text-xs text-[var(--foreground-muted)]">
               Select saved signals and generate a report.
             </p>
 
             <div className="space-y-2 max-h-48 overflow-auto">
               {(savedSignals ?? []).length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)] text-center py-4">
+                <p className="text-sm text-[var(--foreground-muted)] text-center py-4">
                   No saved signals
                 </p>
               ) : (
@@ -237,11 +276,30 @@ export function ReportsView() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{signal.title}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">{signal.source}</p>
+                      <p className="text-xs text-[var(--foreground-muted)]">{signal.source}</p>
                     </div>
                   </label>
                 ))
               )}
+            </div>
+
+            <div>
+              <label className="text-xs font-medium">Investigation Case</label>
+              <select
+                className="h-9 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-2 text-sm mt-1"
+                value={selectedCaseId ?? ""}
+                onChange={(e) => setSelectedCaseId(e.target.value || null)}
+              >
+                {(investigations ?? []).length === 0 ? (
+                  <option value="">No investigations available</option>
+                ) : (
+                  (investigations ?? []).map((investigation) => (
+                    <option key={investigation.case_id} value={investigation.case_id}>
+                      {investigation.name} ({investigation.case_id})
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
 
             <div>
@@ -262,7 +320,7 @@ export function ReportsView() {
             <Button
               className="w-full"
               onClick={handleGenerateReport}
-              disabled={selectedSignals.size === 0 || isGenerating}
+              disabled={selectedSignals.size === 0 || isGenerating || !selectedCaseId}
             >
               {isGenerating ? (
                 <>
@@ -280,7 +338,7 @@ export function ReportsView() {
             {generationOutput && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/50 p-3">
                 <p className="text-xs font-medium mb-1">Output Preview</p>
-                <pre className="text-xs text-[var(--muted-foreground)] whitespace-pre-wrap max-h-32 overflow-auto">
+                <pre className="text-xs text-[var(--foreground-muted)] whitespace-pre-wrap max-h-32 overflow-auto">
                   {generationOutput.slice(0, 500)}
                   {generationOutput.length > 500 && "..."}
                 </pre>
@@ -317,14 +375,14 @@ export function ReportsView() {
           <CardContent className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)] mx-auto mb-4" />
-              <p className="text-[var(--muted-foreground)]">Loading...</p>
+              <p className="text-[var(--foreground-muted)]">Loading...</p>
             </div>
           </CardContent>
         ) : (
           <CardContent className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-            <FileClock className="h-16 w-16 text-[var(--muted-foreground)] mb-4" />
+            <FileClock className="h-16 w-16 text-[var(--foreground-muted)] mb-4" />
             <p className="text-lg font-medium text-[var(--foreground)]">Select a file to view</p>
-            <p className="text-sm text-[var(--muted-foreground)] max-w-sm">
+            <p className="text-sm text-[var(--foreground-muted)] max-w-sm">
               Browse the vault on the left to view intelligence products, or use Trigger Analysis to generate new reports.
             </p>
           </CardContent>

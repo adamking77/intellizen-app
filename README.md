@@ -21,6 +21,11 @@ Stack:
 - Exa JavaScript SDK (`exa-js`)
 - React Flow
 
+Validation commands:
+
+- `pnpm run lint` (frontend type-check + Rust clippy)
+- `pnpm run smoke` (lint + production build + Rust tests)
+
 Primary build and product context lives in:
 
 - `CLAUDE.md`

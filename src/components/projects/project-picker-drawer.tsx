@@ -122,7 +122,7 @@ export function ProjectPickerDrawer({
                 }}
               >
                 <p className="font-medium text-[var(--foreground)]">{project.name}</p>
-                <p className="mt-1 text-sm uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+                <p className="mt-1 text-sm uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
                   {project.type.replace("_", " ")}
                 </p>
               </button>
