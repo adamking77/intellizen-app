@@ -1895,7 +1895,7 @@ export function GraphView() {
           {/* Left — breadcrumb + scope */}
           <div className="flex min-w-0 items-center gap-3">
             {!isCramped && (
-              <div className="flex items-center gap-1.5 font-ui text-[12px]">
+              <div className="text-meta flex items-center gap-1.5">
                 <span className="text-[var(--overlay-1)]">Graph</span>
                 <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
                 <span className="truncate text-[var(--text)]">
@@ -2125,10 +2125,10 @@ export function GraphView() {
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
                   <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent)]" />
-                  <p className="font-ui text-[14px] font-medium text-[var(--text)]">
+                  <p className="text-heading">
                     This project graph is empty
                   </p>
-                  <p className="mt-2 font-ui text-[12px] text-[var(--subtext-0)]">
+                  <p className="text-meta mt-2 text-[var(--subtext-0)]">
                     Build a relationship map from project signals, then inspect it here.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -2512,10 +2512,10 @@ export function GraphView() {
             {graphMode === "project" && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
-                  <p className="font-ui text-[14px] font-medium text-[var(--text)]">
+                  <p className="text-heading">
                     This project graph is empty
                   </p>
-                  <p className="mt-2 font-ui text-[12px] text-[var(--subtext-0)]">
+                  <p className="text-meta mt-2 text-[var(--subtext-0)]">
                     Build a relationship map from project signals, then inspect it here.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
