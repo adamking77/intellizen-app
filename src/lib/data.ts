@@ -148,6 +148,19 @@ export async function updateProject(
   return data as Project;
 }
 
+export async function listProjectSignalCounts(): Promise<Record<number, number>> {
+  const { data, error } = await supabase
+    .from("project_signals")
+    .select("project_id");
+
+  if (error) throw error;
+  const counts: Record<number, number> = {};
+  for (const row of (data ?? []) as { project_id: number }[]) {
+    counts[row.project_id] = (counts[row.project_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function listProjectSignals(projectId: number) {
   const { data, error } = await supabase
     .from("project_signals")

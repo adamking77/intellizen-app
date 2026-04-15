@@ -1,36 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
-  Activity,
   AlertCircle,
   CheckCircle2,
-  ChevronRight,
-  FileText,
+  ChevronDown,
+  ChevronUp,
   FolderOpen,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
+  Lock,
   Plus,
   Play,
   Save,
-  Target,
   Trash2,
-  X,
 } from "lucide-react";
 
+import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
 import { Textarea } from "@/components/ui/textarea";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { useWindowSize } from "@/lib/use-window-size";
+import { useAppStore } from "@/store";
 import {
   addSignalToInvestigation,
-  createInvestigation,
   createVaultFile,
   getInvestigation,
+  listProjects,
+  listProjectSignals,
   listSignals,
   listInvestigations,
   listInvestigationSignals,
@@ -42,15 +39,44 @@ import {
 import { spawnClaude, buildPhasePrompt } from "@/lib/shell";
 import { ensureInvestigationDirectory, readVaultFile, writeVaultFile } from "@/lib/vault";
 import type { VaultFileType } from "@/lib/types";
-// Note: Investigation type imported from @/lib/types in data.ts
 
 const PHASES = [
-  { id: 1, name: "Plan", description: "Scope and PLAN validation" },
-  { id: 2, name: "Collect", description: "Intelligence gathering" },
-  { id: 3, name: "Collate", description: "Entity extraction" },
-  { id: 4, name: "Timeline", description: "Chronological reconstruction" },
-  { id: 5, name: "ACH", description: "Hypothesis evaluation" },
-  { id: 6, name: "Report", description: "Final assembly" },
+  {
+    id: 1,
+    name: "Plan",
+    hint: "Define who or what you're investigating, set the scope, and confirm the ethics gates before anything runs.",
+    runLabel: "Save plan & start",
+  },
+  {
+    id: 2,
+    name: "Collect",
+    hint: "Attach source signals and review them. Need at least 3 reviewed before analysis can run.",
+    runLabel: "Run collection",
+  },
+  {
+    id: 3,
+    name: "Collate",
+    hint: "Extract the people, organisations, locations, and events that show up in the source signals.",
+    runLabel: "Extract entities",
+  },
+  {
+    id: 4,
+    name: "Timeline",
+    hint: "Place events in order. Resolve contradictions before you advance.",
+    runLabel: "Build timeline",
+  },
+  {
+    id: 5,
+    name: "ACH",
+    hint: "Score each working theory against the evidence you've collected.",
+    runLabel: "Run hypothesis matrix",
+  },
+  {
+    id: 6,
+    name: "Report",
+    hint: "Assemble the final intelligence product from everything above.",
+    runLabel: "Generate report",
+  },
 ] as const;
 
 const REPORT_TYPES = [
@@ -104,14 +130,6 @@ function hasRequiredPhaseGates(phase: number, phaseGates: Record<string, boolean
   }
 
   return true;
-}
-
-function getPhaseGateStatus(
-  phase: number,
-  phaseGates: Record<string, boolean>,
-): "green" | "amber" | "red" {
-  if (!hasRequiredPhaseGates(phase, phaseGates)) return "red";
-  return phaseGates[getPhaseGateKey(phase)] ? "green" : "amber";
 }
 
 function buildPhaseArtifactContent(phase: number, rawOutput: string) {
@@ -192,14 +210,35 @@ function parseAchMetrics(content: string | null) {
   return { hypothesisCount, assessmentCells };
 }
 
+function formatElapsed(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0) return "just now";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function isCaseComplete(inv: { current_phase: number; phase_gates: Record<string, boolean> | null | undefined }) {
+  return (inv.phase_gates ?? {})[PHASE_GATE_KEYS[5]] === true;
+}
+
 export function InvestigationView() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const setPendingProjectSelectionId = useAppStore((state) => state.setPendingProjectSelectionId);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [newCaseName, setNewCaseName] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete">("all");
   const [isRunningPhase, setIsRunningPhase] = useState(false);
   const [phaseOutput, setPhaseOutput] = useState<string | null>(null);
+  const [outputOpen, setOutputOpen] = useState(false);
 
-  // Plan form state
   const [planForm, setPlanForm] = useState({
     subjectDefinition: "",
     investigationScope: "",
@@ -211,44 +250,38 @@ export function InvestigationView() {
     knownHypotheses: "",
   });
 
-  // Report type selection
   const [selectedReportType, setSelectedReportType] = useState<typeof REPORT_TYPES[number]["id"]>("internal");
 
-  // Layout state — Graph-style rails
-  const { isCramped } = useWindowSize();
-  const [leftOpen, setLeftOpen] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("intelizen:investigate-left-open") !== "0";
-    } catch {
-      return true;
-    }
+  const [railWidth, setRailWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 320;
+    const saved = window.localStorage.getItem("investigate-rail-width");
+    const parsed = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(parsed) ? Math.max(260, Math.min(480, parsed)) : 320;
   });
-  const [rightOpen, setRightOpen] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("intelizen:investigate-right-open") !== "0";
-    } catch {
-      return true;
-    }
-  });
-  const [railTab, setRailTab] = useState<"status" | "output">("status");
 
   useEffect(() => {
-    try {
-      localStorage.setItem("intelizen:investigate-left-open", leftOpen ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [leftOpen]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("intelizen:investigate-right-open", rightOpen ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [rightOpen]);
-  useEffect(() => {
-    if (isCramped) setRightOpen(false);
-  }, [isCramped]);
+    window.localStorage.setItem("investigate-rail-width", String(railWidth));
+  }, [railWidth]);
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = railWidth;
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      setRailWidth(Math.max(260, Math.min(480, startWidth + delta)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
 
   const { data: investigations, isLoading } = useQuery({
     queryKey: ["investigations"],
@@ -275,7 +308,25 @@ export function InvestigationView() {
     },
   });
 
-  // Sync plan form with selected investigation
+  const { data: projects } = useQuery({
+    queryKey: ["projects"],
+    queryFn: listProjects,
+  });
+
+  const parentProject = useMemo(
+    () =>
+      selectedInvestigation?.project_id
+        ? (projects ?? []).find((p) => p.id === selectedInvestigation.project_id) ?? null
+        : null,
+    [projects, selectedInvestigation?.project_id],
+  );
+
+  const { data: parentProjectSignals } = useQuery({
+    queryKey: ["project-signals", selectedInvestigation?.project_id],
+    queryFn: () => listProjectSignals(selectedInvestigation!.project_id as number),
+    enabled: !!selectedInvestigation?.project_id,
+  });
+
   useEffect(() => {
     if (selectedInvestigation) {
       setPlanForm({
@@ -290,17 +341,6 @@ export function InvestigationView() {
       });
     }
   }, [selectedInvestigation]);
-
-  const createMutation = useMutation({
-    mutationFn: createInvestigation,
-    onSuccess: (data) => {
-      setNewCaseName("");
-      setSelectedCaseId(data.case_id);
-      void queryClient.invalidateQueries({ queryKey: ["investigations"] });
-      toast.success("Investigation created");
-    },
-    onError: (err) => toastError("Couldn't create investigation", err),
-  });
 
   const savePlanMutation = useMutation({
     mutationFn: (input: Parameters<typeof saveInvestigationPlan>[1]) =>
@@ -407,6 +447,13 @@ export function InvestigationView() {
     () => (savedSignals ?? []).filter((signal) => !attachedSignalIdSet.has(signal.id)),
     [attachedSignalIdSet, savedSignals],
   );
+  const importableProjectSignals = useMemo(
+    () =>
+      (parentProjectSignals ?? [])
+        .filter((ps) => ps.intel_signals && !attachedSignalIdSet.has(ps.signal_id))
+        .map((ps) => ps.intel_signals!),
+    [parentProjectSignals, attachedSignalIdSet],
+  );
   const reviewedSignalCount = useMemo(
     () => (investigationSignals ?? []).filter((signal) => isSignalReviewed(signal.notes)).length,
     [investigationSignals],
@@ -461,42 +508,48 @@ export function InvestigationView() {
     if (!selectedInvestigation) return;
 
     if (!hasRequiredPhaseGates(phase, selectedPhaseGates)) {
-      setPhaseOutput("Complete prior phases before running this phase.");
+      setPhaseOutput("Complete earlier phases before running this one.");
+      setOutputOpen(true);
       return;
     }
 
     if (phase === 1 && !planGateComplete) {
-      setPhaseOutput("Complete PLAN fields and validations before running Phase 1.");
+      setPhaseOutput("Fill out the plan fields and confirm the ethics gates before starting.");
+      setOutputOpen(true);
       return;
     }
     if (phase === 2 && !collectGateComplete) {
       setPhaseOutput(
-        `Attach and review at least ${COLLECT_MIN_SIGNALS} signals before running Phase 2.`,
+        `Attach and mark at least ${COLLECT_MIN_SIGNALS} signals as reviewed before running collection.`,
       );
+      setOutputOpen(true);
       return;
     }
     if (phase === 4 && !collateGateComplete) {
-      setPhaseOutput("Phase 4 requires a confirmed Collate artifact with at least 3 entities.");
+      setPhaseOutput("Timeline needs a confirmed entity register with at least 3 entities.");
+      setOutputOpen(true);
       return;
     }
     if (phase === 5 && !timelineGateComplete) {
       setPhaseOutput(
-        "Phase 5 requires Timeline quality gate: at least 3 events and zero unresolved contradictions.",
+        "Hypothesis matrix needs at least 3 timeline events and zero unresolved contradictions.",
       );
+      setOutputOpen(true);
       return;
     }
     if (phase === 6 && !achGateComplete) {
       setPhaseOutput(
-        "Phase 6 requires ACH quality gate: at least 3 hypotheses and assessed evidence cells.",
+        "Report needs at least 3 assessed hypotheses from the ACH matrix.",
       );
+      setOutputOpen(true);
       return;
     }
 
     setIsRunningPhase(true);
     setPhaseOutput(null);
+    setOutputOpen(true);
 
     try {
-      // Ensure directory exists
       await ensureInvestigationDirectory(selectedInvestigation.case_id);
 
       const planPayload = buildPlanPayload();
@@ -504,7 +557,6 @@ export function InvestigationView() {
         await savePlanMutation.mutateAsync(planPayload);
       }
 
-      // Build prompt for this phase
       const prompt = buildPhasePrompt(selectedInvestigation.case_id, phase, {
         subjectDefinition:
           phase === 1 ? planPayload.subjectDefinition : selectedInvestigation.subject_definition ?? undefined,
@@ -568,9 +620,11 @@ export function InvestigationView() {
         phase: Math.max(2, selectedPhase),
         gateData: nextGates,
       });
-      setPhaseOutput("Plan saved and Phase 1 gate marked complete.");
+      setPhaseOutput("Plan saved. Phase 1 gate confirmed.");
+      setOutputOpen(true);
     } catch (error) {
       setPhaseOutput(`Error: ${error instanceof Error ? error.message : "Failed to save plan."}`);
+      setOutputOpen(true);
     }
   }
 
@@ -584,6 +638,64 @@ export function InvestigationView() {
       planForm.necessity
     );
   }, [planForm]);
+
+  const caseStats = useMemo(() => {
+    const list = investigations ?? [];
+    const inProgress = list.filter((i) => !isCaseComplete(i)).length;
+    const complete = list.filter((i) => isCaseComplete(i)).length;
+    const latest = list.reduce<string | null>((acc, i) => {
+      const t = i.updated_at ?? i.created_at ?? null;
+      if (!t) return acc;
+      if (!acc) return t;
+      return new Date(t).getTime() > new Date(acc).getTime() ? t : acc;
+    }, null);
+    return { total: list.length, inProgress, complete, latest };
+  }, [investigations]);
+
+  const filteredCases = useMemo(() => {
+    const list = investigations ?? [];
+    if (statusFilter === "all") return list;
+    if (statusFilter === "complete") return list.filter(isCaseComplete);
+    return list.filter((i) => !isCaseComplete(i));
+  }, [investigations, statusFilter]);
+
+  useEffect(() => {
+    if (selectedCaseId == null && filteredCases.length > 0) {
+      setSelectedCaseId(filteredCases[0].case_id);
+      return;
+    }
+    if (
+      selectedCaseId != null &&
+      filteredCases.length > 0 &&
+      !filteredCases.some((c) => c.case_id === selectedCaseId)
+    ) {
+      setSelectedCaseId(filteredCases[0].case_id);
+    }
+  }, [filteredCases, selectedCaseId]);
+
+  const indicators: IndicatorItem[] = [
+    {
+      label: "Total",
+      value: caseStats.total,
+      onClick: () => setStatusFilter("all"),
+      active: statusFilter === "all",
+    },
+    {
+      label: "In progress",
+      value: caseStats.inProgress,
+      status: caseStats.inProgress > 0 ? "accent" : "neutral",
+      onClick: () => setStatusFilter("in-progress"),
+      active: statusFilter === "in-progress",
+    },
+    {
+      label: "Complete",
+      value: caseStats.complete,
+      status: caseStats.complete > 0 ? "active" : "neutral",
+      onClick: () => setStatusFilter("complete"),
+      active: statusFilter === "complete",
+    },
+    { label: "Last touch", value: formatElapsed(caseStats.latest) },
+  ];
 
   if (isLoading) {
     return (
@@ -603,815 +715,807 @@ export function InvestigationView() {
     (selectedPhase === 5 && !timelineGateComplete) ||
     (selectedPhase === 6 && !achGateComplete);
 
+  const currentPhaseMeta = PHASES[selectedPhase - 1];
+  const isPhaseLocked =
+    !!selectedInvestigation && !hasRequiredPhaseGates(selectedPhase, selectedPhaseGates);
+
   return (
-    <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--base)]">
-      {/* ============================================================
-          LEFT RAIL — Cases
-          ============================================================ */}
-      <aside
-        style={{ width: leftOpen ? 260 : 0 }}
-        className={cn(
-          "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--mantle)]",
-          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-        )}
-      >
-        {leftOpen && (
-          <>
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-              <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                Cases
-              </span>
-              <button
-                type="button"
-                onClick={() => setLeftOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                title="Hide cases"
-              >
-                <PanelLeftClose className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--border)] p-3">
-              <Input
-                placeholder="New case name"
-                value={newCaseName}
-                onChange={(e) => setNewCaseName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newCaseName.trim()) {
-                    createMutation.mutate({ name: newCaseName.trim() });
-                  }
-                }}
-              />
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => createMutation.mutate({ name: newCaseName })}
-                disabled={!newCaseName.trim() || createMutation.isPending}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create
-              </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {(investigations ?? []).length === 0 ? (
-                <p className="px-2 py-6 text-center font-ui text-[11px] text-[var(--overlay-1)]">
-                  No investigations yet.
+    <div className="flex h-screen flex-col overflow-hidden">
+      {/* Topbar */}
+      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <div className="flex flex-col gap-3">
+          <span className="text-label">Investigate</span>
+          <IndicatorStrip items={indicators} />
+        </div>
+
+        <div className="flex items-center pt-1">
+          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+            <Plus className="h-3 w-3" />
+            New investigation
+          </Button>
+        </div>
+      </div>
+
+      {/* Content: case rail + workspace */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Case rail */}
+        <aside
+          style={{ width: railWidth }}
+          className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)]"
+        >
+          <div className="flex-1 overflow-y-auto">
+            {filteredCases.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-10 text-center">
+                <p className="text-label">
+                  {statusFilter === "complete"
+                    ? "No completed cases"
+                    : statusFilter === "in-progress"
+                      ? "No cases in progress"
+                      : "No investigations yet"}
                 </p>
-              ) : (
-                (investigations ?? []).map((inv) => {
-                  const gateStatus = getPhaseGateStatus(inv.current_phase, inv.phase_gates ?? {});
-                  const isSelected = selectedCaseId === inv.case_id;
-                  return (
-                    <button
-                      key={inv.case_id}
-                      type="button"
-                      onClick={() => setSelectedCaseId(inv.case_id)}
-                      className={cn(
-                        "group mb-1 w-full rounded-md border px-3 py-2.5 text-left font-ui transition-colors",
-                        isSelected
-                          ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-                          : "border-transparent hover:bg-[var(--surface-wash)]",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
+                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                  {statusFilter !== "all"
+                    ? "Switch the filter to see the other cases."
+                    : "Start a case to plan, collect, and analyse evidence."}
+                </p>
+                {statusFilter === "all" ? (
+                  <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-2 gap-1.5">
+                    <Plus className="h-3 w-3" />
+                    New investigation
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              filteredCases.map((inv) => {
+                const isSelected = selectedCaseId === inv.case_id;
+                const gates = inv.phase_gates ?? {};
+                const phase = inv.current_phase;
+                const phaseName = PHASES[phase - 1]?.name ?? "";
+                const complete = isCaseComplete(inv);
+                const dotColor = complete
+                  ? "var(--success)"
+                  : phase === 1
+                    ? "var(--overlay-1)"
+                    : "var(--accent)";
+                const stepStatuses = PHASES.map((p) => {
+                  if (gates[getPhaseGateKey(p.id)]) return "done";
+                  if (p.id === phase) return "current";
+                  if (p.id < phase) return "done";
+                  return "pending";
+                });
+                return (
+                  <button
+                    key={inv.case_id}
+                    type="button"
+                    data-selected={isSelected ? "true" : undefined}
+                    onClick={() => setSelectedCaseId(inv.case_id)}
+                    className={cn(
+                      "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left",
+                      "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                      isSelected
+                        ? "bg-[var(--accent-soft)] pl-[13px]"
+                        : "pl-4 hover:bg-[var(--surface-wash)]",
+                    )}
+                  >
+                    {isSelected ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]"
+                      />
+                    ) : null}
+
+                    <span
+                      aria-hidden
+                      className="mt-[5px] h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: dotColor }}
+                    />
+
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
                         <p
                           className={cn(
-                            "truncate text-[12.5px] font-medium",
-                            isSelected ? "text-[var(--text)]" : "text-[var(--subtext-1)]",
+                            "min-w-0 flex-1 truncate font-ui text-[13px] font-medium",
+                            isSelected ? "text-[var(--accent)]" : "text-[var(--text)]",
                           )}
                         >
                           {inv.name}
                         </p>
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
-                            gateStatus === "green"
-                              ? "bg-[var(--success)]"
-                              : gateStatus === "amber"
-                                ? "bg-[var(--warning)]"
-                                : "bg-[var(--danger)]",
-                          )}
-                        />
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                          {complete ? "done" : `${phase}/6`}
+                        </span>
                       </div>
-                      <p className="mt-1 truncate font-mono text-[10px] text-[var(--overlay-1)]">
-                        P{inv.current_phase} · {PHASES[inv.current_phase - 1]?.name ?? ""}
-                      </p>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </>
-        )}
-      </aside>
-
-      {/* ============================================================
-          MAIN COLUMN — Topbar + phase workspace
-          ============================================================ */}
-      <div className="relative flex flex-1 min-w-0 flex-col">
-        {/* Topbar */}
-        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            {!leftOpen && (
-              <button
-                type="button"
-                onClick={() => setLeftOpen(true)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                title="Show cases"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-            )}
-            {!isCramped && (
-              <div className="flex min-w-0 items-center gap-1.5 font-ui text-[12px]">
-                <span className="text-[var(--overlay-1)]">Investigate</span>
-                {selectedInvestigation && (
-                  <>
-                    <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
-                    <span className="truncate text-[var(--text)]">{selectedInvestigation.name}</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Phase stepper pill */}
-          {selectedInvestigation ? (
-            <div className="flex items-center gap-0.5 overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--mantle)] p-0.5">
-              {PHASES.map((phase) => {
-                const isActive = phase.id === selectedPhase;
-                const isLocked = !hasRequiredPhaseGates(phase.id, selectedPhaseGates);
-                const gateStatus = getPhaseGateStatus(phase.id, selectedPhaseGates);
-                return (
-                  <button
-                    key={phase.id}
-                    type="button"
-                    onClick={() => {
-                      if (!isLocked && !isActive) {
-                        void advancePhaseMutation.mutateAsync({
-                          phase: phase.id,
-                          gateData: selectedPhaseGates,
-                        });
-                      }
-                    }}
-                    disabled={isLocked}
-                    title={`${phase.name} — ${phase.description}`}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-ui text-[11px] font-medium transition-colors",
-                      isActive
-                        ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
-                        : isLocked
-                          ? "text-[var(--overlay-0)] cursor-not-allowed"
-                          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
-                    )}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        gateStatus === "green"
-                          ? "bg-[var(--success)]"
-                          : gateStatus === "amber"
-                            ? "bg-[var(--warning)]"
-                            : "bg-[var(--danger)]",
-                      )}
-                    />
-                    <span className="whitespace-nowrap">
-                      <span className="font-mono text-[10px] text-[var(--overlay-1)]">{phase.id}</span>{" "}
-                      {phase.name}
-                    </span>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
+                          {complete ? "Report delivered" : phaseName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {stepStatuses.map((s, idx) => (
+                          <span
+                            key={idx}
+                            aria-hidden
+                            className={cn(
+                              "h-0.5 flex-1 rounded-full",
+                              s === "done"
+                                ? "bg-[var(--success)]"
+                                : s === "current"
+                                  ? "bg-[var(--accent)]"
+                                  : "bg-[var(--overlay-0)]",
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </button>
                 );
-              })}
-            </div>
-          ) : (
-            <div />
-          )}
-
-          <div className="flex items-center gap-1.5">
-            {selectedInvestigation && (
-              <button
-                type="button"
-                onClick={() => void handleRunPhase(selectedPhase)}
-                disabled={runDisabled}
-                className={cn(
-                  "inline-flex h-7 items-center gap-1.5 rounded-md border px-3 font-ui text-[11px] font-medium transition-colors",
-                  runDisabled
-                    ? "border-[var(--border)] bg-[var(--mantle)] text-[var(--overlay-1)]"
-                    : "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
-                )}
-              >
-                {isRunningPhase ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Play className="h-3 w-3" />
-                )}
-                Run phase
-              </button>
+              })
             )}
-            <button
-              type="button"
-              onClick={() => setRightOpen((o) => !o)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              title={rightOpen ? "Hide rail" : "Show rail"}
-            >
-              {rightOpen ? (
-                <PanelRightClose className="h-4 w-4" />
-              ) : (
-                <PanelRightOpen className="h-4 w-4" />
-              )}
-            </button>
           </div>
-        </div>
+
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize case list"
+            onMouseDown={startResize}
+            onDoubleClick={() => setRailWidth(320)}
+            className="group/resize absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize"
+          >
+            <span
+              aria-hidden
+              className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors duration-150 group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
+            />
+          </div>
+        </aside>
 
         {/* Workspace */}
-        <div className="flex-1 overflow-y-auto">
+        <section className="flex flex-1 flex-col overflow-hidden bg-[var(--base)]">
           {selectedInvestigation ? (
-            <div className="mx-auto max-w-[880px] px-6 py-6">
-              {/* Phase header */}
-              <div className="mb-5 flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                    Phase {selectedPhase}
-                  </p>
-                  <h2 className="mt-1 font-ui text-[20px] font-semibold text-[var(--text)]">
-                    {PHASES[selectedPhase - 1]?.name}
+            <>
+              {/* Sub-topbar: case chrome */}
+              <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h2 className="truncate font-ui text-[14px] font-medium text-[var(--text)]">
+                    {selectedInvestigation.name}
                   </h2>
-                  <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
-                    {PHASES[selectedPhase - 1]?.description}
-                  </p>
-                </div>
-              </div>
-
-              {!hasRequiredPhaseGates(selectedPhase, selectedPhaseGates) && (
-                <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 font-ui text-[12px] text-[var(--warning)]">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  Locked — complete earlier phase gates first.
-                </div>
-              )}
-
-              {/* Phase 1: Plan */}
-              {selectedPhase === 1 && (
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Subject definition
-                    </label>
-                    <Textarea
-                      value={planForm.subjectDefinition}
-                      onChange={(e) =>
-                        setPlanForm({ ...planForm, subjectDefinition: e.target.value })
-                      }
-                      placeholder="Who or what is the target of this investigation?"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Investigation scope
-                    </label>
-                    <Textarea
-                      value={planForm.investigationScope}
-                      onChange={(e) =>
-                        setPlanForm({ ...planForm, investigationScope: e.target.value })
-                      }
-                      placeholder="What are the boundaries of this investigation?"
-                    />
-                  </div>
-
-                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
-                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      PLAN validation
-                    </p>
-                    <div className="mt-3 grid gap-2">
-                      {[
-                        { key: "proportionality", label: "Proportionality — Response matches the issue" },
-                        { key: "legality", label: "Legality — Within legal and ethical boundaries" },
-                        { key: "accountability", label: "Accountability — Clear ownership and oversight" },
-                        { key: "necessity", label: "Necessity — Required and justified" },
-                      ].map((item) => (
-                        <label
-                          key={item.key}
-                          className="flex cursor-pointer items-center gap-2 font-ui text-[12.5px] text-[var(--subtext-1)]"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={planForm[item.key as keyof typeof planForm] as boolean}
-                            onChange={(e) =>
-                              setPlanForm({ ...planForm, [item.key]: e.target.checked })
-                            }
-                            className="rounded border-[var(--border)]"
-                          />
-                          <span>{item.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                        Seed entities (one per line)
-                      </label>
-                      <Textarea
-                        rows={4}
-                        value={planForm.seedEntities}
-                        onChange={(e) => setPlanForm({ ...planForm, seedEntities: e.target.value })}
-                        placeholder="People, organisations, or entities to investigate..."
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                        Known hypotheses (one per line)
-                      </label>
-                      <Textarea
-                        rows={4}
-                        value={planForm.knownHypotheses}
-                        onChange={(e) =>
-                          setPlanForm({ ...planForm, knownHypotheses: e.target.value })
-                        }
-                        placeholder="Initial theories or questions to test..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Button
+                  <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">
+                    {selectedInvestigation.case_id}
+                  </span>
+                  {parentProject ? (
+                    <button
+                      type="button"
                       onClick={() => {
-                        void handleSavePlan();
+                        setPendingProjectSelectionId(parentProject.id);
+                        navigate("/projects");
                       }}
-                      disabled={
-                        !planGateComplete ||
-                        savePlanMutation.isPending ||
-                        advancePhaseMutation.isPending
-                      }
+                      title={`Open ${parentProject.name} in Projects`}
+                      className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
                     >
-                      <Save className="h-4 w-4 mr-2" />
-                      Save plan & advance
-                    </Button>
-                    {!planGateComplete && (
-                      <span className="flex items-center gap-1.5 font-ui text-[12px] text-[var(--warning)]">
-                        <AlertCircle className="h-3.5 w-3.5" />
-                        Complete all fields and validations
-                      </span>
-                    )}
-                  </div>
+                      <FolderOpen className="h-2.5 w-2.5" />
+                      <span className="max-w-[160px] truncate">From {parentProject.name}</span>
+                    </button>
+                  ) : null}
                 </div>
-              )}
-
-              {/* Phase 2: Collect */}
-              {selectedPhase === 2 && (
-                <div className="space-y-4">
-                  <p className="font-ui text-[12.5px] text-[var(--subtext-0)]">
-                    Attach saved signals and review them before running collection.
-                  </p>
-                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
-                    <p className="font-medium text-[var(--text)]">
-                      Collection gate: {reviewedSignalCount}/{COLLECT_MIN_SIGNALS} reviewed
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
-                      Require at least {COLLECT_MIN_SIGNALS} attached and reviewed signals.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Attached signals
-                    </p>
-                    {(investigationSignals ?? []).length === 0 ? (
-                      <p className="py-6 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-                        No signals attached yet.
-                      </p>
-                    ) : (
-                      (investigationSignals ?? []).map((sig) => (
-                        <div
-                          key={sig.id}
-                          className="space-y-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
-                        >
-                          <p className="font-ui text-[12.5px] font-medium text-[var(--text)]">
-                            {sig.intel_signals?.title}
-                          </p>
-                          <p className="font-mono text-[11px] text-[var(--overlay-1)]">
-                            {sig.intel_signals?.source}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant={isSignalReviewed(sig.notes) ? "secondary" : "ghost"}
-                              onClick={() =>
-                                reviewSignalMutation.mutate({
-                                  investigationSignalId: sig.id,
-                                  reviewed: !isSignalReviewed(sig.notes),
-                                  notes: sig.notes ?? null,
-                                })
-                              }
-                              disabled={reviewSignalMutation.isPending}
-                            >
-                              {isSignalReviewed(sig.notes) ? "Reviewed" : "Mark reviewed"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => removeSignalMutation.mutate(sig.id)}
-                              disabled={removeSignalMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Import saved signals
-                    </p>
-                    {importableSavedSignals.length === 0 ? (
-                      <p className="py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-                        No additional saved signals available.
-                      </p>
-                    ) : (
-                      importableSavedSignals.map((signal) => (
-                        <div
-                          key={signal.id}
-                          className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
-                              {signal.title}
-                            </p>
-                            <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
-                              {signal.source}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => addSignalMutation.mutate(signal.id)}
-                            disabled={addSignalMutation.isPending}
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                <div className="shrink-0 font-ui text-[11px] text-[var(--subtext-0)]">
+                  Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 6
                 </div>
-              )}
-
-              {/* Phase 3-5: Artifact viewer */}
-              {selectedPhase >= 3 && selectedPhase <= 5 && (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
-                    <Target className="h-4 w-4 shrink-0 text-[var(--accent)]" />
-                    <p className="font-ui text-[12.5px] text-[var(--subtext-1)]">
-                      Review the current artifact quality before running the next analytical phase.
-                    </p>
-                  </div>
-
-                  {selectedPhase === 3 && (
-                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
-                      <p className="font-medium text-[var(--text)]">
-                        Entity register: {collateMetrics.total} extracted
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
-                        Persons {collateMetrics.person} · Organisations {collateMetrics.organisation} ·
-                        Locations {collateMetrics.location} · Events {collateMetrics.event}
-                      </p>
-                      {!collateGateComplete && (
-                        <p className="mt-2 text-[11px] text-[var(--warning)]">
-                          Gate requires at least 3 extracted entities.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {selectedPhase === 4 && (
-                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
-                      <p className="font-medium text-[var(--text)]">
-                        Timeline quality: {timelineMetrics.eventCount} dated events
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
-                        Unresolved contradictions: {timelineMetrics.unresolvedContradictions}
-                      </p>
-                      {!timelineGateComplete && (
-                        <p className="mt-2 text-[11px] text-[var(--warning)]">
-                          Gate requires at least 3 events and zero unresolved contradictions.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {selectedPhase === 5 && (
-                    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12.5px]">
-                      <p className="font-medium text-[var(--text)]">
-                        ACH matrix: {achMetrics.hypothesisCount} hypotheses
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--overlay-1)]">
-                        Evidence assessments: {achMetrics.assessmentCells}
-                      </p>
-                      {!achGateComplete && (
-                        <p className="mt-2 text-[11px] text-[var(--warning)]">
-                          Gate requires at least 3 hypotheses and assessed evidence cells.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
-                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Current artifact
-                    </p>
-                    {isLoadingCurrentArtifact ? (
-                      <div className="mt-2 flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading artifact...
-                      </div>
-                    ) : currentArtifactContent ? (
-                      <pre className="mt-2 max-h-[60vh] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-[var(--subtext-1)]">
-                        {currentArtifactContent}
-                      </pre>
-                    ) : (
-                      <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
-                        No artifact file found yet for this phase.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Phase 6: Report */}
-              {selectedPhase === 6 && (
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Report type
-                    </label>
-                    <select
-                      className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12.5px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                      value={selectedReportType}
-                      onChange={(e) =>
-                        setSelectedReportType(e.target.value as typeof selectedReportType)
-                      }
-                    >
-                      {REPORT_TYPES.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="font-ui text-[12.5px] text-[var(--subtext-0)]">
-                    Generate the final intelligence report based on all previous phases.
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center p-10">
-              <div className="max-w-[380px] text-center">
-                <FolderOpen className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
-                <p className="font-ui text-[15px] font-medium text-[var(--text)]">
-                  Select an investigation
-                </p>
-                <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
-                  Choose a case from the left or create a new one to begin.
-                </p>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* ============================================================
-          RIGHT RAIL — Status / Output
-          ============================================================ */}
-      <aside
-        style={{ width: rightOpen ? 320 : 0 }}
-        className={cn(
-          "relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--mantle)]",
-          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-        )}
-      >
-        {rightOpen && (
-          <>
-            <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
-              <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
-                <InvRailTab
-                  active={railTab === "status"}
-                  onClick={() => setRailTab("status")}
-                  icon={<Activity className="h-3 w-3" />}
-                  label="Status"
-                />
-                <InvRailTab
-                  active={railTab === "output"}
-                  onClick={() => setRailTab("output")}
-                  icon={<FileText className="h-3 w-3" />}
-                  label="Output"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setRightOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                title="Close rail"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {!selectedInvestigation ? (
-                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-                  Select a case to see status and output.
-                </p>
-              ) : railTab === "status" ? (
-                <div className="space-y-4">
-                  <div>
-                    <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Phase gates
-                    </p>
-                    <div className="mt-2 space-y-1">
-                      {PHASES.map((phase) => {
-                        const status = getPhaseGateStatus(phase.id, selectedPhaseGates);
-                        const complete = selectedPhaseGates[getPhaseGateKey(phase.id)] ?? false;
-                        return (
-                          <div
-                            key={phase.id}
-                            className="flex items-center justify-between rounded px-2 py-1.5 font-ui text-[12px]"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                aria-hidden
-                                className={cn(
-                                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                                  status === "green"
-                                    ? "bg-[var(--success)]"
-                                    : status === "amber"
-                                      ? "bg-[var(--warning)]"
-                                      : "bg-[var(--danger)]",
-                                )}
-                              />
-                              <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-                                {phase.id}
-                              </span>
-                              <span className="truncate text-[var(--subtext-1)]">{phase.name}</span>
-                            </div>
-                            {complete && (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-[var(--success)]" />
-                            )}
+              {/* Phase spine */}
+              <div className="shrink-0 border-b border-[var(--border)] bg-[var(--mantle)] px-5 py-3">
+                <div className="flex items-stretch gap-1">
+                  {PHASES.map((phase) => {
+                    const isActive = phase.id === selectedPhase;
+                    const isLocked = !hasRequiredPhaseGates(phase.id, selectedPhaseGates);
+                    const isDone = selectedPhaseGates[getPhaseGateKey(phase.id)] === true;
+                    return (
+                      <button
+                        key={phase.id}
+                        type="button"
+                        onClick={() => {
+                          if (!isLocked && !isActive) {
+                            void advancePhaseMutation.mutateAsync({
+                              phase: phase.id,
+                              gateData: selectedPhaseGates,
+                            });
+                          }
+                        }}
+                        disabled={isLocked}
+                        title={phase.hint}
+                        className={cn(
+                          "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-all",
+                          isActive
+                            ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                            : isLocked
+                              ? "cursor-not-allowed border-[var(--border-subtle)] bg-transparent opacity-60"
+                              : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
+                        )}
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "font-mono text-[10px]",
+                                isActive ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
+                              )}
+                            >
+                              0{phase.id}
+                            </span>
+                            <span
+                              className={cn(
+                                "font-ui text-[11.5px] font-medium",
+                                isActive
+                                  ? "text-[var(--accent)]"
+                                  : isDone
+                                    ? "text-[var(--text)]"
+                                    : "text-[var(--subtext-0)]",
+                              )}
+                            >
+                              {phase.name}
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
+                          {isDone ? (
+                            <CheckCircle2 className="h-3 w-3 text-[var(--success)]" />
+                          ) : isLocked ? (
+                            <Lock className="h-3 w-3 text-[var(--overlay-1)]" />
+                          ) : isActive ? (
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <div className="mx-auto max-w-[880px] px-6 py-6">
+                  <div className="mb-5">
+                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Phase {selectedPhase} — {currentPhaseMeta?.name}
+                    </p>
+                    <p className="mt-1.5 font-ui text-[13px] leading-relaxed text-[var(--subtext-0)]">
+                      {currentPhaseMeta?.hint}
+                    </p>
                   </div>
 
-                  <div className="border-t border-[var(--border)] pt-4">
-                    <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                      Current phase metrics
-                    </p>
-                    <div className="mt-2 space-y-1.5 font-ui text-[12px]">
-                      {selectedPhase === 1 && (
-                        <InvMetric
-                          label="Plan complete"
-                          value={planGateComplete ? "Yes" : "No"}
-                          tone={planGateComplete ? "good" : "warn"}
+                  {isPhaseLocked && (
+                    <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 font-ui text-[12px] text-[var(--warning)]">
+                      <Lock className="h-3.5 w-3.5 shrink-0" />
+                      Locked — finish the earlier phases first.
+                    </div>
+                  )}
+
+                  {/* Phase 1: Plan */}
+                  {selectedPhase === 1 && (
+                    <div className="space-y-5">
+                      <div className="space-y-1.5">
+                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Who or what are you investigating?
+                        </label>
+                        <Textarea
+                          value={planForm.subjectDefinition}
+                          onChange={(e) =>
+                            setPlanForm({ ...planForm, subjectDefinition: e.target.value })
+                          }
+                          placeholder="The person, organisation, situation, or pattern at the centre of the case."
                         />
-                      )}
-                      {selectedPhase === 2 && (
-                        <>
-                          <InvMetric
-                            label="Attached"
-                            value={String(investigationSignals?.length ?? 0)}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          What's in scope (and what isn't)?
+                        </label>
+                        <Textarea
+                          value={planForm.investigationScope}
+                          onChange={(e) =>
+                            setPlanForm({ ...planForm, investigationScope: e.target.value })
+                          }
+                          placeholder="Boundaries, time window, jurisdictions, and anything deliberately excluded."
+                        />
+                      </div>
+
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Ethics gates — all four required
+                        </p>
+                        <p className="mt-1 font-ui text-[11.5px] text-[var(--subtext-0)]">
+                          Confirm before any intelligence gathering begins.
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                          {[
+                            {
+                              key: "proportionality",
+                              label: "Proportionality",
+                              body: "The response fits the concern.",
+                            },
+                            {
+                              key: "legality",
+                              label: "Legality",
+                              body: "Stays within legal and ethical lines.",
+                            },
+                            {
+                              key: "accountability",
+                              label: "Accountability",
+                              body: "Clear ownership and oversight.",
+                            },
+                            {
+                              key: "necessity",
+                              label: "Necessity",
+                              body: "Required and justified, not speculative.",
+                            },
+                          ].map((item) => (
+                            <label
+                              key={item.key}
+                              className="flex cursor-pointer items-start gap-2.5 rounded border border-transparent px-2 py-1.5 font-ui text-[12.5px] text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={planForm[item.key as keyof typeof planForm] as boolean}
+                                onChange={(e) =>
+                                  setPlanForm({ ...planForm, [item.key]: e.target.checked })
+                                }
+                                className="mt-0.5 rounded border-[var(--border)]"
+                              />
+                              <span className="min-w-0">
+                                <span className="font-medium text-[var(--text)]">{item.label}</span>
+                                <span className="text-[var(--overlay-1)]"> — {item.body}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Starting points
+                          </label>
+                          <Textarea
+                            rows={4}
+                            value={planForm.seedEntities}
+                            onChange={(e) => setPlanForm({ ...planForm, seedEntities: e.target.value })}
+                            placeholder="One per line — people, organisations, locations, or events to begin with."
                           />
-                          <InvMetric
-                            label="Reviewed"
-                            value={`${reviewedSignalCount}/${COLLECT_MIN_SIGNALS}`}
-                            tone={collectGateComplete ? "good" : "warn"}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Working theories
+                          </label>
+                          <Textarea
+                            rows={4}
+                            value={planForm.knownHypotheses}
+                            onChange={(e) =>
+                              setPlanForm({ ...planForm, knownHypotheses: e.target.value })
+                            }
+                            placeholder="One per line — what you already suspect and want to test."
                           />
-                        </>
-                      )}
+                        </div>
+                      </div>
+
+                      <PhaseActionFoot
+                        runLabel={currentPhaseMeta?.runLabel ?? "Run phase"}
+                        running={isRunningPhase || savePlanMutation.isPending || advancePhaseMutation.isPending}
+                        disabled={!planGateComplete || runDisabled}
+                        hint={
+                          !planGateComplete
+                            ? "Fill every field and tick all four ethics gates to continue."
+                            : "Ready to save and move to Collect."
+                        }
+                        onRun={() => void handleSavePlan()}
+                        runIcon={<Save className="h-3.5 w-3.5" />}
+                      />
+                    </div>
+                  )}
+
+                  {/* Phase 2: Collect */}
+                  {selectedPhase === 2 && (
+                    <div className="space-y-5">
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[12.5px]">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="font-medium text-[var(--text)]">
+                            Review progress: {reviewedSignalCount}/{COLLECT_MIN_SIGNALS} minimum
+                          </p>
+                          {collectGateComplete ? (
+                            <span className="font-mono text-[11px] text-[var(--success)]">Gate ready</span>
+                          ) : (
+                            <span className="font-mono text-[11px] text-[var(--warning)]">Gate open</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[11px] text-[var(--overlay-1)]">
+                          Attach at least {COLLECT_MIN_SIGNALS} source signals and mark each reviewed before collection runs.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Attached signals ({investigationSignals?.length ?? 0})
+                        </p>
+                        {(investigationSignals ?? []).length === 0 ? (
+                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                            No signals attached yet. Import from your saved signals below.
+                          </div>
+                        ) : (
+                          (investigationSignals ?? []).map((sig) => {
+                            const reviewed = isSignalReviewed(sig.notes);
+                            return (
+                              <div
+                                key={sig.id}
+                                className="space-y-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                      {sig.intel_signals?.title}
+                                    </p>
+                                    <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                                      {sig.intel_signals?.source}
+                                    </p>
+                                  </div>
+                                  {reviewed ? (
+                                    <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--success)]">
+                                      Reviewed
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant={reviewed ? "secondary" : "ghost"}
+                                    onClick={() =>
+                                      reviewSignalMutation.mutate({
+                                        investigationSignalId: sig.id,
+                                        reviewed: !reviewed,
+                                        notes: sig.notes ?? null,
+                                      })
+                                    }
+                                    disabled={reviewSignalMutation.isPending}
+                                  >
+                                    {reviewed ? "Unmark reviewed" : "Mark reviewed"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => removeSignalMutation.mutate(sig.id)}
+                                    disabled={removeSignalMutation.isPending}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Remove
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {parentProject ? (
+                        <div className="space-y-2">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                              From parent project · {parentProject.name} ({importableProjectSignals.length})
+                            </p>
+                            {importableProjectSignals.length > 0 ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  for (const sig of importableProjectSignals) {
+                                    addSignalMutation.mutate(sig.id);
+                                  }
+                                }}
+                                disabled={addSignalMutation.isPending}
+                              >
+                                Add all
+                              </Button>
+                            ) : null}
+                          </div>
+                          {importableProjectSignals.length === 0 ? (
+                            <div className="rounded-md border border-dashed border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-4 py-6 text-center font-ui text-[12px] text-[var(--subtext-0)]">
+                              {(parentProjectSignals?.length ?? 0) > 0
+                                ? "All project signals are already attached."
+                                : "No signals on the parent project yet. Attach some from Inbox or Search."}
+                            </div>
+                          ) : (
+                            importableProjectSignals.map((signal) => (
+                              <div
+                                key={signal.id}
+                                className="flex items-start justify-between gap-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)]/30 p-3"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                    {signal.title}
+                                  </p>
+                                  <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                                    {signal.source}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => addSignalMutation.mutate(signal.id)}
+                                  disabled={addSignalMutation.isPending}
+                                >
+                                  Add
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          {parentProject ? "Import from other saved signals" : "Import from saved signals"} ({importableSavedSignals.length})
+                        </p>
+                        {importableSavedSignals.length === 0 ? (
+                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-6 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                            Nothing available. Save signals from Inbox or Search first.
+                          </div>
+                        ) : (
+                          importableSavedSignals.map((signal) => (
+                            <div
+                              key={signal.id}
+                              className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                  {signal.title}
+                                </p>
+                                <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                                  {signal.source}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => addSignalMutation.mutate(signal.id)}
+                                disabled={addSignalMutation.isPending}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <PhaseActionFoot
+                        runLabel={currentPhaseMeta?.runLabel ?? "Run phase"}
+                        running={isRunningPhase}
+                        disabled={runDisabled}
+                        hint={
+                          !collectGateComplete
+                            ? `Mark ${Math.max(0, COLLECT_MIN_SIGNALS - reviewedSignalCount)} more signal${reviewedSignalCount === COLLECT_MIN_SIGNALS - 1 ? "" : "s"} reviewed to unlock.`
+                            : "Ready — collection will run on the reviewed signals."
+                        }
+                        onRun={() => void handleRunPhase(selectedPhase)}
+                        runIcon={<Play className="h-3.5 w-3.5" />}
+                      />
+                    </div>
+                  )}
+
+                  {/* Phase 3-5: Artifact viewer */}
+                  {selectedPhase >= 3 && selectedPhase <= 5 && (
+                    <div className="space-y-5">
                       {selectedPhase === 3 && (
-                        <>
-                          <InvMetric label="Persons" value={String(collateMetrics.person)} />
-                          <InvMetric
-                            label="Organisations"
-                            value={String(collateMetrics.organisation)}
-                          />
-                          <InvMetric label="Locations" value={String(collateMetrics.location)} />
-                          <InvMetric label="Events" value={String(collateMetrics.event)} />
-                          <InvMetric
-                            label="Total entities"
-                            value={String(collateMetrics.total)}
-                            tone={collateGateComplete ? "good" : "warn"}
-                          />
-                        </>
+                        <PhaseGateCard
+                          title={`Entity register — ${collateMetrics.total} extracted`}
+                          subtitle={`Persons ${collateMetrics.person} · Orgs ${collateMetrics.organisation} · Locations ${collateMetrics.location} · Events ${collateMetrics.event}`}
+                          gateReady={collateGateComplete}
+                          gateText="Gate needs at least 3 entities."
+                        />
                       )}
                       {selectedPhase === 4 && (
-                        <>
-                          <InvMetric
-                            label="Dated events"
-                            value={String(timelineMetrics.eventCount)}
-                          />
-                          <InvMetric
-                            label="Unresolved"
-                            value={String(timelineMetrics.unresolvedContradictions)}
-                            tone={timelineGateComplete ? "good" : "warn"}
-                          />
-                        </>
-                      )}
-                      {selectedPhase === 5 && (
-                        <>
-                          <InvMetric
-                            label="Hypotheses"
-                            value={String(achMetrics.hypothesisCount)}
-                          />
-                          <InvMetric
-                            label="Assessments"
-                            value={String(achMetrics.assessmentCells)}
-                            tone={achGateComplete ? "good" : "warn"}
-                          />
-                        </>
-                      )}
-                      {selectedPhase === 6 && (
-                        <InvMetric
-                          label="Report type"
-                          value={
-                            REPORT_TYPES.find((t) => t.id === selectedReportType)?.label ?? ""
-                          }
+                        <PhaseGateCard
+                          title={`Timeline — ${timelineMetrics.eventCount} dated events`}
+                          subtitle={`Unresolved contradictions: ${timelineMetrics.unresolvedContradictions}`}
+                          gateReady={timelineGateComplete}
+                          gateText="Gate needs at least 3 events and zero unresolved contradictions."
                         />
                       )}
+                      {selectedPhase === 5 && (
+                        <PhaseGateCard
+                          title={`Hypothesis matrix — ${achMetrics.hypothesisCount} theories`}
+                          subtitle={`Evidence assessments: ${achMetrics.assessmentCells}`}
+                          gateReady={achGateComplete}
+                          gateText="Gate needs at least 3 hypotheses and assessed evidence cells."
+                        />
+                      )}
+
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Current artifact
+                        </p>
+                        {isLoadingCurrentArtifact ? (
+                          <div className="mt-2 flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Loading artifact…
+                          </div>
+                        ) : currentArtifactContent ? (
+                          <pre className="mt-2 max-h-[60vh] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] text-[var(--subtext-1)]">
+                            {currentArtifactContent}
+                          </pre>
+                        ) : (
+                          <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                            Nothing saved yet. Run this phase to generate the artifact.
+                          </p>
+                        )}
+                      </div>
+
+                      <PhaseActionFoot
+                        runLabel={currentPhaseMeta?.runLabel ?? "Run phase"}
+                        running={isRunningPhase}
+                        disabled={runDisabled}
+                        hint={
+                          selectedPhase === 4 && !collateGateComplete
+                            ? "Entity register gate not ready."
+                            : selectedPhase === 5 && !timelineGateComplete
+                              ? "Timeline gate not ready."
+                              : "Ready — this phase will overwrite the current artifact."
+                        }
+                        onRun={() => void handleRunPhase(selectedPhase)}
+                        runIcon={<Play className="h-3.5 w-3.5" />}
+                      />
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                    Latest phase output
-                  </p>
-                  {phaseOutput ? (
-                    <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">
-                      {phaseOutput}
-                    </pre>
-                  ) : (
-                    <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
-                      No output yet. Run a phase to see Claude's response here.
-                    </p>
+                  )}
+
+                  {/* Phase 6: Report */}
+                  {selectedPhase === 6 && (
+                    <div className="space-y-5">
+                      <div className="space-y-1.5">
+                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Report type
+                        </label>
+                        <select
+                          className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12.5px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                          value={selectedReportType}
+                          onChange={(e) =>
+                            setSelectedReportType(e.target.value as typeof selectedReportType)
+                          }
+                        >
+                          {REPORT_TYPES.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <PhaseActionFoot
+                        runLabel={currentPhaseMeta?.runLabel ?? "Run phase"}
+                        running={isRunningPhase}
+                        disabled={runDisabled}
+                        hint={
+                          !achGateComplete
+                            ? "Hypothesis matrix gate not ready."
+                            : "Ready — final report will pull from every phase artifact."
+                        }
+                        onRun={() => void handleRunPhase(selectedPhase)}
+                        runIcon={<Play className="h-3.5 w-3.5" />}
+                      />
+                    </div>
                   )}
                 </div>
-              )}
+              </div>
+
+              {/* Collapsible run output */}
+              <div className="shrink-0 border-t border-[var(--border)] bg-[var(--mantle)]">
+                <button
+                  type="button"
+                  onClick={() => setOutputOpen((o) => !o)}
+                  className="flex w-full items-center justify-between gap-3 px-5 py-2 font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>Last run output</span>
+                    {isRunningPhase && <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />}
+                    {phaseOutput && !isRunningPhase && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+                    )}
+                  </span>
+                  {outputOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {outputOpen && (
+                  <div className="max-h-[260px] overflow-y-auto border-t border-[var(--border)] px-5 py-3">
+                    {phaseOutput ? (
+                      <pre className="whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">
+                        {phaseOutput}
+                      </pre>
+                    ) : (
+                      <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                        Run a phase to see the response here.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
+              <p className="text-label">What the Investigate page is for</p>
+              <p className="max-w-[460px] font-ui text-[13px] leading-relaxed text-[var(--subtext-0)]">
+                This is the analyst workbench. Each case walks through six phases — plan, collect, collate, timeline, hypothesise, report — with ethics gates between them. Pick a case from the left, or start a new one.
+              </p>
+              <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-2 gap-1.5">
+                <Plus className="h-3 w-3" />
+                New investigation
+              </Button>
             </div>
-          </>
-        )}
-      </aside>
+          )}
+        </section>
+      </div>
+
+      <InvestigationCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(caseId) => setSelectedCaseId(caseId)}
+      />
     </div>
   );
 }
 
-function InvRailTab({
-  active,
-  onClick,
-  icon,
-  label,
+function PhaseGateCard({
+  title,
+  subtitle,
+  gateReady,
+  gateText,
 }: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
+  title: string;
+  subtitle: string;
+  gateReady: boolean;
+  gateText: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded px-2 py-1 font-ui text-[11px] font-medium transition-colors",
-        active
-          ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
-          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[12.5px]">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-medium text-[var(--text)]">{title}</p>
+        <span
+          className={cn(
+            "shrink-0 font-mono text-[11px]",
+            gateReady ? "text-[var(--success)]" : "text-[var(--warning)]",
+          )}
+        >
+          {gateReady ? "Gate ready" : "Gate open"}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-[var(--overlay-1)]">{subtitle}</p>
+      {!gateReady && (
+        <p className="mt-2 text-[11px] text-[var(--warning)]">{gateText}</p>
       )}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function InvMetric({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "good" | "warn" | "neutral";
-}) {
-  const color =
-    tone === "good"
-      ? "text-[var(--success)]"
-      : tone === "warn"
-        ? "text-[var(--warning)]"
-        : "text-[var(--text)]";
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-[var(--overlay-1)]">{label}</span>
-      <span className={cn("font-mono text-[12px]", color)}>{value}</span>
     </div>
   );
 }
+
+function PhaseActionFoot({
+  runLabel,
+  running,
+  disabled,
+  hint,
+  onRun,
+  runIcon,
+}: {
+  runLabel: string;
+  running: boolean;
+  disabled: boolean;
+  hint: string;
+  onRun: () => void;
+  runIcon: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-4">
+      <span
+        className={cn(
+          "flex items-center gap-1.5 font-ui text-[11.5px]",
+          disabled ? "text-[var(--warning)]" : "text-[var(--subtext-0)]",
+        )}
+      >
+        {disabled && <AlertCircle className="h-3.5 w-3.5" />}
+        {hint}
+      </span>
+      <Button onClick={onRun} disabled={disabled} className="gap-1.5">
+        {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : runIcon}
+        {running ? "Running…" : runLabel}
+      </Button>
+    </div>
+  );
+}
+
