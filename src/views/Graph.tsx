@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { NodePicker } from "@/components/graph/node-picker";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
   Building2,
@@ -2752,7 +2753,7 @@ export function GraphView() {
                   {selectedNodeIds.length > 1 || selectedEdgeIds.length > 1 ? (
                     <div className="flex flex-col gap-3 px-4 py-4">
                       <span className="text-label">Multi-selection</span>
-                      <p className="font-ui text-[12px] text-[var(--subtext-0)]">
+                      <p className="text-meta text-[var(--subtext-0)]">
                         {selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} /{" "}
                         {selectedEdgeIds.length} edge{selectedEdgeIds.length === 1 ? "" : "s"}
                       </p>
@@ -2818,9 +2819,7 @@ export function GraphView() {
                             placeholder="Node label"
                           />
                         ) : (
-                          <p className="font-ui text-[15px] font-medium leading-tight text-[var(--text)]">
-                            {selectedNode.label}
-                          </p>
+                          <p className="text-heading">{selectedNode.label}</p>
                         )}
                         {isConstructMode && (
                           <select
@@ -2889,9 +2888,7 @@ export function GraphView() {
                           Connections ({selectedNodeRelations.length})
                         </span>
                         {selectedNodeRelations.length === 0 ? (
-                          <p className="font-ui text-[11px] text-[var(--overlay-1)]">
-                            No linked entities yet.
-                          </p>
+                          <p className="text-meta">No linked entities yet.</p>
                         ) : (
                           <div className="flex flex-col gap-0.5">
                             {selectedNodeRelations.map((relation) => (
@@ -2908,7 +2905,7 @@ export function GraphView() {
                                   else centerViewportOnNode(relation.otherNodeId);
                                 }}
                               >
-                                <span className="flex items-center gap-1.5 truncate font-ui text-[12px] text-[var(--subtext-1)]">
+                                <span className="text-meta flex items-center gap-1.5 truncate text-[var(--subtext-1)]">
                                   <span className="text-[var(--overlay-0)]">
                                     {relation.direction === "in" ? "←" : "→"}
                                   </span>
@@ -2929,7 +2926,7 @@ export function GraphView() {
                     /* Single edge */
                     <div className="flex flex-col gap-3 px-4 py-4">
                       <span className="text-label">Connection</span>
-                      <p className="font-ui text-[13px] font-medium text-[var(--text)]">
+                      <p className="text-ui font-medium">
                         {findNodeLabel(nodes, selectedEdge.source_node_id)}{" "}
                         <span className="text-[var(--overlay-0)]">→</span>{" "}
                         {findNodeLabel(nodes, selectedEdge.target_node_id)}
@@ -2959,7 +2956,7 @@ export function GraphView() {
                           </div>
                         </>
                       ) : (
-                        <p className="font-ui text-[12px] text-[var(--subtext-0)]">
+                        <p className="text-meta text-[var(--subtext-0)]">
                           {selectedEdge.label?.trim() ?? "Unlabeled relationship"}
                         </p>
                       )}
@@ -3005,7 +3002,7 @@ export function GraphView() {
                                   className="h-2 w-2 rounded-full"
                                   style={{ background: ENTITY_STYLES[type].accent }}
                                 />
-                                <span className="font-ui text-[12px] capitalize text-[var(--subtext-1)]">
+                                <span className="text-meta capitalize text-[var(--subtext-1)]">
                                   {type}
                                 </span>
                               </span>
@@ -3018,7 +3015,7 @@ export function GraphView() {
                       </div>
 
                       <div className="px-4 py-4">
-                        <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+                        <p className="text-meta">
                           Click a node or edge to inspect. Shift-click to multi-select.
                         </p>
                       </div>
@@ -3085,7 +3082,7 @@ export function GraphView() {
                         value={connectLabel}
                         onChange={(e) => setConnectLabel(e.target.value)}
                       />
-                      <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+                      <p className="text-meta">
                         Applied to the next connection you create.
                       </p>
                     </div>
@@ -3111,7 +3108,7 @@ export function GraphView() {
                               className="h-2 w-2 rounded-full"
                               style={{ background: ENTITY_STYLES[type].accent }}
                             />
-                            <span className="font-ui text-[12px] capitalize text-[var(--subtext-1)]">
+                            <span className="text-meta capitalize text-[var(--subtext-1)]">
                               {type}
                             </span>
                           </span>
@@ -3129,7 +3126,7 @@ export function GraphView() {
                           onChange={() => setShowEdgeLabels((c) => !c)}
                           className="accent-[var(--accent)]"
                         />
-                        <span className="font-ui text-[12px] text-[var(--subtext-1)]">
+                        <span className="text-meta text-[var(--subtext-1)]">
                           Edge labels
                         </span>
                       </label>
@@ -3140,7 +3137,7 @@ export function GraphView() {
                           onChange={() => setShowMinimap((c) => !c)}
                           className="accent-[var(--accent)]"
                         />
-                        <span className="font-ui text-[12px] text-[var(--subtext-1)]">
+                        <span className="text-meta text-[var(--subtext-1)]">
                           Minimap (Construct)
                         </span>
                       </label>
@@ -3205,9 +3202,7 @@ export function GraphView() {
                         onChange={setInsightCenterPull}
                       />
                       <div className="flex flex-col gap-1.5">
-                        <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                          Label density
-                        </span>
+                        <span className="text-label">Label density</span>
                         <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
                           {(["context", "selected", "all"] as const).map((mode) => (
                             <button
@@ -3232,30 +3227,20 @@ export function GraphView() {
                   {/* Shortest path */}
                   <div className="flex flex-col gap-2 px-4 py-4">
                     <span className="text-label">Shortest path</span>
-                    <select
-                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                      value={pathFromNodeId ?? ""}
-                      onChange={(e) => setPathFromNodeId(e.target.value || null)}
-                    >
-                      <option value="">From…</option>
-                      {visualNodes.map((n) => (
-                        <option key={`pf-${n.node_id}`} value={n.node_id}>
-                          {n.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                      value={pathToNodeId ?? ""}
-                      onChange={(e) => setPathToNodeId(e.target.value || null)}
-                    >
-                      <option value="">To…</option>
-                      {visualNodes.map((n) => (
-                        <option key={`pt-${n.node_id}`} value={n.node_id}>
-                          {n.label}
-                        </option>
-                      ))}
-                    </select>
+                    <NodePicker
+                      nodes={visualNodes}
+                      value={pathFromNodeId}
+                      onChange={setPathFromNodeId}
+                      placeholder="From…"
+                      entityAccent={INSIGHT_NODE_COLORS}
+                    />
+                    <NodePicker
+                      nodes={visualNodes}
+                      value={pathToNodeId}
+                      onChange={setPathToNodeId}
+                      placeholder="To…"
+                      entityAccent={INSIGHT_NODE_COLORS}
+                    />
                     <div className="flex flex-wrap gap-1.5">
                       <Button
                         size="sm"
@@ -3282,18 +3267,13 @@ export function GraphView() {
                   {/* Ego network */}
                   <div className="flex flex-col gap-2 px-4 py-4">
                     <span className="text-label">Ego network</span>
-                    <select
-                      className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                      value={egoCenterNodeId ?? ""}
-                      onChange={(e) => setEgoCenterNodeId(e.target.value || null)}
-                    >
-                      <option value="">Center…</option>
-                      {visualNodes.map((n) => (
-                        <option key={`ego-${n.node_id}`} value={n.node_id}>
-                          {n.label}
-                        </option>
-                      ))}
-                    </select>
+                    <NodePicker
+                      nodes={visualNodes}
+                      value={egoCenterNodeId}
+                      onChange={setEgoCenterNodeId}
+                      placeholder="Center…"
+                      entityAccent={INSIGHT_NODE_COLORS}
+                    />
                     <div className="flex items-center gap-2">
                       <Input
                         type="number"
@@ -3305,9 +3285,7 @@ export function GraphView() {
                         }
                         className="h-8 w-20"
                       />
-                      <span className="font-ui text-[11px] text-[var(--overlay-1)]">
-                        Depth (1–4)
-                      </span>
+                      <span className="text-meta">Depth (1–4)</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <Button
@@ -3516,7 +3494,7 @@ function SliderRow({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="font-ui text-[11px] text-[var(--overlay-1)]">{label}</span>
+      <span className="text-meta">{label}</span>
       <input
         type="range"
         min={min}
