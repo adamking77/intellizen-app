@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   createProject,
   listProjectSignals,
@@ -16,7 +17,8 @@ import {
   removeSignalFromProject,
   updateProject,
 } from "@/lib/data";
-import type { ProjectType } from "@/lib/types";
+import { toast, toastError } from "@/lib/toast";
+import type { Project, ProjectSignal, ProjectType } from "@/lib/types";
 import { useAppStore } from "@/store";
 
 export function ProjectsView() {
@@ -61,7 +63,9 @@ export function ProjectsView() {
       setType("research");
       setSelectedProjectId(project.id);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Project created");
     },
+    onError: (err) => toastError("Couldn't create project", err),
   });
 
   const saveNotesMutation = useMutation({
@@ -74,7 +78,9 @@ export function ProjectsView() {
       await queryClient.invalidateQueries({
         queryKey: ["project-signals", selectedProjectId],
       });
+      toast.success("Notes saved");
     },
+    onError: (err) => toastError("Couldn't save notes", err),
   });
 
   const toggleStatusMutation = useMutation({
@@ -82,18 +88,55 @@ export function ProjectsView() {
       updateProject(selectedProjectId as number, {
         status: selectedProject?.status === "active" ? "archived" : "active",
       }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    onMutate: async () => {
+      if (selectedProjectId === null) return;
+      await queryClient.cancelQueries({ queryKey: ["projects"] });
+      const previous = queryClient.getQueryData<Project[]>(["projects"]);
+      const nextStatus = selectedProject?.status === "active" ? "archived" : "active";
+      queryClient.setQueryData<Project[]>(["projects"], (old) =>
+        (old ?? []).map((p) =>
+          p.id === selectedProjectId ? { ...p, status: nextStatus } : p,
+        ),
+      );
+      return { previous, nextStatus };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["projects"], context.previous);
+      }
+      toastError("Couldn't update project", err);
+    },
+    onSuccess: (_, __, context) => {
+      toast.success(context?.nextStatus === "archived" ? "Project archived" : "Project reactivated");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 
   const removeSignalMutation = useMutation({
     mutationFn: removeSignalFromProject,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
+    onMutate: async (projectSignalId: number) => {
+      const key = ["project-signals", selectedProjectId];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<ProjectSignal[]>(key);
+      queryClient.setQueryData<ProjectSignal[]>(key, (old) =>
+        (old ?? []).filter((ps) => ps.id !== projectSignalId),
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["project-signals", selectedProjectId], context.previous);
+      }
+      toastError("Couldn't remove signal", err);
+    },
+    onSuccess: () => toast.success("Signal removed"),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
         queryKey: ["project-signals", selectedProjectId],
       });
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 
@@ -138,29 +181,48 @@ export function ProjectsView() {
           </Button>
         </CardContent>
 
-        <CardContent className="grid gap-3 pt-0">
-          {(projects ?? []).map((project) => (
-            <button
-              key={project.id}
-              type="button"
-              className={`rounded-2xl border p-4 text-left transition ${
-                project.id === selectedProjectId
-                  ? "border-[var(--accent-border)] bg-[var(--surface)]"
-                  : "border-[var(--border)] bg-[var(--surface)]/40 hover:bg-[var(--surface)]"
-              }`}
-              onClick={() => setSelectedProjectId(project.id)}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium text-[var(--foreground)]">{project.name}</p>
-                <Badge variant={project.status === "active" ? "success" : "neutral"}>
-                  {project.status}
-                </Badge>
-              </div>
-              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
-                {project.type.replace("_", " ")}
-              </p>
-            </button>
-          ))}
+        <CardContent className="grid gap-2 pt-0">
+          {(projects ?? []).map((project) => {
+            const isSelected = project.id === selectedProjectId;
+            return (
+              <button
+                key={project.id}
+                type="button"
+                data-selected={isSelected ? "true" : undefined}
+                className={cn(
+                  "group/project relative overflow-hidden rounded-xl border p-4 text-left",
+                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  isSelected
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)] pl-[calc(1rem-3px)]"
+                    : "border-[var(--border)] bg-[var(--surface)]/40 hover:bg-[var(--surface-wash)]",
+                )}
+                onClick={() => setSelectedProjectId(project.id)}
+              >
+                {isSelected ? (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]"
+                  />
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <p
+                    className={cn(
+                      "font-medium",
+                      isSelected ? "text-[var(--accent)]" : "text-[var(--foreground)]",
+                    )}
+                  >
+                    {project.name}
+                  </p>
+                  <Badge variant={project.status === "active" ? "success" : "neutral"}>
+                    {project.status}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--foreground-muted)]">
+                  {project.type.replace("_", " ")}
+                </p>
+              </button>
+            );
+          })}
         </CardContent>
       </Card>
 

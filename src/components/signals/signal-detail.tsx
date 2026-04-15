@@ -1,4 +1,5 @@
-import { Bookmark, ExternalLink, Radar, Target, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bookmark, ChevronDown, ChevronRight, ExternalLink, Radar, Target, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,80 @@ type SignalDetailProps = {
   onDismiss: (signalId: number) => void;
 };
 
+type ExaPayload = {
+  text?: string;
+  highlights?: string[];
+  author?: string;
+};
+
+function extractFullText(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as ExaPayload;
+  const text = typeof p.text === "string" ? p.text.trim() : "";
+  return text.length > 0 ? text : null;
+}
+
+function extractExtraHighlights(payload: unknown, snippet: string | null): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const p = payload as ExaPayload;
+  const highlights = Array.isArray(p.highlights) ? p.highlights : [];
+  // Drop the one already used as snippet
+  return highlights.filter((h) => typeof h === "string" && h.trim() && h.trim() !== (snippet ?? "").trim());
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=["'"(\[]?[A-Z0-9])/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function paragraphize(text: string, sentencesPerPara = 3): string[] {
+  // 1) Respect explicit double-newline paragraph breaks
+  const byDouble = text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  if (byDouble.length > 1) return byDouble;
+
+  // 2) Respect single-newline breaks when author used them
+  const bySingle = text
+    .split(/\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  if (bySingle.length > 1) return bySingle;
+
+  // 3) Fallback: scraped blob with no paragraph structure. Group sentences.
+  const sentences = splitSentences(text);
+  if (sentences.length <= sentencesPerPara) return [text.trim()];
+  const paras: string[] = [];
+  for (let i = 0; i < sentences.length; i += sentencesPerPara) {
+    paras.push(sentences.slice(i, i + sentencesPerPara).join(" "));
+  }
+  return paras;
+}
+
 export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDetailProps) {
+  const [fullOpen, setFullOpen] = useState(false);
+
+  const fullText = useMemo(() => extractFullText(signal?.raw_payload), [signal]);
+  const extraHighlights = useMemo(
+    () => extractExtraHighlights(signal?.raw_payload, signal?.snippet ?? null),
+    [signal],
+  );
+  const snippetParagraphs = useMemo(
+    () => (signal?.snippet ? paragraphize(signal.snippet) : []),
+    [signal],
+  );
+  const fullParagraphs = useMemo(
+    () => (fullText ? paragraphize(fullText) : []),
+    [fullText],
+  );
+  const wordCount = useMemo(() => {
+    if (!fullText) return 0;
+    return fullText.split(/\s+/).filter(Boolean).length;
+  }, [fullText]);
+
   if (!signal) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -78,7 +152,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
         </button>
       </div>
 
-      {/* Meta row (mono) */}
+      {/* Meta row */}
       <div className="shrink-0 border-b border-[var(--border)] px-5 py-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-[var(--overlay-1)]">
           {signal.source ? (
@@ -89,17 +163,98 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
         </div>
       </div>
 
-      {/* Snippet */}
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        {signal.snippet ? (
-          <p className="font-ui text-[13px] leading-relaxed text-[var(--subtext-1)]">
-            {signal.snippet}
-          </p>
+      {/* Body — scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Highlight */}
+        {snippetParagraphs.length > 0 ? (
+          <section className="border-b border-[var(--border-subtle)] px-5 pt-5 pb-6">
+            <p className="mb-2 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              Highlight
+            </p>
+            <div className="max-w-[65ch] space-y-4">
+              {snippetParagraphs.map((para, i) => (
+                <p
+                  key={i}
+                  className="font-ui text-[14px] leading-[1.8] text-[var(--subtext-1)]"
+                >
+                  {para}
+                </p>
+              ))}
+            </div>
+          </section>
         ) : (
-          <p className="font-ui text-[12px] italic text-[var(--overlay-1)]">
-            No snippet available.
-          </p>
+          <section className="border-b border-[var(--border-subtle)] px-5 py-5">
+            <p className="font-ui text-[12px] italic text-[var(--overlay-1)]">
+              No snippet available.
+            </p>
+          </section>
         )}
+
+        {/* Additional highlights from Exa */}
+        {extraHighlights.length > 0 ? (
+          <section className="border-b border-[var(--border-subtle)] px-5 py-5">
+            <p className="mb-3 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              Additional excerpts
+            </p>
+            <div className="max-w-[65ch] space-y-4">
+              {extraHighlights.map((highlight, i) => (
+                <p
+                  key={i}
+                  className="border-l border-[var(--border)] pl-3 font-ui text-[13px] leading-[1.8] text-[var(--subtext-0)]"
+                >
+                  {highlight.trim()}
+                </p>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* Full article — collapsible */}
+        {fullParagraphs.length > 0 ? (
+          <section className="px-5 py-5">
+            <button
+              type="button"
+              onClick={() => setFullOpen((o) => !o)}
+              className="flex w-full items-center justify-between gap-2 rounded-md py-1 text-left transition-colors hover:text-[var(--text)]"
+            >
+              <span className="flex items-center gap-2">
+                {fullOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
+                )}
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
+                  Full article
+                </span>
+              </span>
+              <span className="font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                {wordCount.toLocaleString()} words · {fullParagraphs.length} ¶
+              </span>
+            </button>
+            {fullOpen ? (
+              <div className="mt-4 max-w-[65ch] space-y-5">
+                {fullParagraphs.map((para, i) => (
+                  <p
+                    key={i}
+                    className="font-ui text-[14px] leading-[1.8] text-[var(--subtext-1)]"
+                  >
+                    {para}
+                  </p>
+                ))}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void openUrl(signal.url)}
+                    className="inline-flex items-center gap-1.5 font-ui text-[11px] text-[var(--accent)] hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open original at {host ?? "source"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
 
       {/* Actions */}

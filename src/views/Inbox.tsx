@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCcw } from "lucide-react";
+import { Archive, Bookmark, Filter as FilterIcon, RefreshCcw, Search as SearchIcon, X } from "lucide-react";
 
 import { ProjectPickerDrawer } from "@/components/projects/project-picker-drawer";
 import { AttachInvestigationDialog } from "@/components/signals/attach-investigation-dialog";
@@ -8,6 +8,8 @@ import { SignalCard } from "@/components/signals/signal-card";
 import { SignalDetail } from "@/components/signals/signal-detail";
 import { Button } from "@/components/ui/button";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
+import { domainColor } from "@/lib/domains";
+import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import {
   addSignalToInvestigation,
@@ -44,7 +46,52 @@ export function InboxView() {
   const [attachTarget, setAttachTarget] = useState<IntelSignal | null>(null);
   const [attachCaseId, setAttachCaseId] = useState<string | null>(null);
 
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeDomains, setActiveDomains] = useState<Set<string>>(() => new Set());
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkSaveOpen, setBulkSaveOpen] = useState(false);
+
+  // Filter popover
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Resizable detail panel width
+  const [detailWidth, setDetailWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 400;
+    const saved = window.localStorage.getItem("inbox-detail-width");
+    const parsed = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(parsed) ? Math.max(280, Math.min(720, parsed)) : 400;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem("inbox-detail-width", String(detailWidth));
+  }, [detailWidth]);
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = detailWidth;
+    const onMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      setDetailWidth(Math.max(280, Math.min(720, startWidth + delta)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
   const feedRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
 
   const { data: signals, isLoading } = useQuery({
     queryKey: ["signals"],
@@ -69,17 +116,34 @@ export function InboxView() {
 
   const refreshMutation = useMutation({
     mutationFn: refreshInbox,
-    onSuccess: async () => {
+    onSuccess: async (count) => {
       await queryClient.invalidateQueries({ queryKey: ["signals"] });
       await queryClient.invalidateQueries({ queryKey: ["monitors"] });
       await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
+      if (count === 0) toast.info("No new signals");
     },
+    onError: (err) => toastError("Refresh failed", err),
   });
 
   const dismissMutation = useMutation({
     mutationFn: dismissSignal,
-    onSuccess: async (_, signalId) => {
+    onMutate: async (signalId) => {
+      await queryClient.cancelQueries({ queryKey: ["signals"] });
+      const previous = queryClient.getQueryData<IntelSignal[]>(["signals"]);
+      queryClient.setQueryData<IntelSignal[]>(["signals"], (old) =>
+        (old ?? []).filter((s) => s.id !== signalId),
+      );
       if (selectedSignal?.id === signalId) setSelectedSignal(null);
+      return { previous };
+    },
+    onError: (err, _signalId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["signals"], context.previous);
+      }
+      toastError("Couldn't archive signal", err);
+    },
+    onSuccess: () => toast.success("Signal archived"),
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["signals"] });
       await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
     },
@@ -90,8 +154,52 @@ export function InboxView() {
       addSignalToInvestigation(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["investigation-signals"], exact: false });
+      toast.success("Attached to investigation");
+    },
+    onError: (err) => toastError("Couldn't attach signal", err),
+  });
+
+  const bulkArchiveMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const results = await Promise.allSettled(ids.map((id) => dismissSignal(id)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { total: ids.length, failed };
+    },
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: ["signals"] });
+      const previous = queryClient.getQueryData<IntelSignal[]>(["signals"]);
+      const idSet = new Set(ids);
+      queryClient.setQueryData<IntelSignal[]>(["signals"], (old) =>
+        (old ?? []).filter((s) => !idSet.has(s.id)),
+      );
+      if (selectedSignal && idSet.has(selectedSignal.id)) setSelectedSignal(null);
+      return { previous };
+    },
+    onError: (err, _ids, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["signals"], context.previous);
+      }
+      toastError("Bulk archive failed", err);
+    },
+    onSuccess: ({ total, failed }) => {
+      clearSelection();
+      if (failed === 0) toast.success(`Archived ${total} signal${total === 1 ? "" : "s"}`);
+      else toast.error(`Archived ${total - failed} of ${total} — ${failed} failed`);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["signals"] });
+      await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
     },
   });
+
+  // Domains present in signals — drives the filter chip row
+  const allDomains = useMemo(() => {
+    const set = new Set<string>();
+    for (const signal of signals ?? []) {
+      set.add(signal.watch_domain ?? "Manual");
+    }
+    return Array.from(set).sort();
+  }, [signals]);
 
   const { grouped, visible, counts } = useMemo(() => {
     const all = signals ?? [];
@@ -100,14 +208,79 @@ export function InboxView() {
       new: all.filter((s) => s.status === "new").length,
       saved: all.filter((s) => s.status === "saved").length,
     };
-    const visible = filter === "all" ? all : all.filter((s) => s.status === filter);
-    const grouped = visible.reduce<Record<string, IntelSignal[]>>((acc, signal) => {
+
+    const q = searchQuery.trim().toLowerCase();
+    const byStatus = filter === "all" ? all : all.filter((s) => s.status === filter);
+    const byDomain =
+      activeDomains.size === 0
+        ? byStatus
+        : byStatus.filter((s) => activeDomains.has(s.watch_domain ?? "Manual"));
+    const byQuery = q
+      ? byDomain.filter((s) => {
+          const title = s.title.toLowerCase();
+          const snippet = (s.snippet ?? "").toLowerCase();
+          const source = (s.source ?? "").toLowerCase();
+          return title.includes(q) || snippet.includes(q) || source.includes(q);
+        })
+      : byDomain;
+
+    const grouped = byQuery.reduce<Record<string, IntelSignal[]>>((acc, signal) => {
       const key = signal.watch_domain ?? "Manual";
       acc[key] = [...(acc[key] ?? []), signal];
       return acc;
     }, {});
-    return { grouped, visible, counts };
-  }, [filter, signals]);
+    return { grouped, visible: byQuery, counts };
+  }, [filter, signals, searchQuery, activeDomains]);
+
+  // Click-outside handler for filter popover
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!filterPopoverRef.current) return;
+      if (filterPopoverRef.current.contains(e.target as Node)) return;
+      setFilterOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [filterOpen]);
+
+  // Clear any selected ids that are no longer visible (after filter change)
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(visible.map((s) => s.id));
+      let changed = false;
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [visible]);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAllVisible = () => setSelectedIds(new Set(visible.map((s) => s.id)));
+
+  const toggleDomain = (domain: string) => {
+    setActiveDomains((prev) => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain);
+      else next.add(domain);
+      return next;
+    });
+  };
+
+  const hasActiveFilter = searchQuery.length > 0 || activeDomains.size > 0;
 
   // Monitor telemetry
   const monitorStats = useMemo(() => {
@@ -140,7 +313,7 @@ export function InboxView() {
     },
   ];
 
-  // Keyboard navigation (j/k + e/a + enter + esc)
+  // Keyboard navigation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -148,15 +321,26 @@ export function InboxView() {
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
         target?.isContentEditable;
+
+      // "/" focus search even when no field is active
+      if (!inField && e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
       if (inField) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const list = visible;
-      if (list.length === 0) return;
+      if (list.length === 0 && e.key !== "Escape") return;
 
       const currentIdx = selectedSignal
         ? list.findIndex((s) => s.id === selectedSignal.id)
         : -1;
+
+      const hasBulkSelection = selectedIds.size > 0;
 
       if (e.key === "j" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -167,22 +351,35 @@ export function InboxView() {
         const prev = list[Math.max(0, currentIdx - 1)] ?? list[0];
         setSelectedSignal(prev);
       } else if (e.key === "Escape") {
-        setSelectedSignal(null);
-      } else if (e.key === "a" && selectedSignal) {
+        if (filterOpen) setFilterOpen(false);
+        else if (hasBulkSelection) clearSelection();
+        else setSelectedSignal(null);
+      } else if (e.key === "x" && selectedSignal) {
         e.preventDefault();
-        dismissMutation.mutate(selectedSignal.id);
+        toggleSelect(selectedSignal.id);
+      } else if (e.key === "a") {
+        e.preventDefault();
+        if (hasBulkSelection) {
+          bulkArchiveMutation.mutate(Array.from(selectedIds));
+        } else if (selectedSignal) {
+          dismissMutation.mutate(selectedSignal.id);
+        }
       } else if (e.key === "e" && selectedSignal) {
         e.preventDefault();
         setAttachTarget(selectedSignal);
         setAttachCaseId((c) => c ?? activeInvestigations[0]?.case_id ?? null);
-      } else if (e.key === "s" && selectedSignal) {
+      } else if (e.key === "s") {
         e.preventDefault();
-        setSaveTarget(selectedSignal);
+        if (hasBulkSelection) {
+          setBulkSaveOpen(true);
+        } else if (selectedSignal) {
+          setSaveTarget(selectedSignal);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, selectedSignal, dismissMutation, activeInvestigations]);
+  }, [visible, selectedSignal, selectedIds, dismissMutation, bulkArchiveMutation, activeInvestigations, filterOpen]);
 
   const FILTERS: { value: InboxFilter; label: string; count: number }[] = [
     { value: "all", label: "All", count: counts.all },
@@ -223,7 +420,7 @@ export function InboxView() {
           </div>
 
           <div className="flex items-center gap-2">
-            {refreshMutation.data != null ? (
+            {refreshMutation.data != null && refreshMutation.data > 0 ? (
               <span className="font-mono text-[11px] text-[var(--success)]">
                 +{refreshMutation.data} new
               </span>
@@ -242,6 +439,130 @@ export function InboxView() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Filter bar: search + domain chips */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--base)] px-6 py-2">
+        <div className="relative flex min-w-0 items-center">
+          <SearchIcon className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--overlay-1)]" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.currentTarget.blur();
+                setSearchQuery("");
+              }
+            }}
+            placeholder="Filter signals…"
+            className="h-7 w-[240px] rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-8 pr-7 font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:border-[var(--accent)] focus:outline-none"
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-1.5 inline-flex h-4 w-4 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              aria-label="Clear search"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : (
+            <kbd className="pointer-events-none absolute right-1.5 font-mono text-[10px] text-[var(--overlay-1)]">
+              /
+            </kbd>
+          )}
+        </div>
+
+        <div ref={filterPopoverRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+              "font-ui text-[12px] font-medium",
+              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              activeDomains.size > 0 || filterOpen
+                ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
+            )}
+          >
+            <FilterIcon className="h-3 w-3" />
+            <span>Filter</span>
+            {activeDomains.size > 0 ? (
+              <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--accent)] px-1 font-mono text-[10px] text-[var(--base)]">
+                {activeDomains.size}
+              </span>
+            ) : null}
+          </button>
+
+          {filterOpen ? (
+            <div className="absolute left-0 top-full z-20 mt-1 w-[280px] rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-lg">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Topics
+                </span>
+                {activeDomains.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveDomains(new Set())}
+                    className="font-ui text-[10px] text-[var(--overlay-1)] hover:text-[var(--text)]"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              {allDomains.length === 0 ? (
+                <p className="px-1 py-2 font-ui text-[11px] text-[var(--overlay-1)]">
+                  No topics available — run Refresh to populate signals.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {allDomains.map((domain) => {
+                    const active = activeDomains.has(domain);
+                    const color = domainColor(domain);
+                    return (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => toggleDomain(domain)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+                          "font-ui text-[11px] font-medium",
+                          "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          active
+                            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "border-transparent text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: color }}
+                        />
+                        <span>{domain}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        {hasActiveFilter ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setActiveDomains(new Set());
+            }}
+            className="ml-auto shrink-0 font-ui text-[11px] text-[var(--overlay-1)] hover:text-[var(--text)]"
+          >
+            Clear filters
+          </button>
+        ) : null}
       </div>
 
       {/* Content: feed + detail panel */}
@@ -289,11 +610,33 @@ export function InboxView() {
                       snippet={signal.snippet}
                       score={signal.exa_score}
                       isActive={selectedSignal?.id === signal.id}
+                      isSelected={selectedIds.has(signal.id)}
+                      selectionActive={selectedIds.size > 0}
                       onClick={() =>
                         setSelectedSignal((prev) =>
                           prev?.id === signal.id ? null : signal,
                         )
                       }
+                      onToggleSelect={(e) => {
+                        if (e.shiftKey) {
+                          // Range select: from last-selected anchor to this row
+                          const ids = visible.map((s) => s.id);
+                          const thisIdx = ids.indexOf(signal.id);
+                          const anchors = Array.from(selectedIds);
+                          const lastAnchor = anchors[anchors.length - 1];
+                          const anchorIdx = lastAnchor != null ? ids.indexOf(lastAnchor) : -1;
+                          if (anchorIdx >= 0 && thisIdx >= 0) {
+                            const [lo, hi] = anchorIdx < thisIdx ? [anchorIdx, thisIdx] : [thisIdx, anchorIdx];
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              for (let i = lo; i <= hi; i += 1) next.add(ids[i]);
+                              return next;
+                            });
+                            return;
+                          }
+                        }
+                        toggleSelect(signal.id);
+                      }}
                       onSave={() => setSaveTarget(signal)}
                       onDismiss={() => dismissMutation.mutate(signal.id)}
                     />
@@ -303,13 +646,58 @@ export function InboxView() {
             </div>
           )}
 
+          {/* Bulk action bar — floats above keyboard hints when selection exists */}
+          {selectedIds.size > 0 ? (
+            <div className="flex shrink-0 items-center gap-3 border-t border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2">
+              <span className="font-ui text-[12px] font-medium text-[var(--accent)]">
+                {selectedIds.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                className="font-ui text-[11px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+                disabled={selectedIds.size === visible.length}
+              >
+                Select all {visible.length}
+              </button>
+              <span className="h-3 w-px bg-[var(--border)]" aria-hidden />
+              <button
+                type="button"
+                onClick={() => bulkArchiveMutation.mutate(Array.from(selectedIds))}
+                disabled={bulkArchiveMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:opacity-50"
+              >
+                <Archive className="h-3 w-3" />
+                Archive
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkSaveOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <Bookmark className="h-3 w-3" />
+                Save to project…
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 font-ui text-[11px] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <X className="h-3 w-3" />
+                Clear
+              </button>
+            </div>
+          ) : null}
+
           {/* Keyboard hint footer */}
           <div className="flex shrink-0 items-center gap-4 border-t border-[var(--border)] bg-[var(--base)] px-4 py-2">
             <KeyHint keys="j k" label="Navigate" />
-            <KeyHint keys="s" label="Save" />
+            <KeyHint keys="x" label="Select" />
+            <KeyHint keys="s" label={selectedIds.size > 0 ? "Bulk save" : "Save"} />
             <KeyHint keys="e" label="Attach" />
-            <KeyHint keys="a" label="Archive" />
-            <KeyHint keys="esc" label="Close" />
+            <KeyHint keys="a" label={selectedIds.size > 0 ? "Bulk archive" : "Archive"} />
+            <KeyHint keys="/" label="Filter" />
+            <KeyHint keys="esc" label={selectedIds.size > 0 ? "Clear selection" : "Close"} />
           </div>
         </div>
 
@@ -317,8 +705,23 @@ export function InboxView() {
         {selectedSignal ? (
           <aside
             key={selectedSignal.id}
-            className="inbox-detail-panel w-[320px] shrink-0 overflow-hidden border-l border-[var(--border)] bg-[var(--base)] lg:w-[360px] xl:w-[400px]"
+            style={{ width: detailWidth }}
+            className="inbox-detail-panel relative shrink-0 overflow-hidden border-l border-[var(--border)] bg-[var(--base)]"
           >
+            {/* Resize handle */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize reading panel"
+              onMouseDown={startResize}
+              onDoubleClick={() => setDetailWidth(400)}
+              className="group/resize absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-[2px] bg-transparent transition-colors duration-150 group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
+              />
+            </div>
             <SignalDetail
               signal={selectedSignal}
               onSave={(signal) => setSaveTarget(signal)}
@@ -337,10 +740,16 @@ export function InboxView() {
         onClose={() => setSaveTarget(null)}
         onSelect={async (projectId) => {
           if (!saveTarget) return;
-          await saveSignalToProject({ projectId, signalId: saveTarget.id });
-          await queryClient.invalidateQueries({ queryKey: ["signals"] });
-          await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
-          setSaveTarget(null);
+          try {
+            await saveSignalToProject({ projectId, signalId: saveTarget.id });
+            await queryClient.invalidateQueries({ queryKey: ["signals"] });
+            await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
+            toast.success("Saved to project");
+          } catch (err) {
+            toastError("Couldn't save signal", err);
+          } finally {
+            setSaveTarget(null);
+          }
         }}
         title={saveTarget ? `Save "${saveTarget.title}"` : "Attach to project"}
       />
@@ -367,6 +776,31 @@ export function InboxView() {
           );
         }}
         isSubmitting={attachMutation.isPending}
+      />
+
+      <ProjectPickerDrawer
+        open={bulkSaveOpen}
+        onClose={() => setBulkSaveOpen(false)}
+        onSelect={async (projectId) => {
+          const ids = Array.from(selectedIds);
+          if (ids.length === 0) return;
+          const results = await Promise.allSettled(
+            ids.map((id) => saveSignalToProject({ projectId, signalId: id })),
+          );
+          const failed = results.filter((r) => r.status === "rejected").length;
+          await queryClient.invalidateQueries({ queryKey: ["signals"] });
+          await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
+          await queryClient.invalidateQueries({ queryKey: ["projects"] });
+          const saved = ids.length - failed;
+          if (failed === 0) {
+            toast.success(`Saved ${saved} signal${saved === 1 ? "" : "s"}`);
+          } else {
+            toast.error(`Saved ${saved} of ${ids.length} — ${failed} failed`);
+          }
+          clearSelection();
+          setBulkSaveOpen(false);
+        }}
+        title={`Save ${selectedIds.size} signal${selectedIds.size === 1 ? "" : "s"} to project`}
       />
     </div>
   );

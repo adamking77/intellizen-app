@@ -26,6 +26,7 @@ import {
 } from "@/lib/vault";
 import { createVaultFile, listInvestigations, listSignals } from "@/lib/data";
 import { spawnClaude, buildReportPrompt } from "@/lib/shell";
+import { toast, toastError } from "@/lib/toast";
 import type { VaultEntry } from "@/lib/vault";
 import type { Investigation, VaultFileType } from "@/lib/types";
 
@@ -188,13 +189,16 @@ export function ReportsView() {
         setSelectedPath(filePath);
         setGenerationOutput(output);
         void queryClient.invalidateQueries({ queryKey: ["vault-entries"] });
+        toast.success("Report generated", { description: fileName });
       } else {
         setGenerationOutput(`Error: ${result.error}`);
+        toastError("Report generation failed", result.error);
       }
     } catch (error) {
       setGenerationOutput(
         `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
+      toastError("Report generation failed", error);
     } finally {
       setIsGenerating(false);
     }

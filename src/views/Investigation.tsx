@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import {
@@ -296,7 +297,9 @@ export function InvestigationView() {
       setNewCaseName("");
       setSelectedCaseId(data.case_id);
       void queryClient.invalidateQueries({ queryKey: ["investigations"] });
+      toast.success("Investigation created");
     },
+    onError: (err) => toastError("Couldn't create investigation", err),
   });
 
   const savePlanMutation = useMutation({
@@ -304,15 +307,20 @@ export function InvestigationView() {
       saveInvestigationPlan(selectedCaseId!, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
+      toast.success("Plan saved");
     },
+    onError: (err) => toastError("Couldn't save plan", err),
   });
 
   const advancePhaseMutation = useMutation({
     mutationFn: (input: { phase: number; gateData?: Record<string, boolean> }) =>
       updateInvestigationPhase(selectedCaseId!, input.phase, input.gateData),
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
+      const phaseName = PHASES[vars.phase - 1]?.name ?? `Phase ${vars.phase}`;
+      toast.success(`Advanced to ${phaseName}`);
     },
+    onError: (err) => toastError("Couldn't advance phase", err),
   });
 
   const addSignalMutation = useMutation({
@@ -325,7 +333,9 @@ export function InvestigationView() {
       await queryClient.invalidateQueries({
         queryKey: ["investigation-signals", selectedInvestigation?.id],
       });
+      toast.success("Signal added");
     },
+    onError: (err) => toastError("Couldn't add signal", err),
   });
 
   const removeSignalMutation = useMutation({
@@ -334,7 +344,9 @@ export function InvestigationView() {
       await queryClient.invalidateQueries({
         queryKey: ["investigation-signals", selectedInvestigation?.id],
       });
+      toast.success("Signal removed");
     },
+    onError: (err) => toastError("Couldn't remove signal", err),
   });
 
   const reviewSignalMutation = useMutation({

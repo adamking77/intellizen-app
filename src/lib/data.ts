@@ -26,7 +26,8 @@ export async function listMonitors() {
   const { data, error } = await supabase
     .from("monitors")
     .select("*")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) throw error;
   return (data ?? []) as Monitor[];

@@ -7,6 +7,7 @@ import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { listProjects, saveSearchResultToProject } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
+import { toast, toastError } from "@/lib/toast";
 import type { DeepResearchResult, SearchMode, SearchResultItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -47,6 +48,7 @@ export function SearchView() {
 
   const searchMutation = useMutation({
     mutationFn: () => runExaSearch({ mode, query, startDate }),
+    onError: (err) => toastError("Search failed", err),
   });
 
   const results = searchMutation.data;
@@ -183,11 +185,11 @@ export function SearchView() {
               </>
             )
           ) : results ? (
-            <div className="flex flex-col gap-4 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-5">
-              <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-6">
+              <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
                 <div className="flex flex-col gap-1">
                   <span className="text-label">Deep Research</span>
-                  <h2 className="font-ui text-[15px] font-medium text-[var(--text)]">
+                  <h2 className="font-ui text-[16px] font-semibold text-[var(--text)]">
                     {results.title}
                   </h2>
                   <span className="font-mono text-[11px] text-[var(--overlay-1)]">
@@ -198,26 +200,140 @@ export function SearchView() {
                   Save
                 </Button>
               </div>
-              <pre className="whitespace-pre-wrap font-mono text-[12px] leading-6 text-[var(--subtext-0)]">
-                {results.content}
-              </pre>
+              <DeepResearchBody content={results.content} />
             </div>
           ) : null}
         </div>
       </div>
 
+      {/* Deep Research body renderer is defined below */}
       <ProjectPickerDrawer
         open={pendingResult !== null}
         onClose={() => setPendingResult(null)}
         onSelect={async (projectId) => {
           if (!pendingResult) return;
-          await saveSearchResultToProject({ projectId, result: pendingResult });
-          await queryClient.invalidateQueries({ queryKey: ["projects"] });
-          await queryClient.invalidateQueries({ queryKey: ["signals"] });
-          setSearchTargetProjectId(projectId);
+          try {
+            await saveSearchResultToProject({ projectId, result: pendingResult });
+            await queryClient.invalidateQueries({ queryKey: ["projects"] });
+            await queryClient.invalidateQueries({ queryKey: ["signals"] });
+            setSearchTargetProjectId(projectId);
+            toast.success("Saved to project");
+          } catch (err) {
+            toastError("Couldn't save result", err);
+          } finally {
+            setPendingResult(null);
+          }
         }}
         title={pendingResult ? `Attach "${pendingResult.title}"` : "Attach to project"}
       />
+    </div>
+  );
+}
+
+type MdBlock =
+  | { type: "heading"; level: 1 | 2 | 3; text: string }
+  | { type: "list"; items: string[]; ordered: boolean }
+  | { type: "para"; text: string };
+
+function parseMarkdownish(content: string): MdBlock[] {
+  const lines = content.split("\n");
+  const blocks: MdBlock[] = [];
+  let paraBuffer: string[] = [];
+  let listBuffer: string[] = [];
+  let listOrdered = false;
+  let inList = false;
+
+  const flushPara = () => {
+    if (paraBuffer.length === 0) return;
+    blocks.push({ type: "para", text: paraBuffer.join(" ").trim() });
+    paraBuffer = [];
+  };
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    blocks.push({ type: "list", items: listBuffer, ordered: listOrdered });
+    listBuffer = [];
+    inList = false;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (line.trim() === "") {
+      flushPara();
+      flushList();
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+    if (heading) {
+      flushPara();
+      flushList();
+      const level = Math.min(3, heading[1].length) as 1 | 2 | 3;
+      blocks.push({ type: "heading", level, text: heading[2].trim() });
+      continue;
+    }
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    if (bullet || numbered) {
+      flushPara();
+      const ordered = Boolean(numbered);
+      if (!inList || listOrdered !== ordered) {
+        flushList();
+        listOrdered = ordered;
+        inList = true;
+      }
+      listBuffer.push((bullet?.[1] ?? numbered?.[1] ?? "").trim());
+      continue;
+    }
+    flushList();
+    paraBuffer.push(line.trim());
+  }
+  flushPara();
+  flushList();
+  return blocks;
+}
+
+function DeepResearchBody({ content }: { content: string }) {
+  const blocks = parseMarkdownish(content);
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, i) => {
+        if (block.type === "heading") {
+          const sizeClass =
+            block.level === 1
+              ? "text-[18px] font-semibold mt-4"
+              : block.level === 2
+                ? "text-[15px] font-semibold mt-3"
+                : "text-[13px] font-semibold uppercase tracking-[0.08em] mt-2 text-[var(--subtext-0)]";
+          return (
+            <h3 key={i} className={cn("font-ui text-[var(--text)]", sizeClass)}>
+              {block.text}
+            </h3>
+          );
+        }
+        if (block.type === "list") {
+          const ListTag = block.ordered ? "ol" : "ul";
+          return (
+            <ListTag
+              key={i}
+              className={cn(
+                "space-y-1.5 pl-5 font-serif text-[14px] leading-[1.7] text-[var(--subtext-1)]",
+                block.ordered ? "list-decimal" : "list-disc",
+              )}
+            >
+              {block.items.map((item, j) => (
+                <li key={j}>{item}</li>
+              ))}
+            </ListTag>
+          );
+        }
+        return (
+          <p
+            key={i}
+            className="font-serif text-[14px] leading-[1.7] text-[var(--subtext-1)]"
+          >
+            {block.text}
+          </p>
+        );
+      })}
     </div>
   );
 }
