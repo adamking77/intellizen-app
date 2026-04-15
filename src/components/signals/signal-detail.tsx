@@ -145,7 +145,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
           onClick={() => void openUrl(signal.url)}
           className="group/link inline-flex items-start gap-2 text-left"
         >
-          <h2 className="font-ui text-[15px] font-semibold leading-snug text-[var(--text)] transition-colors duration-150 group-hover/link:text-[var(--accent)]">
+          <h2 className="text-heading tracking-tight transition-colors duration-150 group-hover/link:text-[var(--accent)]">
             {signal.title}
           </h2>
           <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)] group-hover/link:text-[var(--accent)]" />
@@ -173,10 +173,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
             </p>
             <div className="max-w-[65ch] space-y-4">
               {snippetParagraphs.map((para, i) => (
-                <p
-                  key={i}
-                  className="font-ui text-[14px] leading-[1.8] text-[var(--subtext-1)]"
-                >
+                <p key={i} className="text-body-reading">
                   {para}
                 </p>
               ))}
@@ -200,7 +197,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
               {extraHighlights.map((highlight, i) => (
                 <p
                   key={i}
-                  className="border-l border-[var(--border)] pl-3 font-ui text-[13px] leading-[1.8] text-[var(--subtext-0)]"
+                  className="text-body-reading border-l border-[var(--border)] pl-3 text-[15px] text-[var(--subtext-0)]"
                 >
                   {highlight.trim()}
                 </p>
@@ -234,10 +231,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
             {fullOpen ? (
               <div className="mt-4 max-w-[65ch] space-y-5">
                 {fullParagraphs.map((para, i) => (
-                  <p
-                    key={i}
-                    className="font-ui text-[14px] leading-[1.8] text-[var(--subtext-1)]"
-                  >
+                  <p key={i} className="text-body-reading">
                     {para}
                   </p>
                 ))}

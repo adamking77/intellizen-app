@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Search as SearchIcon, X } from "lucide-react";
+import { ArrowDown, Loader2, Search as SearchIcon, Target, X } from "lucide-react";
 
 import { ProjectPickerDrawer } from "@/components/projects/project-picker-drawer";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import { listProjects, saveSearchResultToProject } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
 import { toast, toastError } from "@/lib/toast";
@@ -13,15 +14,81 @@ import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import { useAppStore } from "@/store";
 
-const SEARCH_MODES: { value: SearchMode; label: string }[] = [
-  { value: "web", label: "Web" },
-  { value: "news", label: "News" },
-  { value: "research_papers", label: "Papers" },
-  { value: "company", label: "Company" },
-  { value: "people", label: "People" },
-  { value: "financial_reports", label: "Financial" },
-  { value: "deep_research", label: "Deep" },
+type ModeDef = {
+  value: SearchMode;
+  label: string;
+  description: string;
+  placeholder: string;
+  example: string;
+};
+
+const SEARCH_MODES: ModeDef[] = [
+  {
+    value: "web",
+    label: "Web",
+    description: "Semantic web search with AI autoprompt",
+    placeholder: "Enter a search query…",
+    example: "family office exploitation case studies",
+  },
+  {
+    value: "news",
+    label: "News",
+    description: "Date-filterable current events",
+    placeholder: "Search recent news…",
+    example: "crypto fraud indictments 2026",
+  },
+  {
+    value: "research_papers",
+    label: "Papers",
+    description: "Peer-reviewed academic research",
+    placeholder: "Search research papers…",
+    example: "coercive control detection framework",
+  },
+  {
+    value: "company",
+    label: "Company",
+    description: "Corporate sites and profiles",
+    placeholder: "Find companies…",
+    example: "wealth advisory firms Singapore",
+  },
+  {
+    value: "people",
+    label: "People",
+    description: "Personal sites and biographies",
+    placeholder: "Find people…",
+    example: "investigative journalists Southeast Asia",
+  },
+  {
+    value: "financial_reports",
+    label: "Financial",
+    description: "Financial filings and reports",
+    placeholder: "Search financial reports…",
+    example: "SEC enforcement actions fiduciary breach",
+  },
+  {
+    value: "deep_research",
+    label: "Deep",
+    description: "Async multi-source research brief (30s+)",
+    placeholder: "Describe what you want researched…",
+    example: "Map the Singapore family-office regulatory landscape and recent enforcement trends.",
+  },
 ];
+
+type SortKey = "score" | "date";
+
+function sortResults(results: SearchResultItem[], sortKey: SortKey): SearchResultItem[] {
+  const copy = [...results];
+  if (sortKey === "score") {
+    copy.sort((a, b) => (b.exa_score ?? 0) - (a.exa_score ?? 0));
+  } else {
+    copy.sort((a, b) => {
+      const ad = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const bd = b.published_at ? new Date(b.published_at).getTime() : 0;
+      return bd - ad;
+    });
+  }
+  return copy;
+}
 
 export function SearchView() {
   const queryClient = useQueryClient();
@@ -29,9 +96,12 @@ export function SearchView() {
   const [mode, setMode] = useState<SearchMode>("web");
   const [query, setQuery] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("score");
   const [pendingResult, setPendingResult] = useState<
     SearchResultItem | DeepResearchResult | null
   >(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const searchTargetProjectId = useAppStore((state) => state.searchTargetProjectId);
   const setSearchTargetProjectId = useAppStore((state) => state.setSearchTargetProjectId);
@@ -52,161 +122,243 @@ export function SearchView() {
   });
 
   const results = searchMutation.data;
+  const isDeep = mode === "deep_research";
   const canRunSearch = query.trim().length > 0 && !searchMutation.isPending;
+  const hasResults =
+    results !== undefined || searchMutation.isPending || !!searchMutation.error;
+
+  const activeMode = SEARCH_MODES.find((m) => m.value === mode)!;
+
+  const sortedListResults = useMemo(
+    () => (Array.isArray(results) ? sortResults(results, sortKey) : null),
+    [results, sortKey],
+  );
+
+  function runSearch() {
+    if (!canRunSearch) return;
+    searchMutation.mutate();
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      runSearch();
+    }
+  }
 
   return (
     <div className="flex h-[calc(100dvh)] w-full flex-col overflow-hidden bg-[var(--base)]">
-      {/* Slim topbar: breadcrumb + query + mode chips + run */}
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
-        <span className="text-label shrink-0">Search</span>
-        <span className="text-[var(--overlay-1)]">›</span>
-        <form
-          className="flex min-w-0 flex-1 items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!canRunSearch) return;
-            searchMutation.mutate();
-          }}
-        >
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <SearchIcon className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--overlay-1)]" />
-            <input
-              type="text"
-              placeholder={
-                mode === "deep_research"
-                  ? "Write a research brief…"
-                  : "Enter a search query…"
-              }
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-8 pr-3 font-ui text-[13px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:border-[var(--accent)] focus:outline-none"
-            />
-          </div>
-          {mode === "news" && !isCramped ? (
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[11px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-            />
-          ) : null}
-          <Button size="sm" type="submit" disabled={!canRunSearch} className="gap-1.5">
-            {searchMutation.isPending ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Searching…
-              </>
-            ) : (
-              "Run"
-            )}
-          </Button>
-        </form>
-      </header>
-
-      {/* Mode chip strip */}
-      <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--base)] px-4">
-        {SEARCH_MODES.map((item) => (
-          <button
-            key={item.value}
-            onClick={() => setMode(item.value)}
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-md px-2.5 py-1",
-              "font-ui text-[12px] font-medium",
-              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-              mode === item.value
-                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "text-[var(--subtext-0)] hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-        {targetProject ? (
-          <div className="ml-auto flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 py-1">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      {/* Minimal breadcrumb header */}
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--base)] px-4">
+        <span className="text-label">Search</span>
+        {hasResults ? (
+          <>
+            <span className="text-[var(--overlay-1)]">›</span>
+            <span className="font-ui text-[12px] text-[var(--subtext-0)]">
+              {activeMode.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                searchMutation.reset();
+                setQuery("");
+                setTimeout(() => {
+                  if (isDeep) textareaRef.current?.focus();
+                  else inputRef.current?.focus();
+                }, 0);
+              }}
+              className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[11px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+              title="New search"
+            >
+              <X className="h-3 w-3" />
+              New search
+            </button>
+          </>
+        ) : null}
+        {targetProject && !isCramped ? (
+          <div className="ml-auto flex items-center gap-2 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-1">
+            <Target className="h-3 w-3 text-[var(--accent)]" />
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">
               Target
             </span>
-            <span className="font-ui text-[12px] text-[var(--text)]">{targetProject.name}</span>
+            <span className="font-ui text-[12px] text-[var(--text)]">
+              {targetProject.name}
+            </span>
             <button
               type="button"
               onClick={() => setSearchTargetProjectId(null)}
               className="text-[var(--overlay-1)] hover:text-[var(--text)]"
+              title="Clear target"
             >
               <X className="h-3 w-3" />
             </button>
           </div>
         ) : null}
-      </div>
+      </header>
 
-      {/* Full-bleed results area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-[880px] flex-col gap-3 px-6 py-6">
-          {searchMutation.error ? (
-            <div className="rounded-md border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-3 font-ui text-[13px] text-[var(--danger)]">
-              {searchMutation.error.message}
+      {/* Hero composer OR docked composer + results */}
+      {hasResults ? (
+        <>
+          {/* Docked composer */}
+          <div className="shrink-0 border-b border-[var(--border)] bg-[var(--base)] px-4 py-3">
+            <div className="mx-auto max-w-[880px]">
+              <ModeTabs mode={mode} onChange={setMode} compact />
+              <div className="mt-2">
+                <SearchComposer
+                  mode={mode}
+                  query={query}
+                  onQuery={setQuery}
+                  startDate={startDate}
+                  onStartDate={setStartDate}
+                  onRun={runSearch}
+                  canRun={canRunSearch}
+                  isPending={searchMutation.isPending}
+                  isCramped={isCramped}
+                  inputRef={inputRef}
+                  textareaRef={textareaRef}
+                  onKeyDown={onKeyDown}
+                  compact
+                />
+              </div>
             </div>
-          ) : null}
+          </div>
 
-          {!results && !searchMutation.isPending && !searchMutation.error ? (
-            <div className="flex flex-col items-center gap-2 py-24 text-center">
-              <SearchIcon className="h-6 w-6 text-[var(--overlay-1)]" />
-              <p className="text-label">Nothing searched yet</p>
-              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-                Pick a mode above and enter a query to run an Exa search.
+          {/* Results area */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto flex max-w-[880px] flex-col gap-3 px-6 py-6">
+              {searchMutation.error ? (
+                <div className="rounded-md border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-3 font-ui text-[13px] text-[var(--danger)]">
+                  {searchMutation.error.message}
+                </div>
+              ) : null}
+
+              {searchMutation.isPending ? (
+                isDeep ? (
+                  <DeepProgressStrip />
+                ) : (
+                  <ResultsSkeleton />
+                )
+              ) : null}
+
+              {sortedListResults ? (
+                sortedListResults.length === 0 ? (
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--subtext-0)]">
+                    No results.
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-label">
+                        Results · {sortedListResults.length}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-label">Sort</span>
+                        <select
+                          value={sortKey}
+                          onChange={(e) => setSortKey(e.target.value as SortKey)}
+                          className="h-7 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                        >
+                          <option value="score">Score</option>
+                          <option value="date">Date</option>
+                        </select>
+                      </div>
+                    </div>
+                    {sortedListResults.map((result) => (
+                      <SignalCard
+                        key={result.url}
+                        title={result.title}
+                        url={result.url}
+                        source={result.source}
+                        publishedAt={result.published_at}
+                        snippet={result.snippet}
+                        score={result.exa_score}
+                        onSave={() => setPendingResult(result)}
+                      />
+                    ))}
+                  </>
+                )
+              ) : results && !Array.isArray(results) ? (
+                <div className="flex flex-col gap-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-6">
+                  <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="text-label">Deep Research</span>
+                      <h2 className="text-heading tracking-tight">{results.title}</h2>
+                      <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                        {results.source}
+                      </span>
+                    </div>
+                    <Button size="sm" onClick={() => setPendingResult(results)}>
+                      Save
+                    </Button>
+                  </div>
+                  <MarkdownBody content={results.content} />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ---------- HERO composer (empty state) ---------- */
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex min-h-full max-w-[720px] flex-col px-6 pt-[14vh] pb-12">
+            <div className="mb-6">
+              <h1 className="text-display-md">What are you looking for?</h1>
+              <p className="mt-2 font-ui text-[14px] text-[var(--subtext-0)]">
+                Pick a mode, enter a query, and InteliZen will fetch results from Exa.
               </p>
             </div>
-          ) : null}
 
-          {Array.isArray(results) ? (
-            results.length === 0 ? (
-              <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--subtext-0)]">
-                No results.
+            <ModeTabs mode={mode} onChange={setMode} />
+
+            <div className="mt-4">
+              <SearchComposer
+                mode={mode}
+                query={query}
+                onQuery={setQuery}
+                startDate={startDate}
+                onStartDate={setStartDate}
+                onRun={runSearch}
+                canRun={canRunSearch}
+                isPending={searchMutation.isPending}
+                isCramped={isCramped}
+                inputRef={inputRef}
+                textareaRef={textareaRef}
+                onKeyDown={onKeyDown}
+              />
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                  {activeMode.description}
+                </p>
+                <span className="hidden font-mono text-[11px] text-[var(--overlay-1)] sm:inline">
+                  ⌘↵ to run
+                </span>
               </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-label">Results</span>
-                  <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-                    {results.length}
-                  </span>
-                </div>
-                {results.map((result) => (
-                  <SignalCard
-                    key={result.url}
-                    title={result.title}
-                    url={result.url}
-                    source={result.source}
-                    publishedAt={result.published_at}
-                    snippet={result.snippet}
-                    score={result.exa_score}
-                    onSave={() => setPendingResult(result)}
-                  />
-                ))}
-              </>
-            )
-          ) : results ? (
-            <div className="flex flex-col gap-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-6">
-              <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-label">Deep Research</span>
-                  <h2 className="font-ui text-[16px] font-semibold text-[var(--text)]">
-                    {results.title}
-                  </h2>
-                  <span className="font-mono text-[11px] text-[var(--overlay-1)]">
-                    {results.source}
-                  </span>
-                </div>
-                <Button size="sm" onClick={() => setPendingResult(results)}>
-                  Save
-                </Button>
-              </div>
-              <DeepResearchBody content={results.content} />
             </div>
-          ) : null}
-        </div>
-      </div>
 
-      {/* Deep Research body renderer is defined below */}
+            {/* Example query affordance */}
+            <button
+              type="button"
+              onClick={() => {
+                setQuery(activeMode.example);
+                setTimeout(() => {
+                  if (isDeep) textareaRef.current?.focus();
+                  else inputRef.current?.focus();
+                }, 0);
+              }}
+              className="mt-6 flex items-start gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--mantle)] px-3 py-2.5 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-wash-strong)]"
+            >
+              <ArrowDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-label">Try</span>
+                <span className="font-ui text-[13px] text-[var(--subtext-1)]">
+                  {activeMode.example}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
       <ProjectPickerDrawer
         open={pendingResult !== null}
         onClose={() => setPendingResult(null)}
@@ -230,110 +382,224 @@ export function SearchView() {
   );
 }
 
-type MdBlock =
-  | { type: "heading"; level: 1 | 2 | 3; text: string }
-  | { type: "list"; items: string[]; ordered: boolean }
-  | { type: "para"; text: string };
+// ============================================================
+// Mode tabs
+// ============================================================
 
-function parseMarkdownish(content: string): MdBlock[] {
-  const lines = content.split("\n");
-  const blocks: MdBlock[] = [];
-  let paraBuffer: string[] = [];
-  let listBuffer: string[] = [];
-  let listOrdered = false;
-  let inList = false;
-
-  const flushPara = () => {
-    if (paraBuffer.length === 0) return;
-    blocks.push({ type: "para", text: paraBuffer.join(" ").trim() });
-    paraBuffer = [];
-  };
-  const flushList = () => {
-    if (listBuffer.length === 0) return;
-    blocks.push({ type: "list", items: listBuffer, ordered: listOrdered });
-    listBuffer = [];
-    inList = false;
-  };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    if (line.trim() === "") {
-      flushPara();
-      flushList();
-      continue;
-    }
-    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
-    if (heading) {
-      flushPara();
-      flushList();
-      const level = Math.min(3, heading[1].length) as 1 | 2 | 3;
-      blocks.push({ type: "heading", level, text: heading[2].trim() });
-      continue;
-    }
-    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
-    if (bullet || numbered) {
-      flushPara();
-      const ordered = Boolean(numbered);
-      if (!inList || listOrdered !== ordered) {
-        flushList();
-        listOrdered = ordered;
-        inList = true;
-      }
-      listBuffer.push((bullet?.[1] ?? numbered?.[1] ?? "").trim());
-      continue;
-    }
-    flushList();
-    paraBuffer.push(line.trim());
-  }
-  flushPara();
-  flushList();
-  return blocks;
-}
-
-function DeepResearchBody({ content }: { content: string }) {
-  const blocks = parseMarkdownish(content);
+function ModeTabs({
+  mode,
+  onChange,
+  compact = false,
+}: {
+  mode: SearchMode;
+  onChange: (m: SearchMode) => void;
+  compact?: boolean;
+}) {
   return (
-    <div className="space-y-4">
-      {blocks.map((block, i) => {
-        if (block.type === "heading") {
-          const sizeClass =
-            block.level === 1
-              ? "text-[18px] font-semibold mt-4"
-              : block.level === 2
-                ? "text-[15px] font-semibold mt-3"
-                : "text-[13px] font-semibold uppercase tracking-[0.08em] mt-2 text-[var(--subtext-0)]";
-          return (
-            <h3 key={i} className={cn("font-ui text-[var(--text)]", sizeClass)}>
-              {block.text}
-            </h3>
-          );
-        }
-        if (block.type === "list") {
-          const ListTag = block.ordered ? "ol" : "ul";
-          return (
-            <ListTag
-              key={i}
-              className={cn(
-                "space-y-1.5 pl-5 font-serif text-[14px] leading-[1.7] text-[var(--subtext-1)]",
-                block.ordered ? "list-decimal" : "list-disc",
-              )}
-            >
-              {block.items.map((item, j) => (
-                <li key={j}>{item}</li>
-              ))}
-            </ListTag>
-          );
-        }
+    <div
+      className={cn(
+        "flex items-center gap-1 overflow-x-auto",
+        compact ? "h-8" : "h-9",
+      )}
+    >
+      {SEARCH_MODES.map((item) => {
+        const isActive = mode === item.value;
+        const isDeep = item.value === "deep_research";
         return (
-          <p
-            key={i}
-            className="font-serif text-[14px] leading-[1.7] text-[var(--subtext-1)]"
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1",
+              "font-ui text-[12px] font-medium",
+              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              isActive
+                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+            )}
+            title={item.description}
           >
-            {block.text}
-          </p>
+            {item.label}
+            {isDeep && !compact ? (
+              <span className="rounded-sm bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] px-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--warning)]">
+                Async
+              </span>
+            ) : null}
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+// ============================================================
+// Composer
+// ============================================================
+
+function SearchComposer({
+  mode,
+  query,
+  onQuery,
+  startDate,
+  onStartDate,
+  onRun,
+  canRun,
+  isPending,
+  isCramped,
+  inputRef,
+  textareaRef,
+  onKeyDown,
+  compact = false,
+}: {
+  mode: SearchMode;
+  query: string;
+  onQuery: (v: string) => void;
+  startDate: string;
+  onStartDate: (v: string) => void;
+  onRun: () => void;
+  canRun: boolean;
+  isPending: boolean;
+  isCramped: boolean;
+  inputRef: React.Ref<HTMLInputElement>;
+  textareaRef: React.Ref<HTMLTextAreaElement>;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+  compact?: boolean;
+}) {
+  const activeMode = SEARCH_MODES.find((m) => m.value === mode)!;
+  const isDeep = mode === "deep_research";
+
+  return (
+    <form
+      className={cn("flex min-w-0 gap-2", isDeep ? "items-end" : "items-center")}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onRun();
+      }}
+    >
+      <div className="relative flex min-w-0 flex-1 items-center">
+        {!isDeep && (
+          <SearchIcon className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--overlay-1)]" />
+        )}
+        {isDeep ? (
+          <textarea
+            ref={textareaRef}
+            placeholder={activeMode.placeholder}
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={compact ? 2 : 3}
+            className={cn(
+              "w-full resize-none rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2.5 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
+              "focus:border-[var(--accent)] focus:outline-none",
+              compact ? "font-ui text-[13px]" : "font-ui text-[15px] leading-[1.5]",
+            )}
+            autoFocus={!compact}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder={activeMode.placeholder}
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            className={cn(
+              "w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-9 pr-3 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
+              "focus:border-[var(--accent)] focus:outline-none",
+              compact ? "h-9 font-ui text-[13px]" : "h-12 font-ui text-[15px]",
+            )}
+            autoFocus={!compact}
+          />
+        )}
+      </div>
+
+      {mode === "news" && !isCramped ? (
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => onStartDate(e.target.value)}
+          className={cn(
+            "rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[11px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none",
+            compact ? "h-9" : "h-12",
+          )}
+          title="Earliest publish date"
+        />
+      ) : null}
+
+      <Button
+        type="submit"
+        disabled={!canRun}
+        className={cn("gap-1.5 shrink-0", compact ? "h-9" : "h-12 px-5")}
+      >
+        {isPending ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {isDeep ? "Researching…" : "Searching…"}
+          </>
+        ) : isDeep ? (
+          "Start research →"
+        ) : (
+          "Run"
+        )}
+      </Button>
+    </form>
+  );
+}
+
+// ============================================================
+// Loading states
+// ============================================================
+
+function ResultsSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="animate-pulse rounded-md border border-[var(--border-subtle)] bg-[var(--mantle)] p-4"
+        >
+          <div className="h-4 w-3/4 rounded bg-[var(--surface-wash-strong)]" />
+          <div className="mt-3 h-3 w-full rounded bg-[var(--surface-wash)]" />
+          <div className="mt-2 h-3 w-5/6 rounded bg-[var(--surface-wash)]" />
+          <div className="mt-3 flex gap-3">
+            <div className="h-2.5 w-16 rounded bg-[var(--surface-wash)]" />
+            <div className="h-2.5 w-20 rounded bg-[var(--surface-wash)]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DeepProgressStrip() {
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-5">
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+        <span className="font-ui text-[13px] font-medium text-[var(--text)]">
+          Running Deep Research
+        </span>
+        <span className="ml-auto font-mono text-[11px] text-[var(--overlay-1)]">
+          ~30–60s
+        </span>
+      </div>
+      <div className="mt-4 h-1 overflow-hidden rounded bg-[var(--surface-wash)]">
+        <div
+          className="h-full w-1/3 rounded bg-[var(--accent)]"
+          style={{ animation: "deep-progress 2.4s ease-in-out infinite" }}
+        />
+      </div>
+      <p className="mt-3 font-ui text-[12px] text-[var(--overlay-1)]">
+        Exa is searching across multiple sources and synthesizing a structured brief.
+        This usually takes 30–60 seconds.
+      </p>
+      <style>{`
+        @keyframes deep-progress {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(300%); }
+        }
+      `}</style>
     </div>
   );
 }

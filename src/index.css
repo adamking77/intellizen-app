@@ -5,19 +5,19 @@
    ============================================================ */
 
 @font-face {
-  font-family: "Satoshi";
-  src: url("./assets/fonts/Satoshi-Variable.woff2") format("woff2-variations"),
-       url("./assets/fonts/Satoshi-Variable.woff2") format("woff2");
-  font-weight: 300 900;
+  font-family: "Switzer";
+  src: url("./assets/fonts/Switzer-Variable.woff2") format("woff2-variations"),
+       url("./assets/fonts/Switzer-Variable.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "Satoshi";
-  src: url("./assets/fonts/Satoshi-VariableItalic.woff2") format("woff2-variations"),
-       url("./assets/fonts/Satoshi-VariableItalic.woff2") format("woff2");
-  font-weight: 300 900;
+  font-family: "Switzer";
+  src: url("./assets/fonts/Switzer-VariableItalic.woff2") format("woff2-variations"),
+       url("./assets/fonts/Switzer-VariableItalic.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: italic;
   font-display: swap;
 }
@@ -46,7 +46,7 @@
 
 :root {
   color-scheme: dark;
-  font-family: "Satoshi", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Switzer", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-feature-settings: "ss01", "ss02", "cv11";
 
   /* Surfaces */
@@ -107,7 +107,7 @@
   --t-slow: 180ms;
 
   /* Type families */
-  --font-ui: "Satoshi", system-ui, -apple-system, sans-serif;
+  --font-ui: "Switzer", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* ---------- Compat aliases (map legacy names to new tokens) ----------
@@ -216,6 +216,69 @@ pre {
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--text);
+}
+
+/* ---------- Type scale (Untitled UI principles) ----------
+   One family (Switzer), variable weights, leading and tracking
+   tuned to role. Mono (Geist Mono) reserved for data/code. */
+
+.text-display-lg {
+  font-family: var(--font-ui);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.text-display-md {
+  font-family: var(--font-ui);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.text-display-sm {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.text-heading {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.text-body-reading {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--subtext-1);
+}
+
+.text-ui {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.text-meta {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--overlay-1);
 }
 
 /* ---------- Legacy class shims — flattened ----------

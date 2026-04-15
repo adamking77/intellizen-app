@@ -352,7 +352,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
 
             const fontSize = clamp(11 / globalScale, 10, 13);
             const label = node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label;
-            ctx.font = `500 ${fontSize}px Satoshi, system-ui, sans-serif`;
+            ctx.font = `500 ${fontSize}px Switzer, system-ui, sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "top";
 

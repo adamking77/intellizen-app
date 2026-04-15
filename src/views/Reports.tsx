@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import {
@@ -356,9 +357,9 @@ export function ReportsView() {
           {selectedPath && fileContent !== null ? (
             <div className="mx-auto max-w-[880px] px-6 py-8">
               <p className="font-mono text-[11px] text-[var(--overlay-1)]">{selectedPath}</p>
-              <pre className="mt-4 whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-[var(--subtext-1)]">
-                {fileContent}
-              </pre>
+              <div className="mt-4">
+                <MarkdownBody content={fileContent} />
+              </div>
             </div>
           ) : selectedPath ? (
             <div className="flex h-full items-center justify-center">
@@ -371,9 +372,7 @@ export function ReportsView() {
             <div className="flex h-full items-center justify-center p-10">
               <div className="max-w-[380px] text-center">
                 <FileClock className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
-                <p className="font-ui text-[15px] font-medium text-[var(--text)]">
-                  Select a file to view
-                </p>
+                <p className="text-heading">Select a file to view</p>
                 <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
                   Browse the vault on the left or generate a new report from the right.
                 </p>

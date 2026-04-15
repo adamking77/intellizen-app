@@ -2,7 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * Flat badge — 6px radius, uppercase 10px Satoshi 600, tracking-[0.14em].
+ * Flat badge — 6px radius, uppercase 10px Switzer 600, tracking-[0.14em].
  * Tinted bg @ 15% + full-strength text color. No borders unless outline.
  */
 const badgeVariants = cva(
