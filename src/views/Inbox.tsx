@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Bookmark, Filter as FilterIcon, RefreshCcw, Search as SearchIcon, X } from "lucide-react";
 
-import { ProjectPickerDrawer } from "@/components/projects/project-picker-drawer";
+import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { AttachInvestigationDialog } from "@/components/signals/attach-investigation-dialog";
 import { SignalCard } from "@/components/signals/signal-card";
 import { SignalDetail } from "@/components/signals/signal-detail";
@@ -735,7 +735,7 @@ export function InboxView() {
         ) : null}
       </div>
 
-      <ProjectPickerDrawer
+      <ProjectPickerModal
         open={saveTarget !== null}
         onClose={() => setSaveTarget(null)}
         onSelect={async (projectId) => {
@@ -778,7 +778,7 @@ export function InboxView() {
         isSubmitting={attachMutation.isPending}
       />
 
-      <ProjectPickerDrawer
+      <ProjectPickerModal
         open={bulkSaveOpen}
         onClose={() => setBulkSaveOpen(false)}
         onSelect={async (projectId) => {

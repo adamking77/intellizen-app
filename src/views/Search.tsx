@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, Loader2, Search as SearchIcon, Target, X } from "lucide-react";
 
-import { ProjectPickerDrawer } from "@/components/projects/project-picker-drawer";
+import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
@@ -359,7 +359,7 @@ export function SearchView() {
         </div>
       )}
 
-      <ProjectPickerDrawer
+      <ProjectPickerModal
         open={pendingResult !== null}
         onClose={() => setPendingResult(null)}
         onSelect={async (projectId) => {

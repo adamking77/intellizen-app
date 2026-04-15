@@ -1,0 +1,222 @@
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { createProject, listProjects } from "@/lib/data";
+import { cn } from "@/lib/utils";
+import type { ProjectType } from "@/lib/types";
+import { WATCH_DOMAINS } from "@/lib/watch-domains";
+
+type ProjectPickerModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (projectId: number) => Promise<void> | void;
+  title?: string;
+};
+
+export function ProjectPickerModal({
+  open,
+  onClose,
+  onSelect,
+  title = "Attach to project",
+}: ProjectPickerModalProps) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<ProjectType>("research");
+  const [watchDomain, setWatchDomain] = useState<string>("");
+  const [creating, setCreating] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const { data: projects } = useQuery({
+    queryKey: ["projects"],
+    queryFn: listProjects,
+    enabled: open,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createProject({
+        name,
+        type,
+        watch_domain: watchDomain || null,
+      }),
+    onSuccess: async (project) => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setName("");
+      setType("research");
+      setWatchDomain("");
+      setCreating(false);
+      await onSelect(project.id);
+      onClose();
+    },
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      setCreating(false);
+      setName("");
+      setType("research");
+      setWatchDomain("");
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const existing = projects ?? [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="flex max-h-[min(640px,90vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div className="min-w-0">
+            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+              Project routing
+            </p>
+            <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
+              {title}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              Existing projects
+            </span>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+              {existing.length}
+            </span>
+          </div>
+
+          {existing.length === 0 ? (
+            <p className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+              No projects yet — create one below.
+            </p>
+          ) : (
+            <div className="grid gap-1.5">
+              {existing.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={async () => {
+                    await onSelect(project.id);
+                    onClose();
+                  }}
+                  className="group flex items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 text-left transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)]"
+                >
+                  <span className="truncate font-ui text-[13px] font-medium text-[var(--text)]">
+                    {project.name}
+                  </span>
+                  <span className="shrink-0 font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
+                    {project.type.replace("_", " ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 border-t border-[var(--border)] pt-4">
+            {creating ? (
+              <div className="grid gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    New project
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCreating(false)}
+                    className="font-ui text-[11px] text-[var(--overlay-1)] hover:text-[var(--text)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <Input
+                  placeholder="Project name"
+                  value={name}
+                  autoFocus
+                  onChange={(event) => setName(event.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    value={type}
+                    onChange={(event) => setType(event.target.value as ProjectType)}
+                  >
+                    <option value="report">Report</option>
+                    <option value="scoping">Scoping</option>
+                    <option value="research">Research</option>
+                    <option value="client_case">Client Case</option>
+                  </select>
+                  <select
+                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    value={watchDomain}
+                    onChange={(event) => setWatchDomain(event.target.value)}
+                  >
+                    <option value="">No watch domain</option>
+                    {WATCH_DOMAINS.map((domain) => (
+                      <option key={domain} value={domain}>
+                        {domain}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={() => createMutation.mutate()}
+                  disabled={!name.trim() || createMutation.isPending}
+                  className="mt-1"
+                >
+                  {createMutation.isPending ? "Creating…" : "Create and attach"}
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className={cn(
+                  "w-full rounded-md border border-dashed border-[var(--border)] px-3 py-2.5",
+                  "font-ui text-[12px] font-medium text-[var(--subtext-0)]",
+                  "transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                )}
+              >
+                + New project
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

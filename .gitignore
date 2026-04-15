@@ -23,3 +23,6 @@ supabase/.temp
 *.njsproj
 *.sln
 *.sw?
+
+# Local design notes (not shipped)
+dashboard-design.txt
