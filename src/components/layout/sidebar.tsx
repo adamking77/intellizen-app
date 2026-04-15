@@ -1,22 +1,32 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
+import {
+  FileText,
+  FolderOpen,
+  Inbox,
+  Microscope,
+  Network,
+  Radar,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 
 import { getUnreadSignalCount } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { useCommandPalette } from "./command-palette";
 
-type NavItem = { label: string; to: string; key: string };
+type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Inbox", to: "/inbox", key: "inbox" },
-  { label: "Monitors", to: "/monitors", key: "monitors" },
-  { label: "Search", to: "/search", key: "search" },
-  { label: "Projects", to: "/projects", key: "projects" },
-  { label: "Graph", to: "/graph", key: "graph" },
-  { label: "Investigate", to: "/investigate", key: "investigate" },
-  { label: "Reports", to: "/reports", key: "reports" },
+  { label: "Inbox", to: "/inbox", key: "inbox", icon: Inbox },
+  { label: "Monitors", to: "/monitors", key: "monitors", icon: Radar },
+  { label: "Search", to: "/search", key: "search", icon: Search },
+  { label: "Projects", to: "/projects", key: "projects", icon: FolderOpen },
+  { label: "Graph", to: "/graph", key: "graph", icon: Network },
+  { label: "Investigate", to: "/investigate", key: "investigate", icon: Microscope },
+  { label: "Reports", to: "/reports", key: "reports", icon: FileText },
 ];
 
 const APP_VERSION = "v0.4.0";
@@ -132,6 +142,7 @@ export function Sidebar() {
       >
         {NAV_ITEMS.map((item) => {
           const showCount = item.key === "inbox" && unreadCount;
+          const Icon = item.icon;
           return (
             <NavLink
               key={item.to}
@@ -144,7 +155,7 @@ export function Sidebar() {
                   "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
                   collapsed
-                    ? "h-9 justify-center px-0 text-[12px]"
+                    ? "h-9 justify-center px-0"
                     : "justify-between px-4 py-2 text-[13px]",
                   isActive
                     ? "text-[var(--text)]"
@@ -161,14 +172,14 @@ export function Sidebar() {
                     />
                   )}
                   {collapsed ? (
-                    <span
+                    <Icon
+                      aria-hidden
+                      strokeWidth={1.5}
                       className={cn(
-                        "font-ui text-[13px] font-semibold uppercase tracking-[0.05em]",
+                        "h-[18px] w-[18px]",
                         isActive && "text-[var(--accent)]",
                       )}
-                    >
-                      {item.label[0]}
-                    </span>
+                    />
                   ) : (
                     <>
                       <span>{item.label}</span>
