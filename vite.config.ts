@@ -44,26 +44,9 @@ export default defineConfig(async () => ({
             return "vendor-supabase";
           }
 
-          if (
-            id.includes("react-force-graph-2d") ||
-            id.includes("d3-force") ||
-            id.includes("d3-quadtree") ||
-            id.includes("d3-selection") ||
-            id.includes("d3-zoom") ||
-            id.includes("d3-drag") ||
-            id.includes("d3-timer") ||
-            id.includes("d3-dispatch") ||
-            id.includes("d3-interpolate") ||
-            id.includes("d3-color") ||
-            id.includes("d3-ease") ||
-            id.includes("d3-format") ||
-            id.includes("d3-scale") ||
-            id.includes("d3-array") ||
-            id.includes("d3-path") ||
-            id.includes("d3-shape")
-          ) {
-            return "vendor-viz";
-          }
+          // Keep the force-graph / d3 stack in Rollup's default graph.
+          // Forcing those modules into a dedicated vendor chunk caused a production-only
+          // initialization-order crash in the packaged Tauri app.
 
           if (
             id.includes("@tanstack+") ||
