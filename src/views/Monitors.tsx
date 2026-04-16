@@ -47,10 +47,9 @@ function formatElapsed(iso: string | null | undefined): string {
 
 export function MonitorsView() {
   const queryClient = useQueryClient();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingMonitor, setEditingMonitor] = useState<Monitor | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingQuery, setEditingQuery] = useState("");
 
   const { data: monitors, isLoading, error } = useQuery({
     queryKey: ["monitors"],
@@ -163,7 +162,7 @@ export function MonitorsView() {
             ))}
           </div>
 
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+          <Button size="sm" onClick={() => { setEditingMonitor(null); setModalOpen(true); }} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New monitor
           </Button>
@@ -192,7 +191,7 @@ export function MonitorsView() {
               >
                 Seed defaults
               </Button>
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Button size="sm" onClick={() => { setEditingMonitor(null); setModalOpen(true); }}>
                 <Plus className="h-3 w-3" />
                 New monitor
               </Button>
@@ -222,20 +221,8 @@ export function MonitorsView() {
                     <MonitorCard
                       key={monitor.id}
                       monitor={monitor}
-                      editingId={editingId}
-                      editingQuery={editingQuery}
-                      onEditingQueryChange={setEditingQuery}
-                      onStartEdit={(item) => {
-                        setEditingId(item.id);
-                        setEditingQuery(item.query);
-                      }}
-                      onCancelEdit={() => {
-                        setEditingId(null);
-                        setEditingQuery("");
-                      }}
+                      onEdit={(m) => { setEditingMonitor(m); setModalOpen(true); }}
                       onSaved={async () => {
-                        setEditingId(null);
-                        setEditingQuery("");
                         await queryClient.invalidateQueries({ queryKey: ["monitors"] });
                         await queryClient.invalidateQueries({ queryKey: ["signals"] });
                         await queryClient.invalidateQueries({
@@ -251,13 +238,15 @@ export function MonitorsView() {
         )}
       </div>
 
-      <MonitorCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={async () => {
+      <MonitorFormModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingMonitor(null); }}
+        onSaved={async () => {
           await queryClient.invalidateQueries({ queryKey: ["monitors"] });
-          setCreateOpen(false);
+          setModalOpen(false);
+          setEditingMonitor(null);
         }}
+        monitor={editingMonitor}
       />
     </div>
   );
@@ -265,36 +254,18 @@ export function MonitorsView() {
 
 type MonitorCardProps = {
   monitor: Monitor;
-  editingId: number | null;
-  editingQuery: string;
-  onEditingQueryChange: (value: string) => void;
-  onStartEdit: (monitor: Monitor) => void;
-  onCancelEdit: () => void;
+  onEdit: (monitor: Monitor) => void;
   onSaved: () => Promise<void>;
 };
 
 function MonitorCard({
   monitor,
-  editingId,
-  editingQuery,
-  onEditingQueryChange,
-  onStartEdit,
-  onCancelEdit,
+  onEdit,
   onSaved,
 }: MonitorCardProps) {
   const queryClient = useQueryClient();
-  const editing = editingId === monitor.id;
   const isPaused = monitor.status === "paused";
   const color = domainColor(monitor.watch_domain);
-
-  const saveMutation = useMutation({
-    mutationFn: () => updateMonitor(monitor.id, { query: editingQuery }),
-    onSuccess: async () => {
-      await onSaved();
-      toast.success("Query saved");
-    },
-    onError: (err) => toastError("Couldn't save query", err),
-  });
 
   const toggleMutation = useMutation({
     mutationFn: () =>
@@ -383,39 +354,16 @@ function MonitorCard({
           <StatusPill variant={isPaused ? "paused" : "active"} />
         </div>
 
-        {/* Query (edit-inline or display) */}
-        {editing ? (
-          <div className="flex flex-col gap-2">
-            <Input
-              value={editingQuery}
-              onChange={(event) => onEditingQueryChange(event.target.value)}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending || !editingQuery.trim()}
-              >
-                Save query
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancelEdit}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <p
-            className="truncate font-mono text-[12px] text-[var(--overlay-1)]"
-            title={monitor.query}
-          >
-            {monitor.query}
-          </p>
-        )}
+        {/* Query */}
+        <p
+          className="truncate font-mono text-[12px] text-[var(--overlay-1)]"
+          title={monitor.query}
+        >
+          {monitor.query}
+        </p>
 
         {/* Meta + actions */}
-        {!editing ? (
-          <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--overlay-1)] tabular-nums">
               <span className="capitalize">{monitor.frequency}</span>
               <span aria-hidden className="text-[var(--overlay-0)]">·</span>
@@ -470,9 +418,9 @@ function MonitorCard({
               <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/card:opacity-100">
                 <button
                   type="button"
-                  onClick={() => onStartEdit(monitor)}
+                  onClick={() => onEdit(monitor)}
                   className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  title="Edit query"
+                  title="Edit monitor"
                 >
                   <Pencil className="h-3 w-3" />
                 </button>
@@ -491,7 +439,6 @@ function MonitorCard({
               </div>
             </div>
           </div>
-        ) : null}
       </div>
     </div>
   );
@@ -511,26 +458,54 @@ const EMPTY_DRAFT: DraftState = {
   frequency: "daily",
 };
 
-function MonitorCreateModal({
+function MonitorFormModal({
   open,
   onClose,
-  onCreated,
+  onSaved,
+  monitor,
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: () => Promise<void> | void;
+  onSaved: () => Promise<void> | void;
+  monitor?: Monitor | null;
 }) {
+  const isEdit = !!monitor;
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
+
+  useEffect(() => {
+    if (!open) return;
+    if (monitor) {
+      setDraft({
+        name: monitor.name,
+        query: monitor.query,
+        watch_domain: monitor.watch_domain,
+        frequency: monitor.frequency,
+      });
+    } else {
+      setDraft(EMPTY_DRAFT);
+    }
+  }, [open, monitor]);
 
   const createMutation = useMutation({
     mutationFn: () => createMonitor(draft),
     onSuccess: async () => {
       setDraft(EMPTY_DRAFT);
       toast.success("Monitor created");
-      await onCreated();
+      await onSaved();
     },
     onError: (err) => toastError("Couldn't create monitor", err),
   });
+
+  const editMutation = useMutation({
+    mutationFn: () => updateMonitor(monitor!.id, draft),
+    onSuccess: async () => {
+      toast.success("Monitor updated");
+      await onSaved();
+    },
+    onError: (err) => toastError("Couldn't update monitor", err),
+  });
+
+  const isPending = createMutation.isPending || editMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -546,7 +521,7 @@ function MonitorCreateModal({
   const canSubmit =
     draft.name.trim().length > 0 &&
     draft.query.trim().length > 0 &&
-    !createMutation.isPending;
+    !isPending;
 
   const color = domainColor(draft.watch_domain);
 
@@ -565,9 +540,11 @@ function MonitorCreateModal({
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="flex flex-col gap-1">
-            <span className="text-label">New monitor</span>
-            <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-              A saved Exa search template that populates the Inbox on refresh.
+            <span className="text-label">{isEdit ? "Edit monitor" : "New monitor"}</span>
+            <p className="text-meta">
+              {isEdit
+                ? "Update any field and save."
+                : "A saved Exa search template that populates the Inbox on refresh."}
             </p>
           </div>
           <button
@@ -699,8 +676,14 @@ function MonitorCreateModal({
           <Button variant="ghost" onClick={onClose} size="sm">
             Cancel
           </Button>
-          <Button onClick={() => createMutation.mutate()} disabled={!canSubmit} size="sm">
-            {createMutation.isPending ? "Creating…" : "Create monitor"}
+          <Button
+            onClick={() => (isEdit ? editMutation.mutate() : createMutation.mutate())}
+            disabled={!canSubmit}
+            size="sm"
+          >
+            {isPending
+              ? isEdit ? "Saving…" : "Creating…"
+              : isEdit ? "Save changes" : "Create monitor"}
           </Button>
         </div>
       </div>
