@@ -231,7 +231,7 @@ export function ReportsView() {
         {leftOpen && (
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-              <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="text-label">
                 Vault
               </span>
               <button
@@ -251,7 +251,10 @@ export function ReportsView() {
               ) : vaultEntries?.length === 0 ? (
                 <div className="px-2 py-6 text-center">
                   <FolderOpen className="mx-auto mb-2 h-6 w-6 text-[var(--overlay-1)]" />
-                  <p className="font-ui text-[11px] text-[var(--overlay-1)]">Vault is empty</p>
+                  <p className="text-label">Vault is empty</p>
+                  <p className="mt-1 text-meta text-[var(--subtext-0)]">
+                    Run an investigation or generate a report to populate it.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -315,15 +318,13 @@ export function ReportsView() {
                 <PanelLeftOpen className="h-4 w-4" />
               </button>
             )}
-            <div className="flex min-w-0 items-center gap-1.5 font-ui text-[12px]">
-              <span className="text-[var(--overlay-1)]">Reports</span>
-              {fileName && !isCramped && (
-                <>
-                  <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
-                  <span className="truncate text-[var(--text)]">{fileName}</span>
-                </>
-              )}
-            </div>
+            <span className="text-label">Reports</span>
+            {fileName && !isCramped && (
+              <div className="flex min-w-0 items-center gap-1.5">
+                <ChevronRight className="h-3 w-3 shrink-0 text-[var(--overlay-0)]" />
+                <span className="truncate text-meta text-[var(--text)]">{fileName}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -363,7 +364,7 @@ export function ReportsView() {
             </div>
           ) : selectedPath ? (
             <div className="flex h-full items-center justify-center">
-              <div className="flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
+              <div className="flex items-center gap-2 text-meta">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading...
               </div>
@@ -373,7 +374,7 @@ export function ReportsView() {
               <div className="max-w-[380px] text-center">
                 <FileClock className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
                 <p className="text-heading">Select a file to view</p>
-                <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                <p className="mt-1 text-meta text-[var(--subtext-0)]">
                   Browse the vault on the left or generate a new report from the right.
                 </p>
               </div>
@@ -395,7 +396,7 @@ export function ReportsView() {
         {rightOpen && (
           <>
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-3">
-              <div className="flex items-center gap-1.5 font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <div className="flex items-center gap-1.5 text-label">
                 <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
                 Generate report
               </div>
@@ -409,17 +410,17 @@ export function ReportsView() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+              <p className="text-meta">
                 Select saved signals and generate a report.
               </p>
 
               <div className="mt-3 space-y-1">
-                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <p className="text-label">
                   Signals
                 </p>
                 <div className="max-h-[220px] space-y-1 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--base)] p-1">
                   {(savedSignals ?? []).length === 0 ? (
-                    <p className="py-4 text-center font-ui text-[11px] text-[var(--overlay-1)]">
+                    <p className="py-4 text-center text-meta">
                       No saved signals
                     </p>
                   ) : (
@@ -433,7 +434,7 @@ export function ReportsView() {
                           onCheckedChange={() => toggleSignal(signal.id)}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-ui text-[12px] text-[var(--text)]">
+                          <p className="truncate text-meta text-[var(--text)]">
                             {signal.title}
                           </p>
                           <p className="truncate font-mono text-[10px] text-[var(--overlay-1)]">
@@ -447,11 +448,11 @@ export function ReportsView() {
               </div>
 
               <div className="mt-4 space-y-1.5">
-                <label className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <label className="text-label">
                   Investigation case
                 </label>
                 <select
-                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 text-meta text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                   value={selectedCaseId ?? ""}
                   onChange={(e) => setSelectedCaseId(e.target.value || null)}
                 >
@@ -468,11 +469,11 @@ export function ReportsView() {
               </div>
 
               <div className="mt-3 space-y-1.5">
-                <label className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <label className="text-label">
                   Report type
                 </label>
                 <select
-                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 text-meta text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                   value={selectedReportType}
                   onChange={(e) =>
                     setSelectedReportType(e.target.value as typeof selectedReportType)
@@ -484,7 +485,7 @@ export function ReportsView() {
                     </option>
                   ))}
                 </select>
-                <p className="font-ui text-[10.5px] text-[var(--overlay-1)]">
+                <p className="text-meta">
                   {REPORT_TYPES.find((t) => t.id === selectedReportType)?.description}
                 </p>
               </div>
@@ -509,7 +510,7 @@ export function ReportsView() {
 
               {generationOutput && (
                 <div className="mt-4 rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
-                  <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  <p className="text-label">
                     Output preview
                   </p>
                   <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">
@@ -529,7 +530,7 @@ export function ReportsView() {
 function VaultGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-3">
-      <p className="px-2 pb-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <p className="px-2 pb-1 text-label">
         {label}
       </p>
       <div className="space-y-0.5">{children}</div>
@@ -565,7 +566,7 @@ function VaultEntryItem({
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-1)] transition-colors hover:bg-[var(--surface-wash)]"
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-meta text-[var(--subtext-1)] transition-colors hover:bg-[var(--surface-wash)]"
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
         >
           <FolderOpen className="h-3.5 w-3.5 text-[var(--accent)]" />
@@ -594,13 +595,19 @@ function VaultEntryItem({
       type="button"
       onClick={() => onSelect(entry.path)}
       className={cn(
-        "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-ui text-[12px] transition-colors",
+        "relative flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-meta transition-colors",
         isSelected
           ? "bg-[var(--accent-soft)] text-[var(--accent)]"
           : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
     >
+      {isSelected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]"
+        />
+      )}
       <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
       <span className="truncate">{entry.name}</span>
     </button>

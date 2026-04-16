@@ -753,7 +753,7 @@ export function InvestigationView() {
                       ? "No cases in progress"
                       : "No investigations yet"}
                 </p>
-                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                <p className="text-meta">
                   {statusFilter !== "all"
                     ? "Switch the filter to see the other cases."
                     : "Start a case to plan, collect, and analyse evidence."}
@@ -874,7 +874,7 @@ export function InvestigationView() {
               {/* Sub-topbar: case chrome */}
               <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-5">
                 <div className="flex min-w-0 items-center gap-2">
-                  <h2 className="truncate font-ui text-[14px] font-medium text-[var(--text)]">
+                  <h2 className="truncate text-heading">
                     {selectedInvestigation.name}
                   </h2>
                   <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">
@@ -895,7 +895,7 @@ export function InvestigationView() {
                     </button>
                   ) : null}
                 </div>
-                <div className="shrink-0 font-ui text-[11px] text-[var(--subtext-0)]">
+                <div className="shrink-0 text-meta text-[var(--subtext-0)]">
                   Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 6
                 </div>
               </div>
@@ -970,16 +970,16 @@ export function InvestigationView() {
               <div className="flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-[880px] px-6 py-6">
                   <div className="mb-5">
-                    <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    <p className="text-label">
                       Phase {selectedPhase} — {currentPhaseMeta?.name}
                     </p>
-                    <p className="mt-1.5 font-ui text-[13px] leading-relaxed text-[var(--subtext-0)]">
+                    <p className="mt-1.5 text-ui text-[var(--subtext-0)]">
                       {currentPhaseMeta?.hint}
                     </p>
                   </div>
 
                   {isPhaseLocked && (
-                    <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 font-ui text-[12px] text-[var(--warning)]">
+                    <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-meta text-[var(--warning)]">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
                       Locked — finish the earlier phases first.
                     </div>
@@ -989,7 +989,7 @@ export function InvestigationView() {
                   {selectedPhase === 1 && (
                     <div className="space-y-5">
                       <div className="space-y-1.5">
-                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <label className="text-label">
                           Who or what are you investigating?
                         </label>
                         <Textarea
@@ -1001,7 +1001,7 @@ export function InvestigationView() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <label className="text-label">
                           What's in scope (and what isn't)?
                         </label>
                         <Textarea
@@ -1014,10 +1014,10 @@ export function InvestigationView() {
                       </div>
 
                       <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
-                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <p className="text-label">
                           Ethics gates — all four required
                         </p>
-                        <p className="mt-1 font-ui text-[11.5px] text-[var(--subtext-0)]">
+                        <p className="mt-1 text-meta text-[var(--subtext-0)]">
                           Confirm before any intelligence gathering begins.
                         </p>
                         <div className="mt-3 grid gap-2">
@@ -1045,7 +1045,7 @@ export function InvestigationView() {
                           ].map((item) => (
                             <label
                               key={item.key}
-                              className="flex cursor-pointer items-start gap-2.5 rounded border border-transparent px-2 py-1.5 font-ui text-[12.5px] text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]"
+                              className="flex cursor-pointer items-start gap-2.5 rounded border border-transparent px-2 py-1.5 text-meta text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]"
                             >
                               <input
                                 type="checkbox"
@@ -1066,7 +1066,7 @@ export function InvestigationView() {
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-1.5">
-                          <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <label className="text-label">
                             Starting points
                           </label>
                           <Textarea
@@ -1077,7 +1077,7 @@ export function InvestigationView() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <label className="text-label">
                             Working theories
                           </label>
                           <Textarea
@@ -1109,7 +1109,7 @@ export function InvestigationView() {
                   {/* Phase 2: Collect */}
                   {selectedPhase === 2 && (
                     <div className="space-y-5">
-                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[12.5px]">
+                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 text-ui">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="font-medium text-[var(--text)]">
                             Review progress: {reviewedSignalCount}/{COLLECT_MIN_SIGNALS} minimum
@@ -1120,17 +1120,17 @@ export function InvestigationView() {
                             <span className="font-mono text-[11px] text-[var(--warning)]">Gate open</span>
                           )}
                         </div>
-                        <p className="mt-1 text-[11px] text-[var(--overlay-1)]">
+                        <p className="mt-1 text-meta">
                           Attach at least {COLLECT_MIN_SIGNALS} source signals and mark each reviewed before collection runs.
                         </p>
                       </div>
 
                       <div className="space-y-2">
-                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <p className="text-label">
                           Attached signals ({investigationSignals?.length ?? 0})
                         </p>
                         {(investigationSignals ?? []).length === 0 ? (
-                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center text-meta">
                             No signals attached yet. Import from your saved signals below.
                           </div>
                         ) : (
@@ -1143,7 +1143,7 @@ export function InvestigationView() {
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
-                                    <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                    <p className="truncate text-ui font-medium">
                                       {sig.intel_signals?.title}
                                     </p>
                                     <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
@@ -1190,7 +1190,7 @@ export function InvestigationView() {
                       {parentProject ? (
                         <div className="space-y-2">
                           <div className="flex items-baseline justify-between gap-2">
-                            <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                            <p className="text-label text-[var(--accent)]">
                               From parent project · {parentProject.name} ({importableProjectSignals.length})
                             </p>
                             {importableProjectSignals.length > 0 ? (
@@ -1209,7 +1209,7 @@ export function InvestigationView() {
                             ) : null}
                           </div>
                           {importableProjectSignals.length === 0 ? (
-                            <div className="rounded-md border border-dashed border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-4 py-6 text-center font-ui text-[12px] text-[var(--subtext-0)]">
+                            <div className="rounded-md border border-dashed border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-4 py-6 text-center text-meta text-[var(--subtext-0)]">
                               {(parentProjectSignals?.length ?? 0) > 0
                                 ? "All project signals are already attached."
                                 : "No signals on the parent project yet. Attach some from Inbox or Search."}
@@ -1221,7 +1221,7 @@ export function InvestigationView() {
                                 className="flex items-start justify-between gap-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)]/30 p-3"
                               >
                                 <div className="min-w-0">
-                                  <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                  <p className="truncate text-ui font-medium">
                                     {signal.title}
                                   </p>
                                   <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
@@ -1242,11 +1242,11 @@ export function InvestigationView() {
                       ) : null}
 
                       <div className="space-y-2">
-                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <p className="text-label">
                           {parentProject ? "Import from other saved signals" : "Import from saved signals"} ({importableSavedSignals.length})
                         </p>
                         {importableSavedSignals.length === 0 ? (
-                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-6 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+                          <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-6 text-center text-meta">
                             Nothing available. Save signals from Inbox or Search first.
                           </div>
                         ) : (
@@ -1256,7 +1256,7 @@ export function InvestigationView() {
                               className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3"
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-ui text-[12.5px] font-medium text-[var(--text)]">
+                                <p className="truncate text-ui font-medium">
                                   {signal.title}
                                 </p>
                                 <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]">
@@ -1319,11 +1319,11 @@ export function InvestigationView() {
                       )}
 
                       <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
-                        <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <p className="text-label">
                           Current artifact
                         </p>
                         {isLoadingCurrentArtifact ? (
-                          <div className="mt-2 flex items-center gap-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                          <div className="mt-2 flex items-center gap-2 text-meta">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             Loading artifact…
                           </div>
@@ -1332,7 +1332,7 @@ export function InvestigationView() {
                             {currentArtifactContent}
                           </pre>
                         ) : (
-                          <p className="mt-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                          <p className="mt-2 text-meta">
                             Nothing saved yet. Run this phase to generate the artifact.
                           </p>
                         )}
@@ -1359,11 +1359,11 @@ export function InvestigationView() {
                   {selectedPhase === 6 && (
                     <div className="space-y-5">
                       <div className="space-y-1.5">
-                        <label className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <label className="text-label">
                           Report type
                         </label>
                         <select
-                          className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12.5px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                          className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 text-ui focus:border-[var(--accent)] focus:outline-none"
                           value={selectedReportType}
                           onChange={(e) =>
                             setSelectedReportType(e.target.value as typeof selectedReportType)
@@ -1399,7 +1399,7 @@ export function InvestigationView() {
                 <button
                   type="button"
                   onClick={() => setOutputOpen((o) => !o)}
-                  className="flex w-full items-center justify-between gap-3 px-5 py-2 font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+                  className="flex w-full items-center justify-between gap-3 px-5 py-2 text-label transition-colors hover:text-[var(--text)]"
                 >
                   <span className="flex items-center gap-2">
                     <span>Last run output</span>
@@ -1421,7 +1421,7 @@ export function InvestigationView() {
                         {phaseOutput}
                       </pre>
                     ) : (
-                      <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                      <p className="text-meta">
                         Run a phase to see the response here.
                       </p>
                     )}
@@ -1432,7 +1432,7 @@ export function InvestigationView() {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
               <p className="text-label">What the Investigate page is for</p>
-              <p className="max-w-[460px] font-ui text-[13px] leading-relaxed text-[var(--subtext-0)]">
+              <p className="max-w-[460px] text-ui text-[var(--subtext-0)]">
                 This is the analyst workbench. Each case walks through six phases — plan, collect, collate, timeline, hypothesise, report — with ethics gates between them. Pick a case from the left, or start a new one.
               </p>
               <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-2 gap-1.5">
@@ -1465,7 +1465,7 @@ function PhaseGateCard({
   gateText: string;
 }) {
   return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[12.5px]">
+    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 text-ui">
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-medium text-[var(--text)]">{title}</p>
         <span
@@ -1477,9 +1477,9 @@ function PhaseGateCard({
           {gateReady ? "Gate ready" : "Gate open"}
         </span>
       </div>
-      <p className="mt-1 text-[11px] text-[var(--overlay-1)]">{subtitle}</p>
+      <p className="mt-1 text-meta">{subtitle}</p>
       {!gateReady && (
-        <p className="mt-2 text-[11px] text-[var(--warning)]">{gateText}</p>
+        <p className="mt-2 text-meta text-[var(--warning)]">{gateText}</p>
       )}
     </div>
   );
@@ -1504,7 +1504,7 @@ function PhaseActionFoot({
     <div className="flex items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-4">
       <span
         className={cn(
-          "flex items-center gap-1.5 font-ui text-[11.5px]",
+          "flex items-center gap-1.5 text-meta",
           disabled ? "text-[var(--warning)]" : "text-[var(--subtext-0)]",
         )}
       >
