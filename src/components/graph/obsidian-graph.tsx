@@ -50,6 +50,7 @@ export interface ObsidianGraphRef {
   zoomToFit: (padding?: number) => void;
   centerAt: (nodeId: string, zoom?: number) => void;
   zoomBy: (factor: number) => void;
+  captureCanvas: () => string | null;
 }
 
 type GraphNode = NodeObject<InsightNode> &
@@ -291,6 +292,10 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
         const graph = fgRef.current;
         if (!graph) return;
         graph.zoom(clamp(graph.zoom() * factor, 0.25, 6), 220);
+      },
+      captureCanvas: () => {
+        const canvas = containerRef.current?.querySelector("canvas");
+        return canvas?.toDataURL("image/png") ?? null;
       },
     }),
     [nodeLookup],

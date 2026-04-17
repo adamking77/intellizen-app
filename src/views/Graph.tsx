@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChevronRight,
   Crosshair,
+  Download,
   Link2,
   MapPin,
   Maximize2,
@@ -63,16 +64,23 @@ import { useWindowSize } from "@/lib/use-window-size";
 import {
   createGraphEdge,
   createGraphNode,
+  createGraphExportVaultFile,
   deleteGraphEdges,
   deleteGraphNodes,
   listGraphEdges,
   listGraphNodes,
+  listInvestigations,
   listProjectSignals,
   listProjects,
   updateGraphEdge,
   updateGraphNode,
   updateGraphNodePosition,
 } from "@/lib/data";
+import {
+  ensureInvestigationDirectory,
+  ensureProjectDirectory,
+  writeVaultBinaryFile,
+} from "@/lib/vault";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
@@ -252,6 +260,13 @@ export function GraphView() {
   });
   const [railTab, setRailTab] = useState<"inspect" | "controls">("inspect");
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportFilename, setExportFilename] = useState("graph-export");
+  const [exportTarget, setExportTarget] = useState<"project" | "investigation">("project");
+  const [exportTargetId, setExportTargetId] = useState<string | number | null>(null);
+  const [exportSaving, setExportSaving] = useState(false);
+  const [exportDataUrl, setExportDataUrl] = useState<string | null>(null);
   const { isCramped } = useWindowSize();
 
   useEffect(() => {
@@ -295,10 +310,16 @@ export function GraphView() {
   const isApplyingHistoryRef = useRef(false);
   const insightGraphRef = useRef<ObsidianGraphRef>(null);
   const insightNodePositionSeedRef = useRef<Record<string, Point>>({});
+  const worldContainerRef = useRef<HTMLDivElement | null>(null);
 
   const { data: projects } = useQuery({
     queryKey: ["projects"],
     queryFn: listProjects,
+  });
+
+  const { data: investigations } = useQuery({
+    queryKey: ["investigations"],
+    queryFn: listInvestigations,
   });
 
   // Auto-select first project when switching to project mode
@@ -1579,6 +1600,109 @@ export function GraphView() {
     }
   }
 
+  async function handleClearGraph() {
+    if (!isConstructMode) return;
+    const allNodeIds = nodes.map((n) => n.node_id);
+    const allEdgeIds = edges.map((e) => e.edge_id);
+    if (allNodeIds.length === 0 && allEdgeIds.length === 0) {
+      setClearConfirmOpen(false);
+      return;
+    }
+    try {
+      setErrorMessage(null);
+      recordHistory();
+      if (allEdgeIds.length > 0) {
+        await deleteGraphEdges({ projectId: effectiveProjectId, edgeIds: allEdgeIds });
+      }
+      if (allNodeIds.length > 0) {
+        await deleteGraphNodes({ projectId: effectiveProjectId, nodeIds: allNodeIds });
+      }
+      await nodesQuery.refetch();
+      await edgesQuery.refetch();
+      clearSelection();
+      setConnectSourceId(null);
+      setClearConfirmOpen(false);
+      setStatusMessage(`Cleared ${allNodeIds.length} nodes and ${allEdgeIds.length} edges.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to clear graph.");
+    }
+  }
+
+  async function handleExportPng() {
+    let dataUrl: string | null = null;
+
+    if (isInsightMode) {
+      dataUrl = insightGraphRef.current?.captureCanvas() ?? null;
+    } else {
+      const worldEl = worldContainerRef.current;
+      if (worldEl) {
+        try {
+          const { toPng } = await import("html-to-image");
+          dataUrl = await toPng(worldEl, { backgroundColor: "#1e1e2e", pixelRatio: 2 });
+        } catch {
+          dataUrl = null;
+        }
+      }
+    }
+
+    if (!dataUrl) {
+      setErrorMessage("Failed to capture graph image.");
+      return;
+    }
+
+    const ts = new Date().toISOString().slice(0, 10);
+    setExportFilename(`graph-${ts}`);
+    setExportDataUrl(dataUrl);
+
+    if (graphMode === "project" && graphProjectId) {
+      setExportTarget("project");
+      setExportTargetId(graphProjectId);
+    } else {
+      setExportTarget("investigation");
+      setExportTargetId(investigations?.[0]?.case_id ?? null);
+    }
+
+    setExportModalOpen(true);
+  }
+
+  async function handleSaveGraphExport() {
+    if (!exportDataUrl || !exportTargetId) return;
+    try {
+      setExportSaving(true);
+      const base64 = exportDataUrl.split(",")[1];
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const filename = `${exportFilename.trim() || "graph-export"}.png`;
+      let filePath: string;
+
+      if (exportTarget === "project") {
+        const pid = Number(exportTargetId);
+        await ensureProjectDirectory(pid);
+        filePath = `projects/${pid}/${filename}`;
+        await writeVaultBinaryFile(filePath, bytes);
+        await createGraphExportVaultFile({ projectId: pid, filePath, fileName: filename });
+      } else {
+        const cid = String(exportTargetId);
+        await ensureInvestigationDirectory(cid);
+        filePath = `investigations/${cid}/${filename}`;
+        await writeVaultBinaryFile(filePath, bytes);
+        await createGraphExportVaultFile({ caseId: cid, filePath, fileName: filename });
+      }
+
+      setExportModalOpen(false);
+      setExportDataUrl(null);
+      setStatusMessage(`Saved: ${filename}`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save export.");
+    } finally {
+      setExportSaving(false);
+    }
+  }
+
   async function handleTidyLayout() {
     if (!ensureConstructMode("Layout editing")) return;
     if ((graphMode === "project" && !graphProjectId) || visualNodes.length === 0) return;
@@ -2054,6 +2178,23 @@ export function GraphView() {
                         }}
                       />
                     )}
+                    <div className="my-1 h-px bg-[var(--border)]" />
+                    <OverflowItem
+                      label="Export PNG…"
+                      disabled={visualNodes.length === 0}
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        void handleExportPng();
+                      }}
+                    />
+                    <OverflowItem
+                      label="Clear graph…"
+                      disabled={!isConstructMode || (nodes.length === 0 && edges.length === 0)}
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        setClearConfirmOpen(true);
+                      }}
+                    />
                   </div>
                 </>
               )}
@@ -2174,6 +2315,7 @@ export function GraphView() {
             onWheel={handleCanvasWheel}
           >
             <div
+              ref={worldContainerRef}
               className="absolute left-0 top-0"
               style={{
                 width: WORLD_WIDTH,
@@ -3308,6 +3450,144 @@ export function GraphView() {
           </>
         )}
       </aside>
+
+      {/* ============================================================
+          Clear graph confirm dialog
+          ============================================================ */}
+      {clearConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-[340px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-5 shadow-[var(--shadow-elevated)]">
+            <p className="text-heading mb-1">Clear entire graph?</p>
+            <p className="text-meta mb-5 text-[var(--subtext-0)]">
+              This will permanently delete all {nodes.length} nodes and {edges.length} edges. This
+              action can be undone with Undo.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setClearConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => void handleClearGraph()}>
+                <Trash2 className="mr-1.5 h-3 w-3" />
+                Clear graph
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          Export PNG modal
+          ============================================================ */}
+      {exportModalOpen && exportDataUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-[420px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-5 shadow-[var(--shadow-elevated)]">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-heading">Export graph as PNG</p>
+              <button
+                type="button"
+                onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Preview */}
+            <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--crust)]" style={{ height: 120 }}>
+              <img src={exportDataUrl} alt="Graph preview" className="h-full w-full object-contain" />
+            </div>
+
+            {/* Filename */}
+            <div className="mb-4 flex flex-col gap-1.5">
+              <span className="text-label">Filename</span>
+              <div className="flex items-center gap-1">
+                <input
+                  value={exportFilename}
+                  onChange={(e) => setExportFilename(e.target.value)}
+                  className="h-8 flex-1 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                />
+                <span className="text-meta text-[var(--overlay-1)]">.png</span>
+              </div>
+            </div>
+
+            {/* Save to */}
+            <div className="mb-4 flex flex-col gap-1.5">
+              <span className="text-label">Save to</span>
+              <div className="flex gap-3">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="exportTarget"
+                    value="project"
+                    checked={exportTarget === "project"}
+                    onChange={() => {
+                      setExportTarget("project");
+                      setExportTargetId(projects?.[0]?.id ?? null);
+                    }}
+                    className="accent-[var(--accent)]"
+                  />
+                  <span className="text-meta text-[var(--subtext-1)]">Project</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="exportTarget"
+                    value="investigation"
+                    checked={exportTarget === "investigation"}
+                    onChange={() => {
+                      setExportTarget("investigation");
+                      setExportTargetId(investigations?.[0]?.case_id ?? null);
+                    }}
+                    className="accent-[var(--accent)]"
+                  />
+                  <span className="text-meta text-[var(--subtext-1)]">Investigation</span>
+                </label>
+              </div>
+
+              {exportTarget === "project" ? (
+                <select
+                  value={String(exportTargetId ?? "")}
+                  onChange={(e) => setExportTargetId(Number(e.target.value))}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                >
+                  {(projects ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={String(exportTargetId ?? "")}
+                  onChange={(e) => setExportTargetId(e.target.value)}
+                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                >
+                  {(investigations ?? []).map((inv) => (
+                    <option key={inv.case_id} value={inv.case_id}>{inv.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
+                disabled={exportSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSaveGraphExport()}
+                disabled={exportSaving || !exportTargetId}
+              >
+                <Download className="mr-1.5 h-3 w-3" />
+                {exportSaving ? "Saving…" : "Save to vault"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

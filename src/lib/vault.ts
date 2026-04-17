@@ -1,5 +1,5 @@
 // Tauri fs plugin integration for vault operations
-import { readDir, readTextFile, exists, mkdir, remove, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, exists, mkdir, remove, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, homeDir, join } from "@tauri-apps/api/path";
 
 const VAULT_SEGMENTS = ["vault", "intelligence"] as const;
@@ -105,6 +105,24 @@ export async function vaultPathExists(subpath: string): Promise<boolean> {
 }
 
 /**
+ * Write binary data into a file within the vault. Creates parent directories as needed.
+ */
+export async function writeVaultBinaryFile(filepath: string, data: Uint8Array): Promise<void> {
+  try {
+    await ensureVaultDirectory();
+    const parentPath = await dirname(filepath);
+    if (parentPath && parentPath !== ".") {
+      await ensureVaultDirectory(parentPath);
+    }
+    const fullPath = await resolveVaultPath(filepath);
+    await writeFile(fullPath, data);
+  } catch (error) {
+    console.error("Failed to write vault binary file:", error);
+    throw error;
+  }
+}
+
+/**
  * Ensure investigation directory exists
  */
 export async function ensureInvestigationDirectory(caseId: string): Promise<void> {
@@ -113,6 +131,19 @@ export async function ensureInvestigationDirectory(caseId: string): Promise<void
     await ensureVaultDirectory(investigationSubpath);
   } catch (error) {
     console.error("Failed to create investigation directory:", error);
+    throw error;
+  }
+}
+
+/**
+ * Ensure project directory exists under vault/intelligence/projects/<id>
+ */
+export async function ensureProjectDirectory(projectId: number): Promise<void> {
+  try {
+    const projectSubpath = await join("projects", String(projectId));
+    await ensureVaultDirectory(projectSubpath);
+  } catch (error) {
+    console.error("Failed to create project directory:", error);
     throw error;
   }
 }

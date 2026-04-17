@@ -861,3 +861,29 @@ export async function createVaultFile(input: {
   if (error) throw error;
   return data as VaultFile;
 }
+
+export async function createGraphExportVaultFile(input: {
+  caseId?: string | null;
+  projectId?: number | null;
+  filePath: string;
+  fileName: string;
+}) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .insert([
+      {
+        case_id: input.caseId ?? null,
+        project_id: input.projectId ?? null,
+        file_type: "graph_export",
+        file_path: input.filePath,
+        file_name: input.fileName,
+        phase: null,
+        report_type: null,
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as VaultFile;
+}
