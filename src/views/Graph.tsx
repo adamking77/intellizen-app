@@ -454,13 +454,13 @@ export function GraphView() {
 
   // Auto-fit viewport to nodes on initial Construct mode load (once per graph)
   useEffect(() => {
-    if (!isConstructMode) return;
+    if (interactionMode !== "construct") return;
     if (!nodesQuery.isSuccess || visualNodes.length === 0) return;
     const graphKey = effectiveProjectId == null ? "standalone" : String(effectiveProjectId);
     if (hasAutoFitRef.current === graphKey) return;
     hasAutoFitRef.current = graphKey;
     setViewport(computeFitViewToNodes(visualNodes, viewportRef.current));
-  }, [isConstructMode, nodesQuery.isSuccess, visualNodes, effectiveProjectId]);
+  }, [interactionMode, nodesQuery.isSuccess, visualNodes, effectiveProjectId]);
 
   const nodeLookup = useMemo(
     () =>
