@@ -25,6 +25,7 @@ import { useAppStore } from "@/store";
 import {
   addSignalToInvestigation,
   createVaultFile,
+  deleteInvestigation,
   getInvestigation,
   listProjects,
   listProjectSignals,
@@ -234,6 +235,7 @@ export function InvestigationView() {
   const setPendingProjectSelectionId = useAppStore((state) => state.setPendingProjectSelectionId);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete">("all");
   const [isRunningPhase, setIsRunningPhase] = useState(false);
   const [phaseOutput, setPhaseOutput] = useState<string | null>(null);
@@ -398,6 +400,32 @@ export function InvestigationView() {
       await queryClient.invalidateQueries({
         queryKey: ["investigation-signals", selectedInvestigation?.id],
       });
+    },
+  });
+
+  const deleteInvestigationMutation = useMutation({
+    mutationFn: async (input: { caseId: string; name: string }) => {
+      const result = await deleteInvestigation(input.caseId);
+      return { ...input, ...result };
+    },
+    onSuccess: async ({ caseId, vaultCleanupError }) => {
+      if (selectedCaseId === caseId) {
+        setSelectedCaseId(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["investigations"] });
+      await queryClient.invalidateQueries({ queryKey: ["investigation"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["investigation-signals"], exact: false });
+      await queryClient.invalidateQueries({ queryKey: ["reports"], exact: false });
+      if (vaultCleanupError) {
+        toast.success("Investigation deleted", {
+          description: `Case removed from the database. Vault cleanup failed: ${vaultCleanupError}`,
+        });
+      } else {
+        toast.success("Investigation deleted");
+      }
+    },
+    onError: (error) => {
+      toastError("Couldn't delete investigation", error);
     },
   });
 
@@ -895,8 +923,21 @@ export function InvestigationView() {
                     </button>
                   ) : null}
                 </div>
-                <div className="shrink-0 text-meta text-[var(--subtext-0)]">
-                  Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 6
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="text-meta text-[var(--subtext-0)]">
+                    Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 6
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={deleteInvestigationMutation.isPending}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="gap-1.5 text-[var(--overlay-1)] hover:text-[var(--danger)]"
+                    title="Delete investigation"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    {deleteInvestigationMutation.isPending ? "Deleting…" : "Delete"}
+                  </Button>
                 </div>
               </div>
 
@@ -1449,6 +1490,92 @@ export function InvestigationView() {
         onClose={() => setCreateOpen(false)}
         onCreated={(caseId) => setSelectedCaseId(caseId)}
       />
+
+      <DeleteInvestigationModal
+        open={deleteConfirmOpen && !!selectedInvestigation}
+        investigationName={selectedInvestigation?.name ?? ""}
+        caseId={selectedInvestigation?.case_id ?? ""}
+        isPending={deleteInvestigationMutation.isPending}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          if (!selectedInvestigation) return;
+          deleteInvestigationMutation.mutate({
+            caseId: selectedInvestigation.case_id,
+            name: selectedInvestigation.name,
+          });
+          setDeleteConfirmOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function DeleteInvestigationModal({
+  open,
+  investigationName,
+  caseId,
+  isPending,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  investigationName: string;
+  caseId: string;
+  isPending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !isPending) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delete investigation"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+      >
+        <div className="border-b border-[var(--border)] px-5 py-4">
+          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">
+            Delete investigation
+          </p>
+          <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
+            {investigationName}
+          </h3>
+          <p className="mt-2 font-mono text-[11px] text-[var(--overlay-1)]">{caseId}</p>
+        </div>
+
+        <div className="grid gap-3 px-5 py-4">
+          <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+            This will remove the investigation record, attached phase records, and attempt to
+            delete its vault folder.
+          </p>
+          <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+            Project signals and source signals are not deleted.
+          </p>
+
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onConfirm}
+              disabled={isPending}
+              className="gap-1.5"
+            >
+              <Trash2 className="h-3 w-3" />
+              {isPending ? "Deleting…" : "Delete investigation"}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1518,4 +1645,3 @@ function PhaseActionFoot({
     </div>
   );
 }
-

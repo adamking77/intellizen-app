@@ -1,5 +1,5 @@
 // Tauri fs plugin integration for vault operations
-import { readDir, readTextFile, exists, mkdir, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, exists, mkdir, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { dirname, homeDir, join } from "@tauri-apps/api/path";
 
 const VAULT_SEGMENTS = ["vault", "intelligence"] as const;
@@ -113,6 +113,24 @@ export async function ensureInvestigationDirectory(caseId: string): Promise<void
     await ensureVaultDirectory(investigationSubpath);
   } catch (error) {
     console.error("Failed to create investigation directory:", error);
+    throw error;
+  }
+}
+
+/**
+ * Remove an investigation directory from the vault if it exists.
+ */
+export async function removeInvestigationDirectory(caseId: string): Promise<boolean> {
+  try {
+    const investigationSubpath = await join("investigations", caseId);
+    const fullPath = await resolveVaultPath(investigationSubpath);
+    if (!(await exists(fullPath))) {
+      return false;
+    }
+    await remove(fullPath, { recursive: true });
+    return true;
+  } catch (error) {
+    console.error("Failed to remove investigation directory:", error);
     throw error;
   }
 }

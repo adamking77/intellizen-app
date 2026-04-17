@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createInvestigation, listProjects } from "@/lib/data";
+import { toastError } from "@/lib/toast";
 
 type InvestigationCreateModalProps = {
   open: boolean;
@@ -45,6 +46,9 @@ export function InvestigationCreateModal({
       setProjectId(null);
       onCreated?.(investigation.case_id);
       onClose();
+    },
+    onError: (error) => {
+      toastError("Couldn't create investigation", error);
     },
   });
 

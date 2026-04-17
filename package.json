@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "icon": "tauri icon app-icon.svg",
     "analyze:bundle": "ANALYZE_BUNDLE=1 pnpm run build",
     "check": "tsc --noEmit",
     "lint": "pnpm run check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",

@@ -1,4 +1,5 @@
 import {
+  runExaSearch,
   signalDraftFromDeepResearch,
   signalDraftFromSearchResult,
 } from "@/lib/exa";
@@ -19,6 +20,7 @@ import type {
   VaultFile,
 } from "@/lib/types";
 import { safeHostname } from "@/lib/utils";
+import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import { supabase } from "@/lib/supabase";
 
@@ -269,32 +271,30 @@ async function insertSignal(input: SignalDraft) {
 }
 
 export async function runMonitorNow(monitor: Monitor) {
-  const { exa } = await import("@/lib/exa");
-
-  const response = await exa.searchAndContents(monitor.query, {
-    type: "auto",
-    numResults: 10,
-    highlights: {
-      numSentences: 3,
-      highlightsPerUrl: 1,
-    },
+  const response = await runExaSearch({
+    mode: "web",
+    query: monitor.query,
   });
+
+  if (!Array.isArray(response)) {
+    throw new Error("Monitor search returned Deep Research output unexpectedly.");
+  }
 
   const seenInBatch = new Set<string>();
   const drafts: SignalDraft[] = [];
 
-  for (const result of response.results) {
+  for (const result of response) {
     if (seenInBatch.has(result.url)) continue;
     seenInBatch.add(result.url);
     drafts.push({
-      title: result.title ?? safeHostname(result.url),
+      title: result.title,
       url: result.url,
-      source: safeHostname(result.url),
-      published_at: result.publishedDate ?? null,
-      snippet: result.highlights?.[0] ?? null,
+      source: result.source ?? safeHostname(result.url),
+      published_at: result.published_at,
+      snippet: result.snippet,
       watch_domain: monitor.watch_domain,
-      exa_score: result.score ?? null,
-      raw_payload: result,
+      exa_score: result.exa_score,
+      raw_payload: result.raw_payload,
     });
   }
 
@@ -598,6 +598,23 @@ export async function createInvestigation(input: {
   }
 
   throw new Error("Failed to create investigation with a unique case ID.");
+}
+
+export async function deleteInvestigation(caseId: string) {
+  const { error } = await supabase
+    .from("investigations")
+    .delete()
+    .eq("case_id", caseId);
+
+  if (error) throw error;
+
+  try {
+    await removeInvestigationDirectory(caseId);
+    return { vaultCleanupError: null as string | null };
+  } catch (vaultError) {
+    const message = vaultError instanceof Error ? vaultError.message : String(vaultError);
+    return { vaultCleanupError: message };
+  }
 }
 
 function generateCaseId() {
