@@ -186,7 +186,7 @@ export async function removeSignalFromProject(projectSignalId: number) {
 export async function dismissSignal(signalId: number) {
   const { error } = await supabase
     .from("intel_signals")
-    .update({ status: "dismissed" })
+    .delete()
     .eq("id", signalId);
 
   if (error) throw error;
