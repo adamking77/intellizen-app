@@ -192,14 +192,14 @@ export function InboxView() {
     },
   });
 
-  // Domains present in signals — drives the filter chip row
+  // Domains from monitors — drives the filter chip row (not from signal history)
   const allDomains = useMemo(() => {
     const set = new Set<string>();
-    for (const signal of signals ?? []) {
-      set.add(signal.watch_domain ?? "Manual");
+    for (const m of monitors ?? []) {
+      if (m.watch_domain) set.add(m.watch_domain);
     }
     return Array.from(set).sort();
-  }, [signals]);
+  }, [monitors]);
 
   const { grouped, visible, counts } = useMemo(() => {
     const all = signals ?? [];
@@ -425,6 +425,18 @@ export function InboxView() {
                 +{refreshMutation.data} new
               </span>
             ) : null}
+            {visible.length > 0 ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => bulkArchiveMutation.mutate(visible.map((s) => s.id))}
+                disabled={bulkArchiveMutation.isPending}
+                className="gap-1.5 text-[var(--subtext-0)]"
+              >
+                <Archive className="h-3 w-3" />
+                Archive all
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="secondary"
@@ -593,7 +605,9 @@ export function InboxView() {
                 <section key={domain}>
                   {/* Domain group header — flat */}
                   <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4 py-2">
-                    <span className="text-label">{domain}</span>
+                    <span className="text-label" style={{ color: domainColor(domain) }}>
+                      {domain}
+                    </span>
                     <span className="font-mono text-[10px] text-[var(--overlay-1)]">
                       {items.length}
                     </span>
