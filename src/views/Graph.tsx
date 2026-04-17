@@ -1323,6 +1323,8 @@ export function GraphView() {
       if (isTextInputTarget) return;
 
       if (event.key === "Escape") {
+        if (clearConfirmOpen) { setClearConfirmOpen(false); return; }
+        if (exportModalOpen) { setExportModalOpen(false); setExportDataUrl(null); return; }
         setPlaceMode(false);
         setConnectSourceId(null);
         edgeDragStateRef.current = null;
@@ -3455,21 +3457,54 @@ export function GraphView() {
           Clear graph confirm dialog
           ============================================================ */}
       {clearConfirmOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-[340px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-5 shadow-[var(--shadow-elevated)]">
-            <p className="text-heading mb-1">Clear entire graph?</p>
-            <p className="text-meta mb-5 text-[var(--subtext-0)]">
-              This will permanently delete all {nodes.length} nodes and {edges.length} edges. This
-              action can be undone with Undo.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setClearConfirmOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => void handleClearGraph()}>
-                <Trash2 className="mr-1.5 h-3 w-3" />
-                Clear graph
-              </Button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setClearConfirmOpen(false); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Clear graph"
+            className="flex w-full max-w-[380px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+              <div className="min-w-0">
+                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+                  Graph
+                </p>
+                <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
+                  Clear entire graph?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClearConfirmOpen(false)}
+                aria-label="Close"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+                Removes all{" "}
+                <span className="text-[var(--text)]">{nodes.length} nodes</span> and{" "}
+                <span className="text-[var(--text)]">{edges.length} edges</span> from the canvas.
+                You can undo immediately after.
+              </p>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(false)}
+                  className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+                >
+                  Cancel
+                </button>
+                <Button variant="destructive" size="sm" onClick={() => void handleClearGraph()}>
+                  <Trash2 className="mr-1.5 h-3 w-3" />
+                  Clear graph
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -3479,111 +3514,140 @@ export function GraphView() {
           Export PNG modal
           ============================================================ */}
       {exportModalOpen && exportDataUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-[420px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-5 shadow-[var(--shadow-elevated)]">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-heading">Export graph as PNG</p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setExportModalOpen(false);
+              setExportDataUrl(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Export graph as PNG"
+            className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+              <div className="min-w-0">
+                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+                  Graph
+                </p>
+                <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
+                  Export as PNG
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                aria-label="Close"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Preview */}
-            <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--crust)]" style={{ height: 120 }}>
-              <img src={exportDataUrl} alt="Graph preview" className="h-full w-full object-contain" />
-            </div>
-
-            {/* Filename */}
-            <div className="mb-4 flex flex-col gap-1.5">
-              <span className="text-label">Filename</span>
-              <div className="flex items-center gap-1">
-                <input
-                  value={exportFilename}
-                  onChange={(e) => setExportFilename(e.target.value)}
-                  className="h-8 flex-1 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                />
-                <span className="text-meta text-[var(--overlay-1)]">.png</span>
-              </div>
-            </div>
-
-            {/* Save to */}
-            <div className="mb-4 flex flex-col gap-1.5">
-              <span className="text-label">Save to</span>
-              <div className="flex gap-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="exportTarget"
-                    value="project"
-                    checked={exportTarget === "project"}
-                    onChange={() => {
-                      setExportTarget("project");
-                      setExportTargetId(projects?.[0]?.id ?? null);
-                    }}
-                    className="accent-[var(--accent)]"
-                  />
-                  <span className="text-meta text-[var(--subtext-1)]">Project</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="exportTarget"
-                    value="investigation"
-                    checked={exportTarget === "investigation"}
-                    onChange={() => {
-                      setExportTarget("investigation");
-                      setExportTargetId(investigations?.[0]?.case_id ?? null);
-                    }}
-                    className="accent-[var(--accent)]"
-                  />
-                  <span className="text-meta text-[var(--subtext-1)]">Investigation</span>
-                </label>
+            {/* Body */}
+            <div className="grid gap-4 px-5 py-4">
+              {/* Preview */}
+              <div
+                className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--crust)]"
+                style={{ height: 110 }}
+              >
+                <img src={exportDataUrl} alt="" className="h-full w-full object-contain" />
               </div>
 
-              {exportTarget === "project" ? (
-                <select
-                  value={String(exportTargetId ?? "")}
-                  onChange={(e) => setExportTargetId(Number(e.target.value))}
-                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                >
-                  {(projects ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <select
-                  value={String(exportTargetId ?? "")}
-                  onChange={(e) => setExportTargetId(e.target.value)}
-                  className="h-8 rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                >
-                  {(investigations ?? []).map((inv) => (
-                    <option key={inv.case_id} value={inv.case_id}>{inv.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+              {/* Filename */}
+              <label className="grid gap-1.5">
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Filename
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    value={exportFilename}
+                    onChange={(e) => setExportFilename(e.target.value)}
+                    autoFocus
+                    className="h-9 flex-1 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  <span className="font-ui text-[12px] text-[var(--overlay-1)]">.png</span>
+                </div>
+              </label>
 
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
-                disabled={exportSaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSaveGraphExport()}
-                disabled={exportSaving || !exportTargetId}
-              >
-                <Download className="mr-1.5 h-3 w-3" />
-                {exportSaving ? "Saving…" : "Save to vault"}
-              </Button>
+              {/* Target */}
+              <div className="grid gap-1.5">
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Save to
+                </span>
+                <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
+                  {(["project", "investigation"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setExportTarget(t);
+                        setExportTargetId(
+                          t === "project"
+                            ? (projects?.[0]?.id ?? null)
+                            : (investigations?.[0]?.case_id ?? null),
+                        );
+                      }}
+                      className={cn(
+                        "flex-1 rounded px-3 py-1.5 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
+                        exportTarget === t
+                          ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
+                          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
+                      )}
+                    >
+                      {t === "project" ? "Project" : "Investigation"}
+                    </button>
+                  ))}
+                </div>
+                {exportTarget === "project" ? (
+                  <select
+                    value={String(exportTargetId ?? "")}
+                    onChange={(e) => setExportTargetId(Number(e.target.value))}
+                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  >
+                    {(projects ?? []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={String(exportTargetId ?? "")}
+                    onChange={(e) => setExportTargetId(e.target.value)}
+                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                  >
+                    {(investigations ?? []).map((inv) => (
+                      <option key={inv.case_id} value={inv.case_id}>
+                        {inv.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
+                  disabled={exportSaving}
+                  className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={() => void handleSaveGraphExport()}
+                  disabled={exportSaving || !exportTargetId}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  {exportSaving ? "Saving…" : "Save to vault"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
