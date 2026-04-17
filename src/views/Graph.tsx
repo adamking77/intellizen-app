@@ -81,7 +81,8 @@ import {
   ensureProjectDirectory,
   writeVaultBinaryFile,
 } from "@/lib/vault";
-import { buildGraphExtractionPrompt, spawnClaude } from "@/lib/shell";
+import { buildGraphExtractionPrompt } from "@/lib/shell";
+import { anthropic } from "@/lib/anthropic";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
@@ -1831,17 +1832,20 @@ export function GraphView() {
         }))
         .filter((s) => s.title);
 
-      const result = await spawnClaude({
-        prompt: buildGraphExtractionPrompt(signalInputs),
+      const message = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: buildGraphExtractionPrompt(signalInputs) }],
       });
 
-      if (!result.success || !result.output) {
-        setErrorMessage(result.error ?? "Claude extraction failed.");
+      const textBlock = message.content.find((b) => b.type === "text");
+      if (!textBlock || textBlock.type !== "text") {
+        setErrorMessage("Claude extraction returned no text.");
         return;
       }
 
       // Strip markdown fences if Claude wrapped the JSON
-      const raw = result.output.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
+      const raw = textBlock.text.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
 
       let parsed: {
         entities: Array<{ label: string; type: GraphEntityType }>;
@@ -1870,18 +1874,18 @@ export function GraphView() {
       );
       const positions = calculateAutoLayoutPositions(newEntities.length, visualNodes.length);
 
-      for (let i = 0; i < newEntities.length; i++) {
-        const entity = newEntities[i];
+      const nodeCreations = newEntities.map((entity, i) => {
         const nodeId = crypto.randomUUID();
-        await createGraphNode({
+        labelToNodeId.set(entity.label.toLowerCase(), nodeId);
+        return createGraphNode({
           projectId: graphProjectId,
           nodeId,
           label: entity.label,
           entityType: entity.type,
           position: positions[i],
         });
-        labelToNodeId.set(entity.label.toLowerCase(), nodeId);
-      }
+      });
+      await Promise.all(nodeCreations);
 
       // Create edges — only between entities whose labels Claude matched
       const allEdges = await listGraphEdges(graphProjectId);
@@ -1889,7 +1893,7 @@ export function GraphView() {
         allEdges.map((e) => canonicalEdgePair(e.source_node_id, e.target_node_id)),
       );
 
-      let edgesCreated = 0;
+      const edgeCreations: Promise<unknown>[] = [];
       for (const rel of parsed.relationships ?? []) {
         const sourceId = labelToNodeId.get(rel.source.toLowerCase());
         const targetId = labelToNodeId.get(rel.target.toLowerCase());
@@ -1897,17 +1901,20 @@ export function GraphView() {
 
         const pair = canonicalEdgePair(sourceId, targetId);
         if (seenPairs.has(pair)) continue;
-
-        await createGraphEdge({
-          projectId: graphProjectId,
-          edgeId: crypto.randomUUID(),
-          sourceNodeId: sourceId,
-          targetNodeId: targetId,
-          label: rel.relation,
-        });
         seenPairs.add(pair);
-        edgesCreated++;
+
+        edgeCreations.push(
+          createGraphEdge({
+            projectId: graphProjectId,
+            edgeId: crypto.randomUUID(),
+            sourceNodeId: sourceId,
+            targetNodeId: targetId,
+            label: rel.relation,
+          }),
+        );
       }
+      await Promise.all(edgeCreations);
+      const edgesCreated = edgeCreations.length;
 
       await nodesQuery.refetch();
       await edgesQuery.refetch();
