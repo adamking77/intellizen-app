@@ -1,5 +1,6 @@
 // Tauri shell plugin integration for spawning claude -p
 import { Command } from "@tauri-apps/plugin-shell";
+import { homeDir } from "@tauri-apps/api/path";
 import type { InvestigationUseCase, ReportType } from "@/lib/types";
 
 export interface ClaudeInvocation {
@@ -15,6 +16,13 @@ export interface ClaudeResult {
   exitCode?: number | null;
 }
 
+const CLAUDE_COMMAND_CANDIDATES = [
+  "claude",
+  "claude-home-local",
+  "claude-homebrew",
+  "claude-usr-local",
+] as const;
+
 const DEFAULT_TOOLS = [
   "WebSearch",
   "WebFetch",
@@ -28,38 +36,88 @@ const DEFAULT_TOOLS = [
   "mcp__exa__deep_researcher_check",
 ];
 
-export async function spawnClaude(invocation: ClaudeInvocation): Promise<ClaudeResult> {
-  try {
-    const allowedTools = invocation.allowedTools ?? DEFAULT_TOOLS;
+let claudeEnvPromise: Promise<Record<string, string>> | null = null;
 
-    const cmd = Command.create("claude", [
-      "-p",
-      invocation.prompt,
-      "--allowedTools",
-      allowedTools.join(","),
-    ]);
+async function getClaudeEnv(): Promise<Record<string, string>> {
+  if (!claudeEnvPromise) {
+    claudeEnvPromise = (async () => {
+      const home = await homeDir();
+      const normalizedHome = home.replace(/\/$/, "");
+      const user = normalizedHome.split("/").filter(Boolean).pop() || "user";
 
-    const output = await cmd.execute();
-
-    if (output.code !== 0) {
       return {
-        success: false,
-        error: output.stderr || `Process exited with code ${output.code}`,
-        exitCode: output.code,
+        HOME: normalizedHome,
+        USER: user,
+        LOGNAME: user,
+        SHELL: "/bin/zsh",
+        PATH: [
+          `${normalizedHome}/.local/bin`,
+          `${normalizedHome}/.npm-global/bin`,
+          `${normalizedHome}/.cargo/bin`,
+          "/opt/homebrew/bin",
+          "/opt/homebrew/sbin",
+          "/usr/local/bin",
+          "/usr/bin",
+          "/bin",
+          "/usr/sbin",
+          "/sbin",
+        ].join(":"),
+        XDG_CONFIG_HOME: `${normalizedHome}/.config`,
+        XDG_DATA_HOME: `${normalizedHome}/.local/share`,
+        XDG_STATE_HOME: `${normalizedHome}/.local/state`,
       };
-    }
-
-    return {
-      success: true,
-      output: output.stdout,
-      exitCode: output.code ?? undefined,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to spawn Claude CLI",
-    };
+    })();
   }
+
+  return claudeEnvPromise;
+}
+
+export async function spawnClaude(invocation: ClaudeInvocation): Promise<ClaudeResult> {
+  const allowedTools = invocation.allowedTools ?? DEFAULT_TOOLS;
+  const env = await getClaudeEnv();
+  const args = [
+    "-p",
+    invocation.prompt,
+    "--allowedTools",
+    allowedTools.join(","),
+  ];
+
+  let lastError = "Failed to spawn Claude CLI";
+  const aliasErrors: string[] = [];
+
+  for (const commandName of CLAUDE_COMMAND_CANDIDATES) {
+    try {
+      const output = await Command.create(commandName, args, { env }).execute();
+
+      if (output.code !== 0) {
+        return {
+          success: false,
+          error:
+            output.stderr ||
+            output.stdout ||
+            `Process exited with code ${output.code}`,
+          exitCode: output.code,
+        };
+      }
+
+      return {
+        success: true,
+        output: output.stdout,
+        exitCode: output.code ?? undefined,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Failed to spawn Claude CLI";
+      aliasErrors.push(`${commandName}: ${lastError}`);
+    }
+  }
+
+  return {
+    success: false,
+    error:
+      aliasErrors.length > 0
+        ? aliasErrors.join(" | ")
+        : `${lastError}. Checked command aliases: ${CLAUDE_COMMAND_CANDIDATES.join(", ")}.`,
+  };
 }
 
 function formatSignals(signals: { title: string; url: string; source: string | null; published_at: string | null; snippet: string | null }[]): string {
@@ -356,10 +414,19 @@ LANGUAGE STANDARDS:
 }
 
 export function buildGraphExtractionPrompt(
-  signals: { title: string; snippet: string | null }[],
+  signals: { title: string; snippet: string | null; content?: string | null }[],
 ): string {
   const signalText = signals
-    .map((s, i) => `[${i + 1}] ${s.title}${s.snippet ? `\n    ${s.snippet}` : ""}`)
+    .map((s, i) => {
+      const parts = [`[${i + 1}] ${s.title}`];
+      if (s.snippet) {
+        parts.push(`SUMMARY: ${s.snippet}`);
+      }
+      if (s.content) {
+        parts.push(`CONTENT:\n${s.content}`);
+      }
+      return parts.join("\n");
+    })
     .join("\n\n");
 
   return `You are an intelligence analyst. Extract entities and relationships from these signals.
@@ -370,6 +437,7 @@ ${signalText}
 RULES:
 - Only include relationships EXPLICITLY stated in the signal text (e.g. "X founded Y", "X was arrested in Y", "X controls Z")
 - Do NOT connect entities merely because they appear in the same article
+- Prefer the CONTENT block over headlines when they conflict; headlines may be compressed or ambiguous
 - Relationship labels must be short verb phrases: "controls", "founded", "arrested in", "linked to", "operates in", "leads", "targets"
 - Maximum 20 entities total, 20 relationships total
 - Entity types: person, organisation, location, event

@@ -31,7 +31,25 @@
         {
           "name": "claude",
           "cmd": "claude",
-          "args": ["-p", { "validator": ".*" }, "--allowedTools", { "validator": ".*" }],
+          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
+          "sidecar": false
+        },
+        {
+          "name": "claude-home-local",
+          "cmd": "$HOME/.local/bin/claude",
+          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
+          "sidecar": false
+        },
+        {
+          "name": "claude-homebrew",
+          "cmd": "/opt/homebrew/bin/claude",
+          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
+          "sidecar": false
+        },
+        {
+          "name": "claude-usr-local",
+          "cmd": "/usr/local/bin/claude",
+          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
           "sidecar": false
         }
       ]

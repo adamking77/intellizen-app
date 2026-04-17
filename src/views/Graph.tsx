@@ -205,6 +205,37 @@ type InsightLink = {
   label: string | null;
 };
 
+function normalizeGraphSignalText(value: string, maxLength: number): string | null {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
+}
+
+function extractGraphSignalContent(rawPayload: unknown): string | null {
+  if (!rawPayload || typeof rawPayload !== "object") return null;
+
+  const payload = rawPayload as {
+    content?: unknown;
+    text?: unknown;
+    highlights?: unknown;
+  };
+
+  if (typeof payload.content === "string") {
+    return normalizeGraphSignalText(payload.content, 2400);
+  }
+
+  if (typeof payload.text === "string") {
+    return normalizeGraphSignalText(payload.text, 2400);
+  }
+
+  if (Array.isArray(payload.highlights)) {
+    const joined = payload.highlights.filter((item): item is string => typeof item === "string").join(" ");
+    return normalizeGraphSignalText(joined, 1200);
+  }
+
+  return null;
+}
+
 export function GraphView() {
   const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
@@ -1774,6 +1805,7 @@ export function GraphView() {
         .map((ps) => ({
           title: ps.intel_signals?.title ?? "",
           snippet: ps.intel_signals?.snippet ?? null,
+          content: extractGraphSignalContent(ps.intel_signals?.raw_payload),
         }))
         .filter((s) => s.title);
 
