@@ -327,6 +327,7 @@ export function GraphView() {
   const dragPositionsRef = useRef<Record<string, Point>>({});
   const viewportStateRef = useRef<ViewportState>(DEFAULT_VIEW);
   const edgeDragStateRef = useRef<EdgeDragState>(null);
+  const hasAutoFitRef = useRef<string | null>(null);
   const visualNodesRef = useRef<
     Array<{ node_id: string; label: string; entity_type: GraphEntityType; position: Point }>
   >([]);
@@ -450,6 +451,16 @@ export function GraphView() {
     graphProjectIdRef.current = graphProjectId;
     effectiveProjectIdRef.current = effectiveProjectId;
   }, [visualNodes, edges, connectLabel, graphMode, graphProjectId, effectiveProjectId]);
+
+  // Auto-fit viewport to nodes on initial Construct mode load (once per graph)
+  useEffect(() => {
+    if (!isConstructMode) return;
+    if (!nodesQuery.isSuccess || visualNodes.length === 0) return;
+    const graphKey = effectiveProjectId == null ? "standalone" : String(effectiveProjectId);
+    if (hasAutoFitRef.current === graphKey) return;
+    hasAutoFitRef.current = graphKey;
+    setViewport(computeFitViewToNodes(visualNodes, viewportRef.current));
+  }, [isConstructMode, nodesQuery.isSuccess, visualNodes, effectiveProjectId]);
 
   const nodeLookup = useMemo(
     () =>
@@ -2026,6 +2037,7 @@ export function GraphView() {
                 clearPathAnalysis();
                 handleClearEgoNetwork();
                 setConnectSourceId(null);
+                hasAutoFitRef.current = null;
               }}
               className="h-7 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
             >
