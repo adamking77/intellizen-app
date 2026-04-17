@@ -777,6 +777,17 @@ export function GraphView() {
     return neighbors;
   }, [activeSelectedNodeIds, edges, focusMode]);
 
+  // Construct mode: selected node + its direct neighbors, always — no focusMode guard
+  const constructFocusIds = useMemo(() => {
+    if (activeSelectedNodeIds.length === 0) return EMPTY_STRING_SET;
+    const ids = new Set<string>(activeSelectedNodeIds);
+    for (const edge of edges) {
+      if (ids.has(edge.source_node_id)) ids.add(edge.target_node_id);
+      if (ids.has(edge.target_node_id)) ids.add(edge.source_node_id);
+    }
+    return ids;
+  }, [activeSelectedNodeIds, edges]);
+
   const selectedNodeRelations = useMemo(() => {
     if (!selectedNodeId) return [];
 
@@ -2491,7 +2502,7 @@ export function GraphView() {
                   node.node_id === hoveredConnectTargetNodeId;
                 const linkedToSelectedNode =
                   activeSelectedNodeIds.length === 0 ||
-                  selectedNodeNeighborIds.has(node.node_id);
+                  constructFocusIds.has(node.node_id);
                 const nodeOpacity = linkedToSelectedNode ? 1 : 0.3;
                 const showConnectorHandles =
                   isConstructMode &&
