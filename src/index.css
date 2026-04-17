@@ -79,14 +79,14 @@
   --success: #a6e3a1;
   --warning: #f9e2af;
   --caution: #fab387;
-  --danger: #f38ba8;
+  --danger: #f03f3f;
   --info: #74c7ec;
 
   /* Graph entity palette */
-  --entity-person: #94e2d5;
-  --entity-org: #74c7ec;
-  --entity-location: #fab387;
-  --entity-event: #f38ba8;
+  --entity-person: #2ecdb8;
+  --entity-org: #30b8e8;
+  --entity-location: #ff8a50;
+  --entity-event: #f0527a;
   --entity-topic: #cba6f7;
   --entity-signal: #f9e2af;
   --entity-investigation: #b4befe;

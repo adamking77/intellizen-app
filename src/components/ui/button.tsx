@@ -24,7 +24,7 @@ const buttonVariants = cva(
           "bg-transparent text-[var(--subtext-0)] border border-transparent " +
           "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
         destructive:
-          "bg-[var(--danger)] text-[var(--crust)] hover:bg-[#f5a1b6]",
+          "bg-[var(--danger)] text-white hover:bg-[#f56060]",
         glow:
           "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
           "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",

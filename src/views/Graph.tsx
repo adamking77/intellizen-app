@@ -101,40 +101,40 @@ const ENTITY_STYLES: Record<
   }
 > = {
   person: {
-    chip: "rgba(148, 226, 213, 0.16)",
+    chip: "rgba(46, 205, 184, 0.15)",
     fill: "var(--base)",
-    border: "rgba(148, 226, 213, 0.35)",
+    border: "#2ecdb8",
     text: "var(--text)",
-    accent: "#94e2d5",
+    accent: "#2ecdb8",
   },
   organisation: {
-    chip: "rgba(116, 199, 236, 0.16)",
+    chip: "rgba(48, 184, 232, 0.15)",
     fill: "var(--base)",
-    border: "rgba(116, 199, 236, 0.35)",
+    border: "#30b8e8",
     text: "var(--text)",
-    accent: "#74c7ec",
+    accent: "#30b8e8",
   },
   location: {
-    chip: "rgba(250, 179, 135, 0.16)",
+    chip: "rgba(255, 138, 80, 0.15)",
     fill: "var(--base)",
-    border: "rgba(250, 179, 135, 0.35)",
+    border: "#ff8a50",
     text: "var(--text)",
-    accent: "#fab387",
+    accent: "#ff8a50",
   },
   event: {
-    chip: "rgba(243, 139, 168, 0.16)",
+    chip: "rgba(240, 82, 122, 0.15)",
     fill: "var(--base)",
-    border: "rgba(243, 139, 168, 0.35)",
+    border: "#f0527a",
     text: "var(--text)",
-    accent: "#f38ba8",
+    accent: "#f0527a",
   },
 };
 
 const INSIGHT_NODE_COLORS: Record<GraphEntityType, string> = {
-  person: "#94e2d5",
-  organisation: "#74c7ec",
-  location: "#fab387",
-  event: "#f38ba8",
+  person: "#2ecdb8",
+  organisation: "#30b8e8",
+  location: "#ff8a50",
+  event: "#f0527a",
 };
 
 const ENTITY_ICON: Record<GraphEntityType, typeof User> = {
@@ -2277,7 +2277,6 @@ export function GraphView() {
           {/* Construct mode */}
           <div
             ref={viewportRef}
-            data-graph-interactive="true"
             className={cn(
               "absolute inset-0 transition-opacity duration-150",
               placeMode
@@ -2408,7 +2407,7 @@ export function GraphView() {
                         >
                           <circle
                             r={9}
-                            fill="#f38ba8"
+                            fill="#f03f3f"
                             style={{ cursor: "pointer" }}
                             data-graph-interactive="true"
                             onPointerDown={(event) => {
@@ -2804,7 +2803,7 @@ export function GraphView() {
                 className={cn(
                   "rounded-md border px-3 py-1.5 font-ui text-[11px] backdrop-blur",
                   errorMessage
-                    ? "border-[rgba(243,139,168,0.4)] bg-[rgba(243,139,168,0.1)] text-[#f38ba8]"
+                    ? "border-[rgba(240,63,63,0.4)] bg-[rgba(240,63,63,0.1)] text-[#f03f3f]"
                     : "border-[rgba(166,227,161,0.4)] bg-[rgba(166,227,161,0.1)] text-[#a6e3a1]",
                 )}
               >
