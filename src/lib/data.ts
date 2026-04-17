@@ -570,6 +570,7 @@ export async function getInvestigation(caseId: string) {
 export async function createInvestigation(input: {
   name: string;
   projectId?: number | null;
+  useCase?: import("@/lib/types").InvestigationUseCase;
 }) {
   const MAX_CASE_ID_ATTEMPTS = 5;
 
@@ -582,6 +583,7 @@ export async function createInvestigation(input: {
           case_id: caseId,
           name: input.name,
           project_id: input.projectId ?? null,
+          use_case: input.useCase ?? "scoping",
           current_phase: 1,
           status: "active",
         },
@@ -665,31 +667,33 @@ export async function updateInvestigationPhase(
   return data as Investigation;
 }
 
-// Phase 1: Plan
-export async function saveInvestigationPlan(
+// Phase 1: Brief
+export async function saveInvestigationBrief(
   caseId: string,
-  plan: {
+  brief: {
     subjectDefinition: string;
-    investigationScope: string;
+    scopeNotes: string;
+    seedEntities: string[];
+    humintInput?: string | null;
+    useCase?: import("@/lib/types").InvestigationUseCase;
     proportionality: boolean;
     legality: boolean;
     accountability: boolean;
     necessity: boolean;
-    seedEntities: string[];
-    knownHypotheses: string[];
   }
 ) {
   const { data, error } = await supabase
     .from("investigations")
     .update({
-      subject_definition: plan.subjectDefinition,
-      investigation_scope: plan.investigationScope,
-      plan_proportionality: plan.proportionality,
-      plan_legality: plan.legality,
-      plan_accountability: plan.accountability,
-      plan_necessity: plan.necessity,
-      seed_entities: plan.seedEntities,
-      known_hypotheses: plan.knownHypotheses,
+      subject_definition: brief.subjectDefinition,
+      scope_notes: brief.scopeNotes,
+      seed_entities: brief.seedEntities,
+      humint_input: brief.humintInput ?? null,
+      ...(brief.useCase ? { use_case: brief.useCase } : {}),
+      plan_proportionality: brief.proportionality,
+      plan_legality: brief.legality,
+      plan_accountability: brief.accountability,
+      plan_necessity: brief.necessity,
     })
     .eq("case_id", caseId)
     .select("*")
@@ -697,6 +701,49 @@ export async function saveInvestigationPlan(
 
   if (error) throw error;
   return data as Investigation;
+}
+
+// Exa collection for standalone investigations (no parent project)
+export async function collectSignalsForInvestigation(
+  investigationId: number,
+  seedEntities: string[],
+): Promise<{ added: number; errors: string[] }> {
+  const errors: string[] = [];
+  let added = 0;
+
+  for (const entity of seedEntities) {
+    for (const mode of ["web", "news"] as const) {
+      try {
+        const results = await runExaSearch({ mode, query: entity });
+        if (!Array.isArray(results)) continue;
+
+        for (const result of results as import("@/lib/types").SearchResultItem[]) {
+          const draft = signalDraftFromSearchResult(result, "investigation");
+
+          const { data: signal } = await supabase
+            .from("intel_signals")
+            .upsert([{ ...draft, status: "saved" }], { onConflict: "url" })
+            .select("id")
+            .single();
+
+          if (!signal) continue;
+
+          await supabase
+            .from("investigation_signals")
+            .upsert(
+              [{ investigation_id: investigationId, signal_id: signal.id }],
+              { onConflict: "investigation_id,signal_id", ignoreDuplicates: true },
+            );
+
+          added += 1;
+        }
+      } catch (err) {
+        errors.push(`${entity} (${mode}): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  return { added, errors };
 }
 
 // Investigation Signals (Phase 2: Collect)
@@ -729,6 +776,20 @@ export async function addSignalToInvestigation(input: {
       { onConflict: "investigation_id,signal_id", ignoreDuplicates: true }
     );
 
+  if (error) throw error;
+}
+
+export async function bulkAddSignalsToInvestigation(
+  investigationId: number,
+  signalIds: number[],
+) {
+  if (signalIds.length === 0) return;
+  const { error } = await supabase
+    .from("investigation_signals")
+    .upsert(
+      signalIds.map((signal_id) => ({ investigation_id: investigationId, signal_id, notes: null })),
+      { onConflict: "investigation_id,signal_id", ignoreDuplicates: true },
+    );
   if (error) throw error;
 }
 

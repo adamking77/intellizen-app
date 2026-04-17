@@ -125,7 +125,8 @@ export interface GraphEdgeRecord {
 
 // V2: Investigations
 export type InvestigationStatus = "active" | "archived" | "completed";
-export type VaultFileType = "plan" | "collect" | "collate" | "timeline" | "ach" | "report" | "sweep" | "assessment" | "brief";
+export type InvestigationUseCase = "scoping" | "post" | "sit_rep";
+export type VaultFileType = "plan" | "collect" | "collate" | "timeline" | "ach" | "report" | "sweep" | "assessment" | "brief" | "analysis";
 export type ReportType = "internal" | "client" | "deep" | "public";
 
 export interface Investigation {
@@ -135,8 +136,11 @@ export interface Investigation {
   status: InvestigationStatus;
   current_phase: number;
   project_id: number | null;
+  use_case: InvestigationUseCase;
   subject_definition: string | null;
   investigation_scope: string | null;
+  scope_notes: string | null;
+  humint_input: string | null;
   plan_proportionality: boolean;
   plan_legality: boolean;
   plan_accountability: boolean;

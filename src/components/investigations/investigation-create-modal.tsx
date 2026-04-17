@@ -4,9 +4,10 @@ import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { createInvestigation, listProjects } from "@/lib/data";
 import { toastError } from "@/lib/toast";
+import type { InvestigationUseCase } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type InvestigationCreateModalProps = {
   open: boolean;
@@ -15,6 +16,24 @@ type InvestigationCreateModalProps = {
   initialProjectId?: number | null;
   initialName?: string;
 };
+
+const USE_CASES: { id: InvestigationUseCase; label: string; description: string }[] = [
+  {
+    id: "scoping",
+    label: "Scoping",
+    description: "Early client recon — intelligence brief with flags and recommendations",
+  },
+  {
+    id: "post",
+    label: "Post",
+    description: "Public content — GenZen article on trends, groups, or targets",
+  },
+  {
+    id: "sit_rep",
+    label: "Sit Rep",
+    description: "Legacy Threat Analysis — structured contribution with HUMINT integration",
+  },
+];
 
 export function InvestigationCreateModal({
   open,
@@ -25,7 +44,7 @@ export function InvestigationCreateModal({
 }: InvestigationCreateModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(initialName);
-  const [subject, setSubject] = useState("");
+  const [useCase, setUseCase] = useState<InvestigationUseCase>("scoping");
   const [projectId, setProjectId] = useState<number | null>(initialProjectId);
 
   const { data: projects } = useQuery({
@@ -38,11 +57,12 @@ export function InvestigationCreateModal({
   const linkedProject = activeProjects.find((p) => p.id === projectId) ?? null;
 
   const createMutation = useMutation({
-    mutationFn: () => createInvestigation({ name: name.trim(), projectId }),
+    mutationFn: () =>
+      createInvestigation({ name: name.trim(), projectId, useCase }),
     onSuccess: async (investigation) => {
       await queryClient.invalidateQueries({ queryKey: ["investigations"] });
       setName("");
-      setSubject("");
+      setUseCase("scoping");
       setProjectId(null);
       onCreated?.(investigation.case_id);
       onClose();
@@ -68,7 +88,7 @@ export function InvestigationCreateModal({
     if (open) {
       setName(initialName);
       setProjectId(initialProjectId);
-      setSubject("");
+      setUseCase("scoping");
     }
   }, [open, initialName, initialProjectId]);
 
@@ -85,7 +105,7 @@ export function InvestigationCreateModal({
         role="dialog"
         aria-modal="true"
         aria-label="New investigation"
-        className="flex w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+        className="flex w-full max-w-[540px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">
@@ -107,7 +127,7 @@ export function InvestigationCreateModal({
         </div>
 
         <form
-          className="grid gap-3 px-5 py-4"
+          className="grid gap-4 px-5 py-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || createMutation.isPending) return;
@@ -122,25 +142,66 @@ export function InvestigationCreateModal({
               placeholder="e.g. Acme Holdings — succession risk"
               value={name}
               autoFocus
-              onChange={(event) => setName(event.target.value)}
+              onChange={(e) => setName(e.target.value)}
             />
           </label>
+
+          <div className="grid gap-1.5">
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              Use case
+            </span>
+            <div className="grid gap-2">
+              {USE_CASES.map((uc) => (
+                <button
+                  key={uc.id}
+                  type="button"
+                  onClick={() => setUseCase(uc.id)}
+                  className={cn(
+                    "flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                    useCase === uc.id
+                      ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                      : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors",
+                      useCase === uc.id
+                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        : "border-[var(--overlay-0)] bg-transparent",
+                    )}
+                  />
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        "block font-ui text-[12.5px] font-medium",
+                        useCase === uc.id ? "text-[var(--accent)]" : "text-[var(--text)]",
+                      )}
+                    >
+                      {uc.label}
+                    </span>
+                    <span className="block text-meta text-[var(--subtext-0)]">
+                      {uc.description}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="grid gap-1.5">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Parent project{" "}
               <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
-                (optional — inherits that project's signals at Collect)
+                (optional)
               </span>
             </span>
             <select
               className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
               value={projectId ?? ""}
-              onChange={(event) =>
-                setProjectId(event.target.value ? Number(event.target.value) : null)
-              }
+              onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">No parent project</option>
+              <option value="">No parent project — Exa collects from seed entities</option>
               {activeProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -149,39 +210,21 @@ export function InvestigationCreateModal({
             </select>
           </label>
 
-          <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              One-line subject{" "}
-              <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
-                (optional — you'll flesh this out in Phase 1)
-              </span>
-            </span>
-            <Textarea
-              rows={2}
-              placeholder="Who or what is being investigated?"
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-            />
-          </label>
-
           <p className="font-ui text-[11px] text-[var(--overlay-1)]">
             {linkedProject ? (
               <>
                 Linked to{" "}
                 <span className="font-medium text-[var(--subtext-0)]">{linkedProject.name}</span>.
-                The Collect phase will pull attached signals from that project.
+                Collect will pull that project's signals.
               </>
             ) : (
               <>
-                A new case folder will be created at{" "}
-                <span className="font-mono text-[10px] text-[var(--subtext-0)]">
-                  ~/vault/intelligence/investigations/&lt;case-id&gt;/
-                </span>
+                No project — Collect will run Exa searches on your seed entities automatically.
               </>
             )}
           </p>
 
-          <div className="mt-2 flex items-center justify-end gap-2">
+          <div className="mt-1 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}

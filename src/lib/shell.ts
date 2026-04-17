@@ -1,6 +1,6 @@
 // Tauri shell plugin integration for spawning claude -p
 import { Command } from "@tauri-apps/plugin-shell";
-import type { ReportType } from "@/lib/types";
+import type { InvestigationUseCase, ReportType } from "@/lib/types";
 
 export interface ClaudeInvocation {
   prompt: string;
@@ -28,14 +28,10 @@ const DEFAULT_TOOLS = [
   "mcp__exa__deep_researcher_check",
 ];
 
-/**
- * Spawn Claude CLI with a prompt
- * Usage: spawnClaude({ prompt: "Analyze this data..." })
- */
 export async function spawnClaude(invocation: ClaudeInvocation): Promise<ClaudeResult> {
   try {
     const allowedTools = invocation.allowedTools ?? DEFAULT_TOOLS;
-    
+
     const cmd = Command.create("claude", [
       "-p",
       invocation.prompt,
@@ -66,121 +62,305 @@ export async function spawnClaude(invocation: ClaudeInvocation): Promise<ClaudeR
   }
 }
 
-/**
- * Build investigation phase prompt
- */
-export function buildPhasePrompt(
-  caseId: string,
-  phase: number,
-  context: {
-    subjectDefinition?: string;
-    investigationScope?: string;
-    seedEntities?: string[];
-    signals?: { title: string; snippet: string }[];
-    reportType?: ReportType;
+function formatSignals(signals: { title: string; url: string; source: string | null; published_at: string | null; snippet: string | null }[]): string {
+  if (signals.length === 0) return "No signals collected.";
+  return signals
+    .map(
+      (s, i) =>
+        `[${i + 1}] TITLE: ${s.title}\nSOURCE: ${s.source ?? "Unknown"}\nDATE: ${s.published_at ?? "Unknown"}\nURL: ${s.url}\nSUMMARY: ${s.snippet ?? "No summary available"}`,
+    )
+    .join("\n\n---\n\n");
+}
+
+const WRITING_STANDARDS = `
+WRITING STANDARDS:
+- Active voice, direct statements
+- Lead with the finding, not the setup
+- No filler, no preamble, no restating the obvious
+- No M-dashes
+- No groups of three unless genuinely natural
+- Never use: "this suggests," "it's worth noting," "importantly," "delve," "elevate," "innovative," "cutting-edge"
+- Professional intelligence analyst tone`.trim();
+
+export function buildAnalysisPrompt(input: {
+  useCase: InvestigationUseCase;
+  subject: string;
+  scopeNotes: string;
+  seedEntities: string[];
+  signals: { title: string; url: string; source: string | null; published_at: string | null; snippet: string | null }[];
+  humintInput?: string | null;
+}): string {
+  const { useCase, subject, scopeNotes, seedEntities, signals, humintInput } = input;
+  const formattedSignals = formatSignals(signals);
+  const entitiesLine = seedEntities.length > 0 ? seedEntities.join(", ") : "Not specified";
+
+  const signalBlock = `COLLECTED INTELLIGENCE SIGNALS (${signals.length} sources):
+
+${formattedSignals}`;
+
+  const humintBlock = humintInput?.trim()
+    ? `\nHUMINT INTELLIGENCE (contractor-sourced):\n---\n${humintInput.trim()}\n---\n`
+    : "";
+
+  if (useCase === "scoping") {
+    return `You are a GenZen intelligence analyst. Produce a Scoping Brief from the intelligence signals below.
+
+SUBJECT: ${subject}
+SCOPE: ${scopeNotes || "Not specified"}
+SEED ENTITIES: ${entitiesLine}
+
+${signalBlock}
+${humintBlock}
+ANALYTICAL STANDARDS:
+- Bayesian reasoning throughout — present findings as probability ranges, not certainties
+- Competing hypotheses for every major finding
+- Explicit confidence levels (High / Medium / Low) per key claim
+- Separate observations from interpretations
+- Flag information gaps explicitly
+
+OUTPUT FORMAT — Intelligence Scoping Brief:
+
+## Executive Assessment
+2-3 sentences. The situation, who's involved, why it matters. Lead with the finding.
+
+## Key Actors & Entities
+For each identified actor or organisation: role, significance, relationship to subject, confidence level.
+
+## Pattern Analysis
+What patterns emerge across the signals? Exploitation vectors, control mechanisms, behavioural indicators. Include competing interpretations where evidence is ambiguous.
+
+## Autonomy Impact
+How does this situation affect the subject's autonomy? What is being constrained, threatened, or targeted?
+
+## Flags & Gaps
+What is missing from the picture? What specific evidence would change the assessment? What warrants immediate attention?
+
+## Recommendations
+Stage-appropriate next steps tied to confidence levels. Smallest effective interventions first.
+
+${WRITING_STANDARDS}`;
   }
-): string {
-  const basePath = `~/vault/intelligence/investigations/${caseId}`;
-  
-  switch (phase) {
-    case 1: // Plan
-      return `You are an intelligence analyst. Create an investigation plan for:
 
-Subject: ${context.subjectDefinition}
-Scope: ${context.investigationScope}
-Seed Entities: ${context.seedEntities?.join(", ") ?? "None"}
+  if (useCase === "post") {
+    return `You are a GenZen intelligence analyst and writer. Produce a public-facing intelligence article from the signals below.
 
-Output: Create ${basePath}/plan.md with:
-1. Executive Summary
-2. Intelligence Requirements
-3. Collection Strategy
-4. Source Evaluation Criteria
-5. Timeline and Milestones
+SUBJECT/TOPIC: ${subject}
+SCOPE: ${scopeNotes || "Not specified"}
+SEED ENTITIES: ${entitiesLine}
 
-Use markdown format.`;
+${signalBlock}
 
-    case 2: // Collect
-      return `You are an intelligence analyst. Execute collection for investigation ${caseId}.
+First extract and structure the following from the signals:
 
-Based on the plan at ${basePath}/plan.md, conduct comprehensive collection targeting the seed entities.
+1. WHAT'S HAPPENING — the pattern or trend, specific actors or groups involved
+2. WHERE AND WHO — geographic and industry context, named entities
+3. HOW IT WORKS — the mechanism of exploitation or threat, how it operates
+4. EVIDENCE — specific incidents, documented cases, data points with sources
+5. WHY IT MATTERS — stakes, who is affected, trajectory and direction
 
-Output: Update ${basePath}/collection.md with:
-1. Sources Consulted
-2. Data Acquired
-3. Gap Analysis
-4. Next Collection Actions`;
+Then write the complete article in GenZen voice using that structure.
 
-    case 3: // Collate
-      return `You are an intelligence analyst. Extract and structure entities from investigation ${caseId}.
+GENZEN VOICE STANDARDS:
+- Intelligent, succinct, approachable — write like someone who operates in high-stakes environments daily
+- Expert authority without academic or consulting jargon
+- Lead with the finding, not the setup
+- Use contractions and direct address where natural
+- Frame evidence as discoveries: "The pattern is clear" not "The data suggests"
+- Connect all analysis to real-world impact
+- No M-dashes
+- No groups of three unless genuinely natural
+- No AI-favored phrases: "innovative," "elevate," "delve," "cutting-edge," "it's worth noting," "importantly"
+- No empty praise or corporate flattery
 
-Review all collected data and identify POLE entities (Person, Object, Location, Event).
+OUTPUT: Suggested headline followed by the complete article draft, ready for review.
 
-Output: Create ${basePath}/entities.md with:
-1. Person Entities (names, roles, relationships)
-2. Organization Entities
-3. Location Entities
-4. Event Timeline References
-5. Relationship Matrix`;
-
-    case 4: // Timeline
-      return `You are an intelligence analyst. Reconstruct timeline for investigation ${caseId}.
-
-Using entities from ${basePath}/entities.md, create chronological reconstruction.
-
-Output: Create ${basePath}/timeline.md with:
-1. Chronological Event List (UTC normalized)
-2. Temporal Gap Analysis
-3. Contradiction Flags
-4. Confidence Levels per Event`;
-
-    case 5: // ACH (Analysis of Competing Hypotheses)
-      return `You are an intelligence analyst. Conduct ACH for investigation ${caseId}.
-
-Evaluate all hypotheses against available evidence.
-
-Output: Create ${basePath}/ach.md with:
-1. Hypothesis List (minimum 3)
-2. Evidence Matrix
-3. Inconsistency Principle Scoring
-4. Most Likely Hypothesis Assessment`;
-
-    case 6: // Report
-      const reportType = context.reportType ?? "internal";
-      const reportTypeInstructions: Record<ReportType, string> = {
-        internal:
-          "Internal Sweep Summary: analyst-facing, include methodology, confidence levels, and explicit gaps.",
-        client:
-          "Initial Client Assessment: concise implications-first framing, avoid disclosing detailed methodology.",
-        deep:
-          "Deep Case Report: full methodology, evidence register, competing hypotheses, and confidence scoring.",
-        public:
-          "Public Brief: accessible language, explain context, keep sourcing clear and non-technical.",
-      };
-
-      return `You are an intelligence analyst. Assemble final report for investigation ${caseId}.
-
-Synthesize all phases into coherent intelligence product.
-Report type: ${reportType}
-Guidance: ${reportTypeInstructions[reportType]}
-
-Output: Create ${basePath}/report.md with:
-1. Executive Summary
-2. Key Findings
-3. Evidence Register
-4. Confidence Assessments
-5. Recommendations`;
-
-    default:
-      return `Investigation ${caseId} - Phase ${phase}`;
+${WRITING_STANDARDS}`;
   }
+
+  // sit_rep — Legacy Threat Analysis format
+  const today = new Date();
+  const monthYear = today.toLocaleString("en-GB", { month: "long", year: "numeric" });
+
+  return `You are a GenZen intelligence analyst. Produce a Legacy Threat Analysis from the intelligence below.
+
+SUBJECT: ${subject}
+SCOPE: ${scopeNotes || "Not specified"}
+SEED ENTITIES: ${entitiesLine}
+
+${signalBlock}
+${humintBlock}
+Assess threat level based on evidence: Low / Medium / High / Critical.
+
+Every paragraph must contain at least one source citation [^N] referencing the numbered signals above. Use specific figures, documented cases, and named entities throughout. All citations must reference actual signals provided.
+
+Produce the report in this exact structure:
+
+---
+
+# LEGACY THREAT ANALYSIS™
+
+**CONFIDENTIAL INTELLIGENCE BRIEFING**
+
+Prepared By: GenZen Solutions
+Date: ${monthYear}
+Threat Level: [Your assessment]
+Classification: Strategic Intelligence
+
+---
+
+## WHAT'S REALLY HAPPENING
+
+Open with "Here's the situation:" — 2-3 sentences on the core threat with specifics and at least 2 source citations.
+
+---
+
+## THE BOTTOM LINE
+
+### The Pattern We're Seeing
+The systematic threat pattern with specific evidence. Organised, not random. Documented cases and financial impacts with sources.
+
+### Why This Matters
+How this pattern specifically threatens the subject's operations or situation. Operational vulnerabilities and exposure with evidence.
+
+### The Real Risk
+What this represents beyond surface-level impact. Scale and sophistication evidence with sources.
+
+---
+
+## HOW THEY'RE DOING IT
+
+### [Primary Method Title]
+Detailed explanation of execution. Include quantitative evidence of escalation, specific case studies with dollar amounts, sophistication indicators.
+
+### [Secondary Method or Case Study]
+- **Loss Amount**: [Specific figure with source]
+- **Method**: [How with source]
+- **Exploitation Vector**: [Vulnerability used with source]
+
+**[Regulatory or Systematic Issues]**
+List of systemic problems enabling these actions, with statistics and sources.
+
+---
+
+## WHERE PROTECTION IS FAILING
+
+### [Critical Failure 1]
+Specific protection failures with evidence: regulatory gaps, operational vulnerabilities, systematic weaknesses.
+
+### [Critical Failure 2]
+Second major vulnerability with evidence and sources.
+
+### [Critical Failure 3]
+Third major vulnerability with evidence and sources.
+
+### Summary
+
+| Attack Method | How They Do It | What It Cost |
+|---|---|---|
+| **[Method 1]** | [Description] | [Amount with source] |
+| **[Method 2]** | [Description] | [Amount with source] |
+| **[Method 3]** | [Description] | [Amount with source] |
+
+---
+
+## WHY TRADITIONAL APPROACHES AREN'T WORKING
+
+### [Problem 1]
+Why conventional protection is failing with evidence and sources.
+
+### [Problem 2]
+Second reason with evidence and sources.
+
+**What Needs to Change**
+- **[Change 1]** with source citation
+- **[Change 2]** with source citation
+- **[Change 3]** with source citation
+
+---
+
+## WHAT TO DO RIGHT NOW
+
+### Next 72 Hours
+
+**1. [Action Category 1]**
+- [Specific action with source justification]
+- [Specific action with source justification]
+
+**2. [Action Category 2]**
+- [Specific action with source justification]
+- [Specific action with source justification]
+
+**3. [Action Category 3]**
+- [Specific action with source justification]
+- [Specific action with source justification]
+
+### Next 30 Days
+
+**Week 1-2: [Phase 1 Title]**
+- [Action with source justification]
+- [Action with source justification]
+
+**Week 3-4: [Phase 2 Title]**
+- [Action with source justification]
+- [Action with source justification]
+
+### How You'll Know It's Working
+- **[Metric 1]** with source basis
+- **[Metric 2]** with source basis
+- **[Metric 3]** with source basis
+
+---
+
+## THE BIGGER PICTURE
+
+### [Solution Category 1]
+Available solutions and proven methods with effectiveness evidence and sources.
+
+**Proven Defenses**
+- **[Method 1]**: [Effectiveness evidence with source]
+- **[Method 2]**: [Effectiveness evidence with source]
+
+---
+
+## THE REALITY
+
+4-5 paragraphs:
+1. Systematic nature of the threat with key evidence
+2. Why traditional protection has become inadequate with sources
+3. The fundamental shift in the threat landscape with evidence
+4. The necessity of proactive intelligence for protection
+5. Clear implication of continuing under old assumptions
+
+Urgent without hysteria. Supported by documented evidence throughout.
+
+---
+
+## SOURCES
+
+[^1]: [Full URL from signal 1]
+[^2]: [Full URL from signal 2]
+[Continue for all signals cited]
+
+*Complete source list available upon request*
+
+---
+
+LANGUAGE STANDARDS:
+- Use contractions and direct address ("you," "your operations")
+- Open sections with "Here's what's happening" style language
+- Frame evidence as discoveries: "The numbers tell the story"
+- Connect all analysis to reader impact
+- No M-dashes
+- No academic or consulting jargon
+- No AI-favored phrases`;
 }
 
 /**
- * Build report prompt for Trigger Analysis
+ * Build report prompt for the Reports view (standalone trigger analysis)
  */
 export function buildReportPrompt(
-  reportType: "internal" | "client" | "deep" | "public",
-  signals: { title: string; snippet: string; source: string }[]
+  reportType: ReportType,
+  signals: { title: string; snippet: string; source: string }[],
 ): string {
   const signalContext = signals
     .map((s, i) => `${i + 1}. ${s.title}\n   Source: ${s.source}\n   ${s.snippet}`)

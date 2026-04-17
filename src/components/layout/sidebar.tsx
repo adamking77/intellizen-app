@@ -79,10 +79,15 @@ export function Sidebar() {
           collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
-        {!collapsed && (
-          <span className="font-ui text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
-            InteliZen
-          </span>
+        {collapsed ? (
+          <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
+        ) : (
+          <div className="flex items-center gap-2">
+            <img src="/app-icon.svg" alt="" aria-hidden className="h-6 w-6 rounded-md" />
+            <span className="font-ui text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
+              InteliZen
+            </span>
+          </div>
         )}
         {!isCramped && (
           <button
