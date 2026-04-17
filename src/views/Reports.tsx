@@ -209,7 +209,7 @@ export function ReportsView() {
 
         <div className="flex-1 overflow-y-auto">
           {selectedPath && fileContent !== null ? (
-            <div className="px-[clamp(40px,8%,120px)] py-10">
+            <div className="px-[15%] py-10">
               <p className="font-mono text-[11px] text-[var(--overlay-1)]">{selectedPath}</p>
               <div className="mt-4">
                 <MarkdownBody content={fileContent} />

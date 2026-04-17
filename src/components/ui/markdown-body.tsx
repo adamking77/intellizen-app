@@ -69,7 +69,7 @@ interface MarkdownBodyProps {
 export function MarkdownBody({ content, className }: MarkdownBodyProps) {
   const blocks = parseMarkdownish(content);
   return (
-    <div className={cn("max-w-[65ch] space-y-4", className)}>
+    <div className={cn("space-y-4", className)}>
       {blocks.map((block, i) => {
         if (block.type === "heading") {
           if (block.level === 1) {
