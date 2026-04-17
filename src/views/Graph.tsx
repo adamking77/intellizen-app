@@ -81,10 +81,10 @@ import {
   ensureProjectDirectory,
   writeVaultBinaryFile,
 } from "@/lib/vault";
+import { buildGraphExtractionPrompt, spawnClaude } from "@/lib/shell";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
-  ProjectSignal,
 } from "@/lib/types";
 
 type GraphMode = "project" | "standalone";
@@ -1754,10 +1754,10 @@ export function GraphView() {
     }
   }
 
-  // Auto-generate graph from project signals using entity extraction
+  // Auto-generate graph from project signals using Claude entity + relationship extraction
   async function handleAutoGenerateFromProject() {
     if (graphMode !== "project" || !graphProjectId) return;
-    
+
     const projectSignals = projectSignalsQuery.data;
     if (!projectSignals || projectSignals.length === 0) {
       setErrorMessage("No signals in this project to analyze.");
@@ -1767,58 +1767,108 @@ export function GraphView() {
     try {
       setIsAutoGenerating(true);
       setErrorMessage(null);
-      setStatusMessage("Analyzing signals for entities...");
+      setStatusMessage("Extracting entities and relationships via Claude…");
 
-      // Extract entities from signal content using simple pattern matching
-      // In a full implementation, this would call an NLP service or LLM
-      const extractedEntities = extractEntitiesFromSignals(projectSignals);
-      
-      if (extractedEntities.length === 0) {
-        setStatusMessage("No entities found in project signals.");
-        setIsAutoGenerating(false);
+      const signalInputs = projectSignals
+        .slice(0, 30)
+        .map((ps) => ({
+          title: ps.intel_signals?.title ?? "",
+          snippet: ps.intel_signals?.snippet ?? null,
+        }))
+        .filter((s) => s.title);
+
+      const result = await spawnClaude({
+        prompt: buildGraphExtractionPrompt(signalInputs),
+      });
+
+      if (!result.success || !result.output) {
+        setErrorMessage(result.error ?? "Claude extraction failed.");
+        return;
+      }
+
+      // Strip markdown fences if Claude wrapped the JSON
+      const raw = result.output.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
+
+      let parsed: {
+        entities: Array<{ label: string; type: GraphEntityType }>;
+        relationships: Array<{ source: string; target: string; relation: string }>;
+      };
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        setErrorMessage("Could not parse Claude's extraction output.");
+        return;
+      }
+
+      if (!parsed.entities?.length) {
+        setStatusMessage("No entities found in signals.");
         return;
       }
 
       recordHistory();
 
-      // Create nodes for extracted entities
-      const existingLabels = new Set(nodes.map(n => n.label.toLowerCase()));
-      const newNodes: Array<{ label: string; type: GraphEntityType }> = [];
-      
-      for (const entity of extractedEntities) {
-        if (!existingLabels.has(entity.label.toLowerCase())) {
-          newNodes.push(entity);
-          existingLabels.add(entity.label.toLowerCase());
-        }
-      }
+      // Build label → node_id map from existing nodes
+      const labelToNodeId = new Map(nodes.map((n) => [n.label.toLowerCase(), n.node_id]));
 
-      // Batch create nodes
-      const nodePositions = calculateAutoLayoutPositions(newNodes.length, visualNodes.length);
-      for (let i = 0; i < newNodes.length; i++) {
-        const entity = newNodes[i];
+      // Create nodes for entities not already on the canvas
+      const newEntities = parsed.entities.filter(
+        (e) => !labelToNodeId.has(e.label.toLowerCase()),
+      );
+      const positions = calculateAutoLayoutPositions(newEntities.length, visualNodes.length);
+
+      for (let i = 0; i < newEntities.length; i++) {
+        const entity = newEntities[i];
         const nodeId = crypto.randomUUID();
         await createGraphNode({
           projectId: graphProjectId,
           nodeId,
           label: entity.label,
           entityType: entity.type,
-          position: nodePositions[i],
+          position: positions[i],
         });
+        labelToNodeId.set(entity.label.toLowerCase(), nodeId);
       }
 
-      // Create edges based on co-occurrence in signals
-      const edgesCreated = await createEdgesFromCooccurrence(projectSignals, graphProjectId);
+      // Create edges — only between entities whose labels Claude matched
+      const allEdges = await listGraphEdges(graphProjectId);
+      const seenPairs = new Set(
+        allEdges.map((e) => canonicalEdgePair(e.source_node_id, e.target_node_id)),
+      );
+
+      let edgesCreated = 0;
+      for (const rel of parsed.relationships ?? []) {
+        const sourceId = labelToNodeId.get(rel.source.toLowerCase());
+        const targetId = labelToNodeId.get(rel.target.toLowerCase());
+        if (!sourceId || !targetId || sourceId === targetId) continue;
+
+        const pair = canonicalEdgePair(sourceId, targetId);
+        if (seenPairs.has(pair)) continue;
+
+        await createGraphEdge({
+          projectId: graphProjectId,
+          edgeId: crypto.randomUUID(),
+          sourceNodeId: sourceId,
+          targetNodeId: targetId,
+          label: rel.relation,
+        });
+        seenPairs.add(pair);
+        edgesCreated++;
+      }
 
       await nodesQuery.refetch();
       await edgesQuery.refetch();
-      
-      setStatusMessage(`Generated ${newNodes.length} nodes and ${edgesCreated} connections from project signals.`);
-      setViewport(
-        computeFitViewToNodes(
-          [...visualNodes, ...newNodes.map((_, i) => ({ position: nodePositions[i] }))],
-          viewportRef.current,
-        ),
+
+      setStatusMessage(
+        `Generated ${newEntities.length} entities and ${edgesCreated} relationships.`,
       );
+      if (newEntities.length > 0) {
+        setViewport(
+          computeFitViewToNodes(
+            [...visualNodes, ...newEntities.map((_, i) => ({ position: positions[i] }))],
+            viewportRef.current,
+          ),
+        );
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
     } finally {
@@ -1826,65 +1876,12 @@ export function GraphView() {
     }
   }
 
-  // Extract entities from signal content using pattern matching
-  function extractEntitiesFromSignals(signals: ProjectSignal[]): Array<{ label: string; type: GraphEntityType }> {
-    const entities: Array<{ label: string; type: GraphEntityType }> = [];
-    const seen = new Set<string>();
-    
-    // Common entity patterns
-    const patterns = {
-      person: /\b([A-Z][a-z]+ [A-Z][a-z]+)\b/g,
-      organisation: /\b([A-Z][a-z]*(?:\s+[A-Z][a-z]*)+(?:\s+(?:Inc|Ltd|LLC|Corp|Corporation|Company|Group|Fund|Capital|Partners))?\b)/g,
-      location: /\b(?:in|at|from)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/gi,
-    };
-    
-    for (const ps of signals) {
-      const signalTitle = ps.intel_signals?.title ?? "";
-      const signalSnippet = ps.intel_signals?.snippet ?? "";
-      const content = `${signalTitle} ${signalSnippet}`.trim();
-      if (!content) continue;
-      
-      // Extract people (capitalized names)
-      patterns.person.lastIndex = 0;
-      let match;
-      while ((match = patterns.person.exec(content)) !== null) {
-        const name = match[1];
-        if (name.length > 3 && !seen.has(name.toLowerCase())) {
-          seen.add(name.toLowerCase());
-          entities.push({ label: name, type: "person" });
-        }
-      }
-      
-      // Extract organizations
-      patterns.organisation.lastIndex = 0;
-      while ((match = patterns.organisation.exec(content)) !== null) {
-        const org = match[1];
-        if (org.length > 3 && !seen.has(org.toLowerCase()) && !entities.find(e => e.label === org)) {
-          seen.add(org.toLowerCase());
-          entities.push({ label: org, type: "organisation" });
-        }
-      }
-
-      // Extract locations
-      patterns.location.lastIndex = 0;
-      while ((match = patterns.location.exec(content)) !== null) {
-        const location = match[1].trim();
-        if (location.length > 2 && !seen.has(location.toLowerCase())) {
-          seen.add(location.toLowerCase());
-          entities.push({ label: location, type: "location" });
-        }
-      }
-    }
-    
-    return entities.slice(0, 20); // Limit to 20 entities
-  }
-
   // Calculate positions for auto-layout
   function calculateAutoLayoutPositions(count: number, existingCount: number): Point[] {
     const positions: Point[] = [];
     const startX = 100 + (existingCount % 5) * 240;
     const startY = 100 + Math.floor(existingCount / 5) * 156;
-    
+
     for (let i = 0; i < count; i++) {
       const col = i % 4;
       const row = Math.floor(i / 4);
@@ -1894,57 +1891,6 @@ export function GraphView() {
       });
     }
     return positions;
-  }
-
-  // Create edges based on entity co-occurrence in signals
-  async function createEdgesFromCooccurrence(
-    signals: ProjectSignal[],
-    projectId: number
-  ): Promise<number> {
-    // Get all nodes including newly created ones
-    const allNodes = await listGraphNodes(projectId);
-    const allEdges = await listGraphEdges(projectId);
-    let edgeCount = 0;
-    const seenEdgePairs = new Set(
-      allEdges.map((edge) => canonicalEdgePair(edge.source_node_id, edge.target_node_id)),
-    );
-    
-    // For each signal, find entities that appear together and create edges
-    for (const ps of signals) {
-      const signalTitle = ps.intel_signals?.title ?? "";
-      const signalSnippet = ps.intel_signals?.snippet ?? "";
-      const content = `${signalTitle} ${signalSnippet}`.toLowerCase().trim();
-      if (!content) continue;
-      
-      // Find which entities appear in this signal
-      const entitiesInSignal = allNodes.filter(n => 
-        content.includes(n.label.toLowerCase())
-      );
-      
-      // Create edges between co-occurring entities
-      for (let i = 0; i < entitiesInSignal.length; i++) {
-        for (let j = i + 1; j < entitiesInSignal.length; j++) {
-          const source = entitiesInSignal[i];
-          const target = entitiesInSignal[j];
-          
-          const edgePair = canonicalEdgePair(source.node_id, target.node_id);
-          
-          if (!seenEdgePairs.has(edgePair)) {
-            await createGraphEdge({
-              projectId,
-              edgeId: crypto.randomUUID(),
-              sourceNodeId: source.node_id,
-              targetNodeId: target.node_id,
-              label: "mentioned together",
-            });
-            seenEdgePairs.add(edgePair);
-            edgeCount++;
-          }
-        }
-      }
-    }
-    
-    return edgeCount;
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<HTMLDivElement>) {

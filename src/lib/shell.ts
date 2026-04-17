@@ -355,6 +355,30 @@ LANGUAGE STANDARDS:
 - No AI-favored phrases`;
 }
 
+export function buildGraphExtractionPrompt(
+  signals: { title: string; snippet: string | null }[],
+): string {
+  const signalText = signals
+    .map((s, i) => `[${i + 1}] ${s.title}${s.snippet ? `\n    ${s.snippet}` : ""}`)
+    .join("\n\n");
+
+  return `You are an intelligence analyst. Extract entities and relationships from these signals.
+
+SIGNALS:
+${signalText}
+
+RULES:
+- Only include relationships EXPLICITLY stated in the signal text (e.g. "X founded Y", "X was arrested in Y", "X controls Z")
+- Do NOT connect entities merely because they appear in the same article
+- Relationship labels must be short verb phrases: "controls", "founded", "arrested in", "linked to", "operates in", "leads", "targets"
+- Maximum 20 entities total, 20 relationships total
+- Entity types: person, organisation, location, event
+- Keep entity labels concise — proper names only, no generic terms
+
+Return ONLY valid JSON with no markdown fences and no explanation:
+{"entities":[{"label":"string","type":"person|organisation|location|event"}],"relationships":[{"source":"exact entity label","target":"exact entity label","relation":"short label"}]}`;
+}
+
 /**
  * Build report prompt for the Reports view (standalone trigger analysis)
  */
