@@ -13,7 +13,13 @@ macOS-only Tauri v2 desktop intelligence platform for GenZen. Original V1 spec i
 | Organize | `/projects`, `/graph` |
 | Analyse | `/investigate`, `/reports` |
 
-Investigation (6-phase flow: Plan → Collect → Collate → Timeline → ACH → Report) and Reports (sweep / assessment / deep / brief) were promoted from V2 on 2026-04-07 with approval. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 freeze — they are kept for product-intent context, not as implementation contracts.
+Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors) and Reports were promoted from V2. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 freeze — kept for product-intent context, not implementation contracts.
+
+## Build commands
+
+- `pnpm tauri dev` — dev mode
+- `pnpm tauri build` — production DMG
+- `pnpm icon` — regenerate all `src-tauri/icons/` sizes from `app-icon.svg`. **Always use this after updating the icon — never use `sips` or `qlmanage` manually.**
 
 ## Credentials
 
