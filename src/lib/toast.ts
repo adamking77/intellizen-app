@@ -11,6 +11,11 @@ export const toast = {
 };
 
 export function toastError(prefix: string, err: unknown) {
-  const description = err instanceof Error ? err.message : String(err);
+  const description =
+    err instanceof Error
+      ? err.message
+      : typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message: unknown }).message)
+        : String(err);
   sonner.error(prefix, { description });
 }

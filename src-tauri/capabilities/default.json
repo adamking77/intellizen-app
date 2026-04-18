@@ -19,6 +19,7 @@
     "fs:allow-write-file",
     "fs:allow-create",
     "fs:allow-mkdir",
+    "fs:allow-remove",
     {
       "identifier": "fs:scope",
       "allow": [
