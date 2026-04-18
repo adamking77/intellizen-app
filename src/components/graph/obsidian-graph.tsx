@@ -295,7 +295,16 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
       },
       captureCanvas: () => {
         const canvas = containerRef.current?.querySelector("canvas");
-        return canvas?.toDataURL("image/png") ?? null;
+        if (!canvas) return null;
+        const out = document.createElement("canvas");
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const ctx = out.getContext("2d");
+        if (!ctx) return canvas.toDataURL("image/png");
+        ctx.fillStyle = "#1e1e2e";
+        ctx.fillRect(0, 0, out.width, out.height);
+        ctx.drawImage(canvas, 0, 0);
+        return out.toDataURL("image/png");
       },
     }),
     [nodeLookup],

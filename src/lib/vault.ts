@@ -185,6 +185,13 @@ export async function writeVaultFile(filepath: string, content: string): Promise
 }
 
 /**
+ * Resolve a vault-relative path to an absolute filesystem path
+ */
+export async function getVaultAbsolutePath(filepath: string): Promise<string> {
+  return resolveVaultPath(filepath);
+}
+
+/**
  * Organize vault files by type
  */
 export function organizeVaultFiles(entries: VaultEntry[]): {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileSearch, FolderSearch, Plus, Trash2 } from "lucide-react";
+import { Archive, FileImage, FileSearch, FileText, FolderSearch, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -16,12 +16,15 @@ import {
   deleteProject,
   listProjectSignalCounts,
   listProjectSignals,
+  listProjectVaultFiles,
   listProjects,
   removeSignalFromProject,
   updateProject,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import type { Project, ProjectSignal } from "@/lib/types";
+import { getVaultAbsolutePath } from "@/lib/vault";
+import { openPath } from "@tauri-apps/plugin-opener";
+import type { Project, ProjectSignal, VaultFile } from "@/lib/types";
 import { useAppStore } from "@/store";
 
 type StatusFilter = "all" | "active" | "archived";
@@ -141,6 +144,12 @@ export function ProjectsView() {
   const { data: projectSignals } = useQuery({
     queryKey: ["project-signals", selectedProjectId],
     queryFn: () => listProjectSignals(selectedProjectId as number),
+    enabled: selectedProjectId !== null,
+  });
+
+  const { data: projectVaultFiles } = useQuery({
+    queryKey: ["project-vault-files", selectedProjectId],
+    queryFn: () => listProjectVaultFiles(selectedProjectId as number),
     enabled: selectedProjectId !== null,
   });
 
@@ -308,7 +317,7 @@ export function ProjectsView() {
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
           <span className="text-label">Projects unavailable</span>
           <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{error.message}</p>
@@ -318,15 +327,15 @@ export function ProjectsView() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar: IndicatorStrip + status tabs + New project */}
-      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
           <span className="text-label">Projects</span>
           <IndicatorStrip items={indicators} />
         </div>
 
-        <div className="flex items-center pt-1">
+        <div className="flex items-center">
           <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New project
@@ -621,6 +630,22 @@ export function ProjectsView() {
                     )}
                   </div>
                 )}
+
+                {/* Vault files */}
+                {(projectVaultFiles ?? []).length > 0 && (
+                  <div className="shrink-0 border-t border-[var(--border)]">
+                    <div className="px-5 py-3">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Files
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 px-3 pb-3">
+                      {(projectVaultFiles ?? []).map((file) => (
+                        <ProjectVaultFileRow key={file.id} file={file} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -661,6 +686,41 @@ export function ProjectsView() {
           navigate("/investigate");
         }}
       />
+    </div>
+  );
+}
+
+function ProjectVaultFileRow({ file }: { file: VaultFile }) {
+  async function handleOpen() {
+    try {
+      const absPath = await getVaultAbsolutePath(file.file_path);
+      await openPath(absPath);
+    } catch (err) {
+      toastError("Could not open file", err);
+    }
+  }
+
+  const label = file.file_path.split("/").pop() ?? file.file_path;
+  const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(label);
+
+  const icon = isImage ? (
+    <FileImage className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+  ) : (
+    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+  );
+
+  return (
+    <div className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--surface-0)]">
+      {icon}
+      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--subtext-0)]">
+        {label}
+      </span>
+      <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[var(--overlay-1)]">
+        {file.file_type}
+      </span>
+      <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={() => void handleOpen()}>
+        Open
+      </Button>
     </div>
   );
 }

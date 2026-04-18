@@ -871,6 +871,17 @@ export async function createVaultFile(input: {
   return data as VaultFile;
 }
 
+export async function listProjectVaultFiles(projectId: number) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as VaultFile[];
+}
+
 export async function createGraphExportVaultFile(input: {
   caseId?: string | null;
   projectId?: number | null;

@@ -121,7 +121,7 @@ export function MonitorsView() {
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
           <span className="text-label">Monitors unavailable</span>
           <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{error.message}</p>
@@ -131,15 +131,15 @@ export function MonitorsView() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header: IndicatorStrip + status tabs + New monitor */}
-      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
           <span className="text-label">Monitors</span>
           <IndicatorStrip items={indicators} />
         </div>
 
-        <div className="flex items-center gap-4 pt-1">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
             {STATUS_TABS.map(({ value, label }) => (
               <button

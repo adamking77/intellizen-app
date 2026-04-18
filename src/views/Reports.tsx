@@ -99,7 +99,7 @@ export function ReportsView() {
       >
         {leftOpen && (
           <>
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
               <span className="text-label">Vault</span>
               <button
                 type="button"
@@ -173,7 +173,7 @@ export function ReportsView() {
           MAIN COLUMN — Topbar + reader
           ============================================================ */}
       <div className="relative flex flex-1 min-w-0 flex-col">
-        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+        <div className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
           <div className="flex min-w-0 items-center gap-3">
             {!leftOpen && (
               <button

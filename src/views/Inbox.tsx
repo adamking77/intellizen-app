@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Bookmark, Filter as FilterIcon, RefreshCcw, Search as SearchIcon, X } from "lucide-react";
+import { Archive, Bookmark, Filter as FilterIcon, RefreshCcw, X } from "lucide-react";
 
 import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { AttachInvestigationDialog } from "@/components/signals/attach-investigation-dialog";
@@ -47,7 +47,6 @@ export function InboxView() {
   const [attachCaseId, setAttachCaseId] = useState<string | null>(null);
 
   // Filter state
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeDomains, setActiveDomains] = useState<Set<string>>(() => new Set());
 
   // Multi-select state
@@ -90,7 +89,6 @@ export function InboxView() {
   };
 
   const feedRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
 
   const { data: signals, isLoading } = useQuery({
@@ -209,28 +207,19 @@ export function InboxView() {
       saved: all.filter((s) => s.status === "saved").length,
     };
 
-    const q = searchQuery.trim().toLowerCase();
     const byStatus = filter === "all" ? all : all.filter((s) => s.status === filter);
     const byDomain =
       activeDomains.size === 0
         ? byStatus
         : byStatus.filter((s) => activeDomains.has(s.watch_domain ?? "Manual"));
-    const byQuery = q
-      ? byDomain.filter((s) => {
-          const title = s.title.toLowerCase();
-          const snippet = (s.snippet ?? "").toLowerCase();
-          const source = (s.source ?? "").toLowerCase();
-          return title.includes(q) || snippet.includes(q) || source.includes(q);
-        })
-      : byDomain;
 
-    const grouped = byQuery.reduce<Record<string, IntelSignal[]>>((acc, signal) => {
+    const grouped = byDomain.reduce<Record<string, IntelSignal[]>>((acc, signal) => {
       const key = signal.watch_domain ?? "Manual";
       acc[key] = [...(acc[key] ?? []), signal];
       return acc;
     }, {});
-    return { grouped, visible: byQuery, counts };
-  }, [filter, signals, searchQuery, activeDomains]);
+    return { grouped, visible: byDomain, counts };
+  }, [filter, signals, activeDomains]);
 
   // Click-outside handler for filter popover
   useEffect(() => {
@@ -280,8 +269,6 @@ export function InboxView() {
     });
   };
 
-  const hasActiveFilter = searchQuery.length > 0 || activeDomains.size > 0;
-
   // Monitor telemetry
   const monitorStats = useMemo(() => {
     const list = monitors ?? [];
@@ -321,14 +308,6 @@ export function InboxView() {
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
         target?.isContentEditable;
-
-      // "/" focus search even when no field is active
-      if (!inField && e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-        return;
-      }
 
       if (inField) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -388,15 +367,15 @@ export function InboxView() {
   ];
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header: IndicatorStrip + filters + refresh */}
-      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
           <span className="text-label">Inbox</span>
           <IndicatorStrip items={indicators} />
         </div>
 
-        <div className="flex items-center gap-4 pt-1">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-1">
             {FILTERS.map(({ value, label, count }) => (
               <button
@@ -437,57 +416,7 @@ export function InboxView() {
                 Archive all
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
-              className="gap-1.5"
-            >
-              <RefreshCcw
-                className={cn("h-3 w-3", refreshMutation.isPending && "animate-spin")}
-              />
-              {refreshMutation.isPending ? "Refreshing…" : "Refresh"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter bar: search + domain chips */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--base)] px-6 py-2">
-        <div className="relative flex min-w-0 items-center">
-          <SearchIcon className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--overlay-1)]" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.currentTarget.blur();
-                setSearchQuery("");
-              }
-            }}
-            placeholder="Filter signals…"
-            className="h-7 w-[240px] rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-8 pr-7 font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-1.5 inline-flex h-4 w-4 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              aria-label="Clear search"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          ) : (
-            <kbd className="pointer-events-none absolute right-1.5 font-mono text-[10px] text-[var(--overlay-1)]">
-              /
-            </kbd>
-          )}
-        </div>
-
-        <div ref={filterPopoverRef} className="relative">
+            <div ref={filterPopoverRef} className="relative">
           <button
             type="button"
             onClick={() => setFilterOpen((o) => !o)}
@@ -510,7 +439,7 @@ export function InboxView() {
           </button>
 
           {filterOpen ? (
-            <div className="absolute left-0 top-full z-20 mt-1 w-[280px] rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-1 w-[280px] rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-lg">
               <div className="mb-2 flex items-center justify-between px-1">
                 <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   Topics
@@ -561,20 +490,21 @@ export function InboxView() {
               )}
             </div>
           ) : null}
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+              className="gap-1.5"
+            >
+              <RefreshCcw
+                className={cn("h-3 w-3", refreshMutation.isPending && "animate-spin")}
+              />
+              {refreshMutation.isPending ? "Refreshing…" : "Refresh"}
+            </Button>
+          </div>
         </div>
-
-        {hasActiveFilter ? (
-          <button
-            type="button"
-            onClick={() => {
-              setSearchQuery("");
-              setActiveDomains(new Set());
-            }}
-            className="ml-auto shrink-0 font-ui text-[11px] text-[var(--overlay-1)] hover:text-[var(--text)]"
-          >
-            Clear filters
-          </button>
-        ) : null}
       </div>
 
       {/* Content: feed + detail panel */}
@@ -662,7 +592,7 @@ export function InboxView() {
 
           {/* Bulk action bar — floats above keyboard hints when selection exists */}
           {selectedIds.size > 0 ? (
-            <div className="flex shrink-0 items-center gap-3 border-t border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2">
+            <div className="flex shrink-0 items-center gap-3 border-t border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-3">
               <span className="font-ui text-[12px] font-medium text-[var(--accent)]">
                 {selectedIds.size} selected
               </span>
@@ -704,7 +634,7 @@ export function InboxView() {
           ) : null}
 
           {/* Keyboard hint footer */}
-          <div className="flex shrink-0 items-center gap-4 border-t border-[var(--border)] bg-[var(--base)] px-4 py-2">
+          <div className="flex h-10 shrink-0 items-center gap-4 border-t border-[var(--border)] bg-[var(--base)] px-4">
             <KeyHint keys="j k" label="Navigate" />
             <KeyHint keys="x" label="Select" />
             <KeyHint keys="s" label={selectedIds.size > 0 ? "Bulk save" : "Save"} />

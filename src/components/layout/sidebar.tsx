@@ -15,7 +15,6 @@ import {
 import { getUnreadSignalCount } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
-import { useCommandPalette } from "./command-palette";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
@@ -48,7 +47,6 @@ export function Sidebar() {
     queryFn: getUnreadSignalCount,
     staleTime: 30_000,
   });
-  const { open } = useCommandPalette();
   const { isCramped } = useWindowSize();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => readCollapsed());
@@ -75,7 +73,7 @@ export function Sidebar() {
       {/* Header */}
       <div
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-[var(--border)]",
+          "flex h-14 shrink-0 items-center",
           collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
@@ -113,37 +111,6 @@ export function Sidebar() {
             ‹
           </button>
         )}
-      </div>
-
-      {/* ⌘K trigger — separate row so it stays accessible in both states */}
-      <div
-        className={cn(
-          "flex shrink-0 items-center border-b border-[var(--border)]",
-          collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
-        )}
-      >
-        <button
-          type="button"
-          onClick={open}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--base)]",
-            "font-mono text-[11px] text-[var(--subtext-0)]",
-            "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            "hover:text-[var(--text)] hover:border-[var(--border-strong)]",
-            collapsed ? "h-7 w-7 justify-center" : "w-full justify-between px-2 py-1",
-          )}
-          aria-label="Open command palette"
-          title="Command palette (⌘K)"
-        >
-          {collapsed ? (
-            <span>⌘K</span>
-          ) : (
-            <>
-              <span className="font-ui text-[11px] text-[var(--overlay-1)]">Search</span>
-              <span>⌘K</span>
-            </>
-          )}
-        </button>
       </div>
 
       {/* Nav */}
@@ -219,8 +186,8 @@ export function Sidebar() {
       {/* Footer */}
       <div
         className={cn(
-          "flex shrink-0 border-t border-[var(--border)] py-3",
-          collapsed ? "justify-center px-0" : "items-center justify-between px-4",
+          "flex h-10 shrink-0 items-center border-t border-[var(--border)]",
+          collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
         {collapsed ? (

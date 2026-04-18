@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  FileImage,
+  FileText,
   FolderOpen,
   Loader2,
   Lock,
@@ -36,14 +38,16 @@ import {
   listProjectSignals,
   listProjects,
   listSignals,
+  listVaultFiles,
   removeSignalFromInvestigation,
   saveInvestigationBrief,
   updateInvestigation,
   updateInvestigationPhase,
 } from "@/lib/data";
 import { buildAnalysisPrompt, spawnClaude } from "@/lib/shell";
-import { ensureInvestigationDirectory, writeVaultFile } from "@/lib/vault";
-import type { Investigation, InvestigationUseCase } from "@/lib/types";
+import { ensureInvestigationDirectory, getVaultAbsolutePath, writeVaultFile } from "@/lib/vault";
+import { openPath } from "@tauri-apps/plugin-opener";
+import type { Investigation, InvestigationUseCase, VaultFile } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -199,6 +203,12 @@ export function InvestigationView() {
       const all = await listSignals();
       return all.filter((s) => s.status === "saved");
     },
+  });
+
+  const { data: vaultFiles } = useQuery({
+    queryKey: ["vault-files", selectedInvestigation?.case_id],
+    queryFn: () => listVaultFiles(selectedInvestigation!.case_id),
+    enabled: !!selectedInvestigation?.case_id,
   });
 
   const { data: projects } = useQuery({
@@ -562,14 +572,14 @@ export function InvestigationView() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar */}
-      <div className="flex shrink-0 items-start justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
           <span className="text-label">Investigate</span>
           <IndicatorStrip items={indicators} />
         </div>
-        <div className="flex items-center pt-1">
+        <div className="flex items-center">
           <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New investigation
@@ -1078,7 +1088,7 @@ export function InvestigationView() {
                 <button
                   type="button"
                   onClick={() => setOutputOpen((o) => !o)}
-                  className="flex w-full items-center justify-between gap-3 px-5 py-2 text-label transition-colors hover:text-[var(--text)]"
+                  className="flex w-full items-center justify-between gap-3 px-5 py-3 text-label transition-colors hover:text-[var(--text)]"
                 >
                   <span className="flex items-center gap-2">
                     <span>Analysis output</span>
@@ -1097,6 +1107,22 @@ export function InvestigationView() {
                   </div>
                 )}
               </div>
+              )}
+
+              {/* Vault files */}
+              {(vaultFiles ?? []).length > 0 && (
+                <div className="shrink-0 border-t border-[var(--border)]">
+                  <div className="px-5 py-3">
+                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Files
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-0.5 px-3 pb-3">
+                    {(vaultFiles ?? []).map((file) => (
+                      <VaultFileRow key={file.id} file={file} />
+                    ))}
+                  </div>
+                </div>
               )}
             </>
           ) : (
@@ -1137,6 +1163,41 @@ export function InvestigationView() {
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
+
+function VaultFileRow({ file }: { file: VaultFile }) {
+  async function handleOpen() {
+    try {
+      const absPath = await getVaultAbsolutePath(file.file_path);
+      await openPath(absPath);
+    } catch (err) {
+      toastError("Could not open file", err);
+    }
+  }
+
+  const label = file.file_path.split("/").pop() ?? file.file_path;
+  const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(label);
+
+  const icon = isImage ? (
+    <FileImage className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+  ) : (
+    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+  );
+
+  return (
+    <div className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--surface-0)]">
+      {icon}
+      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--subtext-0)]">
+        {label}
+      </span>
+      <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[var(--overlay-1)]">
+        {file.file_type}
+      </span>
+      <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={() => void handleOpen()}>
+        Open
+      </Button>
+    </div>
+  );
+}
 
 function DeleteInvestigationModal({
   open, investigationName, caseId, isPending, onClose, onConfirm,

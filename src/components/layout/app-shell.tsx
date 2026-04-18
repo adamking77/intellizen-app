@@ -8,7 +8,7 @@ export function AppShell() {
     <CommandPaletteProvider>
       <div className="flex h-dvh min-h-0 bg-[var(--base)]">
         <Sidebar />
-        <main className="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
+        <main className="relative flex-1 min-w-0 overflow-hidden">
           <Outlet />
         </main>
       </div>

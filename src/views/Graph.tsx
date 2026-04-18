@@ -2018,13 +2018,13 @@ export function GraphView() {
 
 
   return (
-    <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--crust)]">
+    <div className="relative flex h-full w-full overflow-hidden bg-[var(--crust)]">
       {/* ============================================================
           Main column: topbar + full-bleed canvas
           ============================================================ */}
       <div className="relative flex flex-1 min-w-0 flex-col">
         {/* ---------- TOP BAR ---------- */}
-        <div className="relative z-30 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+        <div className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
           {/* Left — breadcrumb + scope */}
           <div className="flex min-w-0 items-center gap-3">
             {!isCramped && (
@@ -2873,7 +2873,7 @@ export function GraphView() {
         {railOpen && (
           <>
             {/* Tab toggle */}
-            <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+            <div className="flex h-14 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
               <RailTab
                 label="Inspect"
                 active={railTab === "inspect"}
@@ -3131,40 +3131,6 @@ export function GraphView() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2 px-4 py-4">
-                        <span className="text-label">Entities</span>
-                        <div className="flex flex-col gap-1">
-                          {(
-                            Object.keys(ENTITY_STYLES) as GraphEntityType[]
-                          ).map((type) => (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={() => toggleEntityTypeFilter(type)}
-                              className={cn(
-                                "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-150",
-                                entityTypeFilters[type]
-                                  ? "hover:bg-[var(--surface-wash)]"
-                                  : "opacity-50 hover:opacity-80 hover:bg-[var(--surface-wash)]",
-                              )}
-                            >
-                              <span className="flex items-center gap-2">
-                                <span
-                                  className="h-2 w-2 rounded-full"
-                                  style={{ background: ENTITY_STYLES[type].accent }}
-                                />
-                                <span className="text-meta capitalize text-[var(--subtext-1)]">
-                                  {type}
-                                </span>
-                              </span>
-                              <span className="font-mono text-[11px] text-[var(--overlay-1)]">
-                                {graphMetrics.typeCounts[type]}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
                       <div className="px-4 py-4">
                         <p className="text-meta">
                           Click a node or edge to inspect. Shift-click to multi-select.
@@ -3244,17 +3210,18 @@ export function GraphView() {
                     <span className="text-label">Filters</span>
                     <div className="flex flex-col gap-1">
                       {(Object.keys(ENTITY_STYLES) as GraphEntityType[]).map((type) => (
-                        <label
+                        <button
                           key={type}
-                          className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--surface-wash)]"
+                          type="button"
+                          onClick={() => toggleEntityTypeFilter(type)}
+                          className={cn(
+                            "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-150",
+                            entityTypeFilters[type]
+                              ? "hover:bg-[var(--surface-wash)]"
+                              : "opacity-50 hover:opacity-80 hover:bg-[var(--surface-wash)]",
+                          )}
                         >
                           <span className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={entityTypeFilters[type]}
-                              onChange={() => toggleEntityTypeFilter(type)}
-                              className="accent-[var(--accent)]"
-                            />
                             <span
                               className="h-2 w-2 rounded-full"
                               style={{ background: ENTITY_STYLES[type].accent }}
@@ -3266,36 +3233,30 @@ export function GraphView() {
                           <span className="font-mono text-[11px] text-[var(--overlay-1)]">
                             {graphMetrics.typeCounts[type]}
                           </span>
-                        </label>
+                        </button>
                       ))}
                     </div>
                     <div className="mt-2 flex flex-col gap-1.5">
-                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={showEdgeLabels}
-                          onChange={() => setShowEdgeLabels((c) => !c)}
-                          className="accent-[var(--accent)]"
-                        />
-                        <span className="text-meta text-[var(--subtext-1)]">
-                          Edge labels
-                        </span>
-                      </label>
-                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={showMinimap}
-                          onChange={() => setShowMinimap((c) => !c)}
-                          className="accent-[var(--accent)]"
-                        />
-                        <span className="text-meta text-[var(--subtext-1)]">
-                          Minimap (Construct)
-                        </span>
-                      </label>
+                      <Button
+                        size="sm"
+                        variant={showEdgeLabels ? "primary" : "secondary"}
+                        className="w-full"
+                        onClick={() => setShowEdgeLabels((c) => !c)}
+                      >
+                        Edge labels {showEdgeLabels ? "on" : "off"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={showMinimap ? "primary" : "secondary"}
+                        className="w-full"
+                        onClick={() => setShowMinimap((c) => !c)}
+                      >
+                        Minimap {showMinimap ? "on" : "off"}
+                      </Button>
                       <Button
                         size="sm"
                         variant={focusMode === "selection" ? "primary" : "secondary"}
-                        className="mt-1 w-full"
+                        className="w-full"
                         onClick={() =>
                           setFocusMode((c) => (c === "selection" ? "all" : "selection"))
                         }
@@ -3329,7 +3290,8 @@ export function GraphView() {
                         </div>
                       </div>
                       <SliderRow
-                        label={`Spread (${insightRepulsion.toFixed(2)})`}
+                        label="Spread"
+                        displayValue={insightRepulsion.toFixed(2)}
                         value={insightRepulsion}
                         min={0.8}
                         max={3.2}
@@ -3337,7 +3299,8 @@ export function GraphView() {
                         onChange={setInsightRepulsion}
                       />
                       <SliderRow
-                        label={`Link distance (${Math.round(insightLinkDistance)})`}
+                        label="Link distance"
+                        displayValue={String(Math.round(insightLinkDistance))}
                         value={insightLinkDistance}
                         min={140}
                         max={520}
@@ -3345,7 +3308,8 @@ export function GraphView() {
                         onChange={setInsightLinkDistance}
                       />
                       <SliderRow
-                        label={`Center pull (${insightCenterPull.toFixed(2)})`}
+                        label="Center pull"
+                        displayValue={insightCenterPull.toFixed(2)}
                         value={insightCenterPull}
                         min={0.01}
                         max={0.2}
@@ -3831,6 +3795,7 @@ function StatBlock({ label, value }: { label: string; value: string | number }) 
 function SliderRow({
   label,
   value,
+  displayValue,
   min,
   max,
   step,
@@ -3838,6 +3803,7 @@ function SliderRow({
 }: {
   label: string;
   value: number;
+  displayValue: string;
   min: number;
   max: number;
   step: number;
@@ -3845,7 +3811,10 @@ function SliderRow({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-meta">{label}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-meta">{label}</span>
+        <span className="font-mono text-[11px] text-[var(--overlay-1)]">{displayValue}</span>
+      </div>
       <input
         type="range"
         min={min}
