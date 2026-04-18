@@ -131,6 +131,12 @@ The **Tauri SDK** uses `category: 'news'` for News and `category: 'personal site
 
 `listMonitors()` → for each `active` monitor, call Exa, upsert results into `intel_signals` with `onConflict: "url", ignoreDuplicates: true`, update `last_run` and `signal_count`. The unique index on `url` does the dedup.
 
+## MCP server
+
+Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `dist/` directory is gitignored — always build after pulling. The server exposes tools for projects, investigations, signals, vault files, and graph nodes/edges.
+
+**Known limitation:** `list_project_signals` returns full `raw_payload` per signal — can exceed 1M characters on large projects. When reading project signals via MCP, use `run_exa_search` results (which return only IDs and titles) or query Supabase directly for slim fields rather than calling `list_project_signals` on a well-seeded project.
+
 ## Key engineering rules
 
 - Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
