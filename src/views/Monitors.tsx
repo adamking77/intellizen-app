@@ -266,6 +266,7 @@ function MonitorCard({
   const queryClient = useQueryClient();
   const isPaused = monitor.status === "paused";
   const color = domainColor(monitor.watch_domain);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const toggleMutation = useMutation({
     mutationFn: () =>
@@ -393,11 +394,7 @@ function MonitorCard({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm(`Delete monitor "${monitor.name}"?`)) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
                 title="Delete monitor"
               >
@@ -439,6 +436,56 @@ function MonitorCard({
                 className={cn("h-3 w-3", runMutation.isPending && "animate-spin")}
               />
               Run now
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <DeleteMonitorModal
+        open={deleteConfirmOpen}
+        monitorName={monitor.name}
+        isPending={deleteMutation.isPending}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          deleteMutation.mutate();
+          setDeleteConfirmOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function DeleteMonitorModal({
+  open, monitorName, isPending, onClose, onConfirm,
+}: {
+  open: boolean; monitorName: string; isPending: boolean;
+  onClose: () => void; onConfirm: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delete monitor"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+      >
+        <div className="border-b border-[var(--border)] px-5 py-4">
+          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">Delete monitor</p>
+          <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">{monitorName}</h3>
+        </div>
+        <div className="grid gap-3 px-5 py-4">
+          <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+            Removes this monitor permanently. Signals it collected are not deleted.
+          </p>
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
+              <Trash2 className="h-3 w-3" />
+              {isPending ? "Deleting…" : "Delete monitor"}
             </Button>
           </div>
         </div>
