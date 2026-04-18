@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createProject } from "@/lib/data";
+import { createProject, listOperations } from "@/lib/data";
 import type { ProjectType } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
 
@@ -12,13 +12,23 @@ type ProjectCreateModalProps = {
   open: boolean;
   onClose: () => void;
   onCreated?: (projectId: number) => void;
+  initialOperationId?: number | null;
 };
 
-export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateModalProps) {
+export function ProjectCreateModal({ open, onClose, onCreated, initialOperationId = null }: ProjectCreateModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
+  const [operationId, setOperationId] = useState<number | null>(initialOperationId);
+
+  const { data: operations } = useQuery({
+    queryKey: ["operations"],
+    queryFn: listOperations,
+    enabled: open,
+  });
+
+  const activeOperations = (operations ?? []).filter((o) => o.status === "active");
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -26,6 +36,7 @@ export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateMo
         name,
         type,
         watch_domain: watchDomain || null,
+        operation_id: operationId,
       }),
     onSuccess: async (project) => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -33,6 +44,7 @@ export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateMo
       setName("");
       setType("research");
       setWatchDomain("");
+      setOperationId(null);
       onCreated?.(project.id);
       onClose();
     },
@@ -41,10 +53,7 @@ export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateMo
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -55,17 +64,16 @@ export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateMo
       setName("");
       setType("research");
       setWatchDomain("");
+      setOperationId(initialOperationId);
     }
-  }, [open]);
+  }, [open, initialOperationId]);
 
   if (!open) return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         role="dialog"
@@ -147,6 +155,29 @@ export function ProjectCreateModal({ open, onClose, onCreated }: ProjectCreateMo
               </select>
             </label>
           </div>
+
+          {activeOperations.length > 0 && (
+            <label className="grid gap-1.5">
+              <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                Operation{" "}
+                <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
+                  (optional)
+                </span>
+              </span>
+              <select
+                className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                value={operationId ?? ""}
+                onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">No operation — standalone project</option>
+                {activeOperations.map((op) => (
+                  <option key={op.id} value={op.id}>
+                    {op.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="mt-2 flex items-center justify-end gap-2">
             <button

@@ -9,11 +9,14 @@ import { toastError } from "@/lib/toast";
 import type { InvestigationUseCase } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// operationId is passed from context (e.g. opening from an Operation detail pane)
+
 type InvestigationCreateModalProps = {
   open: boolean;
   onClose: () => void;
   onCreated?: (caseId: string) => void;
   initialProjectId?: number | null;
+  initialOperationId?: number | null;
   initialName?: string;
 };
 
@@ -40,12 +43,14 @@ export function InvestigationCreateModal({
   onClose,
   onCreated,
   initialProjectId = null,
+  initialOperationId = null,
   initialName = "",
 }: InvestigationCreateModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(initialName);
   const [useCase, setUseCase] = useState<InvestigationUseCase>("scoping");
   const [projectId, setProjectId] = useState<number | null>(initialProjectId);
+  const operationId = initialOperationId;
 
   const { data: projects } = useQuery({
     queryKey: ["projects"],
@@ -58,7 +63,7 @@ export function InvestigationCreateModal({
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createInvestigation({ name: name.trim(), projectId, useCase }),
+      createInvestigation({ name: name.trim(), projectId, operationId, useCase }),
     onSuccess: async (investigation) => {
       await queryClient.invalidateQueries({ queryKey: ["investigations"] });
       setName("");
@@ -90,7 +95,7 @@ export function InvestigationCreateModal({
       setProjectId(initialProjectId);
       setUseCase("scoping");
     }
-  }, [open, initialName, initialProjectId]);
+  }, [open, initialName, initialProjectId, initialOperationId]);
 
   if (!open) return null;
 

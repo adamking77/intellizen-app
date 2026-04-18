@@ -1,3 +1,4 @@
+export type OperationStatus = "active" | "archived";
 export type SignalStatus = "new" | "saved" | "dismissed";
 export type ProjectType = "report" | "scoping" | "research" | "client_case";
 export type ProjectStatus = "active" | "archived";
@@ -29,6 +30,15 @@ export interface IntelSignal {
   updated_at: string;
 }
 
+export interface Operation {
+  id: number;
+  name: string;
+  description: string | null;
+  status: OperationStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -36,6 +46,7 @@ export interface Project {
   watch_domain: string | null;
   status: ProjectStatus;
   notes: string | null;
+  operation_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +143,7 @@ export type ReportType = "internal" | "client" | "deep" | "public";
 export interface Investigation {
   id: number;
   case_id: string;
+  operation_id: number | null;
   name: string;
   status: InvestigationStatus;
   current_phase: number;

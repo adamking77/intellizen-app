@@ -13,6 +13,7 @@ import type {
   InvestigationSignal,
   Monitor,
   MonitorInsert,
+  Operation,
   Project,
   ProjectSignal,
   SearchResultItem,
@@ -104,6 +105,54 @@ export async function getUnreadSignalCount() {
   return count ?? 0;
 }
 
+// ============================
+// Operations
+// ============================
+
+export async function listOperations() {
+  const { data, error } = await supabase
+    .from("operations")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as Operation[];
+}
+
+export async function createOperation(input: {
+  name: string;
+  description?: string | null;
+}) {
+  const { data, error } = await supabase
+    .from("operations")
+    .insert([{ name: input.name, description: input.description ?? null }])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Operation;
+}
+
+export async function updateOperation(
+  id: number,
+  input: Partial<Pick<Operation, "name" | "description" | "status">>,
+) {
+  const { data, error } = await supabase
+    .from("operations")
+    .update(input)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as Operation;
+}
+
+export async function deleteOperation(id: number) {
+  const { error } = await supabase.from("operations").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listProjects() {
   const { data, error } = await supabase
     .from("projects")
@@ -118,6 +167,7 @@ export async function createProject(input: {
   name: string;
   type: Project["type"];
   watch_domain?: string | null;
+  operation_id?: number | null;
 }) {
   const { data, error } = await supabase
     .from("projects")
@@ -126,6 +176,7 @@ export async function createProject(input: {
         name: input.name,
         type: input.type,
         watch_domain: input.watch_domain ?? null,
+        operation_id: input.operation_id ?? null,
       },
     ])
     .select("*")
@@ -137,7 +188,7 @@ export async function createProject(input: {
 
 export async function updateProject(
   id: number,
-  input: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes">>,
+  input: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id">>,
 ) {
   const { data, error } = await supabase
     .from("projects")
@@ -579,6 +630,7 @@ export async function getInvestigation(caseId: string) {
 export async function createInvestigation(input: {
   name: string;
   projectId?: number | null;
+  operationId?: number | null;
   useCase?: import("@/lib/types").InvestigationUseCase;
 }) {
   const MAX_CASE_ID_ATTEMPTS = 5;
@@ -592,6 +644,7 @@ export async function createInvestigation(input: {
           case_id: caseId,
           name: input.name,
           project_id: input.projectId ?? null,
+          operation_id: input.operationId ?? null,
           use_case: input.useCase ?? "scoping",
           current_phase: 1,
           status: "active",
