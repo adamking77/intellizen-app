@@ -80,7 +80,15 @@ export function Sidebar() {
         )}
       >
         {collapsed ? (
-          <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label="Expand sidebar"
+            title="Expand"
+            className="inline-flex items-center justify-center rounded-md transition-opacity duration-150 hover:opacity-70"
+          >
+            <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
+          </button>
         ) : (
           <div className="flex items-center gap-2">
             <img src="/app-icon.svg" alt="" aria-hidden className="h-6 w-6 rounded-md" />
@@ -89,7 +97,7 @@ export function Sidebar() {
             </span>
           </div>
         )}
-        {!isCramped && (
+        {!isCramped && !collapsed && (
           <button
             type="button"
             onClick={toggle}
@@ -99,10 +107,10 @@ export function Sidebar() {
               "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
             )}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand" : "Collapse"}
+            aria-label="Collapse sidebar"
+            title="Collapse"
           >
-            {collapsed ? "›" : "‹"}
+            ‹
           </button>
         )}
       </div>
