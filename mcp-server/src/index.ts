@@ -257,6 +257,69 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["case_id", "project_id"],
       },
     },
+    // ── Graph ────────────────────────────────────────────────────────────────
+    {
+      name: "upsert_graph_nodes",
+      description:
+        "Batch-upsert entity nodes into a graph. Positions are auto-spread if omitted. Linked to a project or standalone (project_id optional).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: {
+            type: "number",
+            description: "Project to link graph to. Omit for standalone graph.",
+          },
+          nodes: {
+            type: "array",
+            description: "Nodes to upsert.",
+            items: {
+              type: "object",
+              properties: {
+                node_id: { type: "string", description: "Unique kebab-case slug" },
+                label:   { type: "string", description: "Display label (≤4 words)" },
+                entity_type: {
+                  type: "string",
+                  enum: ["person", "organisation", "location", "event"],
+                },
+                position_x: { type: "number" },
+                position_y: { type: "number" },
+              },
+              required: ["node_id", "label", "entity_type"],
+            },
+          },
+        },
+        required: ["nodes"],
+      },
+    },
+    {
+      name: "upsert_graph_edges",
+      description:
+        "Batch-upsert relationship edges into a graph. Validates that source and target nodes exist first.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: {
+            type: "number",
+            description: "Must match the project_id used when creating the nodes.",
+          },
+          edges: {
+            type: "array",
+            description: "Edges to upsert.",
+            items: {
+              type: "object",
+              properties: {
+                edge_id:        { type: "string", description: "Unique kebab-case slug" },
+                source_node_id: { type: "string" },
+                target_node_id: { type: "string" },
+                label:          { type: "string", description: "Relationship verb (≤3 words)" },
+              },
+              required: ["edge_id", "source_node_id", "target_node_id"],
+            },
+          },
+        },
+        required: ["edges"],
+      },
+    },
     // ── Vault / Analysis ────────────────────────────────────────────────────
     {
       name: "write_analysis",
@@ -674,6 +737,104 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── upsert_graph_nodes ────────────────────────────────────────────────────
+  if (name === "upsert_graph_nodes") {
+    const { project_id, nodes } = args as {
+      project_id?: number;
+      nodes: Array<{
+        node_id: string;
+        label: string;
+        entity_type: string;
+        position_x?: number;
+        position_y?: number;
+      }>;
+    };
+
+    // Auto-spread positions using a grid layout centred at (3000, 2000)
+    const COLS = Math.ceil(Math.sqrt(nodes.length));
+    const SPACING = 500;
+    const ORIGIN_X = 3000 - Math.floor(COLS / 2) * SPACING;
+    const ORIGIN_Y = 2000 - Math.floor(nodes.length / COLS / 2) * SPACING;
+
+    const rows = nodes.map((n, i) => ({
+      project_id: project_id ?? null,
+      node_id: n.node_id,
+      label: n.label,
+      entity_type: n.entity_type,
+      position_x: n.position_x ?? ORIGIN_X + (i % COLS) * SPACING,
+      position_y: n.position_y ?? ORIGIN_Y + Math.floor(i / COLS) * SPACING,
+    }));
+
+    const { error } = await supabase
+      .from("graph_nodes")
+      .upsert(rows, { onConflict: "project_id,node_id", ignoreDuplicates: false });
+    if (error) throw new Error(error.message);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ upserted: rows.length, node_ids: rows.map((r) => r.node_id) }, null, 2),
+        },
+      ],
+    };
+  }
+
+  // ── upsert_graph_edges ────────────────────────────────────────────────────
+  if (name === "upsert_graph_edges") {
+    const { project_id, edges } = args as {
+      project_id?: number;
+      edges: Array<{
+        edge_id: string;
+        source_node_id: string;
+        target_node_id: string;
+        label?: string;
+      }>;
+    };
+
+    // Validate all referenced node_ids exist
+    const referencedIds = [...new Set(edges.flatMap((e) => [e.source_node_id, e.target_node_id]))];
+    const nodeQuery = supabase
+      .from("graph_nodes")
+      .select("node_id")
+      .in("node_id", referencedIds);
+    if (project_id !== undefined) {
+      nodeQuery.eq("project_id", project_id);
+    } else {
+      nodeQuery.is("project_id", null);
+    }
+    const { data: existingNodes, error: nodeErr } = await nodeQuery;
+    if (nodeErr) throw new Error(nodeErr.message);
+
+    const existingIds = new Set(existingNodes?.map((n: { node_id: string }) => n.node_id) ?? []);
+    const invalid = referencedIds.filter((id) => !existingIds.has(id));
+    if (invalid.length > 0) {
+      throw new Error(`Referenced node_ids not found: ${invalid.join(", ")}`);
+    }
+
+    const rows = edges.map((e) => ({
+      project_id: project_id ?? null,
+      edge_id: e.edge_id,
+      source_node_id: e.source_node_id,
+      target_node_id: e.target_node_id,
+      label: e.label ?? null,
+    }));
+
+    const { error } = await supabase
+      .from("graph_edges")
+      .upsert(rows, { onConflict: "project_id,edge_id", ignoreDuplicates: false });
+    if (error) throw new Error(error.message);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ upserted: rows.length, edge_ids: rows.map((r) => r.edge_id) }, null, 2),
+        },
+      ],
+    };
   }
 
   throw new Error(`Unknown tool: ${name}`);
