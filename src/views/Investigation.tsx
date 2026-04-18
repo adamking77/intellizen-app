@@ -1117,7 +1117,11 @@ export function InvestigationView() {
                   </div>
                   <div className="flex flex-col gap-0.5 px-3 pb-3">
                     {(vaultFiles ?? []).map((file) => (
-                      <VaultFileRow key={file.id} file={file} />
+                      <VaultFileRow
+                        key={file.id}
+                        file={file}
+                        onDeleted={() => void queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation?.case_id] })}
+                      />
                     ))}
                   </div>
                 </div>

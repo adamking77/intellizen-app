@@ -871,6 +871,11 @@ export async function createVaultFile(input: {
   return data as VaultFile;
 }
 
+export async function deleteVaultFile(id: number) {
+  const { error } = await supabase.from("vault_files").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listProjectVaultFiles(projectId: number) {
   const { data, error } = await supabase
     .from("vault_files")

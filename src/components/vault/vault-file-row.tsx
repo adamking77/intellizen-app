@@ -2,17 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FileImage, FileText } from "lucide-react";
+import { FileImage, FileText, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { deleteVaultFile } from "@/lib/data";
 import { toastError } from "@/lib/toast";
-import { getVaultAbsolutePath } from "@/lib/vault";
+import { getVaultAbsolutePath, removeVaultFile } from "@/lib/vault";
 import type { VaultFile } from "@/lib/types";
 
-export function VaultFileRow({ file }: { file: VaultFile }) {
+interface VaultFileRowProps {
+  file: VaultFile;
+  onDeleted?: () => void;
+}
+
+export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
   const [thumbnailSrc, setThumbnailSrc] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [isDeleting, setIsDeleting] = useState(false);
   const loadedRef = useRef(false);
 
   const label = file.file_path.split("/").pop() ?? file.file_path;
@@ -52,6 +59,18 @@ export function VaultFileRow({ file }: { file: VaultFile }) {
     }
   }
 
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await deleteVaultFile(file.id);
+      await removeVaultFile(file.file_path);
+      onDeleted?.();
+    } catch (err) {
+      toastError("Could not delete file", err);
+      setIsDeleting(false);
+    }
+  }
+
   const icon = isImage ? (
     <FileImage className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
   ) : (
@@ -61,7 +80,7 @@ export function VaultFileRow({ file }: { file: VaultFile }) {
   return (
     <>
       <div
-        className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--surface-0)]"
+        className="group/vf flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--surface-0)]"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShowTooltip(false)}
       >
@@ -72,14 +91,24 @@ export function VaultFileRow({ file }: { file: VaultFile }) {
         <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[var(--overlay-1)]">
           {file.file_type}
         </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 shrink-0 px-2 text-[11px]"
-          onClick={() => void handleOpen()}
-        >
-          Open
-        </Button>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/vf:opacity-100">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => void handleOpen()}
+          >
+            Open
+          </Button>
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={() => void handleDelete()}
+            className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
       </div>
 
       {showTooltip && thumbnailSrc && createPortal(

@@ -167,6 +167,16 @@ export async function removeInvestigationDirectory(caseId: string): Promise<bool
 }
 
 /**
+ * Delete a single file from the vault.
+ */
+export async function removeVaultFile(filepath: string): Promise<void> {
+  const fullPath = await resolveVaultPath(filepath);
+  if (await exists(fullPath)) {
+    await remove(fullPath);
+  }
+}
+
+/**
  * Write text into a file within the vault. Creates parent directories as needed.
  */
 export async function writeVaultFile(filepath: string, content: string): Promise<void> {
