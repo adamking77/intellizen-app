@@ -47,7 +47,7 @@ export function SignalCard({
       data-selected={isSelected ? "true" : undefined}
       data-active={isActive ? "true" : undefined}
       className={cn(
-        "group/row relative flex cursor-pointer items-start gap-3 pr-3 py-4",
+        "group/row relative flex cursor-pointer items-start gap-3 pr-3 py-6",
         "border-b border-[var(--border-subtle)]",
         "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
         isSelected
@@ -97,26 +97,76 @@ export function SignalCard({
 
       {/* Stacked content column */}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {/* Title row with hover actions floated right */}
-        <div className="flex items-start justify-between gap-3">
-          <p
-            className={cn(
-              "min-w-0 flex-1 font-ui text-[13px] leading-snug line-clamp-2",
-              isSelected || isActive
-                ? "text-[var(--text)] font-medium"
-                : "text-[var(--subtext-1)] group-hover/row:text-[var(--text)]",
-            )}
-          >
-            {title}
-          </p>
+        {/* Title */}
+        <p
+          className={cn(
+            "min-w-0 font-ui text-[13px] leading-snug line-clamp-2",
+            isSelected || isActive
+              ? "text-[var(--text)] font-medium"
+              : "text-[var(--subtext-1)] group-hover/row:text-[var(--text)]",
+          )}
+        >
+          {title}
+        </p>
+
+        {/* Meta row: topic chip · source · score · date · actions */}
+        <div className="flex items-center gap-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            <span className="inline-flex shrink-0 items-center gap-1.5" title={label}>
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: color }}
+              />
+              <span
+                className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em]"
+                style={{ color }}
+              >
+                {label}
+              </span>
+            </span>
+
+            {source || host ? (
+              <>
+                <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                <span className="min-w-0 truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                  {source ?? host}
+                </span>
+              </>
+            ) : null}
+
+            {typeof score === "number" ? (
+              <>
+                <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                <span
+                  className={cn(
+                    "font-mono text-[11px] tabular-nums",
+                    score > 0.7
+                      ? "text-[var(--accent)]"
+                      : score > 0.5
+                        ? "text-[var(--warning)]"
+                        : "text-[var(--overlay-1)]",
+                  )}
+                >
+                  {score.toFixed(2)}
+                </span>
+              </>
+            ) : null}
+
+            {publishedAt ? (
+              <>
+                <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                  {formatDate(publishedAt)}
+                </span>
+              </>
+            ) : null}
+          </div>
 
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100">
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void openUrl(url);
-              }}
+              onClick={(e) => { e.stopPropagation(); void openUrl(url); }}
               className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               title="Open URL"
             >
@@ -124,6 +174,7 @@ export function SignalCard({
             </button>
             {onSave ? (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onSave(); }}
                 className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
                 title="Save to project"
@@ -133,6 +184,7 @@ export function SignalCard({
             ) : null}
             {onDismiss ? (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onDismiss(); }}
                 className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
                 title="Dismiss"
@@ -141,59 +193,6 @@ export function SignalCard({
               </button>
             ) : null}
           </div>
-        </div>
-
-        {/* Meta row: topic chip · source · score · date */}
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-          <span className="inline-flex shrink-0 items-center gap-1.5" title={label}>
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ background: color }}
-            />
-            <span
-              className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em]"
-              style={{ color }}
-            >
-              {label}
-            </span>
-          </span>
-
-          {source || host ? (
-            <>
-              <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-              <span className="min-w-0 truncate font-mono text-[11px] text-[var(--overlay-1)]">
-                {source ?? host}
-              </span>
-            </>
-          ) : null}
-
-          {typeof score === "number" ? (
-            <>
-              <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-              <span
-                className={cn(
-                  "font-mono text-[11px] tabular-nums",
-                  score > 0.7
-                    ? "text-[var(--accent)]"
-                    : score > 0.5
-                      ? "text-[var(--warning)]"
-                      : "text-[var(--overlay-1)]",
-                )}
-              >
-                {score.toFixed(2)}
-              </span>
-            </>
-          ) : null}
-
-          {publishedAt ? (
-            <>
-              <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-              <span className="font-mono text-[11px] text-[var(--overlay-1)]">
-                {formatDate(publishedAt)}
-              </span>
-            </>
-          ) : null}
         </div>
       </div>
     </div>

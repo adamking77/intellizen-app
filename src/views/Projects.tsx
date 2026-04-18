@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileSearch, FolderSearch, Plus } from "lucide-react";
+import { Archive, FileSearch, FolderSearch, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { domainColor } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 import {
+  deleteProject,
   listProjectSignalCounts,
   listProjectSignals,
   listProjects,
@@ -48,6 +49,7 @@ export function ProjectsView() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [investigationModalOpen, setInvestigationModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
@@ -268,6 +270,18 @@ export function ProjectsView() {
     },
   });
 
+  const deleteProjectMutation = useMutation({
+    mutationFn: (id: number) => deleteProject(id),
+    onSuccess: async () => {
+      setSelectedProjectId(null);
+      setDeleteConfirmOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["project-signal-counts"] });
+      toast.success("Project deleted");
+    },
+    onError: (err) => toastError("Couldn't delete project", err),
+  });
+
   const indicators: IndicatorItem[] = [
     {
       label: "Total",
@@ -363,6 +377,7 @@ export function ProjectsView() {
                       isSelected
                         ? "bg-[var(--accent-soft)] pl-[13px]"
                         : "pl-4 hover:bg-[var(--surface-wash)]",
+                      project.status === "archived" && "opacity-50",
                     )}
                   >
                     {isSelected ? (
@@ -520,6 +535,16 @@ export function ProjectsView() {
                     <Archive className="h-3 w-3" />
                     {selectedProject.status === "active" ? "Archive" : "Reactivate"}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={deleteProjectMutation.isPending}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="gap-1.5 text-[var(--overlay-1)] hover:text-[var(--danger)]"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    {deleteProjectMutation.isPending ? "Deleting…" : "Delete"}
+                  </Button>
                 </div>
               </div>
 
@@ -615,6 +640,17 @@ export function ProjectsView() {
         onCreated={(id) => setSelectedProjectId(id)}
       />
 
+      <DeleteProjectModal
+        open={deleteConfirmOpen && !!selectedProject}
+        projectName={selectedProject?.name ?? ""}
+        isPending={deleteProjectMutation.isPending}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          if (!selectedProject) return;
+          deleteProjectMutation.mutate(selectedProject.id);
+        }}
+      />
+
       <InvestigationCreateModal
         open={investigationModalOpen}
         onClose={() => setInvestigationModalOpen(false)}
@@ -625,6 +661,46 @@ export function ProjectsView() {
           navigate("/investigate");
         }}
       />
+    </div>
+  );
+}
+
+function DeleteProjectModal({
+  open, projectName, isPending, onClose, onConfirm,
+}: {
+  open: boolean; projectName: string; isPending: boolean;
+  onClose: () => void; onConfirm: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delete project"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+      >
+        <div className="border-b border-[var(--border)] px-5 py-4">
+          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">Delete project</p>
+          <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">{projectName}</h3>
+        </div>
+        <div className="grid gap-3 px-5 py-4">
+          <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+            Removes the project and its signal associations permanently.
+          </p>
+          <p className="font-ui text-[12px] text-[var(--overlay-1)]">Source signals are not deleted — they stay in Inbox.</p>
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
+              <Trash2 className="h-3 w-3" />
+              {isPending ? "Deleting…" : "Delete project"}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

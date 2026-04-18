@@ -317,7 +317,7 @@ function MonitorCard({
     <div
       data-paused={isPaused ? "true" : undefined}
       className={cn(
-        "group/card relative px-6 py-4",
+        "group/card relative px-6 py-6",
         "transition-colors duration-150",
         isPaused ? "bg-[var(--surface-wash)]/40" : "hover:bg-[var(--surface-wash)]",
       )}
@@ -364,6 +364,8 @@ function MonitorCard({
 
         {/* Meta + actions */}
         <div className="flex items-center justify-between gap-3">
+          {/* Left: metadata · hover icons */}
+          <div className="flex items-center gap-5">
             <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--overlay-1)] tabular-nums">
               <span className="capitalize">{monitor.frequency}</span>
               <span aria-hidden className="text-[var(--overlay-0)]">·</span>
@@ -380,65 +382,66 @@ function MonitorCard({
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => toggleMutation.mutate()}
-                disabled={toggleMutation.isPending}
-                className="gap-1.5"
-                title={isPaused ? "Resume monitor" : "Pause monitor"}
+            <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/card:opacity-100">
+              <button
+                type="button"
+                onClick={() => onEdit(monitor)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Edit monitor"
               >
-                {isPaused ? (
-                  <>
-                    <Play className="h-3 w-3" />
-                    Resume
-                  </>
-                ) : (
-                  <>
-                    <Pause className="h-3 w-3" />
-                    Pause
-                  </>
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => runMutation.mutate()}
-                disabled={runMutation.isPending}
-                className="gap-1.5"
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Delete monitor "${monitor.name}"?`)) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+                title="Delete monitor"
               >
-                <RefreshCcw
-                  className={cn("h-3 w-3", runMutation.isPending && "animate-spin")}
-                />
-                Run now
-              </Button>
-
-              {/* Hover-only secondary actions */}
-              <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/card:opacity-100">
-                <button
-                  type="button"
-                  onClick={() => onEdit(monitor)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  title="Edit monitor"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete monitor "${monitor.name}"?`)) {
-                      deleteMutation.mutate();
-                    }
-                  }}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
-                  title="Delete monitor"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           </div>
+
+          {/* Right: labeled action buttons */}
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => toggleMutation.mutate()}
+              disabled={toggleMutation.isPending}
+              className="gap-1.5"
+              title={isPaused ? "Resume monitor" : "Pause monitor"}
+            >
+              {isPaused ? (
+                <>
+                  <Play className="h-3 w-3" />
+                  Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-3 w-3" />
+                  Pause
+                </>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => runMutation.mutate()}
+              disabled={runMutation.isPending}
+              className="gap-1.5"
+            >
+              <RefreshCcw
+                className={cn("h-3 w-3", runMutation.isPending && "animate-spin")}
+              />
+              Run now
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

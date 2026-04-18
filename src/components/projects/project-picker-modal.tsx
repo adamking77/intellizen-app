@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ export function ProjectPickerModal({
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
   const [creating, setCreating] = useState(false);
+  const [savingProjectId, setSavingProjectId] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const { data: projects } = useQuery({
@@ -71,6 +72,7 @@ export function ProjectPickerModal({
       setName("");
       setType("research");
       setWatchDomain("");
+      setSavingProjectId(null);
     }
   }, [open]);
 
@@ -94,8 +96,15 @@ export function ProjectPickerModal({
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Project routing
+            <p className="flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+              {savingProjectId !== null ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />
+                  <span className="text-[var(--accent)]">Saving to project…</span>
+                </>
+              ) : (
+                "Project routing"
+              )}
             </p>
             <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
               {title}
@@ -104,8 +113,9 @@ export function ProjectPickerModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={savingProjectId !== null}
             aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
@@ -127,24 +137,48 @@ export function ProjectPickerModal({
             </p>
           ) : (
             <div className="grid gap-1.5">
-              {existing.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={async () => {
-                    await onSelect(project.id);
-                    onClose();
-                  }}
-                  className="group flex items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 text-left transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)]"
-                >
-                  <span className="truncate font-ui text-[13px] font-medium text-[var(--text)]">
-                    {project.name}
-                  </span>
-                  <span className="shrink-0 font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
-                    {project.type.replace("_", " ")}
-                  </span>
-                </button>
-              ))}
+              {existing.map((project) => {
+                const isSaving = savingProjectId === project.id;
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    disabled={savingProjectId !== null}
+                    onClick={async () => {
+                      setSavingProjectId(project.id);
+                      try {
+                        await onSelect(project.id);
+                        onClose();
+                      } catch {
+                        setSavingProjectId(null);
+                      }
+                    }}
+                    className={cn(
+                      "group flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                      isSaving
+                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)]",
+                      savingProjectId !== null && !isSaving && "opacity-40",
+                    )}
+                  >
+                    <span className={cn(
+                      "truncate font-ui text-[13px] font-medium",
+                      isSaving ? "text-[var(--accent)]" : "text-[var(--text)]",
+                    )}>
+                      {project.name}
+                    </span>
+                    <span className="shrink-0 flex items-center gap-1.5">
+                      {isSaving ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent)]" />
+                      ) : (
+                        <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
+                          {project.type.replace("_", " ")}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
 

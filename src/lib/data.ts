@@ -150,6 +150,15 @@ export async function updateProject(
   return data as Project;
 }
 
+export async function deleteProject(id: number) {
+  const { error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
 export async function listProjectSignalCounts(): Promise<Record<number, number>> {
   const { data, error } = await supabase
     .from("project_signals")

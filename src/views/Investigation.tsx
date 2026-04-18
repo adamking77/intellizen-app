@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
+  Archive,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -37,11 +38,12 @@ import {
   listSignals,
   removeSignalFromInvestigation,
   saveInvestigationBrief,
+  updateInvestigation,
   updateInvestigationPhase,
 } from "@/lib/data";
 import { buildAnalysisPrompt, spawnClaude } from "@/lib/shell";
 import { ensureInvestigationDirectory, writeVaultFile } from "@/lib/vault";
-import type { InvestigationUseCase } from "@/lib/types";
+import type { Investigation, InvestigationUseCase } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -120,7 +122,7 @@ export function InvestigationView() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete" | "archived">("all");
 
   // Phase 1 — Brief form state
   const [briefForm, setBriefForm] = useState({
@@ -293,9 +295,11 @@ export function InvestigationView() {
 
   const filteredCases = useMemo(() => {
     const list = investigations ?? [];
-    if (statusFilter === "all") return list;
-    if (statusFilter === "complete") return list.filter(isCaseComplete);
-    return list.filter((i) => !isCaseComplete(i));
+    if (statusFilter === "archived") return list.filter((i) => i.status === "archived");
+    const active = list.filter((i) => i.status !== "archived");
+    if (statusFilter === "all") return active;
+    if (statusFilter === "complete") return active.filter(isCaseComplete);
+    return active.filter((i) => !isCaseComplete(i));
   }, [investigations, statusFilter]);
 
   useEffect(() => {
@@ -380,6 +384,43 @@ export function InvestigationView() {
       }
     },
     onError: (err) => toastError("Couldn't delete investigation", err),
+  });
+
+  const archiveToggleMutation = useMutation({
+    mutationFn: () =>
+      updateInvestigation(selectedCaseId!, {
+        status: selectedInvestigation?.status === "archived" ? "active" : "archived",
+      }),
+    onMutate: async () => {
+      if (!selectedCaseId || !selectedInvestigation) return;
+      await queryClient.cancelQueries({ queryKey: ["investigations"] });
+      await queryClient.cancelQueries({ queryKey: ["investigation", selectedCaseId] });
+      const previous = queryClient.getQueryData<Investigation[]>(["investigations"]);
+      const nextStatus = selectedInvestigation.status === "archived" ? "active" as const : "archived" as const;
+      queryClient.setQueryData<Investigation[]>(["investigations"], (old) =>
+        (old ?? []).map((i) =>
+          i.case_id === selectedCaseId ? { ...i, status: nextStatus } : i,
+        ),
+      );
+      queryClient.setQueryData<Investigation>(["investigation", selectedCaseId], (old) =>
+        old ? { ...old, status: nextStatus } : old,
+      );
+      return { previous, nextStatus };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["investigations"], context.previous);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
+      toastError("Couldn't update investigation", err);
+    },
+    onSuccess: (_data, _vars, context) => {
+      toast.success(context?.nextStatus === "archived" ? "Investigation archived" : "Investigation reactivated");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["investigations"] });
+      void queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
+    },
   });
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
@@ -489,20 +530,23 @@ export function InvestigationView() {
 
   const caseStats = useMemo(() => {
     const list = investigations ?? [];
-    const complete = list.filter(isCaseComplete).length;
+    const archived = list.filter((i) => i.status === "archived").length;
+    const active = list.filter((i) => i.status !== "archived");
+    const complete = active.filter(isCaseComplete).length;
     const latest = list.reduce<string | null>((acc, i) => {
       const t = i.updated_at ?? i.created_at ?? null;
       if (!t) return acc;
       if (!acc) return t;
       return new Date(t).getTime() > new Date(acc).getTime() ? t : acc;
     }, null);
-    return { total: list.length, inProgress: list.length - complete, complete, latest };
+    return { total: active.length, inProgress: active.length - complete, complete, archived, latest };
   }, [investigations]);
 
   const indicators: IndicatorItem[] = [
     { label: "Total", value: caseStats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
     { label: "In progress", value: caseStats.inProgress, status: caseStats.inProgress > 0 ? "accent" : "neutral", onClick: () => setStatusFilter("in-progress"), active: statusFilter === "in-progress" },
     { label: "Complete", value: caseStats.complete, status: caseStats.complete > 0 ? "active" : "neutral", onClick: () => setStatusFilter("complete"), active: statusFilter === "complete" },
+    { label: "Archived", value: caseStats.archived, status: caseStats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
     { label: "Last touch", value: formatElapsed(caseStats.latest) },
   ];
 
@@ -576,6 +620,7 @@ export function InvestigationView() {
                     className={cn(
                       "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left transition-colors duration-150",
                       isSelected ? "bg-[var(--accent-soft)] pl-[13px]" : "pl-4 hover:bg-[var(--surface-wash)]",
+                      inv.status === "archived" && "opacity-50",
                     )}
                   >
                     {isSelected && (
@@ -599,6 +644,12 @@ export function InvestigationView() {
                         <span className="font-ui text-[10px] text-[var(--subtext-0)]">
                           {complete ? "Complete" : PHASES[inv.current_phase - 1]?.name ?? ""}
                         </span>
+                        {inv.status === "archived" && (
+                          <>
+                            <span className="text-[var(--overlay-0)]">·</span>
+                            <span className="font-ui text-[10px] uppercase tracking-[0.08em] text-[var(--warning)]">Archived</span>
+                          </>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         {stepStatuses.map((s, idx) => (
@@ -657,6 +708,16 @@ export function InvestigationView() {
                   <span className="text-meta text-[var(--subtext-0)]">
                     Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 3
                   </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={archiveToggleMutation.isPending}
+                    onClick={() => archiveToggleMutation.mutate()}
+                    className="gap-1.5"
+                  >
+                    <Archive className="h-3 w-3" />
+                    {selectedInvestigation?.status === "archived" ? "Reactivate" : "Archive"}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
