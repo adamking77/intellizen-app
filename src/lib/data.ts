@@ -4,6 +4,9 @@ import {
   signalDraftFromSearchResult,
 } from "@/lib/exa";
 import type {
+  CanvasDocument,
+  CanvasDocumentData,
+  CanvasDocumentSummary,
   DeepResearchResult,
   GraphEntityType,
   GraphEdgeRecord,
@@ -1253,6 +1256,105 @@ export async function updateWorkspaceFileContent(id: number, content: string) {
   return data as WorkspaceNode;
 }
 
+// ─── Canvas documents ──────────────────────────────────────────────────────────
+
+export async function listCanvasDocuments() {
+  const { data, error } = await supabase
+    .from("canvas_documents")
+    .select("id, name, project_id, case_id, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as CanvasDocumentSummary[];
+}
+
+export async function getCanvasDocument(id: number) {
+  const { data, error } = await supabase
+    .from("canvas_documents")
+    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as CanvasDocument;
+}
+
+export async function createCanvasDocument(input?: {
+  name?: string;
+  projectId?: number | null;
+  caseId?: string | null;
+  contentJson?: CanvasDocumentData;
+}) {
+  const { data, error } = await supabase
+    .from("canvas_documents")
+    .insert([
+      {
+        name: input?.name?.trim() || "Untitled canvas",
+        project_id: input?.projectId ?? null,
+        case_id: input?.caseId ?? null,
+        content_json:
+          input?.contentJson ??
+          ({
+            nodes: [],
+            edges: [],
+            sogo: {
+              background: "dots",
+              snapToGrid: false,
+            },
+          } satisfies CanvasDocumentData),
+      },
+    ])
+    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as CanvasDocument;
+}
+
+export async function updateCanvasDocument(
+  id: number,
+  input: Partial<{
+    name: string;
+    projectId: number | null;
+    caseId: string | null;
+    contentJson: CanvasDocumentData;
+  }>,
+) {
+  const update: Record<string, unknown> = {};
+  if (input.name !== undefined) update.name = input.name;
+  if (input.projectId !== undefined) update.project_id = input.projectId;
+  if (input.caseId !== undefined) update.case_id = input.caseId;
+  if (input.contentJson !== undefined) update.content_json = input.contentJson;
+
+  const { data, error } = await supabase
+    .from("canvas_documents")
+    .update(update)
+    .eq("id", id)
+    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as CanvasDocument;
+}
+
+export async function updateCanvasDocumentContent(id: number, contentJson: CanvasDocumentData) {
+  const { data, error } = await supabase
+    .from("canvas_documents")
+    .update({ content_json: contentJson })
+    .eq("id", id)
+    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as CanvasDocument;
+}
+
+export async function deleteCanvasDocument(id: number) {
+  const { error } = await supabase.from("canvas_documents").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ─── Vault documents (genzen-brain documents table) ────────────────────────────
 
 export async function listStrategyFolders() {
@@ -1369,4 +1471,9 @@ export async function updateVaultDocumentContent(id: number, content: string) {
 
   if (error) throw error;
   return data as VaultDocument;
+}
+
+export async function deleteVaultDocument(id: number) {
+  const { error } = await supabase.from("documents").delete().eq("id", id);
+  if (error) throw error;
 }

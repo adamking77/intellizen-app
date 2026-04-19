@@ -14,10 +14,12 @@ import {
 } from "lucide-react";
 
 import { InlineMarkdownEditor } from "@/components/reports/inline-markdown-editor";
+import { ContextMenu } from "@/components/ui/context-menu";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
   createStrategyFolder,
   createVaultDocument,
+  deleteVaultDocument,
   deleteVaultFile,
   getVaultDocument,
   getVaultFile,
@@ -270,6 +272,17 @@ export function ReportsView() {
     }
   }
 
+  async function handleDeleteDoc(id: number) {
+    try {
+      await deleteVaultDocument(id);
+      if (selection?.kind === "doc" && selection.id === id) setSelection(null);
+      await queryClient.invalidateQueries({ queryKey: ["vault-documents"] });
+      toast.success("Document deleted");
+    } catch (error) {
+      toastError("Delete failed", error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
   const breadcrumb =
     selection?.kind === "doc"
       ? selectedDoc?.source_path ?? null
@@ -445,6 +458,7 @@ export function ReportsView() {
                         activeFolderPath={activeStrategyFolderPath}
                         onSelectDoc={(id) => setSelection({ kind: "doc", id })}
                         onSelectFolder={setActiveStrategyFolderPath}
+                        onDeleteDoc={handleDeleteDoc}
                         depth={0}
                       />
                     ))
@@ -584,14 +598,8 @@ export function ReportsView() {
               ]}
             />
           ) : (
-            <div className="flex h-full items-center justify-center p-10">
-              <div className="max-w-[420px] text-center">
-                <FolderOpen className="mx-auto mb-4 h-10 w-10 text-[var(--overlay-1)]" />
-                <p className="text-[18px] font-semibold text-[var(--text)]">Supabase reports database</p>
-                <p className="mt-1 text-[13px] text-[var(--subtext-0)]">
-                  Select any markdown-backed document or intelligence file to edit it inline.
-                </p>
-              </div>
+            <div className="flex h-full items-center justify-center px-6 text-sm text-[var(--subtext-0)]">
+              Select a document to open it.
             </div>
           )}
         </div>
@@ -606,6 +614,7 @@ function PathNode({
   activeFolderPath,
   onSelectDoc,
   onSelectFolder,
+  onDeleteDoc,
   depth,
 }: {
   node: PathTreeNode;
@@ -613,30 +622,43 @@ function PathNode({
   activeFolderPath: string | null;
   onSelectDoc: (id: number) => void;
   onSelectFolder: (path: string) => void;
+  onDeleteDoc: (id: number) => void;
   depth: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
 
   if (node.kind === "doc") {
     const isSelected = selection?.kind === "doc" && selection.id === node.docId;
     return (
-      <button
-        type="button"
-        onClick={() => onSelectDoc(node.docId)}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        className={cn(
-          "relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
-          isSelected
-            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+      <>
+        <button
+          type="button"
+          onClick={() => onSelectDoc(node.docId)}
+          onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          className={cn(
+            "relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
+            isSelected
+              ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+              : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+          )}
+        >
+          {isSelected ? (
+            <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
+          ) : null}
+          <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          <span className="min-w-0 flex-1 truncate text-[12px]">{node.name}</span>
+        </button>
+        {ctx && (
+          <ContextMenu
+            x={ctx.x}
+            y={ctx.y}
+            items={[{ label: "Delete", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "danger", onSelect: () => onDeleteDoc(node.docId) }]}
+            onClose={() => setCtx(null)}
+          />
         )}
-      >
-        {isSelected ? (
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
-        ) : null}
-        <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        <span className="min-w-0 flex-1 truncate text-[12px]">{node.name}</span>
-      </button>
+      </>
     );
   }
 
@@ -670,6 +692,7 @@ function PathNode({
               activeFolderPath={activeFolderPath}
               onSelectDoc={onSelectDoc}
               onSelectFolder={onSelectFolder}
+              onDeleteDoc={onDeleteDoc}
               depth={depth + 1}
             />
           ))
@@ -951,37 +974,54 @@ function IntelFileRow({
   onDelete: (file: VaultFile, event: MouseEvent) => void;
   depth: number;
 }) {
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
+
+  function triggerDelete() {
+    onDelete(file, { stopPropagation: () => {} } as unknown as MouseEvent);
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      className={cn(
-        "group relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
-        isSelected
-          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-          : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
-      )}
-    >
-      {isSelected ? (
-        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
-      ) : null}
-      <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
-      <span className="min-w-0 flex-1 truncate text-[12px]">{file.file_name}</span>
-      <span
-        role="button"
-        tabIndex={-1}
-        onClick={(event) => onDelete(file, event)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            onDelete(file, event as unknown as MouseEvent);
-          }
-        }}
-        className="ml-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
+    <>
+      <button
+        type="button"
+        onClick={onSelect}
+        onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        className={cn(
+          "group relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
+          isSelected
+            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+            : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+        )}
       >
-        <Trash2 className="h-3 w-3" />
-      </span>
-    </button>
+        {isSelected ? (
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
+        ) : null}
+        <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        <span className="min-w-0 flex-1 truncate text-[12px]">{file.file_name}</span>
+        <span
+          role="button"
+          tabIndex={-1}
+          onClick={(event) => onDelete(file, event)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              onDelete(file, event as unknown as MouseEvent);
+            }
+          }}
+          className="ml-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
+        >
+          <Trash2 className="h-3 w-3" />
+        </span>
+      </button>
+      {ctx && (
+        <ContextMenu
+          x={ctx.x}
+          y={ctx.y}
+          items={[{ label: "Delete", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "danger", onSelect: triggerDelete }]}
+          onClose={() => setCtx(null)}
+        />
+      )}
+    </>
   );
 }
 

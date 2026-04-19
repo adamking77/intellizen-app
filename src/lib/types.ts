@@ -152,6 +152,23 @@ export type InvestigationUseCase = "scoping" | "post" | "sit_rep";
 export type VaultFileType = "plan" | "collect" | "collate" | "timeline" | "ach" | "report" | "sweep" | "assessment" | "brief" | "analysis" | "graph_export";
 export type ReportType = "internal" | "client" | "deep" | "public";
 export type WorkspaceNodeKind = "folder" | "file";
+export type CanvasBackground = "plain" | "dots" | "grid";
+export type CanvasShape = "rect" | "pill" | "diamond" | "parallelogram" | "circle";
+export type CanvasBorder = "none" | "subtle" | "strong";
+export type CanvasTextAlign = "left" | "center" | "right";
+export type CanvasLineStyle = "solid" | "dashed";
+export type CanvasNodeType = "text" | "group" | "file" | "image";
+export type CanvasSide = "top" | "right" | "bottom" | "left";
+export type CanvasColorPreset =
+  | "default"
+  | "pink"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "cyan"
+  | "lavender"
+  | "rainbow";
+export type CanvasColor = CanvasColorPreset | string;
 
 export interface Investigation {
   id: number;
@@ -215,4 +232,68 @@ export interface WorkspaceNodeSummary {
 
 export interface WorkspaceNode extends WorkspaceNodeSummary {
   content: string | null;
+}
+
+export interface CanvasViewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export interface CanvasNodeMeta {
+  shape?: CanvasShape;
+  border?: CanvasBorder;
+  textAlign?: CanvasTextAlign;
+}
+
+export interface CanvasSceneMeta {
+  background?: CanvasBackground;
+  snapToGrid?: boolean;
+  viewport?: CanvasViewport;
+}
+
+export interface CanvasNodeData {
+  id: string;
+  type: CanvasNodeType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  groupId?: string;
+  text?: string;
+  label?: string;
+  color?: CanvasColor;
+  file?: string;
+  url?: string;
+  sogo?: CanvasNodeMeta;
+}
+
+export interface CanvasEdgeData {
+  id: string;
+  fromNode: string;
+  toNode: string;
+  fromSide?: CanvasSide;
+  toSide?: CanvasSide;
+  color?: CanvasColor;
+  lineStyle?: CanvasLineStyle;
+  arrow?: boolean;
+}
+
+export interface CanvasDocumentData {
+  nodes: CanvasNodeData[];
+  edges: CanvasEdgeData[];
+  sogo?: CanvasSceneMeta;
+}
+
+export interface CanvasDocumentSummary {
+  id: number;
+  name: string;
+  project_id: number | null;
+  case_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CanvasDocument extends CanvasDocumentSummary {
+  content_json: CanvasDocumentData;
 }

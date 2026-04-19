@@ -18,6 +18,7 @@ const SearchView = lazyNamed(() => import("@/views/Search"), "SearchView");
 const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView");
 const MonitorsView = lazyNamed(() => import("@/views/Monitors"), "MonitorsView");
 const GraphView = lazyNamed(() => import("@/views/Graph"), "GraphView");
+const CanvasView = lazyNamed(() => import("@/views/Canvas"), "CanvasView");
 const InvestigationView = lazyNamed(
   () => import("@/views/Investigation"),
   "InvestigationView",
@@ -75,6 +76,14 @@ function App() {
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
                 <GraphView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/canvas"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <CanvasView />
               </Suspense>
             }
           />

@@ -82,11 +82,11 @@
   --danger: #f03f3f;
   --info: #74c7ec;
 
-  /* Graph entity palette */
-  --entity-person: #2ecdb8;
-  --entity-org: #30b8e8;
-  --entity-location: #ff8a50;
-  --entity-event: #f0527a;
+  /* Graph entity palette — Catppuccin Mocha */
+  --entity-person: #94e2d5;
+  --entity-org: #89dceb;
+  --entity-location: #fab387;
+  --entity-event: #f38ba8;
   --entity-topic: #cba6f7;
   --entity-signal: #f9e2af;
   --entity-investigation: #b4befe;
@@ -162,13 +162,13 @@ body {
 :root {
   --doc-body-size: 1rem;
   --doc-body-leading: 1.75;
-  --doc-heading-weight: 340;
-  --doc-h1-size: calc(var(--doc-body-size) * 1.56);
-  --doc-h1-leading: 1.24;
-  --doc-h2-size: calc(var(--doc-body-size) * 1.32);
-  --doc-h2-leading: 1.32;
-  --doc-h3-size: calc(var(--doc-body-size) * 1.18);
-  --doc-h3-leading: 1.42;
+  --doc-heading-weight: 480;
+  --doc-h1-size: calc(var(--doc-body-size) * 1.72);
+  --doc-h1-leading: 1.22;
+  --doc-h2-size: calc(var(--doc-body-size) * 1.44);
+  --doc-h2-leading: 1.30;
+  --doc-h3-size: calc(var(--doc-body-size) * 1.24);
+  --doc-h3-leading: 1.40;
 }
 
 a {
@@ -409,22 +409,22 @@ pre {
 }
 
 .intelizen-live-markdown .bn-editor h1.bn-inline-content {
-  font-size: 1.76rem !important;
+  font-size: 1.9rem !important;
   line-height: 1.22 !important;
   font-weight: var(--doc-heading-weight) !important;
   letter-spacing: -0.02em !important;
 }
 
 .intelizen-live-markdown .bn-editor h2.bn-inline-content {
-  font-size: 1.45rem !important;
-  line-height: 1.32 !important;
+  font-size: 1.56rem !important;
+  line-height: 1.30 !important;
   font-weight: var(--doc-heading-weight) !important;
   letter-spacing: -0.015em !important;
 }
 
 .intelizen-live-markdown .bn-editor h3.bn-inline-content {
-  font-size: 1.2rem !important;
-  line-height: 1.4 !important;
+  font-size: 1.28rem !important;
+  line-height: 1.40 !important;
   font-weight: var(--doc-heading-weight) !important;
   letter-spacing: -0.01em !important;
 }
@@ -469,20 +469,20 @@ pre {
 }
 
 .intelizen-doc-markdown .md-heading-1 {
-  font-size: 1.76rem !important;
+  font-size: 1.9rem !important;
   line-height: 1.22 !important;
   letter-spacing: -0.02em !important;
 }
 
 .intelizen-doc-markdown .md-heading-2 {
-  font-size: 1.45rem !important;
-  line-height: 1.32 !important;
+  font-size: 1.56rem !important;
+  line-height: 1.30 !important;
   letter-spacing: -0.015em !important;
 }
 
 .intelizen-doc-markdown .md-heading-3 {
-  font-size: 1.2rem !important;
-  line-height: 1.4 !important;
+  font-size: 1.28rem !important;
+  line-height: 1.40 !important;
   letter-spacing: -0.01em !important;
 }
 

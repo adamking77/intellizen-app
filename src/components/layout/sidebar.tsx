@@ -5,6 +5,7 @@ import {
   FileText,
   FolderOpen,
   Inbox,
+  LayoutGrid,
   Network,
   Rss,
   Search,
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Ops", to: "/projects", key: "projects", icon: FolderOpen },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
+  { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
   { label: "Investigate", to: "/investigate", key: "investigate", icon: Spline },
   { label: "Reports", to: "/reports", key: "reports", icon: FileText },
 ];
