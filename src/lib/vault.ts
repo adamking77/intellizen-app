@@ -2,8 +2,17 @@
 import { readDir, readTextFile, exists, mkdir, remove, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, homeDir, join } from "@tauri-apps/api/path";
 
-const VAULT_SEGMENTS = ["vault", "intelligence"] as const;
-let vaultBasePathPromise: Promise<string> | null = null;
+export type VaultRoot = "vault" | "intelligence";
+
+const VAULT_SEGMENTS: Record<VaultRoot, readonly string[]> = {
+  vault: ["vault"],
+  intelligence: ["vault", "intelligence"],
+};
+
+const IGNORED_ROOT_ENTRY_NAMES = new Set([".DS_Store"]);
+const IGNORED_VAULT_DIRECTORY_NAMES = new Set(["node_modules"]);
+
+const vaultBasePathPromises: Partial<Record<VaultRoot, Promise<string>>> = {};
 
 export interface VaultEntry {
   name: string;
@@ -12,39 +21,78 @@ export interface VaultEntry {
   children?: VaultEntry[];
 }
 
-async function getVaultBasePath(): Promise<string> {
-  if (!vaultBasePathPromise) {
-    vaultBasePathPromise = (async () => {
+async function getVaultBasePath(root: VaultRoot = "intelligence"): Promise<string> {
+  if (!vaultBasePathPromises[root]) {
+    vaultBasePathPromises[root] = (async () => {
       const home = await homeDir();
-      return join(home, ...VAULT_SEGMENTS);
+      return join(home, ...VAULT_SEGMENTS[root]);
     })();
   }
 
-  return vaultBasePathPromise;
+  return vaultBasePathPromises[root]!;
 }
 
-async function resolveVaultPath(subpath = ""): Promise<string> {
-  const base = await getVaultBasePath();
+async function resolveVaultPath(
+  subpath = "",
+  root: VaultRoot = "intelligence",
+): Promise<string> {
+  const base = await getVaultBasePath(root);
   return subpath ? join(base, subpath) : base;
 }
 
-async function ensureVaultDirectory(subpath = ""): Promise<void> {
-  const fullPath = await resolveVaultPath(subpath);
+async function ensureVaultDirectory(
+  subpath = "",
+  root: VaultRoot = "intelligence",
+): Promise<void> {
+  const fullPath = await resolveVaultPath(subpath, root);
   if (!(await exists(fullPath))) {
     await mkdir(fullPath, { recursive: true });
   }
 }
 
-async function readVaultDirectoryRecursive(subpath = ""): Promise<VaultEntry[]> {
-  const basePath = await resolveVaultPath(subpath);
-  const entries = await readDir(basePath);
+export async function createVaultDirectory(
+  subpath: string,
+  root: VaultRoot = "intelligence",
+): Promise<void> {
+  try {
+    await ensureVaultDirectory(subpath, root);
+  } catch (error) {
+    console.error("Failed to create vault directory:", error);
+    throw error;
+  }
+}
+
+function shouldIgnoreVaultEntry(
+  entryName: string,
+  isDirectory: boolean,
+  root: VaultRoot,
+): boolean {
+  if (IGNORED_ROOT_ENTRY_NAMES.has(entryName)) {
+    return true;
+  }
+
+  if (root === "vault" && isDirectory && IGNORED_VAULT_DIRECTORY_NAMES.has(entryName)) {
+    return true;
+  }
+
+  return false;
+}
+
+async function readVaultDirectoryRecursive(
+  subpath = "",
+  root: VaultRoot = "intelligence",
+): Promise<VaultEntry[]> {
+  const basePath = await resolveVaultPath(subpath, root);
+  const entries = (await readDir(basePath)).filter(
+    (entry) => !shouldIgnoreVaultEntry(entry.name, entry.isDirectory, root),
+  );
 
   const results = await Promise.all(
     entries.map(async (entry) => {
       const entryPath = subpath ? await join(subpath, entry.name) : entry.name;
 
       const children = entry.isDirectory
-        ? await readVaultDirectoryRecursive(entryPath).catch(() => [])
+        ? await readVaultDirectoryRecursive(entryPath, root).catch(() => [])
         : undefined;
 
       return {
@@ -68,10 +116,11 @@ async function readVaultDirectoryRecursive(subpath = ""): Promise<VaultEntry[]> 
  * Read vault directory structure
  */
 export async function readVaultDirectory(
-  subpath: string = ""
+  subpath: string = "",
+  root: VaultRoot = "intelligence",
 ): Promise<VaultEntry[]> {
   try {
-    return await readVaultDirectoryRecursive(subpath);
+    return await readVaultDirectoryRecursive(subpath, root);
   } catch (error) {
     console.error("Failed to read vault directory:", error);
     return [];
@@ -81,9 +130,12 @@ export async function readVaultDirectory(
 /**
  * Read a vault file as text
  */
-export async function readVaultFile(filepath: string): Promise<string | null> {
+export async function readVaultFile(
+  filepath: string,
+  root: VaultRoot = "intelligence",
+): Promise<string | null> {
   try {
-    const fullPath = await resolveVaultPath(filepath);
+    const fullPath = await resolveVaultPath(filepath, root);
     const content = await readTextFile(fullPath);
     return content;
   } catch (error) {
@@ -95,9 +147,12 @@ export async function readVaultFile(filepath: string): Promise<string | null> {
 /**
  * Check if vault path exists
  */
-export async function vaultPathExists(subpath: string): Promise<boolean> {
+export async function vaultPathExists(
+  subpath: string,
+  root: VaultRoot = "intelligence",
+): Promise<boolean> {
   try {
-    const fullPath = await resolveVaultPath(subpath);
+    const fullPath = await resolveVaultPath(subpath, root);
     return await exists(fullPath);
   } catch {
     return false;
@@ -179,14 +234,18 @@ export async function removeVaultFile(filepath: string): Promise<void> {
 /**
  * Write text into a file within the vault. Creates parent directories as needed.
  */
-export async function writeVaultFile(filepath: string, content: string): Promise<void> {
+export async function writeVaultFile(
+  filepath: string,
+  content: string,
+  root: VaultRoot = "intelligence",
+): Promise<void> {
   try {
-    await ensureVaultDirectory();
+    await ensureVaultDirectory("", root);
     const parentPath = await dirname(filepath);
     if (parentPath && parentPath !== ".") {
-      await ensureVaultDirectory(parentPath);
+      await ensureVaultDirectory(parentPath, root);
     }
-    const fullPath = await resolveVaultPath(filepath);
+    const fullPath = await resolveVaultPath(filepath, root);
     await writeTextFile(fullPath, content);
   } catch (error) {
     console.error("Failed to write vault file:", error);
@@ -197,8 +256,11 @@ export async function writeVaultFile(filepath: string, content: string): Promise
 /**
  * Resolve a vault-relative path to an absolute filesystem path
  */
-export async function getVaultAbsolutePath(filepath: string): Promise<string> {
-  return resolveVaultPath(filepath);
+export async function getVaultAbsolutePath(
+  filepath: string,
+  root: VaultRoot = "intelligence",
+): Promise<string> {
+  return resolveVaultPath(filepath, root);
 }
 
 /**

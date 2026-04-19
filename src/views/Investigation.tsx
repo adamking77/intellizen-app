@@ -43,8 +43,8 @@ import {
   updateInvestigation,
   updateInvestigationPhase,
 } from "@/lib/data";
-import { buildAnalysisPrompt, spawnClaude } from "@/lib/shell";
-import { ensureInvestigationDirectory, writeVaultFile } from "@/lib/vault";
+import { anthropic } from "@/lib/anthropic";
+import { buildAnalysisPrompt } from "@/lib/shell";
 import type { Investigation, InvestigationUseCase } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -479,8 +479,6 @@ export function InvestigationView() {
     setOutputOpen(true);
 
     try {
-      await ensureInvestigationDirectory(selectedInvestigation.case_id);
-
       const signals = (investigationSignals ?? [])
         .filter((s) => s.intel_signals)
         .map((s) => ({
@@ -500,35 +498,43 @@ export function InvestigationView() {
         humintInput: selectedInvestigation.humint_input,
       });
 
-      const result = await spawnClaude({ prompt });
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8096,
+        messages: [{ role: "user", content: prompt }],
+      });
 
-      if (result.success) {
-        const output = result.output?.trim() || "Analysis completed.";
-        const fileName = ANALYSIS_FILE_NAME[useCase];
-        const filePath = `investigations/${selectedInvestigation.case_id}/${fileName}`;
-        const content = `# ${USE_CASE_LABELS[useCase]} — ${selectedInvestigation.name}\n\nGenerated: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
-
-        await writeVaultFile(filePath, content);
-        await createVaultFile({
-          caseId: selectedInvestigation.case_id,
-          phase: 3,
-          fileType: "analysis",
-          filePath,
-          fileName,
-        });
-
-        const nextGates = { ...selectedPhaseGates, [getPhaseGateKey(3)]: true };
-        await advancePhaseMutation.mutateAsync({ phase: 3, gateData: nextGates });
-        await queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
-
-        setAnalysisOutput(output);
-        toast.success("Analysis complete — saved to vault");
-      } else {
-        setAnalysisOutput(`Error: ${result.error}`);
-        toastError("Analysis failed", new Error(result.error));
+      const textBlock = message.content.find((b) => b.type === "text");
+      if (!textBlock || textBlock.type !== "text") {
+        throw new Error("Claude returned no text");
       }
+
+      const output = textBlock.text.trim();
+      const fileName = ANALYSIS_FILE_NAME[useCase];
+      const filePath = `investigations/${selectedInvestigation.case_id}/${fileName}`;
+      const content = `# ${USE_CASE_LABELS[useCase]} — ${selectedInvestigation.name}\n\nGenerated: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
+
+      await createVaultFile({
+        caseId: selectedInvestigation.case_id,
+        phase: 3,
+        fileType: "analysis",
+        filePath,
+        fileName,
+        content,
+      });
+
+      const nextGates = { ...selectedPhaseGates, [getPhaseGateKey(3)]: true };
+      await advancePhaseMutation.mutateAsync({ phase: 3, gateData: nextGates });
+      await queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
+      await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
+      await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });
+
+      setAnalysisOutput(output);
+      toast.success("Analysis complete — saved to Reports");
     } catch (err) {
-      setAnalysisOutput(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setAnalysisOutput(`Error: ${msg}`);
+      toastError("Analysis failed", err instanceof Error ? err : new Error(msg));
     } finally {
       setIsRunningAnalysis(false);
     }

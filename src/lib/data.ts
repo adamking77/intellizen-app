@@ -18,7 +18,10 @@ import type {
   ProjectSignal,
   SearchResultItem,
   SignalDraft,
+  VaultDocument,
   VaultFile,
+  WorkspaceNode,
+  WorkspaceNodeSummary,
 } from "@/lib/types";
 import { safeHostname } from "@/lib/utils";
 import { removeInvestigationDirectory } from "@/lib/vault";
@@ -937,25 +940,52 @@ export async function listVaultFiles(caseId: string) {
 }
 
 export async function createVaultFile(input: {
-  caseId: string;
+  caseId?: string | null;
+  projectId?: number | null;
   phase?: number;
   fileType: VaultFile["file_type"];
   filePath: string;
   fileName: string;
   reportType?: VaultFile["report_type"];
+  content?: string | null;
 }) {
   const { data, error } = await supabase
     .from("vault_files")
     .insert([
       {
-        case_id: input.caseId,
+        case_id: input.caseId ?? null,
+        project_id: input.projectId ?? null,
         phase: input.phase ?? null,
         file_type: input.fileType,
         file_path: input.filePath,
         file_name: input.fileName,
         report_type: input.reportType ?? null,
+        content: input.content ?? null,
       },
     ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as VaultFile;
+}
+
+export async function getVaultFile(id: number) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as VaultFile;
+}
+
+export async function updateVaultFileContent(id: number, content: string) {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .update({ content })
+    .eq("id", id)
     .select("*")
     .single();
 
@@ -973,6 +1003,16 @@ export async function listProjectVaultFiles(projectId: number) {
     .from("vault_files")
     .select("*")
     .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as VaultFile[];
+}
+
+export async function listAllVaultFiles() {
+  const { data, error } = await supabase
+    .from("vault_files")
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -1003,4 +1043,330 @@ export async function createGraphExportVaultFile(input: {
 
   if (error) throw error;
   return data as VaultFile;
+}
+
+async function getWorkspaceParentContext(parentId: number | null) {
+  if (parentId == null) {
+    return { path: "", caseId: null as string | null, projectId: null as number | null };
+  }
+
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .select("id, kind, path, case_id, project_id")
+    .eq("id", parentId)
+    .single();
+
+  if (error) throw error;
+  if (!data || data.kind !== "folder") {
+    throw new Error("Parent folder not found");
+  }
+
+  return {
+    path: data.path as string,
+    caseId: (data.case_id as string | null) ?? null,
+    projectId: (data.project_id as number | null) ?? null,
+  };
+}
+
+export async function listWorkspaceNodes() {
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .order("path", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as WorkspaceNodeSummary[];
+}
+
+export async function ensureWorkspaceSystemNodes() {
+  const [existingNodes, projects, investigations] = await Promise.all([
+    listWorkspaceNodes(),
+    listProjects(),
+    listInvestigations(),
+  ]);
+
+  const foldersByPath = new Map(
+    existingNodes
+      .filter((node) => node.kind === "folder")
+      .map((node) => [node.path, node]),
+  );
+
+  async function ensureFolder(input: {
+    name: string;
+    path: string;
+    parentId: number | null;
+    caseId?: string | null;
+    projectId?: number | null;
+  }) {
+    const existing = foldersByPath.get(input.path);
+    if (existing) return existing;
+
+    const { data, error } = await supabase
+      .from("workspace_nodes")
+      .insert([
+        {
+          parent_id: input.parentId,
+          case_id: input.caseId ?? null,
+          project_id: input.projectId ?? null,
+          kind: "folder",
+          name: input.name,
+          path: input.path,
+          content: null,
+        },
+      ])
+      .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+      .single();
+
+    if (error) throw error;
+
+    const folder = data as WorkspaceNodeSummary;
+    foldersByPath.set(folder.path, folder);
+    return folder;
+  }
+
+  const workspaceRoot = await ensureFolder({
+    name: "Workspace",
+    path: "Workspace",
+    parentId: null,
+  });
+
+  const projectsRoot = await ensureFolder({
+    name: "Projects",
+    path: "Projects",
+    parentId: null,
+  });
+
+  const investigationsRoot = await ensureFolder({
+    name: "Investigations",
+    path: "Investigations",
+    parentId: null,
+  });
+
+  for (const project of projects) {
+    await ensureFolder({
+      name: project.name,
+      path: `Projects/${project.id}`,
+      parentId: projectsRoot.id,
+      projectId: project.id,
+    });
+  }
+
+  for (const investigation of investigations) {
+    await ensureFolder({
+      name: investigation.name,
+      path: `Investigations/${investigation.case_id}`,
+      parentId: investigationsRoot.id,
+      caseId: investigation.case_id,
+    });
+  }
+
+  return {
+    workspaceRootId: workspaceRoot.id,
+    projectsRootId: projectsRoot.id,
+    investigationsRootId: investigationsRoot.id,
+  };
+}
+
+export async function getWorkspaceNode(id: number) {
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as WorkspaceNode;
+}
+
+export async function createWorkspaceFolder(input: {
+  parentId?: number | null;
+  name: string;
+  caseId?: string | null;
+  projectId?: number | null;
+}) {
+  const parent = await getWorkspaceParentContext(input.parentId ?? null);
+  const path = parent.path ? `${parent.path}/${input.name}` : input.name;
+  const caseId = input.caseId ?? parent.caseId ?? null;
+  const projectId = input.projectId ?? parent.projectId ?? null;
+
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .insert([
+      {
+        parent_id: input.parentId ?? null,
+        case_id: caseId,
+        project_id: projectId,
+        kind: "folder",
+        name: input.name,
+        path,
+        content: null,
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WorkspaceNode;
+}
+
+export async function createWorkspaceFile(input: {
+  parentId?: number | null;
+  name: string;
+  content?: string;
+  caseId?: string | null;
+  projectId?: number | null;
+}) {
+  const parent = await getWorkspaceParentContext(input.parentId ?? null);
+  const path = parent.path ? `${parent.path}/${input.name}` : input.name;
+  const caseId = input.caseId ?? parent.caseId ?? null;
+  const projectId = input.projectId ?? parent.projectId ?? null;
+
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .insert([
+      {
+        parent_id: input.parentId ?? null,
+        case_id: caseId,
+        project_id: projectId,
+        kind: "file",
+        name: input.name,
+        path,
+        content: input.content ?? "",
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WorkspaceNode;
+}
+
+export async function updateWorkspaceFileContent(id: number, content: string) {
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .update({ content })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as WorkspaceNode;
+}
+
+// ─── Vault documents (genzen-brain documents table) ────────────────────────────
+
+export async function listStrategyFolders() {
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .eq("kind", "folder")
+    .is("case_id", null)
+    .is("project_id", null)
+    .not("path", "in", '("Workspace","Projects","Investigations")')
+    .not("path", "like", "Projects/%")
+    .not("path", "like", "Investigations/%")
+    .order("path", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as WorkspaceNodeSummary[];
+}
+
+export async function createStrategyFolder(input: {
+  name: string;
+  parentPath?: string | null;
+}) {
+  let parentId: number | null = null;
+  const parentPath = input.parentPath?.trim() || null;
+  const path = parentPath ? `${parentPath}/${input.name}` : input.name;
+
+  if (parentPath) {
+    const { data: parent, error: parentError } = await supabase
+      .from("workspace_nodes")
+      .select("id")
+      .eq("path", parentPath)
+      .eq("kind", "folder")
+      .maybeSingle();
+
+    if (parentError) throw parentError;
+    parentId = parent?.id ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("workspace_nodes")
+    .insert([
+      {
+        parent_id: parentId,
+        case_id: null,
+        project_id: null,
+        kind: "folder",
+        name: input.name,
+        path,
+        content: null,
+      },
+    ])
+    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as WorkspaceNodeSummary;
+}
+
+export async function listVaultDocuments() {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, title, source_path, document_type, domain, created_at, updated_at")
+    .order("source_path");
+
+  if (error) throw error;
+  return (data ?? []) as VaultDocument[];
+}
+
+export async function getVaultDocument(id: number) {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as VaultDocument;
+}
+
+export async function createVaultDocument(input: {
+  title: string;
+  sourcePath: string;
+  content?: string;
+  documentType?: string;
+  domain?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const { data, error } = await supabase
+    .from("documents")
+    .insert([
+      {
+        title: input.title,
+        source_path: input.sourcePath,
+        document_type: input.documentType ?? "strategy",
+        domain: input.domain ?? "internal",
+        content: input.content ?? "",
+        metadata: input.metadata ?? {},
+      },
+    ])
+    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as VaultDocument;
+}
+
+export async function updateVaultDocumentContent(id: number, content: string) {
+  const { data, error } = await supabase
+    .from("documents")
+    .update({ content })
+    .eq("id", id)
+    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as VaultDocument;
 }

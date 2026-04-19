@@ -1,3 +1,15 @@
+export interface VaultDocument {
+  id: number;
+  title: string;
+  source_path: string;
+  document_type: string;
+  domain: string;
+  content?: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type OperationStatus = "active" | "archived";
 export type SignalStatus = "new" | "saved" | "dismissed";
 export type ProjectType = "report" | "scoping" | "research" | "client_case";
@@ -139,6 +151,7 @@ export type InvestigationStatus = "active" | "archived" | "completed";
 export type InvestigationUseCase = "scoping" | "post" | "sit_rep";
 export type VaultFileType = "plan" | "collect" | "collate" | "timeline" | "ach" | "report" | "sweep" | "assessment" | "brief" | "analysis" | "graph_export";
 export type ReportType = "internal" | "client" | "deep" | "public";
+export type WorkspaceNodeKind = "folder" | "file";
 
 export interface Investigation {
   id: number;
@@ -184,5 +197,22 @@ export interface VaultFile {
   file_name: string;
   report_type: ReportType | null;
   generated_by: string;
+  content: string | null;
   created_at: string;
+}
+
+export interface WorkspaceNodeSummary {
+  id: number;
+  parent_id: number | null;
+  case_id: string | null;
+  project_id: number | null;
+  kind: WorkspaceNodeKind;
+  name: string;
+  path: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceNode extends WorkspaceNodeSummary {
+  content: string | null;
 }

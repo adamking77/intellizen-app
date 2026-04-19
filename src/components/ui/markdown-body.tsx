@@ -69,25 +69,25 @@ interface MarkdownBodyProps {
 export function MarkdownBody({ content, className }: MarkdownBodyProps) {
   const blocks = parseMarkdownish(content);
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("intelizen-doc-markdown", className)}>
       {blocks.map((block, i) => {
         if (block.type === "heading") {
           if (block.level === 1) {
             return (
-              <h2 key={i} className="text-display-sm mt-6 first:mt-0">
+              <h2 key={i} className="md-heading-1">
                 {block.text}
               </h2>
             );
           }
           if (block.level === 2) {
             return (
-              <h3 key={i} className="text-heading mt-5">
+              <h3 key={i} className="md-heading-2">
                 {block.text}
               </h3>
             );
           }
           return (
-            <h4 key={i} className="text-label mt-4">
+            <h4 key={i} className="md-heading-3">
               {block.text}
             </h4>
           );
@@ -98,7 +98,7 @@ export function MarkdownBody({ content, className }: MarkdownBodyProps) {
             <ListTag
               key={i}
               className={cn(
-                "text-body-reading space-y-1.5 pl-5",
+                "md-list",
                 block.ordered ? "list-decimal" : "list-disc",
               )}
             >
@@ -109,7 +109,7 @@ export function MarkdownBody({ content, className }: MarkdownBodyProps) {
           );
         }
         return (
-          <p key={i} className="text-body-reading">
+          <p key={i} className="md-paragraph">
             {block.text}
           </p>
         );

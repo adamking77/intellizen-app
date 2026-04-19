@@ -159,6 +159,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root {
+  --doc-body-size: 1rem;
+  --doc-body-leading: 1.75;
+  --doc-heading-weight: 340;
+  --doc-h1-size: calc(var(--doc-body-size) * 1.56);
+  --doc-h1-leading: 1.24;
+  --doc-h2-size: calc(var(--doc-body-size) * 1.32);
+  --doc-h2-leading: 1.32;
+  --doc-h3-size: calc(var(--doc-body-size) * 1.18);
+  --doc-h3-leading: 1.42;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -180,6 +192,375 @@ samp {
 
 pre {
   margin: 0;
+}
+
+.intelizen-live-markdown {
+  min-height: calc(100dvh - 11rem);
+}
+
+.intelizen-live-markdown .bn-container {
+  min-height: calc(100dvh - 11rem);
+  background: transparent;
+  color: var(--text);
+  --bn-colors-editor-text: var(--text);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: var(--text);
+  --bn-colors-menu-background: var(--base);
+  --bn-colors-tooltip-text: var(--text);
+  --bn-colors-tooltip-background: var(--base);
+  --bn-colors-hovered-text: var(--text);
+  --bn-colors-hovered-background: var(--surface-wash);
+  --bn-colors-selected-text: var(--text);
+  --bn-colors-selected-background: var(--accent-soft);
+  --bn-colors-disabled-text: var(--overlay-1);
+  --bn-colors-disabled-background: var(--surface-0);
+  --bn-colors-shadow: rgba(0, 0, 0, 0.45);
+  --bn-colors-border: var(--border);
+  --bn-colors-side-menu: var(--overlay-1);
+}
+
+.intelizen-live-markdown .bn-editor {
+  min-height: calc(100dvh - 11rem);
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: var(--doc-body-size);
+  line-height: var(--doc-body-leading);
+}
+
+.intelizen-live-markdown .bn-block-content,
+.intelizen-live-markdown .bn-inline-content,
+.intelizen-live-markdown .bn-inline-content * {
+  font-family: var(--font-ui);
+}
+
+.intelizen-live-markdown .bn-mantine {
+  --mantine-font-family: var(--font-ui);
+  --mantine-font-family-headings: var(--font-ui);
+  --mantine-heading-font-weight: var(--doc-heading-weight);
+  --mantine-h1-font-size: var(--doc-h1-size);
+  --mantine-h1-line-height: var(--doc-h1-leading);
+  --mantine-h1-font-weight: var(--doc-heading-weight);
+  --mantine-h2-font-size: var(--doc-h2-size);
+  --mantine-h2-line-height: var(--doc-h2-leading);
+  --mantine-h2-font-weight: var(--doc-heading-weight);
+  --mantine-h3-font-size: var(--doc-h3-size);
+  --mantine-h3-line-height: var(--doc-h3-leading);
+  --mantine-h3-font-weight: var(--doc-heading-weight);
+  --mantine-h4-font-weight: var(--doc-heading-weight);
+  --mantine-h5-font-weight: var(--doc-heading-weight);
+  --mantine-h6-font-weight: var(--doc-heading-weight);
+}
+
+.intelizen-live-markdown .bn-editor [contenteditable="true"] {
+  min-height: calc(100dvh - 11rem);
+  padding: 0;
+  color: var(--text);
+  caret-color: var(--accent);
+}
+
+.intelizen-live-markdown .bn-editor:focus-within {
+  outline: none;
+}
+
+.intelizen-live-markdown .bn-editor h1,
+.intelizen-live-markdown .bn-editor h2,
+.intelizen-live-markdown .bn-editor h3,
+.intelizen-live-markdown .bn-editor h4,
+.intelizen-live-markdown .bn-editor h5,
+.intelizen-live-markdown .bn-editor h6,
+.intelizen-live-markdown .bn-editor p,
+.intelizen-live-markdown .bn-editor li,
+.intelizen-live-markdown .bn-editor blockquote,
+.intelizen-live-markdown .bn-editor td,
+.intelizen-live-markdown .bn-editor th {
+  color: var(--text);
+}
+
+.intelizen-live-markdown .bn-editor p,
+.intelizen-live-markdown .bn-editor li,
+.intelizen-live-markdown .bn-editor blockquote,
+.intelizen-live-markdown .bn-editor td,
+.intelizen-live-markdown .bn-editor th {
+  font-size: var(--doc-body-size);
+  line-height: var(--doc-body-leading);
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"] {
+  font-weight: var(--doc-heading-weight) !important;
+  font-variation-settings: "wght" var(--doc-heading-weight) !important;
+  font-synthesis: none;
+  color: var(--text);
+  margin-top: 1.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.intelizen-live-markdown .bn-block-outer[data-prev-type="heading"] > .bn-block > .bn-block-content {
+  font-weight: var(--doc-heading-weight) !important;
+}
+
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > .bn-block-content[data-content-type="heading"],
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > div[data-type="modification"]
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="heading"] {
+  font-weight: var(--doc-heading-weight) !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"] *,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"] h1,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"] h2,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"] h3 {
+  font-weight: var(--doc-heading-weight) !important;
+  font-variation-settings: "wght" var(--doc-heading-weight) !important;
+  font-synthesis: none;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] {
+  font-size: var(--doc-h1-size) !important;
+  line-height: var(--doc-h1-leading) !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.02em;
+}
+
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > .bn-block-content[data-content-type="heading"][data-level="1"],
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > div[data-type="modification"]
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="heading"][data-level="1"] {
+  font-size: var(--doc-h1-size) !important;
+  line-height: var(--doc-h1-leading) !important;
+  letter-spacing: -0.02em !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] *,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="1"] h1,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="1"] h2,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="1"] h3 {
+  font-size: var(--doc-h1-size) !important;
+  line-height: var(--doc-h1-leading) !important;
+  letter-spacing: -0.02em !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] {
+  font-size: var(--doc-h2-size) !important;
+  line-height: var(--doc-h2-leading) !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.015em;
+}
+
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > .bn-block-content[data-content-type="heading"][data-level="2"],
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > div[data-type="modification"]
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="heading"][data-level="2"] {
+  font-size: var(--doc-h2-size) !important;
+  line-height: var(--doc-h2-leading) !important;
+  letter-spacing: -0.015em !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] *,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="2"] h1,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="2"] h2,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="2"] h3 {
+  font-size: var(--doc-h2-size) !important;
+  line-height: var(--doc-h2-leading) !important;
+  letter-spacing: -0.015em !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] {
+  font-size: var(--doc-h3-size) !important;
+  line-height: var(--doc-h3-leading) !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.01em;
+}
+
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > .bn-block-content[data-content-type="heading"][data-level="3"],
+.intelizen-live-markdown .bn-block-outer:not([data-prev-type])
+  > .bn-block
+  > div[data-type="modification"]
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="heading"][data-level="3"] {
+  font-size: var(--doc-h3-size) !important;
+  line-height: var(--doc-h3-leading) !important;
+  letter-spacing: -0.01em !important;
+}
+
+.intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] *,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="3"] h1,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="3"] h2,
+.intelizen-live-markdown .bn-editor [data-content-type="heading"][data-level="3"] h3 {
+  font-size: var(--doc-h3-size) !important;
+  line-height: var(--doc-h3-leading) !important;
+  letter-spacing: -0.01em !important;
+}
+
+.intelizen-live-markdown .bn-editor h1.bn-inline-content {
+  font-size: 1.76rem !important;
+  line-height: 1.22 !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.02em !important;
+}
+
+.intelizen-live-markdown .bn-editor h2.bn-inline-content {
+  font-size: 1.45rem !important;
+  line-height: 1.32 !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.015em !important;
+}
+
+.intelizen-live-markdown .bn-editor h3.bn-inline-content {
+  font-size: 1.2rem !important;
+  line-height: 1.4 !important;
+  font-weight: var(--doc-heading-weight) !important;
+  letter-spacing: -0.01em !important;
+}
+
+.intelizen-live-markdown .bn-editor a {
+  color: var(--accent);
+}
+
+.intelizen-live-markdown .bn-editor code,
+.intelizen-live-markdown .bn-editor pre {
+  font-family: var(--font-mono);
+}
+
+.intelizen-live-markdown .bn-editor pre {
+  background: var(--mantle);
+  border: 1px solid var(--border);
+}
+
+.intelizen-live-markdown .bn-editor blockquote {
+  border-left: 3px solid var(--accent-border);
+  margin-left: 0;
+  padding-left: 1rem;
+}
+
+.intelizen-doc-markdown {
+  color: var(--subtext-1);
+}
+
+.intelizen-doc-markdown > * + * {
+  margin-top: 1rem;
+}
+
+.intelizen-doc-markdown .md-heading-1,
+.intelizen-doc-markdown .md-heading-2,
+.intelizen-doc-markdown .md-heading-3 {
+  margin: 1.5rem 0 0.45rem;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: var(--doc-heading-weight) !important;
+  font-variation-settings: "wght" var(--doc-heading-weight);
+  font-synthesis: none;
+}
+
+.intelizen-doc-markdown .md-heading-1 {
+  font-size: 1.76rem !important;
+  line-height: 1.22 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.intelizen-doc-markdown .md-heading-2 {
+  font-size: 1.45rem !important;
+  line-height: 1.32 !important;
+  letter-spacing: -0.015em !important;
+}
+
+.intelizen-doc-markdown .md-heading-3 {
+  font-size: 1.2rem !important;
+  line-height: 1.4 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.intelizen-doc-markdown .md-paragraph,
+.intelizen-doc-markdown .md-list {
+  margin: 0;
+  color: var(--subtext-1);
+  font-family: var(--font-ui);
+  font-size: var(--doc-body-size);
+  font-weight: 400;
+  line-height: var(--doc-body-leading);
+}
+
+.intelizen-doc-markdown .md-list {
+  padding-left: 1.4rem;
+}
+
+.intelizen-live-markdown .bn-editor hr {
+  border-color: var(--border);
+}
+
+.bn-suggestion-menu,
+.bn-grid-suggestion-menu,
+.bn-menu-dropdown,
+.mantine-Menu-dropdown,
+.bn-toolbar,
+.bn-form-popover,
+.bn-panel-popover,
+.bn-emoji-picker-popover {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--base) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38) !important;
+  color: var(--text) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.bn-suggestion-menu,
+.bn-grid-suggestion-menu,
+.bn-menu-dropdown,
+.mantine-Menu-dropdown {
+  padding: 6px !important;
+}
+
+.bn-suggestion-menu-item,
+.bn-grid-suggestion-menu-item,
+.mantine-Menu-item,
+.bn-toolbar .mantine-Button-root,
+.bn-toolbar .mantine-ActionIcon-root {
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.bn-suggestion-menu-item[aria-selected="true"],
+.bn-suggestion-menu-item:hover,
+.bn-grid-suggestion-menu-item[aria-selected="true"],
+.bn-grid-suggestion-menu-item:hover,
+.mantine-Menu-item[data-hovered],
+.mantine-Menu-item:hover,
+.bn-toolbar .mantine-Button-root:hover,
+.bn-toolbar .mantine-ActionIcon-root:hover,
+.bn-toolbar .mantine-Button-root[data-selected],
+.bn-toolbar .mantine-ActionIcon-root[data-selected] {
+  background: var(--accent-soft) !important;
+  color: var(--text) !important;
+}
+
+.bn-suggestion-menu-label,
+.bn-mt-suggestion-menu-item-title,
+.bn-mt-suggestion-menu-item-subtitle,
+.bn-toolbar .mantine-Button-label {
+  color: var(--text) !important;
+}
+
+.bn-mt-suggestion-menu-item-subtitle {
+  opacity: 0.72;
 }
 
 /* ============================================================
