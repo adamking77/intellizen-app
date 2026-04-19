@@ -493,7 +493,7 @@ export function ProjectsView() {
       {/* Topbar */}
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
-          <span className="text-label">Ops</span>
+          <span className="text-label">Operations</span>
           <IndicatorStrip items={indicators} />
         </div>
         <div className="flex items-center gap-2">
