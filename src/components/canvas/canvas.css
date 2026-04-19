@@ -276,51 +276,87 @@
 }
 
 .intelizen-canvas .canvas-node.tone-default {
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #d6dae6 28%);
+  --node-accent: var(--surface-2);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--subtext-1) 28%);
 }
 
-/* Catppuccin Mocha: Red #f38ba8 · Peach #fab387 · Yellow #f9e2af · Green #a6e3a1 · Teal #94e2d5 · Lavender #b4befe */
-.intelizen-canvas .canvas-node.tone-pink {
-  --node-accent: #f38ba8;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #f38ba8 28%);
+/* Shared Catppuccin node tones */
+.intelizen-canvas .canvas-node.tone-rosewater {
+  --node-accent: var(--rosewater);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--rosewater) 28%);
 }
 
-.intelizen-canvas .canvas-node.tone-orange {
-  --node-accent: #fab387;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #fab387 28%);
+.intelizen-canvas .canvas-node.tone-flamingo {
+  --node-accent: var(--flamingo);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--flamingo) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-mauve {
+  --node-accent: var(--mauve);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--mauve) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-red {
+  --node-accent: var(--red);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--red) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-maroon {
+  --node-accent: var(--maroon);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--maroon) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-peach {
+  --node-accent: var(--peach);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--peach) 28%);
 }
 
 .intelizen-canvas .canvas-node.tone-yellow {
-  --node-accent: #f9e2af;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 73%, #f9e2af 27%);
+  --node-accent: var(--yellow);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 73%, var(--yellow) 27%);
 }
 
 .intelizen-canvas .canvas-node.tone-green {
-  --node-accent: #a6e3a1;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #a6e3a1 28%);
+  --node-accent: var(--green);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--green) 28%);
 }
 
-.intelizen-canvas .canvas-node.tone-cyan {
-  --node-accent: #94e2d5;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #94e2d5 28%);
+.intelizen-canvas .canvas-node.tone-teal {
+  --node-accent: var(--teal);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--teal) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-sky {
+  --node-accent: var(--sky);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--sky) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-sapphire {
+  --node-accent: var(--sapphire);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--sapphire) 28%);
+}
+
+.intelizen-canvas .canvas-node.tone-blue {
+  --node-accent: var(--blue);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--blue) 28%);
 }
 
 .intelizen-canvas .canvas-node.tone-lavender {
-  --node-accent: #b4befe;
-  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, #b4befe 28%);
+  --node-accent: var(--lavender);
+  --node-fill: color-mix(in srgb, var(--canvas-surface) 72%, var(--lavender) 28%);
 }
 
 .intelizen-canvas .canvas-node.tone-rainbow {
-  --node-accent: #b4befe;
+  --node-accent: var(--mauve);
   --node-fill:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--canvas-surface) 74%, #f38ba8 26%) 0%,
-      color-mix(in srgb, var(--canvas-surface) 74%, #fab387 26%) 20%,
-      color-mix(in srgb, var(--canvas-surface) 75%, #f9e2af 25%) 40%,
-      color-mix(in srgb, var(--canvas-surface) 74%, #a6e3a1 26%) 60%,
-      color-mix(in srgb, var(--canvas-surface) 74%, #94e2d5 26%) 80%,
-      color-mix(in srgb, var(--canvas-surface) 74%, #b4befe 26%) 100%
+      color-mix(in srgb, var(--canvas-surface) 74%, var(--red) 26%) 0%,
+      color-mix(in srgb, var(--canvas-surface) 74%, var(--peach) 26%) 20%,
+      color-mix(in srgb, var(--canvas-surface) 75%, var(--yellow) 25%) 40%,
+      color-mix(in srgb, var(--canvas-surface) 74%, var(--green) 26%) 60%,
+      color-mix(in srgb, var(--canvas-surface) 74%, var(--teal) 26%) 80%,
+      color-mix(in srgb, var(--canvas-surface) 74%, var(--lavender) 26%) 100%
     );
 }
 
@@ -849,15 +885,22 @@
   display: inline-block;
 }
 
-.intelizen-canvas .color-swatch-default { background: #727689; }
-.intelizen-canvas .color-swatch-pink { background: #f38ba8; }
-.intelizen-canvas .color-swatch-orange { background: #fab387; }
-.intelizen-canvas .color-swatch-yellow { background: #f9e2af; }
-.intelizen-canvas .color-swatch-green { background: #a6e3a1; }
-.intelizen-canvas .color-swatch-cyan { background: #94e2d5; }
-.intelizen-canvas .color-swatch-lavender { background: #b4befe; }
+.intelizen-canvas .color-swatch-default { background: var(--surface-2); }
+.intelizen-canvas .color-swatch-rosewater { background: var(--rosewater); }
+.intelizen-canvas .color-swatch-flamingo { background: var(--flamingo); }
+.intelizen-canvas .color-swatch-mauve { background: var(--mauve); }
+.intelizen-canvas .color-swatch-red { background: var(--red); }
+.intelizen-canvas .color-swatch-maroon { background: var(--maroon); }
+.intelizen-canvas .color-swatch-peach { background: var(--peach); }
+.intelizen-canvas .color-swatch-yellow { background: var(--yellow); }
+.intelizen-canvas .color-swatch-green { background: var(--green); }
+.intelizen-canvas .color-swatch-teal { background: var(--teal); }
+.intelizen-canvas .color-swatch-sky { background: var(--sky); }
+.intelizen-canvas .color-swatch-sapphire { background: var(--sapphire); }
+.intelizen-canvas .color-swatch-blue { background: var(--blue); }
+.intelizen-canvas .color-swatch-lavender { background: var(--lavender); }
 .intelizen-canvas .color-swatch-rainbow {
-  background: linear-gradient(135deg, #f38ba8 0%, #fab387 20%, #f9e2af 40%, #a6e3a1 60%, #94e2d5 80%, #b4befe 100%);
+  background: linear-gradient(135deg, var(--red) 0%, var(--peach) 20%, var(--yellow) 40%, var(--green) 60%, var(--teal) 80%, var(--lavender) 100%);
 }
 
 .intelizen-canvas .canvas-prompt-input {

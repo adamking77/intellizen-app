@@ -17,11 +17,18 @@ import type {
 
 export const colorOptions = [
   "default",
-  "pink",
-  "orange",
+  "rosewater",
+  "flamingo",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
   "yellow",
   "green",
-  "cyan",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
   "lavender",
   "rainbow",
 ] as const satisfies readonly CanvasColorPreset[];
@@ -46,27 +53,28 @@ const alignOptionSet = new Set<string>(alignOptions);
 
 const colorAliases: Record<string, CanvasColorPreset> = {
   "0": "default",
-  "1": "pink",
-  "2": "orange",
+  "1": "red",
+  "2": "peach",
   "3": "yellow",
   "4": "green",
-  "5": "cyan",
+  "5": "teal",
   "6": "lavender",
   "7": "rainbow",
   gray: "default",
   grey: "default",
   neutral: "default",
   none: "default",
-  red: "pink",
-  magenta: "pink",
-  amber: "orange",
+  rose: "red",
+  magenta: "mauve",
+  amber: "peach",
+  orange: "peach",
   gold: "yellow",
   lime: "green",
-  teal: "cyan",
-  aqua: "cyan",
-  blue: "cyan",
-  purple: "lavender",
+  cyan: "teal",
+  aqua: "sky",
+  purple: "mauve",
   violet: "lavender",
+  pink: "red",
 };
 
 const shapeAliases: Record<string, CanvasShape> = {
@@ -363,20 +371,34 @@ function edgeStroke(color?: string): string {
   }
 
   switch (normalized) {
-    case "pink":
-      return "#f082a8";
-    case "orange":
-      return "#ffb07a";
+    case "rosewater":
+      return "var(--rosewater)";
+    case "flamingo":
+      return "var(--flamingo)";
+    case "mauve":
+      return "var(--mauve)";
+    case "red":
+      return "var(--red)";
+    case "maroon":
+      return "var(--maroon)";
+    case "peach":
+      return "var(--peach)";
     case "yellow":
-      return "#f4d99b";
+      return "var(--yellow)";
     case "green":
-      return "#9fdf93";
-    case "cyan":
-      return "#7ecbdd";
+      return "var(--green)";
+    case "teal":
+      return "var(--teal)";
+    case "sky":
+      return "var(--sky)";
+    case "sapphire":
+      return "var(--sapphire)";
+    case "blue":
+      return "var(--blue)";
     case "lavender":
-      return "#b1b6f9";
+      return "var(--lavender)";
     case "rainbow":
-      return "#c491ff";
+      return "var(--mauve)";
     default:
       return "var(--canvas-edge)";
   }

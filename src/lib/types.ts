@@ -161,11 +161,18 @@ export type CanvasNodeType = "text" | "group" | "file" | "image";
 export type CanvasSide = "top" | "right" | "bottom" | "left";
 export type CanvasColorPreset =
   | "default"
-  | "pink"
-  | "orange"
+  | "rosewater"
+  | "flamingo"
+  | "mauve"
+  | "red"
+  | "maroon"
+  | "peach"
   | "yellow"
   | "green"
-  | "cyan"
+  | "teal"
+  | "sky"
+  | "sapphire"
+  | "blue"
   | "lavender"
   | "rainbow";
 export type CanvasColor = CanvasColorPreset | string;
