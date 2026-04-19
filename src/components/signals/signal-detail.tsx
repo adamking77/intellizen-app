@@ -258,7 +258,7 @@ export function SignalDetail({ signal, onSave, onAttach, onDismiss }: SignalDeta
             <Bookmark className="h-3.5 w-3.5" />
             Save to project
           </Button>
-          <Button variant="secondary" className="gap-2" onClick={() => onAttach(signal)}>
+          <Button variant="accent-outline" className="gap-2" onClick={() => onAttach(signal)}>
             <Target className="h-3.5 w-3.5" />
             Attach
           </Button>

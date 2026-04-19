@@ -28,6 +28,9 @@ const buttonVariants = cva(
         glow:
           "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
           "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
+        "accent-outline":
+          "bg-transparent text-[var(--accent)] border border-[var(--accent-border)] " +
+          "hover:bg-[rgba(137,180,250,0.08)] hover:border-[var(--accent)]",
       },
       size: {
         default: "h-9 px-3.5 text-[13px]",

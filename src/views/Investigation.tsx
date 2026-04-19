@@ -927,7 +927,7 @@ export function InvestigationView() {
                           </div>
                           <Button
                             size="sm"
-                            variant="secondary"
+                            variant="primary"
                             onClick={() => void handleRunCollection()}
                             disabled={isCollecting}
                             className="gap-1.5 shrink-0"
@@ -1026,7 +1026,7 @@ export function InvestigationView() {
                                   <p className="mt-1.5 line-clamp-2 text-meta text-[var(--subtext-0)]">{signal.snippet}</p>
                                 )}
                               </div>
-                              <Button size="sm" variant="secondary" onClick={() => addSignalMutation.mutate(signal.id)} disabled={addSignalMutation.isPending}>Add</Button>
+                              <Button size="sm" variant="accent-outline" onClick={() => addSignalMutation.mutate(signal.id)} disabled={addSignalMutation.isPending}>Add</Button>
                             </div>
                           ))}
                         </div>

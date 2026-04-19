@@ -2284,7 +2284,7 @@ export function GraphView() {
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                     <Button
-                      variant="secondary"
+                      variant="primary"
                       onClick={() => void handleAutoGenerateFromProject()}
                       disabled={
                         isAutoGenerating ||
@@ -2671,7 +2671,7 @@ export function GraphView() {
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                     <Button
-                      variant="secondary"
+                      variant="primary"
                       onClick={() => void handleAutoGenerateFromProject()}
                       disabled={
                         isAutoGenerating ||
@@ -3239,7 +3239,7 @@ export function GraphView() {
                     <div className="mt-2 flex flex-col gap-1.5">
                       <Button
                         size="sm"
-                        variant={showEdgeLabels ? "primary" : "secondary"}
+                        variant={showEdgeLabels ? "accent-outline" : "ghost"}
                         className="w-full"
                         onClick={() => setShowEdgeLabels((c) => !c)}
                       >
@@ -3247,7 +3247,7 @@ export function GraphView() {
                       </Button>
                       <Button
                         size="sm"
-                        variant={showMinimap ? "primary" : "secondary"}
+                        variant={showMinimap ? "accent-outline" : "ghost"}
                         className="w-full"
                         onClick={() => setShowMinimap((c) => !c)}
                       >
@@ -3255,7 +3255,7 @@ export function GraphView() {
                       </Button>
                       <Button
                         size="sm"
-                        variant={focusMode === "selection" ? "primary" : "secondary"}
+                        variant={focusMode === "selection" ? "accent-outline" : "ghost"}
                         className="w-full"
                         onClick={() =>
                           setFocusMode((c) => (c === "selection" ? "all" : "selection"))
@@ -3275,7 +3275,7 @@ export function GraphView() {
                         <div className="flex gap-1">
                           <Button
                             size="sm"
-                            variant={insightAutoLayout ? "primary" : "secondary"}
+                            variant={insightAutoLayout ? "accent-outline" : "ghost"}
                             onClick={() => setInsightAutoLayout((c) => !c)}
                           >
                             {insightAutoLayout ? "Live" : "Paused"}
@@ -3359,7 +3359,7 @@ export function GraphView() {
                     <div className="flex flex-wrap gap-1.5">
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant="accent-outline"
                         onClick={handleUseSelectedForPath}
                       >
                         Use selection
@@ -3405,7 +3405,7 @@ export function GraphView() {
                     <div className="flex flex-wrap gap-1.5">
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant="accent-outline"
                         onClick={handleApplyEgoFromSelection}
                       >
                         Use selection

@@ -490,11 +490,11 @@ export function ProjectsView() {
           <IndicatorStrip items={indicators} />
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setCreateOperationOpen(true)} className="gap-1.5">
+          <Button size="sm" variant="primary" onClick={() => setCreateOperationOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New operation
           </Button>
-          <Button size="sm" onClick={() => setCreateProjectOpen(true)} className="gap-1.5">
+          <Button size="sm" variant="accent-outline" onClick={() => setCreateProjectOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New project
           </Button>
@@ -813,11 +813,11 @@ function ProjectDetailPane({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <Button size="sm" variant="secondary" className="gap-1.5" onClick={onAddFromSearch}>
+            <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onAddFromSearch}>
               <FolderSearch className="h-3 w-3" />
               Add from Search
             </Button>
-            <Button size="sm" variant="secondary" className="gap-1.5" onClick={onOpenInvestigation}>
+            <Button size="sm" variant="primary" className="gap-1.5" onClick={onOpenInvestigation}>
               <FileSearch className="h-3 w-3" />
               Open as investigation
             </Button>
@@ -1020,11 +1020,11 @@ function OperationDetailPane({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <Button size="sm" variant="secondary" className="gap-1.5" onClick={onNewProject}>
+            <Button size="sm" variant="primary" className="gap-1.5" onClick={onNewProject}>
               <Plus className="h-3 w-3" />
               Add project
             </Button>
-            <Button size="sm" variant="secondary" className="gap-1.5" onClick={onNewInvestigation}>
+            <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onNewInvestigation}>
               <FileSearch className="h-3 w-3" />
               New investigation
             </Button>
@@ -1072,7 +1072,7 @@ function OperationDetailPane({
 
           {assignableProjects.length > 0 && (
             <div className="mb-3">
-              <Button size="sm" variant="secondary" className="gap-1.5 w-full justify-center" onClick={onAssignProject}>
+              <Button size="sm" variant="accent-outline" className="gap-1.5 w-full justify-center" onClick={onAssignProject}>
                 <Plus className="h-3 w-3" />
                 Assign existing project{assignableProjects.length > 1 ? "s" : ""}
               </Button>

@@ -493,7 +493,7 @@ export function InboxView() {
             </div>
             <Button
               size="sm"
-              variant="secondary"
+              variant="primary"
               onClick={() => refreshMutation.mutate()}
               disabled={refreshMutation.isPending}
               className="gap-1.5"

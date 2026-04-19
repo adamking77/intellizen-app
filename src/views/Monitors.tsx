@@ -427,7 +427,7 @@ function MonitorCard({
             </Button>
             <Button
               size="sm"
-              variant="secondary"
+              variant="primary"
               onClick={() => runMutation.mutate()}
               disabled={runMutation.isPending}
               className="gap-1.5"
