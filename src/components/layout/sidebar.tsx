@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Inbox", to: "/inbox", key: "inbox", icon: Inbox },
   { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },
-  { label: "Projects", to: "/projects", key: "projects", icon: FolderOpen },
+  { label: "Ops", to: "/projects", key: "projects", icon: FolderOpen },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Investigate", to: "/investigate", key: "investigate", icon: Spline },
   { label: "Reports", to: "/reports", key: "reports", icon: FileText },

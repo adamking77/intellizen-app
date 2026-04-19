@@ -85,7 +85,7 @@ const NAV_COMMANDS: Command[] = [
   { id: "nav:inbox", label: "Inbox", kind: "navigation", run: ({ navigate }) => navigate("/inbox") },
   { id: "nav:monitors", label: "Monitors", kind: "navigation", run: ({ navigate }) => navigate("/monitors") },
   { id: "nav:search", label: "Search", kind: "navigation", run: ({ navigate }) => navigate("/search") },
-  { id: "nav:projects", label: "Projects", kind: "navigation", run: ({ navigate }) => navigate("/projects") },
+  { id: "nav:projects", label: "Ops", kind: "navigation", run: ({ navigate }) => navigate("/projects") },
   { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
   { id: "nav:investigate", label: "Investigate", kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
   { id: "nav:reports", label: "Reports", kind: "navigation", run: ({ navigate }) => navigate("/reports") },
@@ -94,7 +94,7 @@ const NAV_COMMANDS: Command[] = [
 const ACTION_COMMANDS: Command[] = [
   { id: "act:new-investigation", label: "New investigation", hint: "Investigate", kind: "action", run: ({ navigate }) => navigate("/investigate") },
   { id: "act:new-monitor", label: "New monitor", hint: "Monitors", kind: "action", run: ({ navigate }) => navigate("/monitors") },
-  { id: "act:new-project", label: "New project", hint: "Projects", kind: "action", run: ({ navigate }) => navigate("/projects") },
+  { id: "act:new-project", label: "New project", hint: "Ops", kind: "action", run: ({ navigate }) => navigate("/projects") },
   { id: "act:run-monitor", label: "Run monitor", hint: "Refresh Inbox", kind: "action", run: ({ navigate }) => navigate("/inbox") },
   { id: "act:open-graph", label: "Open Graph", kind: "action", run: ({ navigate }) => navigate("/graph") },
   { id: "act:search-web", label: "Search — Web", hint: "Exa web", kind: "action", run: ({ navigate }) => navigate("/search?mode=web") },
