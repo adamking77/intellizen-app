@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -82,6 +82,7 @@ export function ProjectsView() {
   const [nameDraft, setNameDraft] = useState("");
   const [operationDescDraft, setOperationDescDraft] = useState("");
   const [operationDescStatus, setOperationDescStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [collapsedOps, setCollapsedOps] = useState<Set<number>>(new Set());
 
   // Resizable left rail
   const [railWidth, setRailWidth] = useState<number>(() => {
@@ -531,6 +532,16 @@ export function ProjectsView() {
                 {/* Operations with their projects */}
                 {operationGroups.map(({ operation, projects: opProjects }) => {
                   const isOpSelected = selection?.kind === "operation" && selection.id === operation.id;
+                  const isCollapsed = collapsedOps.has(operation.id);
+                  const toggleCollapse = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setCollapsedOps((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(operation.id)) next.delete(operation.id);
+                      else next.add(operation.id);
+                      return next;
+                    });
+                  };
                   return (
                     <div key={operation.id}>
                       <button
@@ -566,8 +577,21 @@ export function ProjectsView() {
                             Operation · {opProjects.length} project{opProjects.length === 1 ? "" : "s"}
                           </span>
                         </div>
+                        {opProjects.length > 0 && (
+                          <span
+                            role="button"
+                            aria-label={isCollapsed ? "Expand" : "Collapse"}
+                            onClick={toggleCollapse}
+                            className="ml-auto shrink-0 rounded p-0.5 text-[var(--overlay-1)] hover:text-[var(--text)]"
+                          >
+                            {isCollapsed
+                              ? <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.5} />
+                              : <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.5} />
+                            }
+                          </span>
+                        )}
                       </button>
-                      {opProjects.map((p) => renderProject(p, true))}
+                      {!isCollapsed && opProjects.map((p) => renderProject(p, true))}
                     </div>
                   );
                 })}

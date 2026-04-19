@@ -128,7 +128,7 @@ export async function listOperations() {
   const { data, error } = await supabase
     .from("operations")
     .select("*")
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   if (error) throw error;
   return (data ?? []) as Operation[];
