@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileSearch, FolderSearch, Layers, Plus, Trash2 } from "lucide-react";
+import { Archive, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -427,7 +427,7 @@ export function ProjectsView() {
     const isSelected = selection?.kind === "project" && selection.id === project.id;
     const count = signalCounts?.[project.id] ?? 0;
     const domain = project.watch_domain;
-    const dot = domain ? domainColor(domain) : "var(--overlay-1)";
+    const dot = project.status === "active" ? "var(--success)" : "var(--overlay-1)";
     return (
       <button
         key={project.id}
@@ -440,7 +440,7 @@ export function ProjectsView() {
           isSelected
             ? "bg-[var(--accent-soft)] pl-[13px]"
             : indent
-              ? "pl-8 hover:bg-[var(--surface-wash)]"
+              ? "pl-10 hover:bg-[var(--surface-wash)]"
               : "pl-4 hover:bg-[var(--surface-wash)]",
           project.status === "archived" && "opacity-50",
         )}
@@ -453,13 +453,19 @@ export function ProjectsView() {
           <div className="flex items-center justify-between gap-2">
             <p className={cn(
               "min-w-0 flex-1 truncate font-ui text-[13px] font-medium",
-              isSelected ? "text-[var(--accent)]" : "text-[var(--text)] group-hover/row:text-[var(--text)]",
+              isSelected ? "text-[var(--accent)]" : indent ? "text-[var(--subtext-0)]" : "text-[var(--text)]",
             )}>
               {project.name}
             </p>
             <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">{count}</span>
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[11px]">
+            {indent && (
+              <>
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--overlay-1)]">Project</span>
+                <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+              </>
+            )}
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
               {project.type.replace("_", " ")}
             </span>
@@ -805,21 +811,22 @@ function ProjectDetailPane({
                 type="button"
                 onClick={onEditNameStart}
                 title="Click to rename"
-                className="min-w-0 truncate rounded-sm px-1 py-0.5 text-left font-ui text-[15px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-wash)]"
+                className="group/rename flex min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
               >
-                {project.name}
+                <span className="min-w-0 truncate font-ui text-[15px] font-semibold text-[var(--text)]">{project.name}</span>
+                <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
               </button>
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-2">
             <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onAddFromSearch}>
               <FolderSearch className="h-3 w-3" />
-              Add from Search
+              Add Search
             </Button>
             <Button size="sm" variant="primary" className="gap-1.5" onClick={onOpenInvestigation}>
               <FileSearch className="h-3 w-3" />
-              Open as investigation
+              Run Investigation
             </Button>
             <Button size="sm" variant="ghost" className="gap-1.5" onClick={onToggleStatus}>
               <Archive className="h-3 w-3" />
@@ -1012,21 +1019,22 @@ function OperationDetailPane({
               type="button"
               onClick={onEditNameStart}
               title="Click to rename"
-              className="min-w-0 truncate rounded-sm px-1 py-0.5 text-left font-ui text-[15px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--surface-wash)]"
+              className="group/rename flex min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
             >
-              {operation.name}
+              <span className="min-w-0 truncate font-ui text-[15px] font-semibold text-[var(--text)]">{operation.name}</span>
+              <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
             </button>
           )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-2">
             <Button size="sm" variant="primary" className="gap-1.5" onClick={onNewProject}>
               <Plus className="h-3 w-3" />
-              Add project
+              Add Project
             </Button>
             <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onNewInvestigation}>
               <FileSearch className="h-3 w-3" />
-              New investigation
+              Run Investigation
             </Button>
             <Button
               size="sm" variant="ghost" disabled={deletePending}

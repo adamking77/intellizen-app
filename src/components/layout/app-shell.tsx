@@ -15,6 +15,7 @@ export function AppShell() {
       <Toaster
         position="bottom-right"
         theme="dark"
+        closeButton
         toastOptions={{
           style: {
             background: "var(--mantle)",

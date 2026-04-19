@@ -518,6 +518,32 @@ pre {
   animation: slide-in-right 220ms var(--ease-out);
 }
 
+/* Sonner toast close button — right-aligned, blue */
+[data-sonner-toast] [data-close-button] {
+  position: absolute !important;
+  left: auto !important;
+  right: 10px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--accent) !important;
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1;
+  background: transparent !important;
+}
+[data-sonner-toast] [data-close-button] svg {
+  width: 13px;
+  height: 13px;
+}
+[data-sonner-toast] {
+  padding-right: 36px !important;
+}
+
 /* Focus-visible ring (keyboard only) */
 :focus-visible {
   outline: none;

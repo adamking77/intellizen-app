@@ -13,6 +13,7 @@ import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import {
   addSignalToInvestigation,
+  bulkDismissSignals,
   dismissSignal,
   listInvestigations,
   listMonitors,
@@ -158,11 +159,7 @@ export function InboxView() {
   });
 
   const bulkArchiveMutation = useMutation({
-    mutationFn: async (ids: number[]) => {
-      const results = await Promise.allSettled(ids.map((id) => dismissSignal(id)));
-      const failed = results.filter((r) => r.status === "rejected").length;
-      return { total: ids.length, failed };
-    },
+    mutationFn: (ids: number[]) => bulkDismissSignals(ids),
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey: ["signals"] });
       const previous = queryClient.getQueryData<IntelSignal[]>(["signals"]);
@@ -177,12 +174,13 @@ export function InboxView() {
       if (context?.previous) {
         queryClient.setQueryData(["signals"], context.previous);
       }
-      toastError("Bulk archive failed", err);
+      toastError("Clear failed", err);
     },
-    onSuccess: ({ total, failed }) => {
+    onSuccess: ({ total, cleared }) => {
       clearSelection();
-      if (failed === 0) toast.success(`Archived ${total} signal${total === 1 ? "" : "s"}`);
-      else toast.error(`Archived ${total - failed} of ${total} — ${failed} failed`);
+      const skipped = total - cleared;
+      if (skipped === 0) toast.success(`Cleared ${cleared} signal${cleared === 1 ? "" : "s"}`);
+      else toast.success(`Cleared ${cleared} signal${cleared === 1 ? "" : "s"} — ${skipped} kept (saved to project or investigation)`);
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["signals"] });
@@ -413,7 +411,7 @@ export function InboxView() {
                 className="gap-1.5 text-[var(--subtext-0)]"
               >
                 <Archive className="h-3 w-3" />
-                Archive all
+                Clear all
               </Button>
             ) : null}
             <div ref={filterPopoverRef} className="relative">
@@ -612,7 +610,7 @@ export function InboxView() {
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:opacity-50"
               >
                 <Archive className="h-3 w-3" />
-                Archive
+                Clear
               </button>
               <button
                 type="button"
@@ -639,7 +637,7 @@ export function InboxView() {
             <KeyHint keys="x" label="Select" />
             <KeyHint keys="s" label={selectedIds.size > 0 ? "Bulk save" : "Save"} />
             <KeyHint keys="e" label="Attach" />
-            <KeyHint keys="a" label={selectedIds.size > 0 ? "Bulk archive" : "Archive"} />
+            <KeyHint keys="a" label={selectedIds.size > 0 ? "Bulk clear" : "Clear"} />
             <KeyHint keys="/" label="Filter" />
             <KeyHint keys="esc" label={selectedIds.size > 0 ? "Clear selection" : "Close"} />
           </div>

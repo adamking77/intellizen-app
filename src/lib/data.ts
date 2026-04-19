@@ -85,12 +85,27 @@ export async function seedDefaultMonitors() {
 }
 
 export async function listSignals() {
-  const { data, error } = await supabase
+  const [{ data: pSigs }, { data: iSigs }] = await Promise.all([
+    supabase.from("project_signals").select("signal_id"),
+    supabase.from("investigation_signals").select("signal_id"),
+  ]);
+
+  const protectedIds = [
+    ...(pSigs ?? []).map((r) => r.signal_id),
+    ...(iSigs ?? []).map((r) => r.signal_id),
+  ];
+
+  let query = supabase
     .from("intel_signals")
     .select("*")
     .in("status", ["new", "saved"])
     .order("created_at", { ascending: false });
 
+  if (protectedIds.length > 0) {
+    query = query.not("id", "in", `(${protectedIds.join(",")})`);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as IntelSignal[];
 }
@@ -244,12 +259,36 @@ export async function removeSignalFromProject(projectSignalId: number) {
 }
 
 export async function dismissSignal(signalId: number) {
-  const { error } = await supabase
-    .from("intel_signals")
-    .delete()
-    .eq("id", signalId);
+  const [{ count: pCount }, { count: iCount }] = await Promise.all([
+    supabase.from("project_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
+    supabase.from("investigation_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
+  ]);
+  if ((pCount ?? 0) > 0 || (iCount ?? 0) > 0) return;
 
+  const { error } = await supabase.from("intel_signals").delete().eq("id", signalId);
   if (error) throw error;
+}
+
+export async function bulkDismissSignals(ids: number[]) {
+  if (ids.length === 0) return { total: 0, cleared: 0 };
+
+  const [{ data: pSigs }, { data: iSigs }] = await Promise.all([
+    supabase.from("project_signals").select("signal_id").in("signal_id", ids),
+    supabase.from("investigation_signals").select("signal_id").in("signal_id", ids),
+  ]);
+
+  const protectedIds = new Set([
+    ...(pSigs ?? []).map((r) => r.signal_id),
+    ...(iSigs ?? []).map((r) => r.signal_id),
+  ]);
+
+  const toDelete = ids.filter((id) => !protectedIds.has(id));
+  if (toDelete.length === 0) return { total: ids.length, cleared: 0 };
+
+  const { error } = await supabase.from("intel_signals").delete().in("id", toDelete);
+  if (error) throw error;
+
+  return { total: ids.length, cleared: toDelete.length };
 }
 
 export async function saveSignalToProject(input: {
