@@ -21,7 +21,6 @@ insert into project_signals (project_id, signal_id, notes, added_at)
 select project_id, signal_id, notes, added_at
 from duplicate_links
 on conflict (project_id, signal_id) do nothing;
-
 with ranked as (
   select
     id,
@@ -34,7 +33,6 @@ delete from project_signals ps
 using ranked
 where ps.signal_id = ranked.id
   and ranked.row_num > 1;
-
 with ranked as (
   select
     id,
@@ -59,7 +57,6 @@ set status = case
 end
 from status_rollup
 where canonical.id = status_rollup.canonical_id;
-
 with ranked as (
   select
     id,
@@ -72,9 +69,7 @@ delete from intel_signals
 using ranked
 where intel_signals.id = ranked.id
   and ranked.row_num > 1;
-
 create unique index if not exists intel_signals_url_uidx on intel_signals (url);
-
 update monitors
 set signal_count = coalesce((
   select count(*)

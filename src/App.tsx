@@ -19,6 +19,8 @@ const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView")
 const MonitorsView = lazyNamed(() => import("@/views/Monitors"), "MonitorsView");
 const GraphView = lazyNamed(() => import("@/views/Graph"), "GraphView");
 const CanvasView = lazyNamed(() => import("@/views/Canvas"), "CanvasView");
+const DatabasesView = lazyNamed(() => import("@/views/Databases"), "DatabasesView");
+const DatabaseEditorView = lazyNamed(() => import("@/views/DatabaseEditor"), "DatabaseEditorView");
 const InvestigationView = lazyNamed(
   () => import("@/views/Investigation"),
   "InvestigationView",
@@ -84,6 +86,22 @@ function App() {
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
                 <CanvasView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/databases"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <DatabasesView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/databases/:id"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <DatabaseEditorView />
               </Suspense>
             }
           />

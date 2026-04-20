@@ -27,7 +27,7 @@ Supabase-native. Schema in a `workspace_databases` table, records in `workspace_
 
 Port Sogo's 22 webview components from `sogo-ext` — pure React, cleanly separated from VS Code APIs by a message protocol. No library reaches 80%+ of Notion's database UX (researched and confirmed); Sogo already has all views, field types, record modals, and sort/filter built. Replace the VS Code host layer with direct Supabase queries. Restyle to match InteliZen's Tailwind v4 design system.
 
-Views to support V1: Table, Kanban, List. Gallery and Calendar in V2.
+Views shipped in the current implementation: Table, Kanban, List, Gallery, Calendar.
 
 ### Canvas
 **React Flow (`@xyflow/react`, MIT).** Sogo Canvas already uses React Flow as its engine — this is a port, not a fresh build. The `.canvas` ↔ React Flow serializers (`serializeDocument`, `parseDocument`, `nodeToFlowNode`, `flowNodeToCanvasData`, `edgeToFlowEdge`) are already written as self-contained functions with zero VS Code dependencies. Node types (text, group, file, image) and edge model (`fromSide`/`toSide` → React Flow handles) map directly.
@@ -130,7 +130,7 @@ All three are full routes — consistent with InteliZen's route-centric shell ar
 ---
 
 ### Phase 4 — Workspace Databases
-*Highest-risk phase. Spike before committing full estimate.*
+*Highest-risk phase. Spike before committing full estimate. Target: Sogo-parity functionality in InteliZen's product language.*
 
 #### Spike first — six conditions that must all pass before full build
 1. One real Supabase-backed database opens inside InteliZen
@@ -142,34 +142,115 @@ All three are full routes — consistent with InteliZen's route-centric shell ar
 
 If any of these fail cleanly, change approach before committing to the full build.
 
-#### 4a — Supabase Schema
-- `workspace_databases` — id, name, schema (jsonb), created_at
-- `workspace_records` — id, database_id, fields (jsonb), created_at, updated_at
-- Migration applied to prod via Supabase CLI
+#### 4a — Supabase Schema (three tables)
 
-#### 4b — Port Sogo Components
-Copy from `sogo-ext` packages/sogo-lite/webview/src:
-- `TableView`, `KanbanView`, `ListView` + shared record editor
-- Field type renderers: text, number, select, status, date, checkbox, url, relation
-- Sort/filter engine from `sogo-db-core`
-- Replace VS Code host message protocol with direct Supabase queries and TanStack Query (already in InteliZen)
-- Remove all VS Code theming; apply InteliZen's CSS variables and Tailwind
+Sogo stores a whole `Database` (schema + views + records) as one `.db.json` blob. That works on a single-user filesystem with last-write-wins; it does not scale cleanly to Supabase where every record edit would rewrite the whole blob and collide with concurrent writes.
 
-#### 4c — Database UX Shape
-- Left rail: database list + saved views (first-class entities, persisted to Supabase)
+Split into three tables, preserving Sogo's conceptual model (Database / View / Record):
+
+```sql
+workspace_databases (
+  id uuid primary key,
+  name text not null,
+  icon text,
+  schema jsonb not null,              -- Field[] — see 4b for full type set
+  header_field_ids jsonb,             -- string[] — title/subtitle field selection
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+)
+
+workspace_views (
+  id uuid primary key,
+  database_id uuid not null references workspace_databases(id) on delete cascade,
+  name text not null,
+  type text not null,                 -- 'table' | 'kanban' | 'list' | 'gallery' | 'calendar'
+  config jsonb not null,              -- groupBy, sort, filter, hiddenFields, fieldOrder,
+                                      -- columnWidths, cardCoverField, cardFields
+  position int not null default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+)
+
+workspace_records (
+  id uuid primary key,
+  database_id uuid not null references workspace_databases(id) on delete cascade,
+  fields jsonb not null,              -- { [fieldId]: value } — relations stored as uuid[]
+  body text,                          -- maps to Sogo's _body (rich text per record)
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+)
+
+create index workspace_views_database_id_idx on workspace_views(database_id);
+create index workspace_records_database_id_idx on workspace_records(database_id);
+```
+
+**Scope decision:** No `scope` column in V1. Sogo supports `global | workspace` for cross-workspace sharing; InteliZen databases are implicitly global (workspace-level like Notion pages, not tied to Operations or Projects). If per-Operation databases are needed later, add an optional `operation_id` column — don't retrofit scope semantics.
+
+RLS disabled (matches the rest of InteliZen's single-user local desktop model). Migration number: 6th additive migration in `supabase/migrations/`.
+
+**Hydration pattern:** at load, query all three tables for a given database and assemble an in-memory `Database` object that matches Sogo's `types.ts` shape exactly. This is what the ported logic modules in 4b expect as input. Writes flow back to the correct table (record edit → `workspace_records`; view edit → `workspace_views`; schema edit → `workspace_databases`).
+
+#### 4b — Port Sogo Core Logic As-Is
+
+Source: https://github.com/adamking77/sogo-ext — `packages/core/src/` (MIT licensed). **Port logic, not palette** (per Codex design rule).
+
+Port these modules unchanged — they are pure functions operating on the `Database` / `DBRecord` / `Field` types and have zero UI or VS Code dependency:
+
+- `types.ts` — full Field/View/Database/Record type definitions (15 field types, 5 view types)
+- `sort-filter.ts` — filter/sort engine
+- `relations.ts` — relation resolution and reciprocal link updates
+- `rollup.ts` — rollup aggregations (count, count_not_empty, sum, avg, min, max)
+- `formula.ts` — formula expression evaluation
+- `csv.ts` — CSV import/export
+- `utils.ts`, `colors.ts` — shared helpers
+
+Skip: `io.ts` (Node fs reads of `.db.json`), `migration.ts` (Sogo format migration).
+
+**Field types supported in schema from day one** (jsonb is free — storage shape doesn't change per type):
+text, number, select, multiselect, relation, rollup, formula, date, checkbox, url, email, phone, status, createdAt, lastEditedAt.
+
+**View types supported in storage from day one:** table, kanban, list, gallery, calendar.
+
+#### 4c — Port Sogo UI Components
+
+Source: `sogo-ext` webview components. Port the behavior and composition; rebuild the presentation layer in InteliZen's Tailwind v4 + CSS variables.
+
+- `TableView`, `KanbanView`, `ListView`, `GalleryView`, `CalendarView`, `ViewSwitcher`, `Toolbar`
+- `PeekPanel` → becomes InteliZen's right-side record drawer
+- `SchemaEditor` → separate surface from record editing
+- Field renderers per type (15 total)
+- Replace VS Code host message protocol with direct Supabase queries + TanStack Query
+- Strip all VS Code theming; apply InteliZen tokens
+
+#### 4d — UI Rollout Status
+
+Storage supports everything from day one. The current repo implementation now includes the full planned wave set:
+
+**Wave 1 shipped:** Table view. Field renderers for text, number, select, multiselect, status, checkbox, date, url, email, phone, createdAt, lastEditedAt. Record drawer. Schema editor. Saved views persisted to `workspace_views`.
+
+**Wave 2 shipped:** Kanban view, List view. Relation field renderer + target picker.
+
+**Wave 3 shipped:** Gallery view, Calendar view. Rollup + formula field renderers with config editors.
+
+**Hardening shipped:** CSV import/export, kanban drag-and-drop, computed-field validation, and automated tests around the shared database core.
+
+#### 4e — Database UX Shape
+
+- Left rail: database list + saved views per database (first-class entities in `workspace_views`)
 - Top bar: database title, view switcher, filter, sort, group, create actions
-- Main content: current view (Table / Kanban / List)
-- Right-side record drawer: record detail and editing (not a modal)
-- Inline editing for simple fields only (text, checkbox, select)
-- Relations, long text, dates, and metadata editing always in the drawer
+- Main content: current view
+- Right-side record drawer: record detail + editing (not a modal)
+- Inline editing only for simple fields (text, checkbox, select, status)
+- Relations, long text, dates, metadata editing always in the drawer
 - Schema editing is a separate surface from record editing
 
-#### 4d — Routing + Navigation
-- `/databases` — list of all workspace databases from Supabase
-- `/databases/:id` — open database, view switcher
-- Sidebar entry: Databases with count badge
+#### 4f — Routing + Navigation
 
-**Effort:** 2–3 weeks (revised up from 1–1.5 weeks — storage design, component port, Supabase integration, relation fields, and restyling are all non-trivial)
+- `/databases` — list all databases from `workspace_databases`
+- `/databases/:id` — open database, view switcher
+- Sidebar entry under WORKSPACE: Databases with count badge
+
+**Effort:** Spike and full database editor implementation are complete in the current repo. Remaining work is polish and product expansion outside the database core.
 
 ---
 
@@ -1058,3 +1139,329 @@ not:
 - Sogo embedded inside InteliZen
 
 That distinction matters. The success criterion is not just feature parity. It is feature parity implemented in the product language of the app that already exists.
+
+---
+
+## Database Rebuild Plan — 2026-04-20
+
+*Post-Codex-shipping-the-first-pass rebuild. The initial database surface shipped without Sogo's premium DNA — no color system, native `<select>` cells, flat drawer, no column resize, no bulk actions, no pinned summary fields. This plan ports Sogo's logic in three waves while honoring InteliZen principles (Catppuccin Mocha, colorblind-safe palette, no glow, Lucide stroke 1.5).*
+
+### Scope approval
+
+User approved all four tradeoffs on 2026-04-20:
+
+1. **TaskRelationsSection — keep.** Essential workflow function.
+2. **Drag-reorder pinned summary fields — keep.** Essential now.
+3. **Markdown textarea + toolbar (not BlockNote) in record sidepeek.**
+4. **Base64 cover images for gallery — keep.** Lighter and more efficient than vault_files thumbnails for V1.
+
+### Catppuccin color mapping (locked)
+
+**Semantic palette** (`SemanticRole → hex`, dark theme only — InteliZen is dark-only):
+
+```
+danger   → var(--red)       #f38ba8
+warning  → var(--peach)     #fab387
+success  → var(--green)     #a6e3a1
+info     → var(--sapphire)  #74c7ec   (not blue — keeps --accent reserved for app chrome)
+neutral  → var(--overlay-1) #7f849c
+```
+
+**Semantic map** (lowercased option label → role, verbatim from Sogo):
+
+- Priority: critical/urgent/high → danger · medium → warning · low → success · none → neutral
+- Status: not started/todo/to do/backlog/cancelled/canceled → neutral · in progress/active/doing/in review → info · done/complete/completed/closed/shipped → success · blocked → danger · on hold → warning
+
+**Hash palette** (8 hues, colorblind-reordered to avoid adjacent blue/lavender pairs):
+
+```
+0  red        #f38ba8
+1  peach      #fab387
+2  yellow     #f9e2af
+3  green      #a6e3a1
+4  teal       #94e2d5
+5  sapphire   #74c7ec
+6  mauve      #cba6f7
+7  pink       #f5c2e7
+```
+
+**Cycling palette** (non-adjacent order for sequential options): `[0, 4, 2, 6, 1, 5, 3, 7]` — red, teal, yellow, mauve, peach, sapphire, green, pink. No neighboring-hue collisions.
+
+### File structure after rebuild
+
+```
+src/lib/
+  database-colors.ts         (NEW — port of Sogo colors.ts, Catppuccin)
+  database-core.ts           (existing — no structural changes)
+  database-core.test.ts      (existing — extend for new resolvers)
+
+src/components/database/
+  DatabaseTableView.tsx      (REWRITE)
+  DatabaseKanbanView.tsx     (REWRITE)
+  DatabaseGalleryView.tsx    (REWRITE)
+  DatabaseListView.tsx       (REWRITE)
+  DatabaseCalendarView.tsx   (untouched — not in scope)
+  DatabaseSchemaEditor.tsx   (KEEP — bulk/structural edits only)
+  ViewTabBar.tsx             (minor polish — Lucide icons, count badges)
+
+  DatabasePeekPanel.tsx      (NEW — replaces DatabaseRecordDrawer.tsx)
+  DatabaseRecordDrawer.tsx   (DELETE after migration)
+
+  primitives/
+    Badge.tsx                (NEW — solid-fill, YIQ contrast)
+    InlinePillPicker.tsx     (NEW)
+    InlineMultiPillPicker.tsx (NEW)
+    InlineRelationEditor.tsx (NEW)
+    ColumnHeaderPopover.tsx  (NEW — rename + type + options/colors)
+    TaskRelationsSection.tsx (NEW — nested filter/sort/columns)
+    MarkdownToolbar.tsx      (NEW — B/I/•/☐ + word count)
+    RecordPickerDropdown.tsx (NEW — searchable multi-select picker)
+```
+
+Everything that currently hardcodes an option color or renders status as plain text routes through the resolvers.
+
+### Wave 1 — Color foundation + primitives (~500 LoC)
+
+**`src/lib/database-colors.ts`**
+
+```ts
+export type SemanticRole = 'danger' | 'warning' | 'success' | 'info' | 'neutral';
+
+export const SEMANTIC_PALETTE: Record<SemanticRole, string>;
+export const SEMANTIC_MAP: Record<string, SemanticRole>;
+export const HASH_PALETTE: string[];                  // length 8
+export const CYCLING_PALETTE: number[];               // [0,4,2,6,1,5,3,7]
+
+export function hashString(s: string): number;        // djb2, >>> 0
+export function resolveStatusColor(value: string): string;
+export function resolveFieldOptionColor(field: WorkspaceDatabaseField, option: string): string;
+export function resolveRelationColor(title: string): string;
+export function getReadableTextColor(bgHex: string): string;   // YIQ: returns var(--crust) or var(--text)
+```
+
+**`Badge.tsx`** — solid-fill pill, 12px, 2/8 padding, 999 radius. `color` prop optional; defaults to `var(--surface-wash-strong)` + `var(--subtext-0)`. No borders, no shadows, no glow.
+
+**Tests** (extend `database-core.test.ts`):
+
+- semantic match wins over cycling
+- explicit `optionColors` override wins over semantic
+- hash is deterministic + stable across sessions
+- YIQ returns crust on light colors, text on dark
+
+**Acceptance:** resolvers return Catppuccin values; Badge renders with readable text on every palette entry; existing views still compile.
+
+### Wave 2 — Table + PeekPanel (~1600 LoC)
+
+#### `DatabaseTableView.tsx` rewrite
+
+Core state shape additions (persisted on view via `onUpdateView`):
+
+- `columnWidths: Record<fieldId, number>` (default 168px)
+- `groupBy: fieldId | null`
+- `selectedRecordIds: Set<string>` (ephemeral, not persisted)
+
+Layout:
+
+```
+<thead sticky>
+  <tr>
+    <th checkbox-column width=32 />
+    <th x visibleFields>
+      <button click=openColumnPopover>
+        <Lucide icon={fieldTypeIcon} size=14 stroke=1.5 /> {name}
+        {sortDir && <ArrowUp/ArrowDown size=12 />}
+      </button>
+      <div class=resize-handle pointerdown=startResize />
+    </th>
+    <th sticky-right width=32><Plus click=addField /></th>
+  </tr>
+</thead>
+<tbody>
+  {groupBy
+    ? groups.map(g => <GroupHeader color={resolveFieldOptionColor(groupField, g.value)} /> + g.records.map(renderRow))
+    : records.map(renderRow)}
+  <tr class=add-record-row><td colspan=full><Plus /> New record</td></tr>
+</tbody>
+{selectedCount > 0 && <BulkBar count delete />}
+```
+
+Row primary cell has absolute-positioned `<RowActions>`: `ExternalLink` (opens peek) / `Copy` (duplicate) / `Trash2` (delete). Opacity 0, `group-hover:opacity-100`, 90ms transition.
+
+Column resize: `pointerdown` on handle captures `pointermove` on document, updates `columnWidths` locally, persists on `pointerup` via `onUpdateView`. 1px guide rendered with `::before`.
+
+Inline cells — use primitives:
+
+- text/url/email/phone/number/date → `<input>` with blur-to-save (existing pattern, add focus border)
+- checkbox → native checkbox, immediate save
+- status → `<InlinePillPicker getColor={resolveStatusColor} />`
+- select → `<InlinePillPicker getColor={(opt) => resolveFieldOptionColor(field, opt)} />`
+- multiselect → `<InlineMultiPillPicker />`
+- relation → `<InlineRelationEditor />` (opens portal dropdown, NOT peek)
+- formula/rollup/createdAt/lastEditedAt → computed display, `opacity: 0.4`
+
+**Column header popover** (`ColumnHeaderPopover.tsx`, portal-anchored):
+
+- Name input (autosaves 160ms debounced)
+- Type `<select>` (limited to safe conversions)
+- Options list with reorder + delete + per-option color picker (opens a grid of the 8 hash palette swatches plus a "clear" chip)
+- "Hide column", "Sort asc/desc", "Group by this field" (only for status/select/multiselect)
+
+Bulk bar: appears bottom-center when `selectedCount > 0`, shows `{count} selected · Delete` (danger) — solid-fill, no glow.
+
+#### `DatabasePeekPanel.tsx` (replaces Drawer)
+
+Module-level cache: `let lastPanelWidth = 520;`
+
+State:
+
+- `width` (number, 380–92vw)
+- `isFullPage` (boolean)
+- `pinnedFieldIds` (persisted on database as `headerFieldIds`, existing column; max 5)
+- `propertiesOpen` (boolean, default true)
+
+Layout:
+
+```
+<aside style={translateX + width}>
+  <resize-handle onPointerDown={startResize} />    // left edge, 6px, cursor=ew-resize
+  <header>
+    <title-input size=20 />
+    <meta>Created {date} · Edited {date}</meta>
+    <actions>
+      <Maximize2/Minimize2 toggle-fullpage />
+      <Copy duplicate />
+      <Trash2 danger />
+      <X close />
+    </actions>
+  </header>
+
+  <section class=summary>
+    <row>Summary <button>Customize view</button></row>
+    <DndContext>   // drag-reorder pinned
+      {pinnedFields.map(f => <SummaryField /> as draggable)}
+    </DndContext>
+  </section>
+
+  <details open={propertiesOpen}>
+    <summary>Properties ({nonPinned.length})</summary>
+    {nonPinned.map(f => <PeekField />)}
+  </details>
+
+  <TaskRelationsSection />   // one per relation field flagged as tasks
+
+  <section class=notes>
+    <MarkdownToolbar />
+    <textarea value={record._body} blur-to-save />
+    <word-count />
+  </section>
+</aside>
+```
+
+**Pinned-field scoring** (`getSuggestedHeaderFields`, port from Sogo):
+
+- Base score by type: status 36, select 30, relation 24, date 20, checkbox 12, multiselect 16
+- Name regex bonus: `/status|stage|priority|state/i` → +14
+- Name regex penalty: `/tasks?|subtasks?|children/i` on relations → −30
+- Top 5 by score become defaults; user can pin/unpin/drag-reorder; persisted to `databases.headerFieldIds`
+
+**Drag-reorder**: dnd-kit `SortableContext` with `verticalListSortingStrategy`. Persist on `onDragEnd`.
+
+**Resize**: pointerdown on left edge; pointermove updates `width` in state; pointerup writes `lastPanelWidth` (module scope so new opens remember it within session; persist to localStorage for across-session).
+
+**Full-page**: toggle sets `width` to `100vw` via CSS class, animates via transition.
+
+**Slide-in animation**: initial `translateX(100%)`, on mount `translateX(0)`, 200ms cubic-bezier.
+
+**Keyboard**: Escape closes, Cmd/Ctrl+D duplicates, Delete key prompts.
+
+#### `TaskRelationsSection.tsx`
+
+For each `field.type === 'relation'` where target db has task-like schema (heuristic: has a status or checkbox field):
+
+- Section header: `{field.name}` + `Add task` + `Link existing` buttons
+- Inline-create row (input + Cancel/Create)
+- Nested toolbar: `Filter (n)` / `Sort` / `Fields` — all portal dropdowns
+- Nested `<table>` with column-per-field, rendering `TaskFieldEditor` per cell (full pill picker support, not read-only)
+- Row click → `openPeek(task.id)` on target db (nested peek)
+- Link-existing opens `RecordPickerDropdown` with search
+
+This is the chunk of Sogo's PeekPanel lines 800–1225 ported directly.
+
+#### `MarkdownToolbar.tsx`
+
+Buttons: Bold (`**x**`), Italic (`*x*`), Bullet list (`- `), Todo (`- [ ] `). Each wraps current `textarea` selection via `document.execCommand('insertText')` + manual range manipulation. Word count: `body.trim().split(/\s+/).length`.
+
+**Acceptance:** row click opens peek; column resize persists; bulk delete works; groups render with colored dots; column popover edits options+colors with 160ms autosave; peek slides in, resizes, toggles fullpage; pinned fields drag-reorder and persist; properties section collapses; task-relations section supports inline CRUD; markdown toolbar inserts correct syntax and word count updates.
+
+### Wave 3 — Kanban / Gallery / List (~800 LoC)
+
+#### `DatabaseKanbanView.tsx`
+
+```tsx
+const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+```
+
+- Group by status (default) or any select field
+- Columns: droppable by column value (`useDroppable({ id: value })`)
+- Cards: draggable (`useDraggable({ id: record.id })`), opacity 0.5 during drag
+- `DragOverlay` renders lifted card at cursor
+- `onDragEnd`: if `over.id !== active.data.currentValue`, call `onUpdateField(recordId, groupFieldId, over.id)`
+- Column header: colored dot (`resolveFieldOptionColor(groupField, value)`) + label + count + collapse chevron + `+` button (pre-fills group value on create)
+- Collapsed columns: `Set<string>` in local state, narrow vertical header only
+- Cards: 3px left border in status color, title + up to 3 non-primary fields via `KanbanFieldRow` (each a mini badge or text line), hover shows `Copy` / `Trash2` icons
+
+#### `DatabaseGalleryView.tsx`
+
+- `inferCoverField`: first field matching `/cover|image|photo|thumbnail/i`, else first `url` field
+- `isLikelyImage(value)`: starts with `data:image/` OR ends with `.png|.jpg|.jpeg|.webp|.gif|.svg`
+- Card hero area: 120px tall
+  - If cover value is image URL → `<img src>` with object-cover
+  - Else → solid fill in `resolveStatusColor(statusValue)` or `var(--surface-wash)` fallback, centered `Database` icon
+- On hover of hero: `Upload image` / `Replace image` button → `<input type=file>` → FileReader → `onUpdateField(coverFieldId, dataUrl)`
+- Card body: title + up to 3 summary fields (same card-field rule as Kanban)
+- Grid: `repeat(auto-fill, minmax(220px, 1fr))` with 16px gap
+
+#### `DatabaseListView.tsx`
+
+- Card rows, one per record, 12px padding
+- Left column: property labels (resizable via `db-list-property-divider`, persisted per-view as `listPropertyWidth`)
+- Right column: values rendered via `SummaryFieldValue` (same component used in peek)
+- Auto-hide rows where value is empty
+- Row click opens peek
+
+#### `ViewTabBar.tsx` polish
+
+- Replace unicode view-type icons with Lucide: `Table2` / `Columns3` (kanban) / `List` / `LayoutGrid` (gallery) / `Calendar`
+- Double-click tab → rename input
+- Hover × to delete (confirm dialog)
+- `+` dropdown to add new view of any type
+
+**Acceptance:** drag card between kanban columns updates status field in DB; collapse kanban columns narrows them; gallery uploads image as data URL and persists; list label column resizes; all view-type icons are Lucide stroke-1.5.
+
+### Out of scope
+
+- `DatabaseCalendarView.tsx` — not used, not mentioned, skip
+- Supabase schema changes — new fields (`columnWidths`, `listPropertyWidth`, `headerFieldIds`) live on `WorkspaceDatabaseModel` per the earlier spec pass; if any are missing, add one additive migration at the start of Wave 2
+- `DatabaseSchemaEditor.tsx` — leave as-is; column popover handles quick edits, this handles bulk/structural
+- Filters / sort UI in toolbar — already working, not reinventing
+- Formula/rollup computation — already in `database-core.ts`, not touching
+
+### Validation gates between waves
+
+After each wave:
+
+1. `pnpm typecheck` clean
+2. `pnpm test` clean (database-core.test.ts extended)
+3. Manual smoke: create database → add records → exercise surface → confirm persistence across app reload
+4. Visual pass against InteliZen principles: Catppuccin only, no glow, Lucide stroke 1.5, no dot grid, no m-dashes in any string
+
+### Order of execution
+
+1. Wave 1 end-to-end (colors + Badge + primitives exported but not yet wired)
+2. Pause for review — look at a Badge palette page, confirm Catppuccin feels right
+3. Wave 2 (table + peek — the 80% of daily-use premium feel)
+4. Pause for review
+5. Wave 3 (kanban + gallery + list)
+6. Final polish pass + delete `DatabaseRecordDrawer.tsx`
+
+**Time estimate**: ~2900 LoC total. No external library additions (dnd-kit and lucide-react are already in the tree).

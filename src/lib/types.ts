@@ -241,6 +241,154 @@ export interface WorkspaceNode extends WorkspaceNodeSummary {
   content: string | null;
 }
 
+export type WorkspaceDatabaseFieldType =
+  | "text"
+  | "number"
+  | "select"
+  | "multiselect"
+  | "relation"
+  | "rollup"
+  | "formula"
+  | "date"
+  | "checkbox"
+  | "url"
+  | "email"
+  | "phone"
+  | "status"
+  | "createdAt"
+  | "lastEditedAt";
+
+export type WorkspaceDatabaseViewType =
+  | "table"
+  | "kanban"
+  | "list"
+  | "gallery"
+  | "calendar";
+
+export type WorkspaceDatabaseFieldValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | null
+  | undefined;
+
+export interface WorkspaceDatabaseRelationConfig {
+  targetDatabaseId?: string;
+  targetRelationFieldId?: string;
+}
+
+export interface WorkspaceDatabaseRollupConfig {
+  relationFieldId: string;
+  targetFieldId?: string;
+  aggregation: "count" | "count_not_empty" | "sum" | "avg" | "min" | "max";
+}
+
+export interface WorkspaceDatabaseFormulaConfig {
+  expression: string;
+}
+
+export interface WorkspaceDatabaseField {
+  id: string;
+  name: string;
+  type: WorkspaceDatabaseFieldType;
+  options?: string[];
+  optionColors?: Record<string, string>;
+  relation?: WorkspaceDatabaseRelationConfig;
+  rollup?: WorkspaceDatabaseRollupConfig;
+  formula?: WorkspaceDatabaseFormulaConfig;
+}
+
+export interface WorkspaceDatabaseViewConfig {
+  groupBy?: string;
+  sort: Array<{ fieldId: string; direction: "asc" | "desc" }>;
+  filter: Array<{ fieldId: string; op: string; value: string }>;
+  hiddenFields: string[];
+  fieldOrder?: string[];
+  columnWidths?: Record<string, number>;
+  listPropertyWidth?: number;
+  cardCoverField?: string;
+  cardFields?: string[];
+}
+
+export interface WorkspaceDatabaseSummary {
+  id: string;
+  name: string;
+  icon: string | null;
+  schema: WorkspaceDatabaseField[];
+  header_field_ids: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceDatabase extends WorkspaceDatabaseSummary {}
+
+export interface WorkspaceDatabaseView {
+  id: string;
+  database_id: string;
+  name: string;
+  type: WorkspaceDatabaseViewType;
+  config: WorkspaceDatabaseViewConfig;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceDatabaseRecord {
+  id: string;
+  database_id: string;
+  fields: Record<string, WorkspaceDatabaseFieldValue>;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceDatabaseRecordModel {
+  id: string;
+  _body?: string;
+  _createdAt?: string;
+  _updatedAt?: string;
+  [fieldId: string]: WorkspaceDatabaseFieldValue;
+}
+
+export interface WorkspaceDatabaseModel {
+  id: string;
+  name: string;
+  icon?: string | null;
+  schema: WorkspaceDatabaseField[];
+  views: Array<{
+    id: string;
+    name: string;
+    type: WorkspaceDatabaseViewType;
+    groupBy?: string;
+    cardCoverField?: string;
+    cardFields?: string[];
+    sort: Array<{ fieldId: string; direction: "asc" | "desc" }>;
+    filter: Array<{ fieldId: string; op: string; value: string }>;
+    hiddenFields: string[];
+    fieldOrder?: string[];
+    columnWidths?: Record<string, number>;
+    listPropertyWidth?: number;
+  }>;
+  records: WorkspaceDatabaseRecordModel[];
+  headerFieldIds?: string[];
+}
+
+export interface WorkspaceDatabaseBundle {
+  database: WorkspaceDatabase;
+  views: WorkspaceDatabaseView[];
+  records: WorkspaceDatabaseRecord[];
+  model: WorkspaceDatabaseModel;
+}
+
+export interface WorkspaceDatabaseCatalogEntry {
+  id: string;
+  name: string;
+  schema: WorkspaceDatabaseField[];
+  headerFieldIds: string[];
+  records: WorkspaceDatabaseRecordModel[];
+}
+
 export interface CanvasViewport {
   x: number;
   y: number;

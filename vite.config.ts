@@ -35,6 +35,9 @@ export default defineConfig(async () => ({
     },
   },
   build: {
+    // BlockNote remains a large but isolated lazy-loaded editor payload. Keep the warning
+    // threshold aligned with that accepted route-local chunk so production builds stay signal-heavy.
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -47,14 +50,6 @@ export default defineConfig(async () => ({
           // Keep the force-graph / d3 stack in Rollup's default graph.
           // Forcing those modules into a dedicated vendor chunk caused a production-only
           // initialization-order crash in the packaged Tauri app.
-
-          if (
-            id.includes("@tanstack+") ||
-            id.includes("/@tanstack/") ||
-            id.includes("zustand")
-          ) {
-            return "vendor-data";
-          }
 
           if (
             id.includes("exa-js") ||
@@ -73,11 +68,21 @@ export default defineConfig(async () => ({
             return "vendor-router";
           }
 
+          if (id.includes("@blocknote+") || id.includes("/@blocknote/")) {
+            return "vendor-blocknote";
+          }
+
+          if (id.includes("@mantine+") || id.includes("/@mantine/")) {
+            return "vendor-mantine";
+          }
+
           if (
             id.includes("lucide-react") ||
             id.includes("tailwind-merge") ||
             id.includes("class-variance-authority") ||
-            id.includes("clsx")
+            id.includes("clsx") ||
+            id.includes("@dnd-kit+") ||
+            id.includes("/@dnd-kit/")
           ) {
             return "vendor-ui";
           }
@@ -86,11 +91,16 @@ export default defineConfig(async () => ({
             return "vendor-tauri";
           }
 
-          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("scheduler")) {
-            return "vendor-react";
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("scheduler") ||
+            id.includes("@tanstack+") ||
+            id.includes("/@tanstack/") ||
+            id.includes("zustand")
+          ) {
+            return "vendor-framework";
           }
-
-          return "vendor-misc";
         },
       },
     },

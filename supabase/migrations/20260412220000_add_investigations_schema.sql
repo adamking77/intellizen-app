@@ -28,11 +28,9 @@ create table if not exists investigations (
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
-
 create index if not exists investigations_case_id_idx on investigations (case_id);
 create index if not exists investigations_status_idx on investigations (status);
 create index if not exists investigations_project_id_idx on investigations (project_id);
-
 -- Investigation signals (linking intel_signals to investigations)
 create table if not exists investigation_signals (
   id               bigint generated always as identity primary key,
@@ -43,10 +41,8 @@ create table if not exists investigation_signals (
   added_at         timestamptz not null default now(),
   unique (investigation_id, signal_id)
 );
-
 create index if not exists investigation_signals_investigation_id_idx on investigation_signals (investigation_id);
 create index if not exists investigation_signals_signal_id_idx on investigation_signals (signal_id);
-
 -- Vault file tracking (for reports generated via claude -p)
 create table if not exists vault_files (
   id             bigint generated always as identity primary key,
@@ -60,10 +56,8 @@ create table if not exists vault_files (
   generated_by   text default 'claude',        -- claude, manual, import
   created_at     timestamptz not null default now()
 );
-
 create index if not exists vault_files_case_id_idx on vault_files (case_id);
 create index if not exists vault_files_file_type_idx on vault_files (file_type);
-
 -- Auto-update trigger for investigations
 drop trigger if exists investigations_updated_at on investigations;
 create trigger investigations_updated_at

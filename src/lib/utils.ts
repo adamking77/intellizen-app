@@ -9,27 +9,29 @@ export function formatDate(value: string | null | undefined) {
   if (!value) return "Undated";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Undated";
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) return "Undated";
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(date);
+  }).format(timestamp);
 }
 
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return "Never";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Never";
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) return "Never";
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+  }).format(timestamp);
 }
 
 export function safeHostname(value: string) {

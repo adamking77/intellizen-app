@@ -11,10 +11,8 @@ create table if not exists graph_nodes (
   updated_at     timestamptz not null default now(),
   unique (project_id, node_id)
 );
-
 create index if not exists graph_nodes_project_id_idx on graph_nodes (project_id);
 create index if not exists graph_nodes_entity_type_idx on graph_nodes (entity_type);
-
 create table if not exists graph_edges (
   id             bigint generated always as identity primary key,
   project_id     bigint not null references projects(id) on delete cascade,
@@ -26,16 +24,13 @@ create table if not exists graph_edges (
   updated_at     timestamptz not null default now(),
   unique (project_id, edge_id)
 );
-
 create index if not exists graph_edges_project_id_idx on graph_edges (project_id);
 create index if not exists graph_edges_source_node_id_idx on graph_edges (source_node_id);
 create index if not exists graph_edges_target_node_id_idx on graph_edges (target_node_id);
-
 drop trigger if exists graph_nodes_updated_at on graph_nodes;
 create trigger graph_nodes_updated_at
   before update on graph_nodes
   for each row execute function update_updated_at();
-
 drop trigger if exists graph_edges_updated_at on graph_edges;
 create trigger graph_edges_updated_at
   before update on graph_edges

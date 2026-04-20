@@ -11,10 +11,8 @@ create table if not exists workspace_nodes (
     (kind = 'folder' and content is null) or kind = 'file'
   )
 );
-
 create index if not exists workspace_nodes_parent_id_idx on workspace_nodes (parent_id);
 create index if not exists workspace_nodes_path_idx on workspace_nodes (path);
-
 drop trigger if exists workspace_nodes_updated_at on workspace_nodes;
 create trigger workspace_nodes_updated_at
   before update on workspace_nodes

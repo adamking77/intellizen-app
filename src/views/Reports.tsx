@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -13,7 +13,6 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { InlineMarkdownEditor } from "@/components/reports/inline-markdown-editor";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
@@ -50,6 +49,19 @@ type ReportSaveStatus = "idle" | "dirty" | "saving" | "error";
 type PathTreeNode =
   | { kind: "folder"; name: string; fullPath: string; children: PathTreeNode[] }
   | { kind: "doc"; name: string; fullPath: string; docId: number };
+
+const InlineMarkdownEditor = lazy(async () => {
+  const module = await import("@/components/reports/inline-markdown-editor");
+  return { default: module.InlineMarkdownEditor };
+});
+
+function EditorLoadingFallback() {
+  return (
+    <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-wash)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--subtext-0)]" />
+    </div>
+  );
+}
 
 export function ReportsView() {
   const queryClient = useQueryClient();
@@ -521,11 +533,13 @@ export function ReportsView() {
               <h2 className="mt-1 text-[20px] font-semibold text-[var(--text)]">{selectedDoc.title}</h2>
               <p className="mt-1 font-mono text-[10px] text-[var(--overlay-1)]">{selectedDoc.source_path}</p>
               <div className="mt-4">
-                <InlineMarkdownEditor
-                  key={`doc-${selection.id}`}
-                  initialValue={fileContent ?? ""}
-                  onChange={handleEditorChange}
-                />
+                <Suspense fallback={<EditorLoadingFallback />}>
+                  <InlineMarkdownEditor
+                    key={`doc-${selection.id}`}
+                    initialValue={fileContent ?? ""}
+                    onChange={handleEditorChange}
+                  />
+                </Suspense>
               </div>
             </div>
           ) : selection?.kind === "doc" ? (
@@ -541,11 +555,13 @@ export function ReportsView() {
                 <h2 className="mt-1 text-[20px] font-semibold text-[var(--text)]">{selectedFile.file_name}</h2>
                 <p className="mt-1 font-mono text-[10px] text-[var(--overlay-1)]">{selectedFile.file_path}</p>
                 <div className="mt-4">
-                  <InlineMarkdownEditor
-                    key={`file-${selection.id}`}
-                    initialValue={fileContent ?? ""}
-                    onChange={handleEditorChange}
-                  />
+                  <Suspense fallback={<EditorLoadingFallback />}>
+                    <InlineMarkdownEditor
+                      key={`file-${selection.id}`}
+                      initialValue={fileContent ?? ""}
+                      onChange={handleEditorChange}
+                    />
+                  </Suspense>
                 </div>
               </div>
             ) : (

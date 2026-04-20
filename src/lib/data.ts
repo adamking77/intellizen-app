@@ -3,6 +3,7 @@ import {
   signalDraftFromDeepResearch,
   signalDraftFromSearchResult,
 } from "@/lib/exa";
+import { resolveStatusColor } from "@/lib/database-colors";
 import type {
   CanvasDocument,
   CanvasDocumentData,
@@ -23,6 +24,17 @@ import type {
   SignalDraft,
   VaultDocument,
   VaultFile,
+  WorkspaceDatabase,
+  WorkspaceDatabaseBundle,
+  WorkspaceDatabaseCatalogEntry,
+  WorkspaceDatabaseField,
+  WorkspaceDatabaseFieldValue,
+  WorkspaceDatabaseModel,
+  WorkspaceDatabaseRecord,
+  WorkspaceDatabaseRecordModel,
+  WorkspaceDatabaseSummary,
+  WorkspaceDatabaseView,
+  WorkspaceDatabaseViewConfig,
   WorkspaceNode,
   WorkspaceNodeSummary,
 } from "@/lib/types";
@@ -1254,6 +1266,640 @@ export async function updateWorkspaceFileContent(id: number, content: string) {
 
   if (error) throw error;
   return data as WorkspaceNode;
+}
+
+// ─── Workspace databases ──────────────────────────────────────────────────────
+
+const DEFAULT_DATABASE_VIEW_CONFIG: WorkspaceDatabaseViewConfig = {
+  sort: [],
+  filter: [],
+  hiddenFields: [],
+};
+
+function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_DATABASE_VIEW_CONFIG };
+  }
+
+  const candidate = value as Partial<WorkspaceDatabaseViewConfig>;
+  return {
+    groupBy: typeof candidate.groupBy === "string" ? candidate.groupBy : undefined,
+    sort: Array.isArray(candidate.sort)
+      ? candidate.sort.filter(
+          (
+            item,
+          ): item is {
+            fieldId: string;
+            direction: "asc" | "desc";
+          } =>
+            Boolean(item) &&
+            typeof item === "object" &&
+            "fieldId" in item &&
+            typeof item.fieldId === "string" &&
+            "direction" in item &&
+            (item.direction === "asc" || item.direction === "desc"),
+        )
+      : [],
+    filter: Array.isArray(candidate.filter)
+      ? candidate.filter.filter(
+          (
+            item,
+          ): item is {
+            fieldId: string;
+            op: string;
+            value: string;
+          } =>
+            Boolean(item) &&
+            typeof item === "object" &&
+            "fieldId" in item &&
+            typeof item.fieldId === "string" &&
+            "op" in item &&
+            typeof item.op === "string" &&
+            "value" in item &&
+            typeof item.value === "string",
+        )
+      : [],
+    hiddenFields: Array.isArray(candidate.hiddenFields)
+      ? candidate.hiddenFields.filter((item): item is string => typeof item === "string")
+      : [],
+    fieldOrder: Array.isArray(candidate.fieldOrder)
+      ? candidate.fieldOrder.filter((item): item is string => typeof item === "string")
+      : undefined,
+    columnWidths:
+      candidate.columnWidths && typeof candidate.columnWidths === "object"
+        ? Object.fromEntries(
+            Object.entries(candidate.columnWidths).filter(
+              (entry): entry is [string, number] =>
+                typeof entry[0] === "string" && typeof entry[1] === "number",
+            ),
+          )
+        : undefined,
+    listPropertyWidth:
+      typeof candidate.listPropertyWidth === "number" ? candidate.listPropertyWidth : undefined,
+    cardCoverField: typeof candidate.cardCoverField === "string" ? candidate.cardCoverField : undefined,
+    cardFields: Array.isArray(candidate.cardFields)
+      ? candidate.cardFields.filter((item): item is string => typeof item === "string")
+      : undefined,
+  };
+}
+
+function hydrateWorkspaceDatabaseRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabaseRecordModel {
+  return {
+    id: record.id,
+    _body: record.body ?? undefined,
+    _createdAt: record.created_at,
+    _updatedAt: record.updated_at,
+    ...(record.fields ?? {}),
+  };
+}
+
+function hydrateWorkspaceDatabaseModel(
+  database: WorkspaceDatabase,
+  views: WorkspaceDatabaseView[],
+  records: WorkspaceDatabaseRecord[],
+): WorkspaceDatabaseModel {
+  return {
+    id: database.id,
+    name: database.name,
+    icon: database.icon,
+    schema: database.schema,
+    headerFieldIds: database.header_field_ids ?? undefined,
+    views: views.map((view) => ({
+      id: view.id,
+      name: view.name,
+      type: view.type,
+      groupBy: view.config.groupBy,
+      cardCoverField: view.config.cardCoverField,
+      cardFields: view.config.cardFields,
+      sort: view.config.sort,
+      filter: view.config.filter,
+      hiddenFields: view.config.hiddenFields,
+      fieldOrder: view.config.fieldOrder,
+      columnWidths: view.config.columnWidths,
+      listPropertyWidth: view.config.listPropertyWidth,
+    })),
+    records: records.map(hydrateWorkspaceDatabaseRecord),
+  };
+}
+
+function defaultWorkspaceSchema(name?: string): WorkspaceDatabaseField[] {
+  const titleFieldId = crypto.randomUUID();
+  const statusFieldId = crypto.randomUUID();
+  return [
+    {
+      id: titleFieldId,
+      name: name?.trim() ? `${name.trim()} name` : "Name",
+      type: "text",
+    },
+    {
+      id: statusFieldId,
+      name: "Status",
+      type: "status",
+      options: ["Not started", "In progress", "Done"],
+      optionColors: {
+        "Not started": resolveStatusColor("Not started"),
+        "In progress": resolveStatusColor("In progress"),
+        Done: resolveStatusColor("Done"),
+      },
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Notes",
+      type: "text",
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Created",
+      type: "createdAt",
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Updated",
+      type: "lastEditedAt",
+    },
+  ];
+}
+
+function defaultWorkspaceViewConfig(schema: WorkspaceDatabaseField[]): WorkspaceDatabaseViewConfig {
+  return {
+    sort: [],
+    filter: [],
+    hiddenFields: [],
+    fieldOrder: schema.map((field) => field.id),
+  };
+}
+
+type WorkspaceDatabaseRow = {
+  id: string;
+  name: string;
+  icon: string | null;
+  schema: WorkspaceDatabaseField[];
+  header_field_ids: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type WorkspaceDatabaseViewRow = {
+  id: string;
+  database_id: string;
+  name: string;
+  type: WorkspaceDatabaseView["type"];
+  config: unknown;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type WorkspaceDatabaseRecordRow = {
+  id: string;
+  database_id: string;
+  fields: Record<string, WorkspaceDatabaseFieldValue>;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function toWorkspaceDatabase(row: WorkspaceDatabaseRow): WorkspaceDatabase {
+  return {
+    id: row.id,
+    name: row.name,
+    icon: row.icon,
+    schema: row.schema ?? [],
+    header_field_ids: row.header_field_ids ?? [],
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function toWorkspaceDatabaseView(row: WorkspaceDatabaseViewRow): WorkspaceDatabaseView {
+  return {
+    id: row.id,
+    database_id: row.database_id,
+    name: row.name,
+    type: row.type,
+    config: coerceViewConfig(row.config),
+    position: row.position,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function toWorkspaceDatabaseRecord(row: WorkspaceDatabaseRecordRow): WorkspaceDatabaseRecord {
+  return {
+    id: row.id,
+    database_id: row.database_id,
+    fields: row.fields ?? {},
+    body: row.body,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+async function updateWorkspaceRecordFields(
+  id: string,
+  nextFields: Record<string, WorkspaceDatabaseFieldValue>,
+  nextBody?: string | null,
+) {
+  const update: {
+    fields: Record<string, WorkspaceDatabaseFieldValue>;
+    body?: string | null;
+  } = {
+    fields: nextFields,
+  };
+
+  if (nextBody !== undefined) {
+    update.body = nextBody;
+  }
+
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .update(update)
+    .eq("id", id)
+    .select("id, database_id, fields, body, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+}
+
+export async function listWorkspaceDatabases() {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as WorkspaceDatabaseRow[]).map(toWorkspaceDatabase) as WorkspaceDatabaseSummary[];
+}
+
+export async function listWorkspaceDatabaseCatalog() {
+  const [{ data: databaseRows, error: databaseError }, { data: recordRows, error: recordError }] =
+    await Promise.all([
+      supabase
+        .from("workspace_databases")
+        .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+        .order("name", { ascending: true }),
+      supabase
+        .from("workspace_records")
+        .select("id, database_id, fields, body, created_at, updated_at")
+        .order("updated_at", { ascending: false }),
+    ]);
+
+  if (databaseError) throw databaseError;
+  if (recordError) throw recordError;
+
+  const recordsByDatabase = new Map<string, WorkspaceDatabaseRecordModel[]>();
+  for (const row of (recordRows ?? []) as WorkspaceDatabaseRecordRow[]) {
+    const record = hydrateWorkspaceDatabaseRecord(toWorkspaceDatabaseRecord(row));
+    const bucket = recordsByDatabase.get(row.database_id) ?? [];
+    bucket.push(record);
+    recordsByDatabase.set(row.database_id, bucket);
+  }
+
+  return ((databaseRows ?? []) as WorkspaceDatabaseRow[]).map((row) => {
+    const database = toWorkspaceDatabase(row);
+    return {
+      id: database.id,
+      name: database.name,
+      schema: database.schema,
+      headerFieldIds: database.header_field_ids ?? [],
+      records: recordsByDatabase.get(database.id) ?? [],
+    } satisfies WorkspaceDatabaseCatalogEntry;
+  });
+}
+
+export async function getWorkspaceDatabaseBundle(id: string) {
+  const [{ data: databaseRow, error: databaseError }, { data: viewRows, error: viewError }, { data: recordRows, error: recordError }] =
+    await Promise.all([
+      supabase
+        .from("workspace_databases")
+        .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+        .eq("id", id)
+        .single(),
+      supabase
+        .from("workspace_views")
+        .select("id, database_id, name, type, config, position, created_at, updated_at")
+        .eq("database_id", id)
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("workspace_records")
+        .select("id, database_id, fields, body, created_at, updated_at")
+        .eq("database_id", id)
+        .order("updated_at", { ascending: false }),
+    ]);
+
+  if (databaseError) throw databaseError;
+  if (viewError) throw viewError;
+  if (recordError) throw recordError;
+
+  const database = toWorkspaceDatabase(databaseRow as WorkspaceDatabaseRow);
+  const views = ((viewRows ?? []) as WorkspaceDatabaseViewRow[]).map(toWorkspaceDatabaseView);
+  const records = ((recordRows ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+
+  return {
+    database,
+    views,
+    records,
+    model: hydrateWorkspaceDatabaseModel(database, views, records),
+  } satisfies WorkspaceDatabaseBundle;
+}
+
+export async function createWorkspaceDatabase(input?: {
+  name?: string;
+  icon?: string | null;
+  schema?: WorkspaceDatabaseField[];
+}) {
+  const schema = input?.schema ?? defaultWorkspaceSchema(input?.name);
+  const { data: databaseRow, error: databaseError } = await supabase
+    .from("workspace_databases")
+    .insert([
+      {
+        name: input?.name?.trim() || "Untitled database",
+        icon: input?.icon ?? null,
+        schema,
+        header_field_ids: [],
+      },
+    ])
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .single();
+
+  if (databaseError) throw databaseError;
+
+  const database = toWorkspaceDatabase(databaseRow as WorkspaceDatabaseRow);
+  const { data: viewRow, error: viewError } = await supabase
+    .from("workspace_views")
+    .insert([
+      {
+        database_id: database.id,
+        name: "All items",
+        type: "table",
+        config: defaultWorkspaceViewConfig(schema),
+        position: 0,
+      },
+    ])
+    .select("id, database_id, name, type, config, position, created_at, updated_at")
+    .single();
+
+  if (viewError) throw viewError;
+
+  const view = toWorkspaceDatabaseView(viewRow as WorkspaceDatabaseViewRow);
+  return {
+    database,
+    views: [view],
+    records: [],
+    model: hydrateWorkspaceDatabaseModel(database, [view], []),
+  } satisfies WorkspaceDatabaseBundle;
+}
+
+export async function updateWorkspaceDatabase(
+  id: string,
+  input: Partial<Pick<WorkspaceDatabase, "name" | "icon">>,
+) {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .update(input)
+    .eq("id", id)
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
+}
+
+export async function updateWorkspaceDatabaseSchema(id: string, schema: WorkspaceDatabaseField[]) {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .update({ schema })
+    .eq("id", id)
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
+}
+
+export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: string[]) {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .update({ header_field_ids: fieldIds })
+    .eq("id", id)
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
+}
+
+export async function createWorkspaceView(input: {
+  databaseId: string;
+  name: string;
+  type?: WorkspaceDatabaseView["type"];
+  config?: WorkspaceDatabaseViewConfig;
+}) {
+  const { data: existing, error: existingError } = await supabase
+    .from("workspace_views")
+    .select("position")
+    .eq("database_id", input.databaseId)
+    .order("position", { ascending: false })
+    .limit(1);
+
+  if (existingError) throw existingError;
+
+  const { data, error } = await supabase
+    .from("workspace_views")
+    .insert([
+      {
+        database_id: input.databaseId,
+        name: input.name.trim() || "New view",
+        type: input.type ?? "table",
+        config: input.config ?? { ...DEFAULT_DATABASE_VIEW_CONFIG },
+        position: ((existing ?? [])[0]?.position as number | undefined ?? -1) + 1,
+      },
+    ])
+    .select("id, database_id, name, type, config, position, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseView(data as WorkspaceDatabaseViewRow);
+}
+
+export async function updateWorkspaceView(
+  id: string,
+  input: Partial<Pick<WorkspaceDatabaseView, "name" | "type" | "position">> & {
+    config?: WorkspaceDatabaseViewConfig;
+  },
+) {
+  const update: Record<string, unknown> = {};
+  if (input.name !== undefined) update.name = input.name;
+  if (input.type !== undefined) update.type = input.type;
+  if (input.position !== undefined) update.position = input.position;
+  if (input.config !== undefined) update.config = input.config;
+
+  const { data, error } = await supabase
+    .from("workspace_views")
+    .update(update)
+    .eq("id", id)
+    .select("id, database_id, name, type, config, position, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseView(data as WorkspaceDatabaseViewRow);
+}
+
+export async function deleteWorkspaceView(id: string) {
+  const { error } = await supabase.from("workspace_views").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function createWorkspaceRecord(input: {
+  databaseId: string;
+  fields?: Record<string, WorkspaceDatabaseFieldValue>;
+  body?: string | null;
+}) {
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .insert([
+      {
+        database_id: input.databaseId,
+        fields: input.fields ?? {},
+        body: input.body ?? null,
+      },
+    ])
+    .select("id, database_id, fields, body, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+}
+
+export async function createWorkspaceRecords(
+  input: Array<{
+    databaseId: string;
+    fields?: Record<string, WorkspaceDatabaseFieldValue>;
+    body?: string | null;
+  }>,
+) {
+  if (input.length === 0) return [] as WorkspaceDatabaseRecord[];
+
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .insert(
+      input.map((record) => ({
+        database_id: record.databaseId,
+        fields: record.fields ?? {},
+        body: record.body ?? null,
+      })),
+    )
+    .select("id, database_id, fields, body, created_at, updated_at");
+
+  if (error) throw error;
+  return ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+}
+
+export async function updateWorkspaceRecord(
+  id: string,
+  input: Partial<Pick<WorkspaceDatabaseRecord, "body">> & {
+    fields?: Record<string, WorkspaceDatabaseFieldValue>;
+    fieldId?: string;
+    value?: WorkspaceDatabaseFieldValue;
+  },
+) {
+  const { data: existing, error: existingError } = await supabase
+    .from("workspace_records")
+    .select("id, database_id, fields, body, created_at, updated_at")
+    .eq("id", id)
+    .single();
+
+  if (existingError) throw existingError;
+
+  const current = toWorkspaceDatabaseRecord(existing as WorkspaceDatabaseRecordRow);
+  const nextFields = input.fields
+    ? input.fields
+    : input.fieldId
+      ? { ...current.fields, [input.fieldId]: input.value }
+      : current.fields;
+
+  return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body);
+}
+
+export async function deleteWorkspaceRecord(id: string) {
+  const { error } = await supabase.from("workspace_records").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateWorkspaceRelationLinks(input: {
+  databaseId: string;
+  recordId: string;
+  relationFieldId: string;
+  recordIds: string[];
+}) {
+  const bundle = await getWorkspaceDatabaseBundle(input.databaseId);
+  const sourceField = bundle.database.schema.find((field) => field.id === input.relationFieldId);
+  if (!sourceField || sourceField.type !== "relation") {
+    throw new Error("Relation field not found.");
+  }
+
+  const sourceRecord = bundle.records.find((record) => record.id === input.recordId);
+  if (!sourceRecord) {
+    throw new Error("Record not found.");
+  }
+
+  const normalizedIds = [...new Set(input.recordIds.filter(Boolean))];
+  const currentIds = Array.isArray(sourceRecord.fields[input.relationFieldId])
+    ? ((sourceRecord.fields[input.relationFieldId] as string[]) ?? [])
+    : [];
+
+  const updatedSource = await updateWorkspaceRecordFields(input.recordId, {
+    ...sourceRecord.fields,
+    [input.relationFieldId]: normalizedIds,
+  });
+
+  const targetDatabaseId = sourceField.relation?.targetDatabaseId ?? input.databaseId;
+  const backlinkFieldId = sourceField.relation?.targetRelationFieldId;
+  if (!backlinkFieldId || (targetDatabaseId === input.databaseId && backlinkFieldId === input.relationFieldId)) {
+    return updatedSource;
+  }
+
+  const affectedIds = [...new Set([...currentIds, ...normalizedIds])];
+  if (affectedIds.length === 0) {
+    return updatedSource;
+  }
+
+  const { data: targetRows, error: targetError } = await supabase
+    .from("workspace_records")
+    .select("id, database_id, fields, body, created_at, updated_at")
+    .eq("database_id", targetDatabaseId)
+    .in("id", affectedIds);
+
+  if (targetError) throw targetError;
+
+  for (const row of (targetRows ?? []) as WorkspaceDatabaseRecordRow[]) {
+    const targetRecord = toWorkspaceDatabaseRecord(row);
+    const existingLinks = Array.isArray(targetRecord.fields[backlinkFieldId])
+      ? ([...((targetRecord.fields[backlinkFieldId] as string[]) ?? [])] as string[])
+      : [];
+    const shouldLink = normalizedIds.includes(targetRecord.id);
+    const hasLink = existingLinks.includes(input.recordId);
+
+    if (shouldLink && !hasLink) {
+      existingLinks.push(input.recordId);
+      await updateWorkspaceRecordFields(targetRecord.id, {
+        ...targetRecord.fields,
+        [backlinkFieldId]: existingLinks,
+      });
+    }
+
+    if (!shouldLink && hasLink) {
+      await updateWorkspaceRecordFields(targetRecord.id, {
+        ...targetRecord.fields,
+        [backlinkFieldId]: existingLinks.filter((id) => id !== input.recordId),
+      });
+    }
+  }
+
+  return updatedSource;
 }
 
 // ─── Canvas documents ──────────────────────────────────────────────────────────

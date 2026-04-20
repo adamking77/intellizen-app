@@ -6,7 +6,6 @@ alter table investigations
     check (use_case in ('scoping', 'post', 'sit_rep')),
   add column if not exists scope_notes text,
   add column if not exists humint_input text;
-
 -- Add 'analysis' to allowed vault file types
 alter table vault_files drop constraint vault_files_file_type_check;
 alter table vault_files add constraint vault_files_file_type_check

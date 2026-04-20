@@ -5,7 +5,6 @@
 
 ALTER TABLE vault_files
   DROP CONSTRAINT IF EXISTS vault_files_project_id_fkey;
-
 ALTER TABLE vault_files
   ADD CONSTRAINT vault_files_project_id_fkey
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;

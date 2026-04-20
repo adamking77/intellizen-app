@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import {
+  Database,
   FileText,
   FolderOpen,
   Inbox,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { getUnreadSignalCount } from "@/lib/data";
+import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Ops", to: "/projects", key: "projects", icon: FolderOpen },
+  { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
   { label: "Investigate", to: "/investigate", key: "investigate", icon: Spline },
@@ -47,6 +50,11 @@ export function Sidebar() {
   const { data: unreadCount } = useQuery({
     queryKey: ["signals", "unread-count"],
     queryFn: getUnreadSignalCount,
+    staleTime: 30_000,
+  });
+  const { data: databases = [] } = useQuery({
+    queryKey: ["workspace-databases"],
+    queryFn: listWorkspaceDatabases,
     staleTime: 30_000,
   });
   const { isCramped } = useWindowSize();
@@ -123,7 +131,8 @@ export function Sidebar() {
         )}
       >
         {NAV_ITEMS.map((item) => {
-          const showCount = item.key === "inbox" && unreadCount;
+          const showCount =
+            item.key === "inbox" ? unreadCount : item.key === "databases" ? databases.length : 0;
           const Icon = item.icon;
           return (
             <NavLink
@@ -167,7 +176,7 @@ export function Sidebar() {
                       <span>{item.label}</span>
                       {showCount ? (
                         <span className="font-mono text-[10px] text-[var(--accent)]">
-                          {unreadCount}
+                          {showCount}
                         </span>
                       ) : null}
                     </>
