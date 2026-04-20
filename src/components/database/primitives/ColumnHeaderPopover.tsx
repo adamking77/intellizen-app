@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, EyeOff, GripVertical } from "lucide-react";
+import { ArrowDown, ArrowUp, EyeOff, GripVertical, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ interface ColumnHeaderPopoverProps {
   open: boolean;
   currentSortDirection?: "asc" | "desc";
   onClose: () => void;
-  onSaveSchema: (schema: WorkspaceDatabaseField[]) => void;
+  onSaveSchema: (schema: WorkspaceDatabaseField[], records?: WorkspaceDatabaseModel["records"]) => void;
   onHideField: (fieldId: string) => void;
   onToggleSort: (fieldId: string, direction: "asc" | "desc") => void;
   onGroupByField: (fieldId: string) => void;
@@ -134,11 +134,15 @@ export function ColumnHeaderPopover({
       className="fixed z-[90] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       style={{ top: position.top, left: position.left, width: position.width }}
     >
-      <div className="space-y-3 border-b border-[var(--border)] p-4">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-          Column settings
+      <div className="space-y-2 border-b border-[var(--border)] p-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          Property
         </div>
-        <Input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
+        <Input
+          value={nameDraft}
+          onChange={(event) => setNameDraft(event.target.value)}
+          className="h-8 text-[13px]"
+        />
         <select
           value={schemaField.type}
           onChange={(event) =>
@@ -153,7 +157,7 @@ export function ColumnHeaderPopover({
               ),
             )
           }
-          className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--base)] px-3 text-[13px] text-[var(--text)] outline-none"
+          className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 text-[13px] text-[var(--text)] outline-none"
         >
           {EDITABLE_TYPES.map((type) => (
             <option key={type} value={type}>
@@ -164,14 +168,14 @@ export function ColumnHeaderPopover({
       </div>
 
       {(schemaField.type === "select" || schemaField.type === "multiselect" || schemaField.type === "status") && (
-        <div className="space-y-2 border-b border-[var(--border)] p-4">
-          <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <div className="space-y-1.5 border-b border-[var(--border)] p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Options
           </div>
           {(schemaField.options ?? []).map((option, index) => (
-            <div key={option} className="rounded-xl border border-[var(--border)] bg-[var(--base)] p-3">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
+            <div key={option} className="rounded-lg border border-[var(--border)] bg-[var(--base)] p-2">
+              <div className="flex items-center gap-1.5">
+                <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
                 <Input
                   defaultValue={option}
                   onBlur={(event) => {
@@ -184,54 +188,82 @@ export function ColumnHeaderPopover({
                       nextColors[nextOption] = nextColors[option];
                       delete nextColors[option];
                     }
+                    const isMulti = schemaField.type === "multiselect";
+                    const nextRecords = database.records.map((record) => {
+                      const current = record[field.id];
+                      if (isMulti) {
+                        if (!Array.isArray(current) || !current.includes(option)) return record;
+                        return {
+                          ...record,
+                          [field.id]: current.map((item) => (item === option ? nextOption : item)),
+                        };
+                      }
+                      if (current !== option) return record;
+                      return { ...record, [field.id]: nextOption };
+                    });
                     onSaveSchema(
                       database.schema.map((candidate) =>
                         candidate.id === field.id
                           ? { ...candidate, options: nextOptions, optionColors: nextColors }
                           : candidate,
                       ),
+                      nextRecords,
                     );
                   }}
+                  className="h-7 text-[13px]"
                 />
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveOption(index, -1)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                    aria-label={`Move ${option} up`}
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveOption(index, 1)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                    aria-label={`Move ${option} down`}
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => moveOption(index, -1)}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                  aria-label={`Move ${option} up`}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveOption(index, 1)}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                  aria-label={`Move ${option} down`}
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     const nextOptions = (schemaField.options ?? []).filter((candidate) => candidate !== option);
                     const nextColors = { ...(schemaField.optionColors ?? {}) };
                     delete nextColors[option];
+                    const isMulti = schemaField.type === "multiselect";
+                    const nextRecords = database.records.map((record) => {
+                      const current = record[field.id];
+                      if (isMulti) {
+                        if (!Array.isArray(current) || !current.includes(option)) return record;
+                        return {
+                          ...record,
+                          [field.id]: current.filter((item) => item !== option),
+                        };
+                      }
+                      if (current !== option) return record;
+                      return { ...record, [field.id]: null };
+                    });
                     onSaveSchema(
                       database.schema.map((candidate) =>
                         candidate.id === field.id
                           ? { ...candidate, options: nextOptions, optionColors: nextColors }
                           : candidate,
                       ),
+                      nextRecords,
                     );
                   }}
-                  className="text-[12px] text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)]"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+                  aria-label={`Delete ${option}`}
                 >
-                  Delete
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -245,6 +277,8 @@ export function ColumnHeaderPopover({
                       ),
                     );
                   }}
+                  className="mr-0.5"
+                  title="Reset to auto color"
                 >
                   <Badge color={resolveFieldOptionColor(schemaField, option)}>Auto</Badge>
                 </button>
@@ -268,7 +302,7 @@ export function ColumnHeaderPopover({
                       )
                     }
                     className={cn(
-                      "h-6 w-6 rounded-full border transition-transform hover:scale-105",
+                      "h-4 w-4 rounded-full border transition-transform hover:scale-110",
                       schemaField.optionColors?.[option] === color
                         ? "border-[var(--text)]"
                         : "border-transparent",
@@ -296,9 +330,9 @@ export function ColumnHeaderPopover({
                 ),
               )
             }
-            className="rounded-xl border border-dashed border-[var(--border)] px-3 py-2 text-[12px] text-[var(--overlay-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+            className="w-full rounded-lg border border-dashed border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--overlay-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
           >
-            Add option
+            + Add option
           </button>
         </div>
       )}

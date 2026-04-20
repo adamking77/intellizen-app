@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { resolveFieldOptionColor, resolveStatusColor } from "@/lib/database-colors";
 import { getFieldValue, getKanbanColumns, getRecordTitle, getViewRecords } from "@/lib/database-core";
 import type {
@@ -79,14 +80,10 @@ export function DatabaseKanbanView({
 
   if (!groupField) {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="max-w-md rounded-2xl border border-dashed border-[var(--border)] bg-[var(--mantle)] px-6 py-10 text-center">
-          <div className="text-[18px] font-semibold text-[var(--text)]">Kanban needs a status field</div>
-          <div className="mt-2 text-[13px] leading-6 text-[var(--subtext-0)]">
-            Add a status or select field in schema, then choose it as the kanban grouping property.
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        title="Kanban needs a status field"
+        description="Add a status or select field in schema, then choose it as the kanban grouping property."
+      />
     );
   }
 
@@ -327,7 +324,10 @@ function KanbanCard({
             {getRecordTitle(record, database)}
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           <IconButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={() => onDuplicateRecord(record.id)} />
           <IconButton
             icon={<Trash2 className="h-3.5 w-3.5" />}

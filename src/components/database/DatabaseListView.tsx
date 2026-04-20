@@ -1,9 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { ArrowUpRight } from "lucide-react";
 
+import { Badge } from "@/components/database/primitives/Badge";
+import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import { getFieldDisplayValue, getFieldValue, getRecordTitle, getViewRecords, getVisibleFields } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,
+  WorkspaceDatabaseField,
   WorkspaceDatabaseModel,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -102,7 +105,6 @@ export function DatabaseListView({
                   <div className="mt-4 space-y-2">
                     {shownFields.length ? (
                       shownFields.map((field) => {
-                        const displayValue = getFieldDisplayValue(record, field, database, catalog);
                         return (
                           <div
                             key={field.id}
@@ -112,8 +114,8 @@ export function DatabaseListView({
                             <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                               {field.name}
                             </div>
-                            <div className="truncate text-[13px] text-[var(--subtext-0)]">
-                              {displayValue}
+                            <div className="min-w-0">
+                              <ListCellValue field={field} record={record} database={database} catalog={catalog} />
                             </div>
                             <div
                               className="absolute bottom-0 left-[calc(var(--list-width,120px)-8px)] top-0 w-4 cursor-col-resize"
@@ -138,4 +140,78 @@ export function DatabaseListView({
       </div>
     </div>
   );
+}
+
+function ListCellValue({
+  field,
+  record,
+  database,
+  catalog,
+}: {
+  field: WorkspaceDatabaseField;
+  record: WorkspaceDatabaseModel["records"][number];
+  database: WorkspaceDatabaseModel;
+  catalog: WorkspaceDatabaseCatalogEntry[];
+}) {
+  const value = getFieldValue(record, field, database, catalog);
+
+  if (field.type === "status") {
+    const text = typeof value === "string" ? value : "";
+    return text ? <Badge color={resolveStatusColor(text)}>{text}</Badge> : <EmDash />;
+  }
+
+  if (field.type === "select") {
+    const text = typeof value === "string" ? value : "";
+    return text ? <Badge color={resolveFieldOptionColor(field, text)}>{text}</Badge> : <EmDash />;
+  }
+
+  if (field.type === "multiselect") {
+    const values = Array.isArray(value) ? value : [];
+    if (values.length === 0) return <EmDash />;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {values.map((item) => (
+          <Badge key={String(item)} color={resolveFieldOptionColor(field, String(item))}>
+            {String(item)}
+          </Badge>
+        ))}
+      </div>
+    );
+  }
+
+  if (field.type === "relation") {
+    const values = Array.isArray(value) ? value : [];
+    if (values.length === 0) return <EmDash />;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {values.map((item) => {
+          const label = String(item);
+          return (
+            <Badge key={label} color={resolveRelationColor(label)}>
+              {label}
+            </Badge>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (field.type === "checkbox") {
+    return (
+      <div className="text-[13px] text-[var(--subtext-0)]">
+        {value === true ? "☑︎" : <EmDash />}
+      </div>
+    );
+  }
+
+  const displayValue = getFieldDisplayValue(record, field, database, catalog);
+  return displayValue ? (
+    <div className="truncate text-[13px] text-[var(--subtext-0)]">{displayValue}</div>
+  ) : (
+    <EmDash />
+  );
+}
+
+function EmDash() {
+  return <span className="text-[13px] text-[var(--overlay-1)] opacity-60">—</span>;
 }

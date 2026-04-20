@@ -5,6 +5,7 @@ import { Badge } from "@/components/database/primitives/Badge";
 import { Button } from "@/components/ui/button";
 import { resolveFieldOptionColor, resolveStatusColor } from "@/lib/database-colors";
 import { getFieldValue, getRecordTitle, getViewRecords } from "@/lib/database-core";
+import type { WorkspaceDatabaseField } from "@/lib/types";
 import type {
   WorkspaceDatabaseCatalogEntry,
   WorkspaceDatabaseFieldValue,
@@ -36,9 +37,9 @@ export function DatabaseGalleryView({
     database.schema.find((field) => field.type === "text")?.id ??
     database.schema[0]?.id;
 
-  const inferCoverField =
-    database.schema.find((field) => /cover|image|photo|thumbnail/i.test(field.name)) ??
+  const inferCoverField: WorkspaceDatabaseField | undefined =
     database.schema.find((field) => field.id === view.cardCoverField) ??
+    database.schema.find((field) => /cover|image|photo|thumbnail/i.test(field.name)) ??
     database.schema.find((field) => field.type === "url");
 
   const cardFields = (view.cardFields?.length ? view.cardFields : database.schema
@@ -70,13 +71,6 @@ export function DatabaseGalleryView({
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
             {records.map((record) => {
               const coverValue = inferCoverField ? getFieldValue(record, inferCoverField, database, catalog) : null;
-              const statusField = database.schema.find((field) => field.type === "status" || field.type === "select");
-              const statusValue = statusField ? String(getFieldValue(record, statusField, database, catalog) ?? "") : "";
-              const fallbackColor = statusField
-                ? statusField.type === "status"
-                  ? resolveStatusColor(statusValue)
-                  : resolveFieldOptionColor(statusField, statusValue || "No value")
-                : "var(--surface-wash)";
               const imageLike = typeof coverValue === "string" && isLikelyImage(coverValue);
 
               return (
@@ -93,8 +87,8 @@ export function DatabaseGalleryView({
                     {imageLike ? (
                       <img src={String(coverValue)} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full items-center justify-center" style={{ background: fallbackColor }}>
-                        <Database className="h-8 w-8 text-[var(--crust)]" />
+                      <div className="flex h-full items-center justify-center bg-[var(--surface-wash)]">
+                        <Database className="h-8 w-8 text-[var(--overlay-1)] opacity-50" />
                       </div>
                     )}
                     <ArrowUpRight className="absolute right-3 top-3 h-4 w-4 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover:opacity-100" />

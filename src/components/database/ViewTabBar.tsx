@@ -86,35 +86,6 @@ export function ViewTabBar({
   const sortRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
 
-  // Filter state — local, debounced up
-  const [filterFieldId, setFilterFieldId] = useState<string>(() => {
-    const existing = activeView.filter[0];
-    return existing?.fieldId ?? database.schema.find((f) => f.type === "text")?.id ?? database.schema[0]?.id ?? "";
-  });
-  const [filterValue, setFilterValue] = useState<string>(() => activeView.filter[0]?.value ?? "");
-
-  // Sync filter local state when view changes
-  useEffect(() => {
-    const existing = activeView.filter[0];
-    const defaultField = existing?.fieldId ?? database.schema.find((f) => f.type === "text")?.id ?? database.schema[0]?.id ?? "";
-    setFilterFieldId(defaultField);
-    setFilterValue(existing?.value ?? "");
-  }, [activeView.id, database.schema]);
-
-  // Debounced filter save
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const next =
-        filterValue.trim().length > 0
-          ? [{ fieldId: filterFieldId, op: "contains", value: filterValue.trim() }]
-          : [];
-      const current = activeView.filter;
-      if (JSON.stringify(current) === JSON.stringify(next)) return;
-      onUpdateViewConfig({ filter: next });
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [filterValue, filterFieldId, activeView.id]);
-
   // Click-outside handlers
   useClickOutside(addViewRef, () => setAddViewOpen(false), addViewOpen);
   useClickOutside(filterRef, () => setFilterOpen(false), filterOpen);
@@ -167,9 +138,9 @@ export function ViewTabBar({
   const dateFields = database.schema.filter((f) => f.type === "date");
 
   return (
-    <div className="flex items-center gap-0.5 overflow-x-auto">
+    <div className="flex items-center gap-0.5">
       {/* View tabs */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
         {views.map((view) => (
           <div key={view.id} className="group relative flex items-center">
             {editingViewId === view.id ? (
@@ -185,68 +156,69 @@ export function ViewTabBar({
                 className="h-8 w-28 rounded-md border border-[var(--accent)] bg-[var(--base)] px-2 text-[13px] text-[var(--text)] outline-none"
               />
             ) : (
-              <button
-                type="button"
-                onClick={() => onSwitchView(view.id)}
-                onDoubleClick={() => startRename(view)}
-                    className={cn(
-                      "flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
-                  view.id === activeView.id
-                    ? "bg-[var(--surface-0)] text-[var(--text)]"
-                    : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                )}
-              >
-                <span className={cn(view.id === activeView.id ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
-                  {VIEW_ICONS[view.type]}
-                </span>
-                {view.name}
-                {view.id === activeView.id ? <Badge>Active</Badge> : null}
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSwitchView(view.id)}
+                  onDoubleClick={() => startRename(view)}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+                    view.id === activeView.id
+                      ? "bg-[var(--surface-0)] text-[var(--text)]"
+                      : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                  )}
+                >
+                  <span className={cn(view.id === activeView.id ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
+                    {VIEW_ICONS[view.type]}
+                  </span>
+                  {view.name}
+                  {view.id === activeView.id ? <Badge>Active</Badge> : null}
+                </button>
                 {views.length > 1 && (
-                  <span
-                    role="button"
-                    tabIndex={-1}
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm(`Delete view "${view.name}"?`)) {
-                        onDeleteView(view.id);
-                      }
+                      onDeleteView(view.id);
                     }}
-                    className="ml-0.5 hidden h-4 w-4 items-center justify-center rounded text-[var(--overlay-1)] hover:text-[var(--text)] group-hover:flex"
+                    className="ml-0.5 hidden h-5 w-5 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] group-hover:inline-flex"
+                    title="Delete view"
+                    aria-label={`Delete view ${view.name}`}
                   >
                     <X className="h-3 w-3" />
-                  </span>
+                  </button>
                 )}
-              </button>
+              </>
             )}
           </div>
         ))}
+      </div>
 
-        {/* Add view */}
-        <div ref={addViewRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setAddViewOpen((v) => !v)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-            title="Add view"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-          {addViewOpen && (
-            <div className="absolute left-0 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-              {VIEW_TYPES.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => { onCreateView(type); setAddViewOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                >
-                  <span className="text-[var(--overlay-1)]">{VIEW_ICONS[type]}</span>
-                  {VIEW_LABELS[type]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Add view — outside overflow container so popover isn't clipped */}
+      <div ref={addViewRef} className="relative shrink-0">
+        <button
+          type="button"
+          onClick={() => setAddViewOpen((v) => !v)}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          title="Add view"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        {addViewOpen && (
+          <div className="absolute left-0 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+            {VIEW_TYPES.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => { onCreateView(type); setAddViewOpen(false); }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <span className="text-[var(--overlay-1)]">{VIEW_ICONS[type]}</span>
+                {VIEW_LABELS[type]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Spacer */}
@@ -301,17 +273,13 @@ export function ViewTabBar({
             )}
           >
             <ListFilter className="h-3.5 w-3.5" />
-            Filter
-            {filterCount > 0 ? <Badge>{String(filterCount)}</Badge> : null}
+            {filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
           </button>
           {filterOpen && (
             <FilterPopover
               schema={database.schema}
-              filterFieldId={filterFieldId}
-              filterValue={filterValue}
-              onFieldChange={setFilterFieldId}
-              onValueChange={setFilterValue}
-              onClear={() => { setFilterValue(""); setFilterFieldId(database.schema.find((f) => f.type === "text")?.id ?? database.schema[0]?.id ?? ""); }}
+              filters={activeView.filter}
+              onChange={(next) => onUpdateViewConfig({ filter: next })}
             />
           )}
         </div>
@@ -329,8 +297,7 @@ export function ViewTabBar({
             )}
           >
             <ArrowUpDown className="h-3.5 w-3.5" />
-            Sort
-            {sortCount > 0 ? <Badge>{String(sortCount)}</Badge> : null}
+            {sortCount > 0 ? `Sort (${sortCount})` : "Sort"}
           </button>
           {sortOpen && (
             <SortPopover
@@ -359,12 +326,11 @@ export function ViewTabBar({
           <button
             type="button"
             onClick={() => { setMoreOpen((v) => !v); setFilterOpen(false); setSortOpen(false); }}
-            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             title="More options"
             aria-label="More options"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
-            <span className="text-[12px] font-medium">More</span>
           </button>
           {moreOpen && (
             <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
@@ -402,62 +368,165 @@ export function ViewTabBar({
 
 // ── Filter Popover ────────────────────────────────────────────────────────────
 
+type FilterRule = { fieldId: string; op: string; value: string };
+
+const FILTER_OPS_TEXT: Array<{ value: string; label: string }> = [
+  { value: "contains", label: "contains" },
+  { value: "not_contains", label: "does not contain" },
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "does not equal" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" },
+];
+
+const FILTER_OPS_NUMBER: Array<{ value: string; label: string }> = [
+  { value: "equals", label: "=" },
+  { value: "not_equals", label: "≠" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: "≥" },
+  { value: "lt", label: "<" },
+  { value: "lte", label: "≤" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" },
+];
+
+const FILTER_OPS_CHECKBOX: Array<{ value: string; label: string }> = [
+  { value: "equals", label: "is" },
+  { value: "not_equals", label: "is not" },
+];
+
+function getOpsForField(field: WorkspaceDatabaseField | undefined) {
+  if (!field) return FILTER_OPS_TEXT;
+  if (field.type === "number") return FILTER_OPS_NUMBER;
+  if (field.type === "checkbox") return FILTER_OPS_CHECKBOX;
+  return FILTER_OPS_TEXT;
+}
+
+function getDefaultOpForField(field: WorkspaceDatabaseField | undefined): string {
+  if (!field) return "contains";
+  if (field.type === "number" || field.type === "checkbox") return "equals";
+  return "contains";
+}
+
+function opNeedsValue(op: string): boolean {
+  return op !== "is_empty" && op !== "is_not_empty";
+}
+
 function FilterPopover({
   schema,
-  filterFieldId,
-  filterValue,
-  onFieldChange,
-  onValueChange,
-  onClear,
+  filters,
+  onChange,
 }: {
   schema: WorkspaceDatabaseField[];
-  filterFieldId: string;
-  filterValue: string;
-  onFieldChange: (id: string) => void;
-  onValueChange: (v: string) => void;
-  onClear: () => void;
+  filters: FilterRule[];
+  onChange: (next: FilterRule[]) => void;
 }) {
+  const filterableSchema = schema.filter((f) => f.type !== "formula" && f.type !== "rollup" && f.type !== "relation");
+  const firstField = filterableSchema[0];
+  const lastInputRef = useRef<HTMLInputElement | null>(null);
+  const focusIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (focusIndexRef.current === null) return;
+    if (focusIndexRef.current === filters.length - 1) {
+      lastInputRef.current?.focus();
+    }
+    focusIndexRef.current = null;
+  }, [filters.length]);
+
   return (
-    <div className="absolute right-0 top-full z-50 mt-1 w-[300px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Filter</div>
-      <div className="space-y-2">
-        <div className="space-y-1">
-          <div className="text-[11px] text-[var(--overlay-1)]">Field</div>
-          <div className="flex flex-wrap gap-1">
-            {schema.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => onFieldChange(f.id)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
-                  filterFieldId === f.id
-                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "border border-[var(--border)] bg-[var(--base)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
-                )}
-              >
-                {f.name}
-              </button>
-            ))}
-          </div>
+    <div className="absolute right-0 top-full z-50 mt-1 w-[420px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Filter</div>
+      {filters.length === 0 ? (
+        <div className="py-2 text-[12px] text-[var(--overlay-1)]">No filters applied</div>
+      ) : (
+        <div className="mb-2 space-y-1.5">
+          {filters.map((rule, index) => {
+            const field = schema.find((f) => f.id === rule.fieldId);
+            const ops = getOpsForField(field);
+            return (
+              <div key={index} className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--base)] px-2 py-1.5">
+                <select
+                  value={rule.fieldId}
+                  onChange={(event) => {
+                    const nextFieldId = event.target.value;
+                    const nextField = schema.find((f) => f.id === nextFieldId);
+                    const nextRules = [...filters];
+                    nextRules[index] = {
+                      fieldId: nextFieldId,
+                      op: getDefaultOpForField(nextField),
+                      value: "",
+                    };
+                    onChange(nextRules);
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 py-1 text-[12px] text-[var(--text)] outline-none"
+                >
+                  {filterableSchema.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={rule.op}
+                  onChange={(event) => {
+                    const nextRules = [...filters];
+                    nextRules[index] = { ...rule, op: event.target.value };
+                    onChange(nextRules);
+                  }}
+                  className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 py-1 text-[12px] text-[var(--text)] outline-none"
+                >
+                  {ops.map((op) => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+                {opNeedsValue(rule.op) ? (
+                  <Input
+                    ref={index === filters.length - 1 ? lastInputRef : undefined}
+                    value={rule.value}
+                    onChange={(event) => {
+                      const nextRules = [...filters];
+                      nextRules[index] = { ...rule, value: event.target.value };
+                      onChange(nextRules);
+                    }}
+                    className="h-7 min-w-0 flex-1 text-[12px]"
+                    placeholder="Value"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onChange(filters.filter((_, i) => i !== index))}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                  aria-label="Remove filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
-        <Input
-          value={filterValue}
-          onChange={(e) => onValueChange(e.target.value)}
-          placeholder="Filter value…"
-          className="h-8 text-[13px]"
-          autoFocus
-        />
-      </div>
-      {filterValue && (
+      )}
+      <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={onClear}
-          className="mt-2 text-[12px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+          disabled={!firstField}
+          onClick={() => {
+            if (!firstField) return;
+            focusIndexRef.current = filters.length;
+            onChange([...filters, { fieldId: firstField.id, op: getDefaultOpForField(firstField), value: "" }]);
+          }}
+          className="rounded-md px-2 py-1 text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Clear filter
+          + Add filter
         </button>
-      )}
+        {filters.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="rounded-md px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            Clear all
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

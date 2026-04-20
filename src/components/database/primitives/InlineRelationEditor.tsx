@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronDown, Link2 } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { RecordPickerDropdown } from "@/components/database/primitives/RecordPickerDropdown";
@@ -44,10 +44,7 @@ export function InlineRelationEditor({
             </Badge>
           ))
         ) : (
-          <span className="inline-flex items-center gap-1 text-[12px] text-[var(--overlay-1)]">
-            <Link2 className="h-3.5 w-3.5" />
-            Link records
-          </span>
+          <span className="text-[13px] text-[var(--overlay-1)] opacity-60">—</span>
         )}
         <ChevronDown className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
       </button>

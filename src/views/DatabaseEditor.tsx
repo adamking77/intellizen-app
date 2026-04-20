@@ -19,6 +19,9 @@ import {
   findDefaultKanbanField,
   prepareCsvImport,
 } from "@/lib/database-core";
+import { getVaultAbsolutePath, writeVaultFile } from "@/lib/vault";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { dirname } from "@tauri-apps/api/path";
 import {
   createWorkspaceRecord,
   createWorkspaceRecords,
@@ -223,6 +226,30 @@ export function DatabaseEditorView() {
     }
   }
 
+  async function handleDuplicateRecords(targetDatabaseId: string, recordIds: string[]) {
+    const targetDatabase = getDatabaseModel(targetDatabaseId);
+    if (!targetDatabase) return;
+    try {
+      await Promise.all(
+        recordIds.map((recordId) => {
+          const sourceRecord = targetDatabase.records.find((record) => record.id === recordId);
+          if (!sourceRecord) return Promise.resolve();
+          return createWorkspaceRecord({
+            databaseId: targetDatabaseId,
+            fields: Object.fromEntries(
+              Object.entries(sourceRecord).filter(([key]) => !key.startsWith("_") && key !== "id"),
+            ),
+            body: sourceRecord._body ?? null,
+          });
+        }),
+      );
+      await refreshDatabase();
+      toast.success(`${recordIds.length} records duplicated`);
+    } catch (err) {
+      toastError("Bulk duplicate failed", err);
+    }
+  }
+
   async function handleDuplicateRecord(targetDatabaseId: string, recordId: string) {
     const targetDatabase = getDatabaseModel(targetDatabaseId);
     const sourceRecord = targetDatabase?.records.find((record) => record.id === recordId);
@@ -289,6 +316,7 @@ export function DatabaseEditorView() {
         setActiveViewId(remaining[0]?.id ?? null);
       }
       await refreshDatabase();
+      toast.success("View deleted");
     } catch (err) {
       toastError("View deletion failed", err);
     }
@@ -315,10 +343,32 @@ export function DatabaseEditorView() {
     }
   }
 
-  async function handleSaveSchema(schema: WorkspaceDatabaseModel["schema"]) {
-    if (!bundle) return;
+  async function handleSaveSchema(
+    schema: WorkspaceDatabaseModel["schema"],
+    nextRecords?: WorkspaceDatabaseModel["records"],
+  ) {
+    if (!bundle || !database) return;
     try {
       await updateWorkspaceDatabaseSchema(bundle.database.id, schema);
+      if (nextRecords && nextRecords.length) {
+        const fieldIds = schema.map((candidate) => candidate.id);
+        const updates: Array<Promise<unknown>> = [];
+        for (const record of nextRecords) {
+          const previous = database.records.find((candidate) => candidate.id === record.id);
+          if (!previous) continue;
+          for (const fieldId of fieldIds) {
+            if (previous[fieldId] !== record[fieldId]) {
+              updates.push(
+                updateWorkspaceRecord(record.id, {
+                  fieldId,
+                  value: record[fieldId] as never,
+                }),
+              );
+            }
+          }
+        }
+        if (updates.length) await Promise.all(updates);
+      }
       await refreshDatabase();
     } catch (err) {
       toastError("Schema update failed", err);
@@ -362,16 +412,25 @@ export function DatabaseEditorView() {
     }
   }
 
-  function handleCsvExport() {
+  async function handleCsvExport() {
     if (!bundle || !database) return;
-    const csv = exportDatabaseCsv(database, catalog);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${bundle.database.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "database"}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const csv = exportDatabaseCsv(database, catalog);
+      const slug = bundle.database.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "database";
+      const relative = `exports/${slug}-${Date.now()}.csv`;
+      await writeVaultFile(relative, csv, "vault");
+      const absolute = await getVaultAbsolutePath(relative, "vault");
+      toast.success(`Exported to vault/${relative}`, {
+        action: {
+          label: "Reveal",
+          onClick: () => {
+            void dirname(absolute).then((dir) => openPath(dir));
+          },
+        },
+      });
+    } catch (err) {
+      toastError("CSV export failed", err);
+    }
   }
 
   function handleOpenSchema() {
@@ -522,6 +581,7 @@ export function DatabaseEditorView() {
               onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
               onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
               onDeleteRecords={(recordIds) => void handleDeleteRecords(recordIds)}
+              onDuplicateRecords={(recordIds) => void handleDuplicateRecords(database.id, recordIds)}
             />
           )}
         </div>
@@ -536,6 +596,7 @@ export function DatabaseEditorView() {
         />
 
         <DatabasePeekPanel
+          key={activeRecord?.id ?? "empty"}
           database={peekDatabase ?? database}
           record={activeRecord}
           catalog={catalog}

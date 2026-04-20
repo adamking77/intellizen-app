@@ -87,10 +87,16 @@ export function DatabasePeekPanel({
   const [isFullPage, setIsFullPage] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [customizeSummaryOpen, setCustomizeSummaryOpen] = useState(false);
+  const [entered, setEntered] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const customizeAnchorRef = useRef<HTMLDivElement | null>(null);
   const widthRef = useRef(lastPanelWidth);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   useEffect(() => {
     if (!record) return;
@@ -195,7 +201,7 @@ export function DatabasePeekPanel({
       )}
       style={{
         width: isFullPage ? "100%" : width,
-        transform: "translateX(0)",
+        transform: entered ? "translateX(0)" : "translateX(100%)",
       }}
     >
       <div

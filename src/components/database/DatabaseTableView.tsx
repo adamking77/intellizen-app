@@ -46,12 +46,13 @@ interface DatabaseTableViewProps {
     fieldOrder?: string[];
     columnWidths?: Record<string, number>;
   }) => void;
-  onSaveSchema: (schema: WorkspaceDatabaseModel["schema"]) => void;
+  onSaveSchema: (schema: WorkspaceDatabaseModel["schema"], records?: WorkspaceDatabaseModel["records"]) => void;
   onOpenSchema: () => void;
   onCreateRecord: () => void;
   onDuplicateRecord: (recordId: string) => void;
   onDeleteRecord: (recordId: string) => void;
   onDeleteRecords: (recordIds: string[]) => void;
+  onDuplicateRecords: (recordIds: string[]) => void;
 }
 
 export function DatabaseTableView({
@@ -68,12 +69,49 @@ export function DatabaseTableView({
   onDuplicateRecord,
   onDeleteRecord,
   onDeleteRecords,
+  onDuplicateRecords,
 }: DatabaseTableViewProps) {
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(view.columnWidths ?? {});
   const [popoverFieldId, setPopoverFieldId] = useState<string | null>(null);
   const [resizeGuideX, setResizeGuideX] = useState<number | null>(null);
+  const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const addFieldRef = useRef<HTMLDivElement | null>(null);
   const headerButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    if (!addFieldOpen) return;
+    function handle(event: MouseEvent) {
+      if (!addFieldRef.current || addFieldRef.current.contains(event.target as Node)) return;
+      setAddFieldOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [addFieldOpen]);
+
+  function handleQuickAddField(name: string, type: WorkspaceDatabaseField["type"]) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const newField: WorkspaceDatabaseField = {
+      id: crypto.randomUUID(),
+      name: trimmed,
+      type,
+    };
+    if (type === "status" || type === "select" || type === "multiselect") {
+      newField.options = [];
+    }
+    if (type === "relation") {
+      newField.relation = { targetDatabaseId: database.id };
+    }
+    if (type === "rollup") {
+      newField.rollup = { relationFieldId: "", aggregation: "count" };
+    }
+    if (type === "formula") {
+      newField.formula = { expression: "" };
+    }
+    onSaveSchema([...database.schema, newField]);
+    setAddFieldOpen(false);
+  }
 
   useEffect(() => {
     setColumnWidths(view.columnWidths ?? {});
@@ -125,19 +163,74 @@ export function DatabaseTableView({
     });
   }
 
-  function handleResize(fieldId: string, event: React.PointerEvent<HTMLDivElement>) {
+  function defaultWidthForField(field: WorkspaceDatabaseField) {
+    switch (field.type) {
+      case "checkbox":
+        return 72;
+      case "date":
+      case "createdAt":
+      case "lastEditedAt":
+        return 140;
+      case "number":
+        return 120;
+      case "status":
+      case "select":
+        return 160;
+      case "multiselect":
+      case "relation":
+        return 220;
+      case "url":
+      case "email":
+      case "phone":
+        return 200;
+      case "text":
+      default:
+        return 200;
+    }
+  }
+
+  function columnWidthFor(field: WorkspaceDatabaseField) {
+    return columnWidths[field.id] ?? defaultWidthForField(field);
+  }
+
+  function autoFitColumn(field: WorkspaceDatabaseField) {
+    const next = defaultWidthForField(field);
+    const updated = { ...columnWidths };
+    delete updated[field.id];
+    setColumnWidths(updated);
+    onUpdateView({ columnWidths: updated });
+    return next;
+  }
+
+  function handleCreateOption(fieldId: string, label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const existing = database.schema.find((candidate) => candidate.id === fieldId);
+    if (!existing) return;
+    if ((existing.options ?? []).some((option) => option.toLowerCase() === trimmed.toLowerCase())) return;
+    onSaveSchema(
+      database.schema.map((candidate) =>
+        candidate.id === fieldId
+          ? { ...candidate, options: [...(candidate.options ?? []), trimmed] }
+          : candidate,
+      ),
+    );
+  }
+
+  function handleResize(field: WorkspaceDatabaseField, event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
+    const fieldId = field.id;
     const startX = event.clientX;
-    const startWidth = columnWidths[fieldId] ?? 168;
+    const startWidth = columnWidthFor(field);
 
     function handleMove(moveEvent: PointerEvent) {
-      const nextWidth = Math.max(120, startWidth + (moveEvent.clientX - startX));
+      const nextWidth = Math.max(72, startWidth + (moveEvent.clientX - startX));
       setColumnWidths((current) => ({ ...current, [fieldId]: nextWidth }));
       setResizeGuideX(moveEvent.clientX);
     }
 
     function handleUp(moveEvent: PointerEvent) {
-      const nextWidth = Math.max(120, startWidth + (moveEvent.clientX - startX));
+      const nextWidth = Math.max(72, startWidth + (moveEvent.clientX - startX));
       setResizeGuideX(null);
       onUpdateView({
         columnWidths: {
@@ -176,7 +269,7 @@ export function DatabaseTableView({
           <td
             key={field.id}
             className="border-b border-[var(--border-subtle)] px-4 py-2.5 align-top"
-            style={{ width: columnWidths[field.id] ?? 168, minWidth: columnWidths[field.id] ?? 168 }}
+            style={{ width: columnWidthFor(field), minWidth: columnWidthFor(field) }}
           >
             <div className={cn("relative", index === 0 && "pr-22")}>
               <InlineCell
@@ -185,6 +278,7 @@ export function DatabaseTableView({
                 field={field}
                 catalog={catalog}
                 onCommit={(value) => onUpdateField(record.id, field.id, value)}
+                onCreateOption={handleCreateOption}
               />
               {index === 0 ? (
                 <div className="absolute right-0 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-90 group-hover:opacity-100">
@@ -233,7 +327,7 @@ export function DatabaseTableView({
                   <th
                     key={field.id}
                     className="border-b border-[var(--border)] px-4 py-3 text-left align-middle"
-                    style={{ width: columnWidths[field.id] ?? 168, minWidth: columnWidths[field.id] ?? 168 }}
+                    style={{ width: columnWidthFor(field), minWidth: columnWidthFor(field) }}
                   >
                     <div className="relative flex items-center">
                       <button
@@ -258,10 +352,15 @@ export function DatabaseTableView({
                         )}
                       </button>
                       <div
-                        className="absolute inset-y-0 right-[-10px] w-3 cursor-col-resize"
-                        onPointerDown={(event) => handleResize(field.id, event)}
+                        className="group/resize absolute inset-y-0 right-[-10px] w-3 cursor-col-resize"
+                        onPointerDown={(event) => handleResize(field, event)}
+                        onDoubleClick={(event) => {
+                          event.stopPropagation();
+                          autoFitColumn(field);
+                        }}
+                        title="Drag to resize · Double-click to auto-fit"
                       >
-                        <div className="mx-auto h-full w-px bg-[var(--border-subtle)]" />
+                        <div className="mx-auto h-full w-px bg-[var(--border-subtle)] transition-colors group-hover/resize:w-[2px] group-hover/resize:bg-[var(--accent)]" />
                       </div>
                       <ColumnHeaderPopover
                         anchorRef={{ current: headerButtonRefs.current[field.id] }}
@@ -293,14 +392,27 @@ export function DatabaseTableView({
                   </th>
                 );
               })}
-              <th className="sticky right-0 z-[2] w-8 border-b border-[var(--border)] bg-[var(--mantle)] px-2 py-3">
-                <button
-                  type="button"
-                  onClick={onOpenSchema}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
+              <th className="sticky right-0 z-[2] w-10 border-b border-[var(--border)] bg-[var(--mantle)] px-2 py-3">
+                <div ref={addFieldRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAddFieldOpen((open) => !open)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                    title="Add property"
+                    aria-label="Add property"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  {addFieldOpen ? (
+                    <AddFieldPopover
+                      onAdd={handleQuickAddField}
+                      onOpenSchema={() => {
+                        setAddFieldOpen(false);
+                        onOpenSchema();
+                      }}
+                    />
+                  ) : null}
+                </div>
               </th>
             </tr>
           </thead>
@@ -366,7 +478,21 @@ export function DatabaseTableView({
             <div className="text-[12px] text-[var(--subtext-0)]">{selectedCount} selected</div>
             <button
               type="button"
-              onClick={() => onDeleteRecords([...selectedRecordIds])}
+              onClick={() => {
+                onDuplicateRecords([...selectedRecordIds]);
+                setSelectedRecordIds(new Set());
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--base)] px-3 py-1 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--surface-wash)]"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDeleteRecords([...selectedRecordIds]);
+                setSelectedRecordIds(new Set());
+              }}
               className="rounded-full bg-[var(--red)] px-3 py-1 text-[12px] font-medium text-[var(--crust)]"
             >
               Delete
@@ -384,12 +510,14 @@ function InlineCell({
   field,
   catalog,
   onCommit,
+  onCreateOption,
 }: {
   database: WorkspaceDatabaseModel;
   record: WorkspaceDatabaseModel["records"][number];
   field: WorkspaceDatabaseField;
   catalog: WorkspaceDatabaseCatalogEntry[];
   onCommit: (value: WorkspaceDatabaseFieldValue) => void;
+  onCreateOption: (fieldId: string, label: string) => void;
 }) {
   const value = getFieldValue(record, field, database, catalog);
 
@@ -406,8 +534,10 @@ function InlineCell({
       <InlinePillPicker
         options={field.options ?? []}
         value={typeof value === "string" ? value : null}
+        groupStatus
         getColor={resolveStatusColor}
         onChange={onCommit}
+        onCreate={(label) => onCreateOption(field.id, label)}
       />
     );
   }
@@ -419,6 +549,7 @@ function InlineCell({
         value={typeof value === "string" ? value : null}
         getColor={(option) => resolveFieldOptionColor(field, option)}
         onChange={onCommit}
+        onCreate={(label) => onCreateOption(field.id, label)}
       />
     );
   }
@@ -430,6 +561,7 @@ function InlineCell({
         values={Array.isArray(value) ? value : []}
         getColor={(option) => resolveFieldOptionColor(field, option)}
         onChange={onCommit}
+        onCreate={(label) => onCreateOption(field.id, label)}
       />
     );
   }
@@ -491,9 +623,10 @@ function InlineCell({
   }
 
   const displayValue = getFieldDisplayValue(record, field, database, catalog);
+  const computed = field.type === "createdAt" || field.type === "lastEditedAt" || field.type === "formula" || field.type === "rollup";
   return (
-    <div className={cn("min-h-8 text-[13px]", (field.type === "createdAt" || field.type === "lastEditedAt" || field.type === "formula" || field.type === "rollup") && "opacity-40", !displayValue && "text-[var(--overlay-1)]")}>
-      {displayValue || "Empty"}
+    <div className={cn("min-h-8 text-[13px]", computed && "opacity-50", !displayValue && "text-[var(--overlay-1)] opacity-60")}>
+      {displayValue || "—"}
     </div>
   );
 }
@@ -525,5 +658,91 @@ function RowAction({
     >
       {icon}
     </button>
+  );
+}
+
+const QUICK_ADD_TYPES: Array<{ value: WorkspaceDatabaseField["type"]; label: string }> = [
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "status", label: "Status" },
+  { value: "select", label: "Select" },
+  { value: "multiselect", label: "Multi-select" },
+  { value: "date", label: "Date" },
+  { value: "checkbox", label: "Checkbox" },
+  { value: "url", label: "URL" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "relation", label: "Relation" },
+  { value: "formula", label: "Formula" },
+  { value: "rollup", label: "Rollup" },
+  { value: "createdAt", label: "Created time" },
+  { value: "lastEditedAt", label: "Last edited time" },
+];
+
+function AddFieldPopover({
+  onAdd,
+  onOpenSchema,
+}: {
+  onAdd: (name: string, type: WorkspaceDatabaseField["type"]) => void;
+  onOpenSchema: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState<WorkspaceDatabaseField["type"]>("text");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function submit() {
+    if (!name.trim()) return;
+    onAdd(name, type);
+    setName("");
+    setType("text");
+  }
+
+  return (
+    <div className="absolute right-0 top-full z-50 mt-1 w-[240px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Add property</div>
+      <Input
+        ref={inputRef}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="Property name"
+        className="mb-2 h-8 text-[13px]"
+      />
+      <select
+        value={type}
+        onChange={(event) => setType(event.target.value as WorkspaceDatabaseField["type"])}
+        className="mb-3 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 text-[13px] text-[var(--text)] outline-none"
+      >
+        {QUICK_ADD_TYPES.map((entry) => (
+          <option key={entry.value} value={entry.value}>{entry.label}</option>
+        ))}
+      </select>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onOpenSchema}
+          className="text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+        >
+          Edit schema…
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!name.trim()}
+          className="rounded-md bg-[var(--accent)] px-3 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Add
+        </button>
+      </div>
+    </div>
   );
 }

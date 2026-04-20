@@ -26,3 +26,6 @@ supabase/.temp
 
 # Local design notes (not shipped)
 dashboard-design.txt
+
+# Local scheduler/hook state (not shipped)
+.claude/

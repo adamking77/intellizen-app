@@ -150,8 +150,10 @@ export function getVisibleFields(
   view: WorkspaceDatabaseModel["views"][number],
 ) {
   const order = view.fieldOrder ?? schema.map((field) => field.id);
+  const orderSet = new Set(order);
+  const appended = schema.map((field) => field.id).filter((id) => !orderSet.has(id));
   const hidden = new Set(view.hiddenFields ?? []);
-  return order
+  return [...order, ...appended]
     .map((id) => schema.find((field) => field.id === id))
     .filter((field): field is WorkspaceDatabaseField => {
       if (!field) return false;

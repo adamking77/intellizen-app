@@ -2,6 +2,7 @@ import { toast as sonner } from "sonner";
 
 type ToastOpts = {
   description?: string;
+  action?: { label: string; onClick: () => void };
 };
 
 export const toast = {

@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   findDefaultDateField,
   getRecordTitle,
@@ -23,7 +24,7 @@ interface DatabaseCalendarViewProps {
   onCreateRecord: (seed?: Record<string, WorkspaceDatabaseFieldValue>) => void;
 }
 
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function DatabaseCalendarView({
   database,
@@ -75,14 +76,10 @@ export function DatabaseCalendarView({
 
   if (!dateField) {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="max-w-md rounded-2xl border border-dashed border-[var(--border)] bg-[var(--mantle)] px-6 py-10 text-center">
-          <div className="text-[18px] font-semibold text-[var(--text)]">Calendar needs a date field</div>
-          <div className="mt-2 text-[13px] leading-6 text-[var(--subtext-0)]">
-            Add a `date` property in schema, then assign it as the calendar field for this view.
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        title="Calendar needs a date field"
+        description="Add a `date` property in schema, then assign it as the calendar field for this view."
+      />
     );
   }
 
@@ -123,6 +120,7 @@ export function DatabaseCalendarView({
           return (
             <div
               key={key}
+              onDoubleClick={() => onCreateRecord({ [dateField.id]: key })}
               className={cn(
                 "min-h-0 border-r border-b border-[var(--border-subtle)] p-2 last:border-r-0",
                 !inMonth && "bg-[rgba(17,17,27,0.35)]",
@@ -186,9 +184,7 @@ function addDays(date: Date, amount: number) {
 
 function startOfCalendarGrid(month: Date) {
   const first = startOfMonth(month);
-  const day = first.getDay();
-  const offset = day === 0 ? 6 : day - 1;
-  return addDays(first, -offset);
+  return addDays(first, -first.getDay());
 }
 
 function toDateKey(date: Date) {

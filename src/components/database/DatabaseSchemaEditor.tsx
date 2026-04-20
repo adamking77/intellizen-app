@@ -55,9 +55,12 @@ export function DatabaseSchemaEditor({
     return null;
   }
 
-  const schema = structuredClone(database.schema) as WorkspaceDatabaseField[];
+  function cloneSchema(): WorkspaceDatabaseField[] {
+    return structuredClone(database.schema) as WorkspaceDatabaseField[];
+  }
 
   function updateField(fieldId: string, updater: (field: WorkspaceDatabaseField) => WorkspaceDatabaseField) {
+    const schema = cloneSchema();
     const index = schema.findIndex((field) => field.id === fieldId);
     if (index === -1) return;
     schema[index] = updater(schema[index]);
@@ -70,21 +73,21 @@ export function DatabaseSchemaEditor({
       name: "New field",
       type: "text",
     };
-    void onSave([...schema, next]);
+    void onSave([...cloneSchema(), next]);
   }
 
   function removeField(fieldId: string) {
-    void onSave(schema.filter((field) => field.id !== fieldId));
+    void onSave(cloneSchema().filter((field) => field.id !== fieldId));
   }
 
   function moveField(fieldId: string, direction: -1 | 1) {
+    const schema = cloneSchema();
     const index = schema.findIndex((field) => field.id === fieldId);
     const targetIndex = index + direction;
     if (index < 0 || targetIndex < 0 || targetIndex >= schema.length) return;
-    const next = [...schema];
-    const [field] = next.splice(index, 1);
-    next.splice(targetIndex, 0, field);
-    void onSave(next);
+    const [field] = schema.splice(index, 1);
+    schema.splice(targetIndex, 0, field);
+    void onSave(schema);
   }
 
   function toggleHeaderField(fieldId: string) {

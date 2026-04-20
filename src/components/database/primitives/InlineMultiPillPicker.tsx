@@ -13,6 +13,7 @@ interface InlineMultiPillPickerProps {
   values: string[];
   getColor: (option: string) => string;
   onChange: (values: string[]) => void;
+  onCreate?: (label: string) => void;
 }
 
 export function InlineMultiPillPicker({
@@ -21,6 +22,7 @@ export function InlineMultiPillPicker({
   values,
   getColor,
   onChange,
+  onCreate,
 }: InlineMultiPillPickerProps) {
   const [open, setOpen] = useState(false);
   const localAnchorRef = anchorRef ?? ({ current: null } as RefObject<HTMLElement | null>);
@@ -47,7 +49,7 @@ export function InlineMultiPillPicker({
             </Badge>
           ))
         ) : (
-          <span className="text-[12px] text-[var(--overlay-1)]">Empty</span>
+          <span className="text-[13px] text-[var(--overlay-1)] opacity-60">—</span>
         )}
         <ChevronDown className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
       </button>
@@ -57,6 +59,14 @@ export function InlineMultiPillPicker({
         open={open}
         options={normalizedOptions}
         selectedIds={values}
+        onCreate={
+          onCreate
+            ? (label) => {
+                onCreate(label);
+                if (!values.includes(label)) onChange([...values, label]);
+              }
+            : undefined
+        }
         onToggle={(id) => {
           if (values.includes(id)) {
             onChange(values.filter((value) => value !== id));
