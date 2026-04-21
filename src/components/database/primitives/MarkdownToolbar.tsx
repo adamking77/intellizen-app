@@ -34,7 +34,7 @@ export function MarkdownToolbar({ textareaRef, className }: MarkdownToolbarProps
   }
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
+    <div className={cn("db-markdown-toolbar", className)}>
       <ToolbarButton label="Bold" onClick={() => applyWrapper("**")} icon={<Bold className="h-3.5 w-3.5" />} />
       <ToolbarButton label="Italic" onClick={() => applyWrapper("*")} icon={<Italic className="h-3.5 w-3.5" />} />
       <ToolbarButton label="Bullet" onClick={() => applyPrefix("- ")} icon={<ListIcon className="h-3.5 w-3.5" />} />
@@ -56,7 +56,7 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+      className="db-markdown-toolbar-btn"
       title={label}
       aria-label={label}
     >

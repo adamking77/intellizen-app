@@ -16,7 +16,9 @@ interface RecordPickerDropdownProps {
   options: RecordPickerOption[];
   selectedIds: string[];
   multiple?: boolean;
+  showSearch?: boolean;
   onToggle: (id: string) => void;
+  onClearSelection?: () => void;
   onClose: () => void;
   onCreate?: (label: string) => void;
 }
@@ -27,7 +29,9 @@ export function RecordPickerDropdown({
   options,
   selectedIds,
   multiple = true,
+  showSearch = true,
   onToggle,
+  onClearSelection,
   onClose,
   onCreate,
 }: RecordPickerDropdownProps) {
@@ -107,7 +111,7 @@ export function RecordPickerDropdown({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
+      className="fixed z-[80] flex flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       style={{
         top: position.placeAbove ? undefined : position.top,
         bottom: position.placeAbove ? window.innerHeight - position.top : undefined,
@@ -117,26 +121,53 @@ export function RecordPickerDropdown({
       }}
       onClick={(event) => event.stopPropagation()}
     >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-2.5 py-1.5">
-        <Search className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-        <input
-          ref={searchRef}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && canCreate) {
-              event.preventDefault();
-              handleCreate();
-            } else if (event.key === "Escape") {
-              onClose();
-            }
-          }}
-          placeholder={onCreate ? "Search or create…" : "Search…"}
-          className="h-6 w-full bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
-        />
-      </div>
+      {showSearch ? (
+        <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--base)] px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && canCreate) {
+                event.preventDefault();
+                handleCreate();
+              } else if (event.key === "Escape") {
+                onClose();
+              }
+            }}
+            placeholder={onCreate ? "Search or create…" : "Search…"}
+            className="h-6 w-full bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
+          />
+        </div>
+      ) : null}
 
-      <div className="flex-1 overflow-y-auto p-1">
+      {multiple && selectedIds.length > 0 ? (
+        <div className="border-b border-[var(--border-subtle)] px-3 py-2.5">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            Selected
+          </div>
+          <div className="flex flex-wrap gap-1">
+          {selectedIds.map((id) => {
+            const option = options.find((candidate) => candidate.id === id);
+            if (!option) return null;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onToggle(option.id)}
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--base)] px-2 py-0.5 text-[11px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                <span className="max-w-[140px] truncate">{option.label}</span>
+                <span className="text-[var(--overlay-1)]">×</span>
+              </button>
+            );
+          })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex-1 overflow-y-auto p-1.5">
         {filteredOptions.length ? (
           filteredOptions.map((option) => {
             const selected = selectedIds.includes(option.id);
@@ -151,9 +182,9 @@ export function RecordPickerDropdown({
                   }
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors",
+                  "flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition-colors",
                   selected
-                    ? "bg-[var(--accent-soft)] text-[var(--text)]"
+                    ? "bg-[color-mix(in_srgb,var(--accent)_14%,var(--mantle)_86%)] text-[var(--text)]"
                     : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >
@@ -186,7 +217,7 @@ export function RecordPickerDropdown({
           <button
             type="button"
             onClick={handleCreate}
-            className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-[var(--border-subtle)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="mt-1 flex w-full items-center gap-1.5 rounded-xl bg-[var(--base)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             <Plus className="h-3.5 w-3.5 text-[var(--accent)]" />
             <span>Create</span>
@@ -194,6 +225,40 @@ export function RecordPickerDropdown({
           </button>
         ) : null}
       </div>
+
+      {multiple ? (
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--base)_38%,transparent)] px-3 py-2.5">
+          <div className="text-[11px] text-[var(--overlay-1)]">
+            {selectedIds.length === 0
+              ? "No records selected"
+              : `${selectedIds.length} selected`}
+          </div>
+          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (onClearSelection) {
+                onClearSelection();
+                return;
+              }
+              for (const id of selectedIds) {
+                onToggle(id);
+              }
+            }}
+            className="rounded-md px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
+          >
+            Done
+          </button>
+          </div>
+        </div>
+      ) : null}
     </div>,
     document.body,
   );

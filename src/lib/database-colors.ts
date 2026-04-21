@@ -47,6 +47,17 @@ export const HASH_PALETTE = [
   "#f5c2e7",
 ];
 
+export const NAMED_OPTION_COLORS = [
+  { label: "Rose", value: "#f38ba8" },
+  { label: "Peach", value: "#fab387" },
+  { label: "Gold", value: "#f9e2af" },
+  { label: "Mint", value: "#a6e3a1" },
+  { label: "Teal", value: "#94e2d5" },
+  { label: "Sky", value: "#74c7ec" },
+  { label: "Iris", value: "#cba6f7" },
+  { label: "Pink", value: "#f5c2e7" },
+] as const;
+
 export const CYCLING_PALETTE = [0, 4, 2, 6, 1, 5, 3, 7];
 
 export function hashString(value: string) {
@@ -70,7 +81,11 @@ export function getReadableTextColor(backgroundHex: string) {
   return yiq >= 150 ? "var(--crust)" : "var(--text)";
 }
 
-export function resolveStatusColor(value: string) {
+export function resolveStatusColor(value: string, field?: WorkspaceDatabaseField) {
+  const explicit = field?.optionColors?.[value];
+  if (explicit) {
+    return explicit;
+  }
   const semantic = SEMANTIC_MAP[value.trim().toLowerCase()];
   if (semantic) {
     return SEMANTIC_PALETTE[semantic];

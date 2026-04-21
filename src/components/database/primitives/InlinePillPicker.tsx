@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { cn } from "@/lib/utils";
@@ -117,21 +117,20 @@ export function InlinePillPicker({
           event.stopPropagation();
           setOpen((current) => !current);
         }}
-        className="inline-flex min-h-8 items-center gap-1 rounded-full"
+        className="inline-flex min-h-9 min-w-[72px] items-center rounded-xl border border-transparent px-2 py-1 text-left transition-[background-color,border-color,color] duration-150 hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)]"
       >
         {value ? (
           <Badge color={getColor(value)}>{value}</Badge>
         ) : (
           <span className="text-[13px] text-[var(--overlay-1)] opacity-60">—</span>
         )}
-        <ChevronDown className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
       </button>
 
       {open
         ? createPortal(
             <div
               ref={panelRef}
-              className="fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
+              className="fixed z-[80] flex flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
               style={{
                 top: position.placeAbove ? undefined : position.top,
                 bottom: position.placeAbove ? window.innerHeight - position.top : undefined,
@@ -141,7 +140,7 @@ export function InlinePillPicker({
               }}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-center gap-2 border-b border-[var(--border)] px-2.5 py-1.5">
+              <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--base)] px-3 py-2">
                 <Search className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
                 <input
                   ref={searchRef}
@@ -160,7 +159,7 @@ export function InlinePillPicker({
                 />
               </div>
 
-              <div className="flex-1 overflow-y-auto p-1">
+              <div className="flex-1 overflow-y-auto p-1.5">
                 {value ? (
                   <button
                     type="button"
@@ -168,7 +167,7 @@ export function InlinePillPicker({
                       onChange(null);
                       setOpen(false);
                     }}
-                    className="flex w-full rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                    className="flex w-full rounded-xl px-2.5 py-2 text-left text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                   >
                     Clear
                   </button>
@@ -195,7 +194,7 @@ export function InlinePillPicker({
                   <button
                     type="button"
                     onClick={handleCreate}
-                    className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-[var(--border-subtle)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                    className="mt-1 flex w-full items-center gap-1.5 rounded-xl bg-[var(--base)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                   >
                     <Plus className="h-3.5 w-3.5 text-[var(--accent)]" />
                     <span>Create</span>
@@ -248,7 +247,7 @@ function renderGroupedOptions({
   return sections
     .filter((section) => buckets[section].length > 0)
     .map((section) => (
-      <div key={section} className="py-0.5">
+      <div key={section} className="py-1">
         <div className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {section}
         </div>
@@ -281,8 +280,10 @@ function OptionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)]",
-        selected ? "bg-[var(--surface-wash)]" : "",
+        "flex w-full rounded-xl px-2.5 py-2 text-left transition-colors",
+        selected
+          ? "bg-[color-mix(in_srgb,var(--accent)_14%,var(--mantle)_86%)]"
+          : "hover:bg-[var(--surface-wash)]",
       )}
     >
       <Badge color={color}>{option}</Badge>

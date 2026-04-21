@@ -263,7 +263,13 @@ export type WorkspaceDatabaseViewType =
   | "kanban"
   | "list"
   | "gallery"
-  | "calendar";
+  | "calendar"
+  | "chart";
+
+export type WorkspaceDatabaseChartType = "bar" | "line" | "donut";
+export type WorkspaceDatabaseChartAggregation = "count" | "sum" | "avg" | "min" | "max";
+export type WorkspaceDatabaseChartPalette = "blue" | "rose" | "gold" | "teal";
+export type WorkspaceDatabaseChartRange = "30d" | "90d" | "365d" | "all";
 
 export type WorkspaceDatabaseFieldValue =
   | string
@@ -309,6 +315,17 @@ export interface WorkspaceDatabaseViewConfig {
   listPropertyWidth?: number;
   cardCoverField?: string;
   cardFields?: string[];
+  chartType?: WorkspaceDatabaseChartType;
+  chartValueField?: string;
+  chartAggregation?: WorkspaceDatabaseChartAggregation;
+  chartShowLegend?: boolean;
+  chartShowGrid?: boolean;
+  chartPalette?: WorkspaceDatabaseChartPalette;
+  chartRange?: WorkspaceDatabaseChartRange;
+}
+
+export interface WorkspaceDatabaseSchemaSaveOptions {
+  silent?: boolean;
 }
 
 export interface WorkspaceDatabaseSummary {
@@ -369,6 +386,13 @@ export interface WorkspaceDatabaseModel {
     fieldOrder?: string[];
     columnWidths?: Record<string, number>;
     listPropertyWidth?: number;
+    chartType?: WorkspaceDatabaseChartType;
+    chartValueField?: string;
+    chartAggregation?: WorkspaceDatabaseChartAggregation;
+    chartShowLegend?: boolean;
+    chartShowGrid?: boolean;
+    chartPalette?: WorkspaceDatabaseChartPalette;
+    chartRange?: WorkspaceDatabaseChartRange;
   }>;
   records: WorkspaceDatabaseRecordModel[];
   headerFieldIds?: string[];
@@ -387,6 +411,7 @@ export interface WorkspaceDatabaseCatalogEntry {
   schema: WorkspaceDatabaseField[];
   headerFieldIds: string[];
   records: WorkspaceDatabaseRecordModel[];
+  views: WorkspaceDatabaseModel["views"];
 }
 
 export interface CanvasViewport {

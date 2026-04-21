@@ -1,22 +1,38 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   ArrowUpDown,
-  Calendar,
-  Columns,
+  BarChart3,
+  CalendarDays,
   Columns3,
+  Download,
+  Funnel,
   LayoutGrid,
-  LayoutList,
   List,
-  ListFilter,
   MoreHorizontal,
   Plus,
+  Settings2,
   Table2,
+  Upload,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/database/primitives/Badge";
 import { Input } from "@/components/ui/input";
+import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseField,
   WorkspaceDatabaseModel,
@@ -25,38 +41,65 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const VIEW_ICONS: Record<WorkspaceDatabaseViewType, React.ReactNode> = {
-  table: <Table2 className="h-3.5 w-3.5" strokeWidth={1.5} />,
-  kanban: <Columns3 className="h-3.5 w-3.5" strokeWidth={1.5} />,
-  list: <List className="h-3.5 w-3.5" strokeWidth={1.5} />,
-  gallery: <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.5} />,
-  calendar: <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />,
+const VIEW_ICONS: Record<WorkspaceDatabaseViewType, ReactNode> = {
+  table: <Table2 className="h-3.5 w-3.5" />,
+  kanban: <Columns3 className="h-3.5 w-3.5" />,
+  list: <List className="h-3.5 w-3.5" />,
+  gallery: <LayoutGrid className="h-3.5 w-3.5" />,
+  calendar: <CalendarDays className="h-3.5 w-3.5" />,
+  chart: <BarChart3 className="h-3.5 w-3.5" />,
 };
 
-const VIEW_LABELS: Record<WorkspaceDatabaseViewType, string> = {
+const VIEW_DEFAULT_NAMES: Record<WorkspaceDatabaseViewType, string> = {
   table: "Table",
-  kanban: "Board",
+  kanban: "Kanban",
   list: "List",
   gallery: "Gallery",
   calendar: "Calendar",
+  chart: "Chart",
 };
 
-const VIEW_TYPES: WorkspaceDatabaseViewType[] = ["table", "kanban", "list", "gallery", "calendar"];
+function getViewTabLabel(view: WorkspaceDatabaseModel["views"][number]): string {
+  const aliases = {
+    table: ["Table", "All items"],
+    kanban: ["Kanban", "Board"],
+    list: ["List"],
+    gallery: ["Gallery"],
+    calendar: ["Calendar"],
+    chart: ["Chart"],
+  } satisfies Record<WorkspaceDatabaseViewType, string[]>;
+
+  const matchedAlias = aliases[view.type].find((alias) => view.name.match(new RegExp(`^${alias} \\d+$`)));
+  return matchedAlias ?? view.name;
+}
+
+type FilterOperator =
+  | "contains"
+  | "not_contains"
+  | "equals"
+  | "not_equals"
+  | "is_empty"
+  | "is_not_empty"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte";
 
 interface ViewTabBarProps {
   views: WorkspaceDatabaseModel["views"];
   activeView: WorkspaceDatabaseModel["views"][number];
   database: WorkspaceDatabaseModel;
-  onSwitchView: (id: string) => void;
+  onSwitchView: (viewId: string) => void;
   onCreateView: (type: WorkspaceDatabaseViewType) => void;
-  onDeleteView: (id: string) => void;
-  onRenameView: (id: string, name: string) => void;
-  onUpdateViewConfig: (config: Partial<WorkspaceDatabaseViewConfig>) => void;
+  onDeleteView: (viewId: string) => void;
+  onRenameView: (viewId: string, name: string) => void;
+  onReorderViews: (viewIds: string[]) => void;
+  onUpdateViewConfig: (input: Partial<WorkspaceDatabaseViewConfig>) => void;
   onCreateRecord: () => void;
   onOpenSchema: () => void;
   onImportCsv: () => void;
   onExportCsv: () => void;
-  isImportingCsv?: boolean;
+  isImportingCsv: boolean;
 }
 
 export function ViewTabBar({
@@ -67,6 +110,7 @@ export function ViewTabBar({
   onCreateView,
   onDeleteView,
   onRenameView,
+  onReorderViews,
   onUpdateViewConfig,
   onCreateRecord,
   onOpenSchema,
@@ -77,6 +121,7 @@ export function ViewTabBar({
   const [addViewOpen, setAddViewOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -86,542 +131,1039 @@ export function ViewTabBar({
   const sortRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
 
-  // Click-outside handlers
-  useClickOutside(addViewRef, () => setAddViewOpen(false), addViewOpen);
-  useClickOutside(filterRef, () => setFilterOpen(false), filterOpen);
-  useClickOutside(sortRef, () => setSortOpen(false), sortOpen);
-  useClickOutside(moreRef, () => setMoreOpen(false), moreOpen);
+  useClickOutside(addViewRef, addViewOpen, () => setAddViewOpen(false));
+  useClickOutside(filterRef, filterOpen, () => setFilterOpen(false));
+  useClickOutside(sortRef, sortOpen, () => setSortOpen(false));
+  useClickOutside(moreRef, moreOpen, () => setMoreOpen(false));
 
   const filterCount = activeView.filter.length;
   const sortCount = activeView.sort.length;
+  const hiddenCount = activeView.hiddenFields.length;
+
+  function closePanels() {
+    setAddViewOpen(false);
+    setFilterOpen(false);
+    setSortOpen(false);
+    setSettingsOpen(false);
+    setMoreOpen(false);
+  }
+
+  function togglePanel(panel: "add" | "filter" | "sort" | "settings" | "more") {
+    const nextState = {
+      add: panel === "add" ? !addViewOpen : false,
+      filter: panel === "filter" ? !filterOpen : false,
+      sort: panel === "sort" ? !sortOpen : false,
+      settings: panel === "settings" ? !settingsOpen : false,
+      more: panel === "more" ? !moreOpen : false,
+    };
+    setAddViewOpen(nextState.add);
+    setFilterOpen(nextState.filter);
+    setSortOpen(nextState.sort);
+    setSettingsOpen(nextState.settings);
+    setMoreOpen(nextState.more);
+  }
 
   function startRename(view: WorkspaceDatabaseModel["views"][number]) {
     setEditingViewId(view.id);
     setRenameDraft(view.name);
   }
 
-  function commitRename(viewId: string) {
-    const next = renameDraft.trim();
+  function commitRename(view: WorkspaceDatabaseModel["views"][number]) {
+    const nextName = renameDraft.trim();
     setEditingViewId(null);
-    if (!next) return;
-    onRenameView(viewId, next);
+    if (!nextName || nextName === view.name) return;
+    onRenameView(view.id, nextName);
   }
 
-  // Sort helpers
-  function addSort(fieldId: string) {
-    if (activeView.sort.some((s) => s.fieldId === fieldId)) return;
-    onUpdateViewConfig({ sort: [...activeView.sort, { fieldId, direction: "asc" as const }] });
+  function toggleFieldVisibility(fieldId: string) {
+    const nextHidden = activeView.hiddenFields.includes(fieldId)
+      ? activeView.hiddenFields.filter((id) => id !== fieldId)
+      : [...activeView.hiddenFields, fieldId];
+    onUpdateViewConfig({ hiddenFields: nextHidden });
   }
 
-  function toggleSortDirection(fieldId: string) {
+  function toggleSort(fieldId: string, direction: "asc" | "desc") {
+    const existing = activeView.sort.find((sort) => sort.fieldId === fieldId);
+    if (existing?.direction === direction) {
+      onUpdateViewConfig({ sort: activeView.sort.filter((sort) => sort.fieldId !== fieldId) });
+      return;
+    }
     onUpdateViewConfig({
-      sort: activeView.sort.map((s) =>
-        s.fieldId === fieldId ? { ...s, direction: s.direction === "asc" ? ("desc" as const) : ("asc" as const) } : s,
-      ),
+      sort: [
+        ...activeView.sort.filter((sort) => sort.fieldId !== fieldId),
+        { fieldId, direction },
+      ],
     });
   }
 
-  function removeSort(fieldId: string) {
-    onUpdateViewConfig({ sort: activeView.sort.filter((s) => s.fieldId !== fieldId) });
+  const hasDisplaySettings =
+    hiddenCount > 0 ||
+    Boolean(activeView.groupBy) ||
+    Boolean(activeView.cardCoverField) ||
+    Boolean(activeView.cardFields?.length) ||
+    Boolean(activeView.chartValueField) ||
+    Boolean(activeView.chartType) ||
+    Boolean(activeView.chartAggregation && activeView.chartAggregation !== "count") ||
+    activeView.chartShowLegend === false ||
+    activeView.chartShowGrid === false;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentIndex = views.findIndex((view) => view.id === active.id);
+    const nextIndex = views.findIndex((view) => view.id === over.id);
+    if (currentIndex < 0 || nextIndex < 0) return;
+    const nextViews = [...views];
+    const [moved] = nextViews.splice(currentIndex, 1);
+    nextViews.splice(nextIndex, 0, moved);
+    onReorderViews(nextViews.map((view) => view.id));
   }
 
-  const sortableFields = database.schema.filter(
-    (f) => f.type !== "relation" && f.type !== "formula" && f.type !== "rollup",
-  );
-  const groupedByField = activeView.groupBy
-    ? database.schema.find((field) => field.id === activeView.groupBy)
-    : undefined;
-
-  const statusAndSelectFields = database.schema.filter(
-    (f) => f.type === "status" || f.type === "select",
-  );
-  const dateFields = database.schema.filter((f) => f.type === "date");
-
   return (
-    <div className="flex items-center gap-0.5">
-      {/* View tabs */}
-      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
-        {views.map((view) => (
-          <div key={view.id} className="group relative flex items-center">
-            {editingViewId === view.id ? (
-              <input
-                autoFocus
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                onBlur={() => commitRename(view.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); commitRename(view.id); }
-                  if (e.key === "Escape") { e.preventDefault(); setEditingViewId(null); }
-                }}
-                className="h-8 w-28 rounded-md border border-[var(--accent)] bg-[var(--base)] px-2 text-[13px] text-[var(--text)] outline-none"
-              />
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onSwitchView(view.id)}
-                  onDoubleClick={() => startRename(view)}
-                  className={cn(
-                    "flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
-                    view.id === activeView.id
-                      ? "bg-[var(--surface-0)] text-[var(--text)]"
-                      : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                  )}
-                >
-                  <span className={cn(view.id === activeView.id ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
-                    {VIEW_ICONS[view.type]}
-                  </span>
-                  {view.name}
-                  {view.id === activeView.id ? <Badge>Active</Badge> : null}
-                </button>
-                {views.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteView(view.id);
-                    }}
-                    className="ml-0.5 hidden h-5 w-5 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] group-hover:inline-flex"
-                    title="Delete view"
-                    aria-label={`Delete view ${view.name}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Add view — outside overflow container so popover isn't clipped */}
-      <div ref={addViewRef} className="relative shrink-0">
-        <button
-          type="button"
-          onClick={() => setAddViewOpen((v) => !v)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          title="Add view"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-        {addViewOpen && (
-          <div className="absolute left-0 top-full z-50 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-            {VIEW_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => { onCreateView(type); setAddViewOpen(false); }}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              >
-                <span className="text-[var(--overlay-1)]">{VIEW_ICONS[type]}</span>
-                {VIEW_LABELS[type]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-1">
-        {/* Group by — kanban only */}
-        {activeView.type === "kanban" && statusAndSelectFields.length > 0 && (
-          <div className="flex items-center gap-1 rounded-md bg-[var(--surface-wash)] px-2.5 py-1.5 text-[12px]">
-            <LayoutList className="h-3 w-3 text-[var(--overlay-1)]" />
-            <span className="text-[var(--overlay-1)]">Group:</span>
-            <select
-              value={activeView.groupBy ?? statusAndSelectFields[0]?.id ?? ""}
-              onChange={(e) => onUpdateViewConfig({ groupBy: e.target.value || undefined })}
-              className="border-0 bg-transparent text-[12px] font-medium text-[var(--text)] outline-none"
-            >
-              {statusAndSelectFields.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
+    <>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={views.map((view) => view.id)} strategy={horizontalListSortingStrategy}>
+            <div className="db-tabs min-w-0 overflow-x-auto">
+              {views.map((view) => (
+                <SortableViewTab
+                  key={view.id}
+                  view={view}
+                  activeViewId={activeView.id}
+                  editingViewId={editingViewId}
+                  renameDraft={renameDraft}
+                  setRenameDraft={setRenameDraft}
+                  onCommitRename={commitRename}
+                  onCancelRename={() => setEditingViewId(null)}
+                  onSwitchView={onSwitchView}
+                  onStartRename={startRename}
+                  onDeleteView={onDeleteView}
+                  showClose={views.length > 1}
+                />
               ))}
-            </select>
-          </div>
-        )}
+            </div>
+          </SortableContext>
+        </DndContext>
 
-        {/* Date by — calendar only */}
-        {activeView.type === "calendar" && dateFields.length > 0 && (
-          <div className="flex items-center gap-1 rounded-md bg-[var(--surface-wash)] px-2.5 py-1.5 text-[12px]">
-            <Calendar className="h-3 w-3 text-[var(--overlay-1)]" />
-            <span className="text-[var(--overlay-1)]">Date:</span>
-            <select
-              value={activeView.groupBy ?? dateFields[0]?.id ?? ""}
-              onChange={(e) => onUpdateViewConfig({ groupBy: e.target.value || undefined })}
-              className="border-0 bg-transparent text-[12px] font-medium text-[var(--text)] outline-none"
-            >
-              {dateFields.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Filter */}
-        <div ref={filterRef} className="relative">
-          <button
-            type="button"
-            onClick={() => { setFilterOpen((v) => !v); setSortOpen(false); setMoreOpen(false); }}
-            className={cn(
-              "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors",
-              filterCount > 0
-                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-            )}
+        <div ref={addViewRef} className="relative shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => togglePanel("add")}
+            aria-label="Add view"
+            className="h-8 w-8"
           >
-            <ListFilter className="h-3.5 w-3.5" />
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+          {addViewOpen ? (
+            <div className="db-dropdown-panel absolute left-0 top-full z-50 mt-2 min-w-[180px]">
+              {(["table", "kanban", "list", "gallery", "calendar", "chart"] as WorkspaceDatabaseViewType[]).map((viewType) => (
+                <button
+                  key={viewType}
+                  type="button"
+                  className="db-context-menu-item"
+                  onClick={() => {
+                    onCreateView(viewType);
+                    closePanels();
+                  }}
+                >
+                  <span className="mr-2 inline-flex align-middle">{VIEW_ICONS[viewType]}</span>
+                  {VIEW_DEFAULT_NAMES[viewType]}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+        <div ref={filterRef} className="relative">
+          <Button
+            variant={filterCount > 0 ? "glow" : "ghost"}
+            size="sm"
+            onClick={() => togglePanel("filter")}
+          >
+            <Funnel className="h-3.5 w-3.5" />
             {filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
-          </button>
-          {filterOpen && (
-            <FilterPopover
+          </Button>
+          {filterOpen ? (
+            <FilterPanel
+              activeView={activeView}
               schema={database.schema}
-              filters={activeView.filter}
-              onChange={(next) => onUpdateViewConfig({ filter: next })}
+              onClose={() => setFilterOpen(false)}
+              onUpdateViewConfig={onUpdateViewConfig}
             />
-          )}
+          ) : null}
         </div>
 
-        {/* Sort */}
         <div ref={sortRef} className="relative">
-          <button
-            type="button"
-            onClick={() => { setSortOpen((v) => !v); setFilterOpen(false); setMoreOpen(false); }}
-            className={cn(
-              "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors",
-              sortCount > 0
-                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-            )}
+          <Button
+            variant={sortCount > 0 ? "glow" : "ghost"}
+            size="sm"
+            onClick={() => togglePanel("sort")}
           >
             <ArrowUpDown className="h-3.5 w-3.5" />
             {sortCount > 0 ? `Sort (${sortCount})` : "Sort"}
-          </button>
-          {sortOpen && (
-            <SortPopover
-              sort={activeView.sort}
-              sortableFields={sortableFields}
-              groupedByFieldName={groupedByField?.name}
-              onAddSort={addSort}
-              onToggleDirection={toggleSortDirection}
-              onRemoveSort={removeSort}
+          </Button>
+          {sortOpen ? (
+            <SortPanel
+              activeView={activeView}
+              schema={database.schema}
+              onClose={() => setSortOpen(false)}
+              onToggleSort={toggleSort}
+              onClearSort={() => onUpdateViewConfig({ sort: [] })}
             />
-          )}
+          ) : null}
         </div>
 
-        {/* Fields = schema */}
-        <button
-          type="button"
-          onClick={() => { onOpenSchema(); setFilterOpen(false); setSortOpen(false); setMoreOpen(false); }}
-          className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-        >
-          <Columns className="h-3.5 w-3.5" />
-          Fields
-        </button>
-
-        {/* More (import / export) */}
-        <div ref={moreRef} className="relative">
-          <button
-            type="button"
-            onClick={() => { setMoreOpen((v) => !v); setFilterOpen(false); setSortOpen(false); }}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-            title="More options"
-            aria-label="More options"
+          <Button
+            variant={hasDisplaySettings ? "glow" : "ghost"}
+            size="sm"
+            onClick={() => {
+              closePanels();
+              setSettingsOpen(true);
+            }}
           >
+            <Settings2 className="h-3.5 w-3.5" />
+            Settings
+          </Button>
+
+        <div ref={moreRef} className="relative">
+          <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} className="h-8 w-8">
             <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-          {moreOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+          </Button>
+          {moreOpen ? (
+            <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[180px]">
               <button
                 type="button"
-                onClick={() => { onImportCsv(); setMoreOpen(false); }}
-                disabled={isImportingCsv}
-                className="w-full px-3 py-2 text-left text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:opacity-50"
+                className="db-context-menu-item"
+                onClick={() => {
+                  closePanels();
+                  onOpenSchema();
+                }}
               >
+                Manage fields
+              </button>
+              <button
+                type="button"
+                className="db-context-menu-item"
+                onClick={() => {
+                  closePanels();
+                  onImportCsv();
+                }}
+                disabled={isImportingCsv}
+              >
+                <Upload className="mr-2 inline h-3.5 w-3.5 align-middle" />
                 {isImportingCsv ? "Importing..." : "Import CSV"}
               </button>
               <button
                 type="button"
-                onClick={() => { onExportCsv(); setMoreOpen(false); }}
-                className="w-full px-3 py-2 text-left text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="db-context-menu-item"
+                onClick={() => {
+                  closePanels();
+                  onExportCsv();
+                }}
               >
+                <Download className="mr-2 inline h-3.5 w-3.5 align-middle" />
                 Export CSV
               </button>
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/* Divider */}
-        <div className="mx-1 h-5 w-px bg-[var(--border)]" />
-
-        {/* New record */}
         <Button size="sm" onClick={onCreateRecord}>
           <Plus className="h-3.5 w-3.5" />
           New record
         </Button>
       </div>
-    </div>
+      </div>
+
+      <ViewSettingsModal
+        open={settingsOpen}
+        activeView={activeView}
+        database={database}
+        onClose={() => setSettingsOpen(false)}
+        onOpenSchema={() => {
+          setSettingsOpen(false);
+          onOpenSchema();
+        }}
+        onToggleField={toggleFieldVisibility}
+        onUpdateViewConfig={onUpdateViewConfig}
+      />
+    </>
   );
 }
 
-// ── Filter Popover ────────────────────────────────────────────────────────────
-
-type FilterRule = { fieldId: string; op: string; value: string };
-
-const FILTER_OPS_TEXT: Array<{ value: string; label: string }> = [
-  { value: "contains", label: "contains" },
-  { value: "not_contains", label: "does not contain" },
-  { value: "equals", label: "equals" },
-  { value: "not_equals", label: "does not equal" },
-  { value: "is_empty", label: "is empty" },
-  { value: "is_not_empty", label: "is not empty" },
-];
-
-const FILTER_OPS_NUMBER: Array<{ value: string; label: string }> = [
-  { value: "equals", label: "=" },
-  { value: "not_equals", label: "≠" },
-  { value: "gt", label: ">" },
-  { value: "gte", label: "≥" },
-  { value: "lt", label: "<" },
-  { value: "lte", label: "≤" },
-  { value: "is_empty", label: "is empty" },
-  { value: "is_not_empty", label: "is not empty" },
-];
-
-const FILTER_OPS_CHECKBOX: Array<{ value: string; label: string }> = [
-  { value: "equals", label: "is" },
-  { value: "not_equals", label: "is not" },
-];
-
-function getOpsForField(field: WorkspaceDatabaseField | undefined) {
-  if (!field) return FILTER_OPS_TEXT;
-  if (field.type === "number") return FILTER_OPS_NUMBER;
-  if (field.type === "checkbox") return FILTER_OPS_CHECKBOX;
-  return FILTER_OPS_TEXT;
-}
-
-function getDefaultOpForField(field: WorkspaceDatabaseField | undefined): string {
-  if (!field) return "contains";
-  if (field.type === "number" || field.type === "checkbox") return "equals";
-  return "contains";
-}
-
-function opNeedsValue(op: string): boolean {
-  return op !== "is_empty" && op !== "is_not_empty";
-}
-
-function FilterPopover({
-  schema,
-  filters,
-  onChange,
+function SortableViewTab({
+  view,
+  activeViewId,
+  editingViewId,
+  renameDraft,
+  setRenameDraft,
+  onCommitRename,
+  onCancelRename,
+  onSwitchView,
+  onStartRename,
+  onDeleteView,
+  showClose,
 }: {
-  schema: WorkspaceDatabaseField[];
-  filters: FilterRule[];
-  onChange: (next: FilterRule[]) => void;
+  view: WorkspaceDatabaseModel["views"][number];
+  activeViewId: string;
+  editingViewId: string | null;
+  renameDraft: string;
+  setRenameDraft: (value: string) => void;
+  onCommitRename: (view: WorkspaceDatabaseModel["views"][number]) => void;
+  onCancelRename: () => void;
+  onSwitchView: (viewId: string) => void;
+  onStartRename: (view: WorkspaceDatabaseModel["views"][number]) => void;
+  onDeleteView: (viewId: string) => void;
+  showClose: boolean;
 }) {
-  const filterableSchema = schema.filter((f) => f.type !== "formula" && f.type !== "rollup" && f.type !== "relation");
-  const firstField = filterableSchema[0];
-  const lastInputRef = useRef<HTMLInputElement | null>(null);
-  const focusIndexRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (focusIndexRef.current === null) return;
-    if (focusIndexRef.current === filters.length - 1) {
-      lastInputRef.current?.focus();
-    }
-    focusIndexRef.current = null;
-  }, [filters.length]);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: view.id, disabled: editingViewId === view.id });
 
   return (
-    <div className="absolute right-0 top-full z-50 mt-1 w-[420px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Filter</div>
-      {filters.length === 0 ? (
-        <div className="py-2 text-[12px] text-[var(--overlay-1)]">No filters applied</div>
-      ) : (
-        <div className="mb-2 space-y-1.5">
-          {filters.map((rule, index) => {
-            const field = schema.find((f) => f.id === rule.fieldId);
-            const ops = getOpsForField(field);
-            return (
-              <div key={index} className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--base)] px-2 py-1.5">
-                <select
-                  value={rule.fieldId}
-                  onChange={(event) => {
-                    const nextFieldId = event.target.value;
-                    const nextField = schema.find((f) => f.id === nextFieldId);
-                    const nextRules = [...filters];
-                    nextRules[index] = {
-                      fieldId: nextFieldId,
-                      op: getDefaultOpForField(nextField),
-                      value: "",
-                    };
-                    onChange(nextRules);
-                  }}
-                  className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 py-1 text-[12px] text-[var(--text)] outline-none"
-                >
-                  {filterableSchema.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={rule.op}
-                  onChange={(event) => {
-                    const nextRules = [...filters];
-                    nextRules[index] = { ...rule, op: event.target.value };
-                    onChange(nextRules);
-                  }}
-                  className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 py-1 text-[12px] text-[var(--text)] outline-none"
-                >
-                  {ops.map((op) => (
-                    <option key={op.value} value={op.value}>{op.label}</option>
-                  ))}
-                </select>
-                {opNeedsValue(rule.op) ? (
-                  <Input
-                    ref={index === filters.length - 1 ? lastInputRef : undefined}
-                    value={rule.value}
-                    onChange={(event) => {
-                      const nextRules = [...filters];
-                      nextRules[index] = { ...rule, value: event.target.value };
-                      onChange(nextRules);
-                    }}
-                    className="h-7 min-w-0 flex-1 text-[12px]"
-                    placeholder="Value"
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => onChange(filters.filter((_, i) => i !== index))}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  aria-label="Remove filter"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 5 : undefined,
+      }}
+      className={cn(
+        "db-tab-wrapper",
+        showClose && editingViewId !== view.id && "db-tab-wrapper--closable",
+        isDragging && "db-tab-wrapper--dragging",
       )}
-      <div className="flex items-center justify-between">
+    >
+      {editingViewId === view.id ? (
+        <input
+          autoFocus
+          className="db-input db-tab-rename-input"
+          value={renameDraft}
+          onChange={(event) => setRenameDraft(event.target.value)}
+          onBlur={() => onCommitRename(view)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onCommitRename(view);
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCancelRename();
+            }
+          }}
+        />
+      ) : (
         <button
           type="button"
-          disabled={!firstField}
-          onClick={() => {
-            if (!firstField) return;
-            focusIndexRef.current = filters.length;
-            onChange([...filters, { fieldId: firstField.id, op: getDefaultOpForField(firstField), value: "" }]);
-          }}
-          className="rounded-md px-2 py-1 text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+          className={cn(
+            "db-tab",
+            view.id === activeViewId && "db-tab--active",
+            showClose && "db-tab--closable",
+          )}
+          onClick={() => onSwitchView(view.id)}
+          onDoubleClick={() => onStartRename(view)}
+          {...attributes}
+          {...listeners}
         >
-          + Add filter
+          <span className={cn("shrink-0", view.id === activeViewId ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
+            {VIEW_ICONS[view.type]}
+          </span>
+          <span className="truncate">{getViewTabLabel(view)}</span>
         </button>
-        {filters.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => onChange([])}
-            className="rounded-md px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            Clear all
-          </button>
-        ) : null}
-      </div>
+      )}
+      {showClose && editingViewId !== view.id ? (
+        <button
+          type="button"
+          className="db-tab-close"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDeleteView(view.id);
+          }}
+          aria-label={`Delete ${getViewTabLabel(view)}`}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
 
-// ── Sort Popover ──────────────────────────────────────────────────────────────
-
-function SortPopover({
-  sort,
-  sortableFields,
-  groupedByFieldName,
-  onAddSort,
-  onToggleDirection,
-  onRemoveSort,
+function FilterPanel({
+  activeView,
+  schema,
+  onClose,
+  onUpdateViewConfig,
 }: {
-  sort: Array<{ fieldId: string; direction: "asc" | "desc" }>;
-  sortableFields: WorkspaceDatabaseField[];
-  groupedByFieldName?: string;
-  onAddSort: (fieldId: string) => void;
-  onToggleDirection: (fieldId: string) => void;
-  onRemoveSort: (fieldId: string) => void;
+  activeView: WorkspaceDatabaseModel["views"][number];
+  schema: WorkspaceDatabaseField[];
+  onClose: () => void;
+  onUpdateViewConfig: ViewTabBarProps["onUpdateViewConfig"];
 }) {
-  const usedFieldIds = new Set(sort.map((s) => s.fieldId));
-  const availableFields = sortableFields.filter((f) => !usedFieldIds.has(f.id));
+  function updateFilter(
+    index: number,
+    changes: Partial<WorkspaceDatabaseModel["views"][number]["filter"][number]>,
+  ) {
+    const next = activeView.filter.map((filter, filterIndex) =>
+      filterIndex === index ? { ...filter, ...changes } : filter,
+    );
+    onUpdateViewConfig({ filter: next });
+  }
+
+  function addFilter(fieldId: string) {
+    const field = schema.find((candidate) => candidate.id === fieldId);
+    if (!field) return;
+    onUpdateViewConfig({
+      filter: [...activeView.filter, defaultFilterForField(field)],
+    });
+  }
 
   return (
-    <div className="absolute right-0 top-full z-50 mt-1 w-[280px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-        Sort
-      </div>
-      {groupedByFieldName ? (
-        <div className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--base)] px-2.5 py-2 text-[11px] leading-5 text-[var(--overlay-1)]">
-          Grouped by {groupedByFieldName}. Sorts apply within each group.
-        </div>
-      ) : null}
-      {sort.length === 0 ? (
-        <div className="py-2 text-[12px] text-[var(--overlay-1)]">No sorts applied</div>
-      ) : (
-        <div className="mb-2 space-y-1.5">
-          {sort.map((rule) => {
-            const field = sortableFields.find((f) => f.id === rule.fieldId);
+    <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[320px] max-w-[360px]">
+      <div className="db-panel-section-title">Filters</div>
+      <div className="space-y-2">
+        {activeView.filter.length === 0 ? (
+          <div className="db-panel-empty">No active filters</div>
+        ) : (
+          activeView.filter.map((filter, index) => {
+            const field = schema.find((candidate) => candidate.id === filter.fieldId) ?? schema[0];
+            if (!field) return null;
+            const operators = operatorsForField(field);
+            const normalizedOperator = operators.includes(filter.op as FilterOperator)
+              ? (filter.op as FilterOperator)
+              : operators[0];
             return (
-              <div key={rule.fieldId} className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--base)] px-2.5 py-2">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">
-                  {field?.name ?? rule.fieldId}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onToggleDirection(rule.fieldId)}
-                  className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]"
-                >
-                  {rule.direction === "asc" ? "A→Z" : "Z→A"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onRemoveSort(rule.fieldId)}
-                  className="shrink-0 text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+              <div key={`${filter.fieldId}-${index}`} className="rounded-xl bg-[var(--base)] p-3">
+                <div className="mb-2 grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2">
+                  <select
+                    className="db-select"
+                    value={field.id}
+                    onChange={(event) => {
+                      const nextField = schema.find((candidate) => candidate.id === event.target.value);
+                      if (!nextField) return;
+                      const nextDefault = defaultFilterForField(nextField);
+                      updateFilter(index, nextDefault);
+                    }}
+                  >
+                    {schema.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="db-select"
+                    value={normalizedOperator}
+                    onChange={(event) => {
+                      const nextOperator = event.target.value as FilterOperator;
+                      updateFilter(index, {
+                        op: nextOperator,
+                        value: operatorNeedsValue(nextOperator) ? filter.value : "",
+                      });
+                    }}
+                  >
+                    {operators.map((operator) => (
+                      <option key={operator} value={operator}>
+                        {OPERATOR_LABELS[operator]}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() =>
+                      onUpdateViewConfig({
+                        filter: activeView.filter.filter((_, filterIndex) => filterIndex !== index),
+                      })
+                    }
+                  >
+                    ×
+                  </Button>
+                </div>
+
+                {operatorNeedsValue(normalizedOperator) ? (
+                  renderFilterValueInput(field, filter.value, (value) => updateFilter(index, { value }))
+                ) : null}
               </div>
             );
-          })}
-        </div>
-      )}
-      {availableFields.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[11px] text-[var(--overlay-1)]">Add sort</div>
-          <div className="flex flex-wrap gap-1">
-            {availableFields.slice(0, 6).map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => onAddSort(f.id)}
-                className="rounded-full border border-[var(--border)] bg-[var(--base)] px-2 py-0.5 text-[11px] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
-              >
-                + {f.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+          })
+        )}
+      </div>
+      <div className="db-panel-add">
+        <select
+          className="db-select w-full"
+          value=""
+          onChange={(event) => {
+            if (!event.target.value) return;
+            addFilter(event.target.value);
+            onClose();
+          }}
+        >
+          <option value="">Add filter...</option>
+          {schema.map((field) => (
+            <option key={field.id} value={field.id}>
+              {field.name}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+function SortPanel({
+  activeView,
+  schema,
+  onClose,
+  onToggleSort,
+  onClearSort,
+}: {
+  activeView: WorkspaceDatabaseModel["views"][number];
+  schema: WorkspaceDatabaseField[];
+  onClose: () => void;
+  onToggleSort: (fieldId: string, direction: "asc" | "desc") => void;
+  onClearSort: () => void;
+}) {
+  const sortableFields = schema.filter((field) => field.type !== "formula" && field.type !== "rollup");
 
-function useClickOutside(ref: React.RefObject<HTMLElement | null>, onClose: () => void, enabled: boolean) {
+  return (
+    <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[260px]">
+      <div className="db-panel-section-title">Sort</div>
+      <div className="space-y-1.5">
+        {sortableFields.map((field) => {
+          const activeSort = activeView.sort.find((sort) => sort.fieldId === field.id);
+          return (
+            <div key={field.id} className="flex items-center gap-2 rounded-xl bg-[var(--base)] px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">{field.name}</span>
+              <Button
+                variant={activeSort?.direction === "asc" ? "glow" : "ghost"}
+                size="sm"
+                onClick={() => onToggleSort(field.id, "asc")}
+              >
+                Asc
+              </Button>
+              <Button
+                variant={activeSort?.direction === "desc" ? "glow" : "ghost"}
+                size="sm"
+                onClick={() => onToggleSort(field.id, "desc")}
+              >
+                Desc
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      {activeView.sort.length > 0 ? (
+        <div className="db-panel-add">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-center"
+            onClick={() => {
+              onClearSort();
+              onClose();
+            }}
+          >
+            Clear sorting
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ViewSettingsModal({
+  open,
+  activeView,
+  database,
+  onClose,
+  onOpenSchema,
+  onToggleField,
+  onUpdateViewConfig,
+}: {
+  open: boolean;
+  activeView: WorkspaceDatabaseModel["views"][number];
+  database: WorkspaceDatabaseModel;
+  onClose: () => void;
+  onOpenSchema: () => void;
+  onToggleField: (fieldId: string) => void;
+  onUpdateViewConfig: ViewTabBarProps["onUpdateViewConfig"];
+}) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  const coverCandidates = database.schema.filter((field) => field.type === "url" || field.type === "text");
+  const chartType = activeView.chartType ?? "bar";
+  const groupCandidates = activeView.type === "kanban"
+    ? database.schema.filter((field) => field.type === "status" || field.type === "select")
+    : activeView.type === "calendar"
+      ? database.schema.filter((field) => field.type === "date")
+      : activeView.type === "chart"
+        ? getChartGroupCandidates(database, chartType)
+      : [];
+  const chartValueCandidates = database.schema.filter(
+    (field) => field.type === "number" || field.type === "rollup" || field.type === "formula",
+  );
+  const titleFieldId = database.headerFieldIds?.[0];
+  const selectedFieldIds = activeView.cardFields ?? [];
+  const selectedFieldOrder = new Map(selectedFieldIds.map((fieldId, index) => [fieldId, index]));
+  const cardCandidates = database.schema
+    .filter((field) => field.type !== "createdAt" && field.type !== "lastEditedAt")
+    .filter((field) => field.id !== titleFieldId)
+    .sort((left, right) => {
+      const leftIndex = selectedFieldOrder.get(left.id);
+      const rightIndex = selectedFieldOrder.get(right.id);
+      if (leftIndex !== undefined || rightIndex !== undefined) {
+        if (leftIndex === undefined) return 1;
+        if (rightIndex === undefined) return -1;
+        return leftIndex - rightIndex;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  const isGallery = activeView.type === "gallery";
+  const isChart = activeView.type === "chart";
+  const supportsCardFields = activeView.type === "gallery" || activeView.type === "kanban";
+  const visibleFieldCount = database.schema.length - activeView.hiddenFields.length;
+  const cardFieldCount = Math.min(selectedFieldIds.length, 3);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="View settings"
+        className="flex max-h-[min(720px,90vh)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+              <Settings2 className="h-3 w-3 text-[var(--accent)]" />
+              View settings
+            </p>
+            <h3 className="mt-2 truncate font-ui text-[15px] font-medium text-[var(--text)]">
+              {activeView.name}
+            </h3>
+            <p className="mt-1 text-[12px] text-[var(--overlay-1)]">
+              {VIEW_DEFAULT_NAMES[activeView.type]} view
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="space-y-5">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-[13px] font-semibold text-[var(--text)]">Layout</h4>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--base)] px-2.5 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  {VIEW_ICONS[activeView.type]}
+                  {VIEW_DEFAULT_NAMES[activeView.type]}
+                </span>
+              </div>
+
+              <div className="grid gap-3">
+                {groupCandidates.length > 0 ? (
+                  <label className="grid gap-1.5">
+                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      {activeView.type === "kanban"
+                        ? "Group columns by"
+                        : activeView.type === "calendar"
+                          ? "Date property"
+                          : chartType === "line"
+                            ? "Time field"
+                            : "Group by"}
+                    </span>
+                    <select
+                      className="db-select"
+                      value={activeView.groupBy ?? ""}
+                      onChange={(event) => onUpdateViewConfig({ groupBy: event.target.value || undefined })}
+                    >
+                      <option value="">Auto</option>
+                      {groupCandidates.map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                {isGallery ? (
+                  <label className="grid gap-1.5">
+                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      Card cover
+                    </span>
+                    <select
+                      className="db-select"
+                      value={activeView.cardCoverField ?? ""}
+                      onChange={(event) => onUpdateViewConfig({ cardCoverField: event.target.value || undefined })}
+                    >
+                      <option value="">None</option>
+                      {coverCandidates.map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                {isChart ? (
+                  <>
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Chart type
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.chartType ?? "bar"}
+                        onChange={(event) => {
+                          const nextType = event.target.value as "bar" | "line" | "donut";
+                          const nextCandidates = getChartGroupCandidates(database, nextType);
+                          const currentGroupIsValid = nextCandidates.some((field) => field.id === activeView.groupBy);
+                          onUpdateViewConfig({
+                            chartType: nextType,
+                            groupBy: currentGroupIsValid
+                              ? activeView.groupBy
+                              : findDefaultChartGroupField(database, nextType)?.id,
+                          });
+                        }}
+                      >
+                        <option value="bar">Bar</option>
+                        <option value="line">Line</option>
+                        <option value="donut">Donut</option>
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Value mode
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.chartAggregation ?? "count"}
+                        onChange={(event) =>
+                          onUpdateViewConfig({
+                            chartAggregation: event.target.value as "count" | "sum" | "avg" | "min" | "max",
+                          })
+                        }
+                      >
+                        <option value="count">Count records</option>
+                        <option value="sum">Sum field</option>
+                        <option value="avg">Average field</option>
+                        <option value="min">Minimum field</option>
+                        <option value="max">Maximum field</option>
+                      </select>
+                    </label>
+
+                    {(activeView.chartAggregation ?? "count") !== "count" ? (
+                      <label className="grid gap-1.5">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Numeric field
+                        </span>
+                        <select
+                          className="db-select"
+                          value={activeView.chartValueField ?? ""}
+                          onChange={(event) =>
+                            onUpdateViewConfig({ chartValueField: event.target.value || undefined })
+                          }
+                        >
+                          <option value="">Select field...</option>
+                          {chartValueCandidates.map((field) => (
+                            <option key={field.id} value={field.id}>
+                              {field.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Palette
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.chartPalette ?? "blue"}
+                        onChange={(event) =>
+                          onUpdateViewConfig({
+                            chartPalette: event.target.value as "blue" | "rose" | "gold" | "teal",
+                          })
+                        }
+                      >
+                        <option value="blue">Blue</option>
+                        <option value="rose">Rose</option>
+                        <option value="gold">Gold</option>
+                        <option value="teal">Teal</option>
+                      </select>
+                    </label>
+
+                    {chartType === "line" ? (
+                      <label className="grid gap-1.5">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Time range
+                        </span>
+                        <select
+                          className="db-select"
+                          value={activeView.chartRange ?? "90d"}
+                          onChange={(event) =>
+                            onUpdateViewConfig({
+                              chartRange: event.target.value as "30d" | "90d" | "365d" | "all",
+                            })
+                          }
+                        >
+                          <option value="30d">Last 30 days</option>
+                          <option value="90d">Last 90 days</option>
+                          <option value="365d">Last year</option>
+                          <option value="all">All time</option>
+                        </select>
+                      </label>
+                    ) : null}
+
+                    <div className="grid gap-2">
+                      <label className="db-fields-row">
+                        <input
+                          type="checkbox"
+                          checked={activeView.chartShowGrid ?? true}
+                          onChange={(event) => onUpdateViewConfig({ chartShowGrid: event.target.checked })}
+                        />
+                        <span className="db-fields-name">Show grid</span>
+                      </label>
+                      <label className="db-fields-row">
+                        <input
+                          type="checkbox"
+                          checked={activeView.chartShowLegend ?? true}
+                          onChange={(event) => onUpdateViewConfig({ chartShowLegend: event.target.checked })}
+                        />
+                        <span className="db-fields-name">Show legend</span>
+                      </label>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </section>
+
+            {!isChart ? (
+              <section className="space-y-3 border-t border-[var(--border)] pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-[13px] font-semibold text-[var(--text)]">Visible fields</h4>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+                    {visibleFieldCount}/{database.schema.length}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onUpdateViewConfig({ hiddenFields: [] })}
+                  >
+                    Show all
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onUpdateViewConfig({ hiddenFields: database.schema.map((field) => field.id) })}
+                  >
+                    Hide all
+                  </Button>
+                </div>
+              </div>
+
+              <div className="db-fields-list rounded-xl bg-[var(--base)] p-2">
+                {database.schema.map((field) => (
+                  <label key={field.id} className="db-fields-row">
+                    <input
+                      type="checkbox"
+                      checked={!activeView.hiddenFields.includes(field.id)}
+                      onChange={() => onToggleField(field.id)}
+                    />
+                    <span className="db-fields-name">{field.name}</span>
+                  </label>
+                ))}
+              </div>
+              </section>
+            ) : null}
+
+            {supportsCardFields ? (
+              <section className="space-y-3 border-t border-[var(--border)] pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-[13px] font-semibold text-[var(--text)]">Card properties</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+                      {selectedFieldIds.length > 0 ? `${cardFieldCount}/3` : "auto"}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onUpdateViewConfig({ cardFields: [] })}
+                    >
+                      Auto
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="db-fields-list rounded-xl bg-[var(--base)] p-2">
+                  {cardCandidates.map((field) => (
+                    <label key={field.id} className="db-fields-row">
+                      <input
+                        type="checkbox"
+                        checked={selectedFieldIds.includes(field.id)}
+                        onChange={() => {
+                          const next = selectedFieldIds.includes(field.id)
+                            ? selectedFieldIds.filter((id) => id !== field.id)
+                            : [...selectedFieldIds, field.id];
+                          onUpdateViewConfig({ cardFields: next });
+                        }}
+                      />
+                      <span className="db-fields-name">{field.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="border-t border-[var(--border)] pt-4">
+              <Button variant="secondary" size="sm" onClick={onOpenSchema}>
+                Manage schema
+              </Button>
+            </section>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-[var(--border)] px-5 py-4">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useClickOutside<T extends HTMLElement>(
+  ref: RefObject<T | null>,
+  enabled: boolean,
+  onClose: () => void,
+) {
   useEffect(() => {
     if (!enabled) return;
-    function handle(e: MouseEvent) {
-      if (!ref.current || ref.current.contains(e.target as Node)) return;
+    function handleMouseDown(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!ref.current || ref.current.contains(target)) return;
       onClose();
     }
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [enabled, onClose, ref]);
+}
+
+const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  contains: "Contains",
+  not_contains: "Doesn't contain",
+  equals: "Equals",
+  not_equals: "Not equal",
+  is_empty: "Is empty",
+  is_not_empty: "Is not empty",
+  gt: "Greater than",
+  gte: "Greater or equal",
+  lt: "Less than",
+  lte: "Less or equal",
+};
+
+function operatorsForField(field: WorkspaceDatabaseField): FilterOperator[] {
+  switch (field.type) {
+    case "number":
+    case "date":
+      return ["equals", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"];
+    case "checkbox":
+    case "select":
+    case "status":
+      return ["equals", "not_equals", "is_empty", "is_not_empty"];
+    default:
+      return ["contains", "not_contains", "equals", "not_equals", "is_empty", "is_not_empty"];
+  }
+}
+
+function operatorNeedsValue(operator: FilterOperator) {
+  return operator !== "is_empty" && operator !== "is_not_empty";
+}
+
+function defaultFilterForField(field: WorkspaceDatabaseField) {
+  return {
+    fieldId: field.id,
+    op: operatorsForField(field)[0],
+    value: "",
+  };
+}
+
+function renderFilterValueInput(
+  field: WorkspaceDatabaseField,
+  value: string,
+  onChange: (value: string) => void,
+) {
+  if (field.type === "status" || field.type === "select") {
+    return (
+      <select className="db-select w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select value...</option>
+        {(field.options ?? []).map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.type === "checkbox") {
+    return (
+      <select className="db-select w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select value...</option>
+        <option value="true">True</option>
+        <option value="false">False</option>
+      </select>
+    );
+  }
+
+  return (
+    <Input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder="Filter value"
+      className="h-9"
+    />
+  );
 }

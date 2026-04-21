@@ -1,19 +1,14 @@
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  findDefaultDateField,
-  getRecordTitle,
-  getViewRecords,
-} from "@/lib/database-core";
+import { getRecordTitle, getViewRecords } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,
   WorkspaceDatabaseFieldValue,
   WorkspaceDatabaseModel,
 } from "@/lib/types";
-import { cn } from "@/lib/utils";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 interface DatabaseCalendarViewProps {
   database: WorkspaceDatabaseModel;
@@ -24,8 +19,6 @@ interface DatabaseCalendarViewProps {
   onCreateRecord: (seed?: Record<string, WorkspaceDatabaseFieldValue>) => void;
 }
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 export function DatabaseCalendarView({
   database,
   view,
@@ -34,180 +27,144 @@ export function DatabaseCalendarView({
   onOpenRecord,
   onCreateRecord,
 }: DatabaseCalendarViewProps) {
-  const dateField =
-    (view.groupBy ? database.schema.find((field) => field.id === view.groupBy) : undefined) ??
-    findDefaultDateField(database);
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
 
-  const seedMonth = useMemo(() => {
-    if (!dateField) return startOfMonth(new Date());
-    const firstDatedRecord = getViewRecords(database, view, catalog).find((record) => {
-      const raw = record[dateField.id];
-      return typeof raw === "string" && raw.length >= 10;
-    });
-    return firstDatedRecord
-      ? startOfMonth(parseLocalDate(String(firstDatedRecord[dateField.id]).slice(0, 10)))
-      : startOfMonth(new Date());
-  }, [catalog, database, dateField, view]);
-
-  const [currentMonth, setCurrentMonth] = useState(seedMonth);
-  useEffect(() => {
-    setCurrentMonth(seedMonth);
-  }, [seedMonth]);
   const records = getViewRecords(database, view, catalog);
 
+  const dateField = useMemo(
+    () =>
+      database.schema.find((f) => f.id === view.groupBy && f.type === "date")
+      ?? database.schema.find((f) => f.type === "date"),
+    [database.schema, view.groupBy],
+  );
+
   const days = useMemo(() => {
-    const start = startOfCalendarGrid(currentMonth);
-    return Array.from({ length: 42 }, (_, index) => addDays(start, index));
-  }, [currentMonth]);
+    const first = new Date(month.year, month.month, 1);
+    const last = new Date(month.year, month.month + 1, 0);
+    const startDay = first.getDay();
+    const totalDays = last.getDate();
 
-  const recordsByDay = useMemo(() => {
-    const grouped = new Map<string, typeof records>();
-    if (!dateField) return grouped;
+    const grid: Array<{ date: number | null; records: WorkspaceDatabaseModel["records"]; isToday: boolean }> = [];
 
-    for (const record of records) {
-      const raw = record[dateField.id];
-      if (typeof raw !== "string" || raw.length < 10) continue;
-      const key = raw.slice(0, 10);
-      grouped.set(key, [...(grouped.get(key) ?? []), record]);
+    for (let i = 0; i < startDay; i++) {
+      grid.push({ date: null, records: [], isToday: false });
     }
 
-    return grouped;
-  }, [dateField, records]);
+    const today = new Date();
+    const isCurrentMonth = today.getFullYear() === month.year && today.getMonth() === month.month;
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const dayRecords = dateField
+        ? records.filter((r) => {
+            const val = String(r[dateField.id] ?? "");
+            return val.startsWith(dateStr);
+          })
+        : [];
+      grid.push({ date: d, records: dayRecords, isToday: isCurrentMonth && today.getDate() === d });
+    }
+
+    return grid;
+  }, [month, records, dateField]);
 
   if (!dateField) {
     return (
       <EmptyState
-        title="Calendar needs a date field"
-        description="Add a `date` property in schema, then assign it as the calendar field for this view."
+        title="No date field"
+        description="Calendar view requires a date field to group by."
       />
     );
   }
 
+  const monthLabel = new Date(month.year, month.month).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  function createRecord(dateValue?: string) {
+    if (!dateField) {
+      onCreateRecord();
+      return;
+    }
+    onCreateRecord(dateValue ? { [dateField.id]: dateValue } : undefined);
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-2">
+    <div className="flex flex-col flex-1 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <button
+          className="db-btn"
+          onClick={() =>
+            setMonth((m) => {
+              const d = new Date(m.year, m.month - 1);
+              return { year: d.getFullYear(), month: d.getMonth() };
+            })
+          }
+        >
+          &lt;
+        </button>
+        <span className="text-sm font-medium">{monthLabel}</span>
         <div className="flex items-center gap-2">
-          <Button size="icon" variant="ghost" onClick={() => setCurrentMonth((month) => addMonths(month, -1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-[160px] text-center text-[13px] font-medium text-[var(--text)]">
-            {formatMonthLabel(currentMonth)}
-          </div>
-          <Button size="icon" variant="ghost" onClick={() => setCurrentMonth((month) => addMonths(month, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <button
+            className="db-btn"
+            onClick={() =>
+              setMonth((m) => {
+                const d = new Date(m.year, m.month + 1);
+                return { year: d.getFullYear(), month: d.getMonth() };
+              })
+            }
+          >
+            &gt;
+          </button>
+          <button className="db-btn db-btn-primary" onClick={() => createRecord()}>
+            + Record
+          </button>
         </div>
-        <div className="text-[12px] text-[var(--overlay-1)]">by {dateField.name}</div>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--mantle)]">
-        {WEEKDAY_LABELS.map((label) => (
+      <div className="db-calendar-grid">
+        {WEEKDAYS.map((day) => (
+          <div key={day} className="db-calendar-weekday">
+            {day}
+          </div>
+        ))}
+        {days.map((day, i) => (
           <div
-            key={label}
-            className="border-r border-[var(--border-subtle)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)] last:border-r-0"
+            key={i}
+            className={`db-calendar-day${day.date ? "" : " db-calendar-day--other"}${day.isToday ? " db-calendar-day-today" : ""}`}
+            onDoubleClick={() => {
+              if (!day.date || !dateField) return;
+              const dateValue = `${month.year}-${String(month.month + 1).padStart(2, "0")}-${String(day.date).padStart(2, "0")}`;
+              createRecord(dateValue);
+            }}
           >
-            {label}
+            {day.date && (
+              <>
+                <div className="db-calendar-day-number">{day.date}</div>
+                {day.records.slice(0, 3).map((record) => (
+                  <div
+                    key={record.id}
+                    className="db-calendar-event"
+                    style={{
+                      backgroundColor: activeRecordId === record.id ? "var(--accent)" : undefined,
+                      color: activeRecordId === record.id ? "var(--crust)" : undefined,
+                    }}
+                    onClick={() => onOpenRecord(record.id)}
+                  >
+                    {getRecordTitle(record, database)}
+                  </div>
+                ))}
+                {day.records.length > 3 && (
+                  <div className="text-[10px] opacity-40">+{day.records.length - 3} more</div>
+                )}
+              </>
+            )}
           </div>
         ))}
       </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
-        {days.map((day) => {
-          const key = toDateKey(day);
-          const dayRecords = recordsByDay.get(key) ?? [];
-          const inMonth = day.getMonth() === currentMonth.getMonth();
-
-          return (
-            <div
-              key={key}
-              onDoubleClick={() => onCreateRecord({ [dateField.id]: key })}
-              className={cn(
-                "min-h-0 border-r border-b border-[var(--border-subtle)] p-2 last:border-r-0",
-                !inMonth && "bg-[rgba(17,17,27,0.35)]",
-              )}
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <div
-                  className={cn(
-                    "text-[12px] font-medium",
-                    inMonth ? "text-[var(--text)]" : "text-[var(--overlay-1)]",
-                  )}
-                >
-                  {day.getDate()}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onCreateRecord({ [dateField.id]: key })}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  title="Create record for this day"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </div>
-
-              <div className="space-y-1 overflow-y-auto">
-                {dayRecords.map((record) => (
-                  <button
-                    key={record.id}
-                    type="button"
-                    onClick={() => onOpenRecord(record.id)}
-                    className={cn(
-                      "block w-full rounded-lg border border-[var(--border)] bg-[var(--mantle)] px-2 py-1.5 text-left text-[11px] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
-                      activeRecordId === record.id && "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text)]",
-                    )}
-                  >
-                    <div className="truncate font-medium">{getRecordTitle(record, database)}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, amount: number) {
-  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
-function startOfCalendarGrid(month: Date) {
-  const first = startOfMonth(month);
-  return addDays(first, -first.getDay());
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatMonthLabel(date: Date) {
-  const timestamp = date.getTime();
-  if (!Number.isFinite(timestamp)) {
-    return "Invalid month";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(timestamp);
-}
-
-function parseLocalDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(year, (month || 1) - 1, day || 1);
-  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
 }

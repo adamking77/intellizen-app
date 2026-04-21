@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { DatabaseCalendarView } from "@/components/database/DatabaseCalendarView";
+import { DatabaseChartView } from "@/components/database/DatabaseChartView";
 import { DatabaseGalleryView } from "@/components/database/DatabaseGalleryView";
 import { DatabaseKanbanView } from "@/components/database/DatabaseKanbanView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
@@ -15,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   exportDatabaseCsv,
+  findDefaultChartGroupField,
+  findDefaultChartValueField,
   findDefaultDateField,
   findDefaultKanbanField,
   prepareCsvImport,
@@ -38,8 +41,12 @@ import {
   updateWorkspaceView,
 } from "@/lib/data";
 import type {
+  WorkspaceDatabaseBundle,
+  WorkspaceDatabaseCatalogEntry,
   WorkspaceDatabaseFieldValue,
   WorkspaceDatabaseModel,
+  WorkspaceDatabaseSchemaSaveOptions,
+  WorkspaceDatabaseSummary,
   WorkspaceDatabaseViewConfig,
   WorkspaceDatabaseViewType,
 } from "@/lib/types";
@@ -53,8 +60,16 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
     hiddenFields: view.hiddenFields,
     fieldOrder: view.fieldOrder,
     columnWidths: view.columnWidths,
+    listPropertyWidth: view.listPropertyWidth,
     cardCoverField: view.cardCoverField,
     cardFields: view.cardFields,
+    chartType: view.chartType,
+    chartValueField: view.chartValueField,
+    chartAggregation: view.chartAggregation,
+    chartShowLegend: view.chartShowLegend,
+    chartShowGrid: view.chartShowGrid,
+    chartPalette: view.chartPalette,
+    chartRange: view.chartRange,
   };
 }
 
@@ -111,7 +126,7 @@ export function DatabaseEditorView() {
         schema: entry.schema,
         headerFieldIds: entry.headerFieldIds,
         records: entry.records,
-        views: [],
+        views: entry.views,
       });
     }
     if (database) {
@@ -141,6 +156,99 @@ export function DatabaseEditorView() {
     ]);
   }
 
+  function getBundleSnapshot() {
+    return queryClient.getQueryData<WorkspaceDatabaseBundle>(["workspace-database", databaseId]);
+  }
+
+  function getCatalogSnapshot() {
+    return queryClient.getQueryData<WorkspaceDatabaseCatalogEntry[]>(["workspace-database-catalog"]);
+  }
+
+  function getDatabaseListSnapshot() {
+    return queryClient.getQueryData<WorkspaceDatabaseSummary[]>(["workspace-databases"]);
+  }
+
+  function restoreSnapshots(snapshot: {
+    bundle?: WorkspaceDatabaseBundle;
+    catalog?: WorkspaceDatabaseCatalogEntry[];
+    databases?: WorkspaceDatabaseSummary[];
+  }) {
+    if (snapshot.bundle) {
+      queryClient.setQueryData(["workspace-database", databaseId], snapshot.bundle);
+    }
+    if (snapshot.catalog) {
+      queryClient.setQueryData(["workspace-database-catalog"], snapshot.catalog);
+    }
+    if (snapshot.databases) {
+      queryClient.setQueryData(["workspace-databases"], snapshot.databases);
+    }
+  }
+
+  function patchBundle(updater: (bundle: WorkspaceDatabaseBundle) => WorkspaceDatabaseBundle) {
+    queryClient.setQueryData<WorkspaceDatabaseBundle>(["workspace-database", databaseId], (current) =>
+      current ? updater(current) : current,
+    );
+  }
+
+  function patchCatalog(
+    updater: (catalogEntries: WorkspaceDatabaseCatalogEntry[]) => WorkspaceDatabaseCatalogEntry[],
+  ) {
+    queryClient.setQueryData<WorkspaceDatabaseCatalogEntry[]>(["workspace-database-catalog"], (current) =>
+      current ? updater(current) : current,
+    );
+  }
+
+  function patchDatabaseList(
+    updater: (entries: WorkspaceDatabaseSummary[]) => WorkspaceDatabaseSummary[],
+  ) {
+    queryClient.setQueryData<WorkspaceDatabaseSummary[]>(["workspace-databases"], (current) =>
+      current ? updater(current) : current,
+    );
+  }
+
+  function patchDatabaseSchemaState(
+    targetDatabaseId: string,
+    schema: WorkspaceDatabaseModel["schema"],
+    nextRecords?: WorkspaceDatabaseModel["records"],
+  ) {
+    if (targetDatabaseId === databaseId) {
+      patchBundle((current) => ({
+        ...current,
+        database: { ...current.database, schema },
+        model: {
+          ...current.model,
+          schema,
+          records: nextRecords ?? current.model.records,
+        },
+      }));
+    }
+
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === targetDatabaseId
+          ? {
+              ...entry,
+              schema,
+              records: nextRecords ?? entry.records,
+            }
+          : entry,
+      ),
+    );
+
+    patchDatabaseList((entries) =>
+      entries.map((entry) => (entry.id === targetDatabaseId ? { ...entry, schema } : entry)),
+    );
+  }
+
+  function findRecordDatabaseId(recordId: string) {
+    for (const [candidateDatabaseId, candidateDatabase] of catalogDatabaseMap.entries()) {
+      if (candidateDatabase.records.some((record) => record.id === recordId)) {
+        return candidateDatabaseId;
+      }
+    }
+    return databaseId;
+  }
+
   function getDatabaseModel(targetDatabaseId: string) {
     return catalogDatabaseMap.get(targetDatabaseId);
   }
@@ -149,10 +257,31 @@ export function DatabaseEditorView() {
     if (!bundle) return;
     const next = name.trim();
     if (!next || next === bundle.database.name) return;
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+      databases: getDatabaseListSnapshot(),
+    };
+    patchBundle((current) => ({
+      ...current,
+      database: { ...current.database, name: next },
+      model: { ...current.model, name: next },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) => (entry.id === bundle.database.id ? { ...entry, name: next } : entry)),
+    );
+    patchDatabaseList((entries) =>
+      entries.map((entry) => (entry.id === bundle.database.id ? { ...entry, name: next } : entry)),
+    );
     try {
       await updateWorkspaceDatabase(bundle.database.id, { name: next });
-      await refreshDatabase();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+      ]);
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Rename failed", err);
     }
   }
@@ -185,19 +314,85 @@ export function DatabaseEditorView() {
   }
 
   async function handleUpdateRecordField(recordId: string, fieldId: string, value: unknown) {
+    const targetDatabaseId = findRecordDatabaseId(recordId);
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+    };
+    patchBundle((current) => ({
+      ...current,
+      records: current.records.map((record) =>
+        record.id === recordId ? { ...record, fields: { ...record.fields, [fieldId]: value as never } } : record,
+      ),
+      model: {
+        ...current.model,
+        records: current.model.records.map((record) =>
+          record.id === recordId ? { ...record, [fieldId]: value as WorkspaceDatabaseFieldValue } : record,
+        ),
+      },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === targetDatabaseId
+          ? {
+              ...entry,
+              records: entry.records.map((record) =>
+                record.id === recordId ? { ...record, [fieldId]: value as WorkspaceDatabaseFieldValue } : record,
+              ),
+            }
+          : entry,
+      ),
+    );
     try {
       await updateWorkspaceRecord(recordId, { fieldId, value: value as never });
-      await refreshDatabase();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Record update failed", err);
     }
   }
 
   async function handleUpdateRecordBody(recordId: string, body: string | null) {
+    const targetDatabaseId = findRecordDatabaseId(recordId);
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+    };
+    patchBundle((current) => ({
+      ...current,
+      records: current.records.map((record) =>
+        record.id === recordId ? { ...record, body } : record,
+      ),
+      model: {
+        ...current.model,
+        records: current.model.records.map((record) =>
+          record.id === recordId ? { ...record, _body: body ?? undefined } : record,
+        ),
+      },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === targetDatabaseId
+          ? {
+              ...entry,
+              records: entry.records.map((record) =>
+                record.id === recordId ? { ...record, _body: body ?? undefined } : record,
+              ),
+            }
+          : entry,
+      ),
+    );
     try {
       await updateWorkspaceRecord(recordId, { body });
-      await refreshDatabase();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Record body update failed", err);
     }
   }
@@ -271,10 +466,42 @@ export function DatabaseEditorView() {
   }
 
   async function handleUpdateRelation(targetDatabaseId: string, recordId: string, fieldId: string, recordIds: string[]) {
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+    };
+    patchBundle((current) => ({
+      ...current,
+      records: current.records.map((record) =>
+        record.id === recordId ? { ...record, fields: { ...record.fields, [fieldId]: recordIds as never } } : record,
+      ),
+      model: {
+        ...current.model,
+        records: current.model.records.map((record) =>
+          record.id === recordId ? { ...record, [fieldId]: recordIds } : record,
+        ),
+      },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === targetDatabaseId
+          ? {
+              ...entry,
+              records: entry.records.map((record) =>
+                record.id === recordId ? { ...record, [fieldId]: recordIds } : record,
+              ),
+            }
+          : entry,
+      ),
+    );
     try {
       await updateWorkspaceRelationLinks({ databaseId: targetDatabaseId, recordId, relationFieldId: fieldId, recordIds });
-      await refreshDatabase();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Relation update failed", err);
     }
   }
@@ -283,6 +510,9 @@ export function DatabaseEditorView() {
     if (!activeView || !database) return;
     const defaultGroupField = findDefaultKanbanField(database);
     const defaultDateField = findDefaultDateField(database);
+    const defaultChartType = activeView.type === "chart" ? activeView.chartType ?? "bar" : "bar";
+    const defaultChartGroupField = findDefaultChartGroupField(database, defaultChartType);
+    const defaultChartValueField = findDefaultChartValueField(database);
     const nextName = `${VIEW_LABELS[type]} ${(bundle?.views.length ?? 0) + 1}`;
     try {
       const created = await createWorkspaceView({
@@ -296,7 +526,18 @@ export function DatabaseEditorView() {
               ? activeView.groupBy ?? defaultGroupField?.id
               : type === "calendar"
                 ? activeView.groupBy ?? defaultDateField?.id
-                : activeView.groupBy,
+                : type === "chart"
+                  ? activeView.groupBy ?? defaultChartGroupField?.id
+                  : undefined,
+          chartType: type === "chart" ? defaultChartType : activeView.chartType,
+          chartValueField:
+            type === "chart" ? activeView.chartValueField ?? defaultChartValueField?.id : activeView.chartValueField,
+          chartAggregation:
+            type === "chart" ? activeView.chartAggregation ?? "count" : activeView.chartAggregation,
+          chartShowLegend: type === "chart" ? activeView.chartShowLegend ?? true : activeView.chartShowLegend,
+          chartShowGrid: type === "chart" ? activeView.chartShowGrid ?? true : activeView.chartShowGrid,
+          chartPalette: type === "chart" ? activeView.chartPalette ?? "blue" : activeView.chartPalette,
+          chartRange: type === "chart" ? activeView.chartRange ?? "90d" : activeView.chartRange,
         },
       });
       setActiveViewId(created.id);
@@ -323,21 +564,118 @@ export function DatabaseEditorView() {
   }
 
   async function handleRenameView(viewId: string, name: string) {
+    const snapshot = { bundle: getBundleSnapshot() };
+    patchBundle((current) => ({
+      ...current,
+      views: current.views.map((view) => (view.id === viewId ? { ...view, name } : view)),
+      model: {
+        ...current.model,
+        views: current.model.views.map((view) => (view.id === viewId ? { ...view, name } : view)),
+      },
+    }));
     try {
       await updateWorkspaceView(viewId, { name });
-      await refreshDatabase();
+      await queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] });
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("View rename failed", err);
+    }
+  }
+
+  async function handleReorderViews(viewIds: string[]) {
+    if (!bundle || !database || viewIds.length !== database.views.length) return;
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+    };
+
+    const order = new Map(viewIds.map((id, index) => [id, index]));
+    const sortByOrder = <T extends { id: string }>(items: T[]) =>
+      [...items].sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
+
+    patchBundle((current) => ({
+      ...current,
+      views: sortByOrder(
+        current.views.map((view) => ({
+          ...view,
+          position: order.get(view.id) ?? view.position,
+        })),
+      ),
+      model: {
+        ...current.model,
+        views: sortByOrder(current.model.views),
+      },
+    }));
+
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === databaseId
+          ? {
+              ...entry,
+              views: sortByOrder(entry.views),
+            }
+          : entry,
+      ),
+    );
+
+    try {
+      await Promise.all(viewIds.map((viewId, index) => updateWorkspaceView(viewId, { position: index })));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
+    } catch (err) {
+      restoreSnapshots(snapshot);
+      toastError("View reorder failed", err);
     }
   }
 
   async function handleUpdateViewConfig(input: Partial<WorkspaceDatabaseViewConfig>) {
     if (!activeView) return;
+    const snapshot = { bundle: getBundleSnapshot() };
+    patchBundle((current) => ({
+      ...current,
+      views: current.views.map((view) =>
+        view.id === activeView.id ? { ...view, ...input } : view,
+      ),
+      model: {
+        ...current.model,
+        views: current.model.views.map((view) =>
+          view.id === activeView.id ? { ...view, ...input } : view,
+        ),
+      },
+    }));
     try {
       await updateWorkspaceView(activeView.id, {
         config: { ...toViewConfig(activeView), ...input },
       });
       await queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] });
+    } catch (err) {
+      restoreSnapshots(snapshot);
+      toastError("View update failed", err);
+    }
+  }
+
+  async function handleUpdateViewConfigForDatabase(
+    targetDatabaseId: string,
+    viewId: string,
+    input: Partial<WorkspaceDatabaseViewConfig>,
+  ) {
+    if (targetDatabaseId === databaseId && activeView?.id === viewId) {
+      await handleUpdateViewConfig(input);
+      return;
+    }
+    const targetDatabase = getDatabaseModel(targetDatabaseId);
+    const targetView = targetDatabase?.views.find((view) => view.id === viewId);
+    if (!targetView) return;
+    try {
+      await updateWorkspaceView(viewId, {
+        config: { ...toViewConfig(targetView), ...input },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", targetDatabaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
     } catch (err) {
       toastError("View update failed", err);
     }
@@ -346,8 +684,15 @@ export function DatabaseEditorView() {
   async function handleSaveSchema(
     schema: WorkspaceDatabaseModel["schema"],
     nextRecords?: WorkspaceDatabaseModel["records"],
+    options?: WorkspaceDatabaseSchemaSaveOptions,
   ) {
     if (!bundle || !database) return;
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+      databases: getDatabaseListSnapshot(),
+    };
+    patchDatabaseSchemaState(bundle.database.id, schema, nextRecords);
     try {
       await updateWorkspaceDatabaseSchema(bundle.database.id, schema);
       if (nextRecords && nextRecords.length) {
@@ -370,7 +715,63 @@ export function DatabaseEditorView() {
         if (updates.length) await Promise.all(updates);
       }
       await refreshDatabase();
+      if (!options?.silent) {
+        toast.success("Schema saved");
+      }
     } catch (err) {
+      restoreSnapshots(snapshot);
+      toastError("Schema update failed", err);
+    }
+  }
+
+  async function handleSaveSchemaForDatabase(
+    targetDatabaseId: string,
+    schema: WorkspaceDatabaseModel["schema"],
+    nextRecords?: WorkspaceDatabaseModel["records"],
+    options?: WorkspaceDatabaseSchemaSaveOptions,
+  ) {
+    if (targetDatabaseId === databaseId) {
+      await handleSaveSchema(schema, nextRecords, options);
+      return;
+    }
+    const targetDatabase = getDatabaseModel(targetDatabaseId);
+    if (!targetDatabase) return;
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+      databases: getDatabaseListSnapshot(),
+    };
+    patchDatabaseSchemaState(targetDatabaseId, schema, nextRecords);
+    try {
+      await updateWorkspaceDatabaseSchema(targetDatabaseId, schema);
+      if (nextRecords && nextRecords.length) {
+        const fieldIds = schema.map((candidate) => candidate.id);
+        const updates: Array<Promise<unknown>> = [];
+        for (const record of nextRecords) {
+          const previous = targetDatabase.records.find((candidate) => candidate.id === record.id);
+          if (!previous) continue;
+          for (const fieldId of fieldIds) {
+            if (previous[fieldId] !== record[fieldId]) {
+              updates.push(
+                updateWorkspaceRecord(record.id, {
+                  fieldId,
+                  value: record[fieldId] as never,
+                }),
+              );
+            }
+          }
+        }
+        if (updates.length) await Promise.all(updates);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", targetDatabaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+      ]);
+      if (!options?.silent) {
+        toast.success("Schema saved");
+      }
+    } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Schema update failed", err);
     }
   }
@@ -484,9 +885,9 @@ export function DatabaseEditorView() {
       />
 
       {/* Database header */}
-      <div className="shrink-0 border-b border-[var(--border)] bg-[var(--base)] px-8 pb-0 pt-4">
+      <div className="shrink-0 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,black_6%)] px-6 pb-4 pt-5">
         {/* Breadcrumb */}
-        <div className="mb-2.5 flex items-center gap-1">
+        <div className="mb-3 flex items-center gap-1.5">
           <Link
             to="/databases"
             className="flex items-center gap-0.5 text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
@@ -503,7 +904,7 @@ export function DatabaseEditorView() {
           key={bundle.database.id}
           defaultValue={bundle.database.name}
           onBlur={(e) => handleUpdateDatabaseName(e.target.value)}
-          className="mb-3 h-auto border-transparent bg-transparent px-0 text-[24px] font-bold tracking-[-0.04em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
+          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[22px] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
         />
 
         {/* View tab bar */}
@@ -515,6 +916,7 @@ export function DatabaseEditorView() {
           onCreateView={handleCreateView}
           onDeleteView={handleDeleteView}
           onRenameView={handleRenameView}
+          onReorderViews={handleReorderViews}
           onUpdateViewConfig={handleUpdateViewConfig}
           onCreateRecord={() => handleCreateRecord()}
           onOpenSchema={handleOpenSchema}
@@ -526,73 +928,85 @@ export function DatabaseEditorView() {
 
       {/* Content */}
       <div className="relative flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          {activeView.type === "list" ? (
-            <DatabaseListView
-              database={database}
-              view={activeView}
-              catalog={catalog}
-              activeRecordId={activeRecordId}
-              onOpenRecord={handleOpenRecord}
-              onUpdateView={handleUpdateViewConfig}
-            />
-          ) : activeView.type === "kanban" ? (
-            <DatabaseKanbanView
-              database={database}
-              view={activeView}
-              catalog={catalog}
-              activeRecordId={activeRecordId}
-              onOpenRecord={handleOpenRecord}
-              onCreateRecord={(seed) => void handleCreateRecord(database.id, seed)}
-              onUpdateField={handleUpdateRecordField}
-              onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
-              onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
-            />
-          ) : activeView.type === "gallery" ? (
-            <DatabaseGalleryView
-              database={database}
-              view={activeView}
-              catalog={catalog}
-              activeRecordId={activeRecordId}
-              onOpenRecord={handleOpenRecord}
-              onUpdateField={handleUpdateRecordField}
-            />
-          ) : activeView.type === "calendar" ? (
-            <DatabaseCalendarView
-              database={database}
-              view={activeView}
-              catalog={catalog}
-              activeRecordId={activeRecordId}
-              onOpenRecord={handleOpenRecord}
-              onCreateRecord={() => void handleCreateRecord()}
-            />
-          ) : (
-            <DatabaseTableView
-              database={database}
-              view={activeView}
-              catalog={catalog}
-              activeRecordId={activeRecordId}
-              onOpenRecord={handleOpenRecord}
-              onUpdateField={handleUpdateRecordField}
-              onUpdateView={handleUpdateViewConfig}
-              onSaveSchema={handleSaveSchema}
-              onOpenSchema={handleOpenSchema}
-              onCreateRecord={() => void handleCreateRecord()}
-              onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
-              onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
-              onDeleteRecords={(recordIds) => void handleDeleteRecords(recordIds)}
-              onDuplicateRecords={(recordIds) => void handleDuplicateRecords(database.id, recordIds)}
-            />
-          )}
+        <div className="min-w-0 flex-1 overflow-hidden px-6 pb-6 pt-5">
+          <div className="h-full">
+            {activeView.type === "list" ? (
+              <DatabaseListView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                activeRecordId={activeRecordId}
+                onOpenRecord={handleOpenRecord}
+                onCreateRecord={() => void handleCreateRecord()}
+                onUpdateView={handleUpdateViewConfig}
+              />
+            ) : activeView.type === "kanban" ? (
+              <DatabaseKanbanView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                activeRecordId={activeRecordId}
+                onOpenRecord={handleOpenRecord}
+                onCreateRecord={(seed) => void handleCreateRecord(database.id, seed)}
+                onUpdateField={handleUpdateRecordField}
+                onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
+                onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
+              />
+            ) : activeView.type === "gallery" ? (
+              <DatabaseGalleryView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                activeRecordId={activeRecordId}
+                onOpenRecord={handleOpenRecord}
+                onCreateRecord={() => void handleCreateRecord()}
+                onUpdateField={handleUpdateRecordField}
+              />
+            ) : activeView.type === "calendar" ? (
+              <DatabaseCalendarView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                activeRecordId={activeRecordId}
+                onOpenRecord={handleOpenRecord}
+                onCreateRecord={() => void handleCreateRecord()}
+              />
+            ) : activeView.type === "chart" ? (
+              <DatabaseChartView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                onCreateRecord={() => void handleCreateRecord()}
+              />
+            ) : (
+              <DatabaseTableView
+                database={database}
+                view={activeView}
+                catalog={catalog}
+                activeRecordId={activeRecordId}
+                onOpenRecord={handleOpenRecord}
+                onUpdateField={handleUpdateRecordField}
+                onUpdateView={handleUpdateViewConfig}
+                onSaveSchema={handleSaveSchema}
+                onOpenSchema={handleOpenSchema}
+                onCreateRecord={() => void handleCreateRecord()}
+                onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
+                onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
+                onDeleteRecords={(recordIds) => void handleDeleteRecords(recordIds)}
+                onDuplicateRecords={(recordIds) => void handleDuplicateRecords(database.id, recordIds)}
+              />
+            )}
+          </div>
         </div>
 
         <DatabaseSchemaEditor
           open={schemaOpen}
           database={database}
+          activeView={activeView}
           catalog={catalog}
           onClose={() => setSchemaOpen(false)}
           onSave={handleSaveSchema}
-          onSaveHeaderFields={(fieldIds) => void handleSaveHeaderFields(database.id, fieldIds)}
+          onSaveViewConfig={handleUpdateViewConfig}
         />
 
         <DatabasePeekPanel
@@ -608,6 +1022,10 @@ export function DatabaseEditorView() {
           onUpdateBody={handleUpdateRecordBody}
           onUpdateRelation={handleUpdateRelation}
           onCreateRecord={handleCreateRecord}
+          onUpdateViewConfig={handleUpdateViewConfigForDatabase}
+          onSaveSchema={handleSaveSchemaForDatabase}
+          onDeleteRecords={handleDeleteRecords}
+          onDuplicateRecords={handleDuplicateRecords}
           onSaveHeaderFields={handleSaveHeaderFields}
         />
       </div>
@@ -621,4 +1039,5 @@ const VIEW_LABELS: Record<WorkspaceDatabaseViewType, string> = {
   list: "List",
   gallery: "Gallery",
   calendar: "Calendar",
+  chart: "Chart",
 };

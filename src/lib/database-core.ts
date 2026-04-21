@@ -184,6 +184,68 @@ export function findDefaultDateField(
   return database.schema.find((field) => field.type === "date");
 }
 
+export function getChartGroupCandidates(
+  database: Pick<WorkspaceDatabaseModel, "schema">,
+  chartType: WorkspaceDatabaseModel["views"][number]["chartType"] = "bar",
+) {
+  return database.schema.filter((field) => {
+    if (chartType === "line") {
+      return field.type === "date" || field.type === "createdAt" || field.type === "lastEditedAt";
+    }
+
+    if (chartType === "donut") {
+      return (
+        field.type === "status" ||
+        field.type === "select" ||
+        field.type === "multiselect" ||
+        field.type === "relation" ||
+        field.type === "checkbox"
+      );
+    }
+
+    return (
+      field.type === "status" ||
+      field.type === "select" ||
+      field.type === "multiselect" ||
+      field.type === "relation" ||
+      field.type === "checkbox" ||
+      field.type === "date" ||
+      field.type === "createdAt" ||
+      field.type === "lastEditedAt" ||
+      field.type === "text"
+    );
+  });
+}
+
+export function findDefaultChartGroupField(
+  database: Pick<WorkspaceDatabaseModel, "schema">,
+  chartType: WorkspaceDatabaseModel["views"][number]["chartType"] = "bar",
+) {
+  const candidates = getChartGroupCandidates(database, chartType);
+  return (
+    candidates.find((field) => field.type === "status") ??
+    candidates.find((field) => field.type === "select") ??
+    candidates.find((field) => field.type === "date") ??
+    candidates.find((field) => field.type === "createdAt") ??
+    candidates.find((field) => field.type === "lastEditedAt") ??
+    candidates.find((field) => field.type === "relation") ??
+    candidates.find((field) => field.type === "multiselect") ??
+    candidates.find((field) => field.type === "checkbox") ??
+    candidates.find((field) => field.type === "text") ??
+    candidates[0]
+  );
+}
+
+export function findDefaultChartValueField(
+  database: Pick<WorkspaceDatabaseModel, "schema">,
+) {
+  return (
+    database.schema.find((field) => field.type === "number") ??
+    database.schema.find((field) => field.type === "rollup") ??
+    database.schema.find((field) => field.type === "formula")
+  );
+}
+
 export function exportDatabaseCsv(
   database: Pick<WorkspaceDatabaseModel, "schema" | "records" | "headerFieldIds">,
   catalog?: WorkspaceDatabaseCatalogEntry[],
@@ -353,6 +415,7 @@ export function getComputedFieldIssue(
           id: "",
           name: "",
           headerFieldIds: [],
+          views: [],
         };
       if (!targetDb.schema.some((candidate) => candidate.id === field.rollup?.targetFieldId)) {
         return "Target field is missing on the related database.";
@@ -575,6 +638,7 @@ function computeRollupValue(
       schema: database.schema,
       headerFieldIds: [],
       records: database.records,
+      views: [],
     };
 
   const linkedRecords = targetDatabase.records.filter((candidate) => linkedIds.includes(candidate.id));

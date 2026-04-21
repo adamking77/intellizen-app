@@ -4,11 +4,12 @@ import { ArrowDown, ArrowUp, EyeOff, GripVertical, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { Input } from "@/components/ui/input";
-import { HASH_PALETTE, resolveFieldOptionColor } from "@/lib/database-colors";
+import { NAMED_OPTION_COLORS, resolveFieldOptionColor } from "@/lib/database-colors";
 import type {
   WorkspaceDatabaseField,
   WorkspaceDatabaseFieldType,
   WorkspaceDatabaseModel,
+  WorkspaceDatabaseSchemaSaveOptions,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +33,11 @@ interface ColumnHeaderPopoverProps {
   open: boolean;
   currentSortDirection?: "asc" | "desc";
   onClose: () => void;
-  onSaveSchema: (schema: WorkspaceDatabaseField[], records?: WorkspaceDatabaseModel["records"]) => void;
+  onSaveSchema: (
+    schema: WorkspaceDatabaseField[],
+    records?: WorkspaceDatabaseModel["records"],
+    options?: WorkspaceDatabaseSchemaSaveOptions,
+  ) => void;
   onHideField: (fieldId: string) => void;
   onToggleSort: (fieldId: string, direction: "asc" | "desc") => void;
   onGroupByField: (fieldId: string) => void;
@@ -99,6 +104,8 @@ export function ColumnHeaderPopover({
         database.schema.map((candidate) =>
           candidate.id === field.id ? { ...candidate, name: nextName } : candidate,
         ),
+        undefined,
+        { silent: true },
       );
     }, 160);
     return () => window.clearTimeout(timer);
@@ -131,7 +138,7 @@ export function ColumnHeaderPopover({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[90] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
+      className="fixed z-[90] overflow-hidden rounded-2xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       style={{ top: position.top, left: position.left, width: position.width }}
     >
       <div className="space-y-2 border-b border-[var(--border)] p-3">
@@ -173,7 +180,7 @@ export function ColumnHeaderPopover({
             Options
           </div>
           {(schemaField.options ?? []).map((option, index) => (
-            <div key={option} className="rounded-lg border border-[var(--border)] bg-[var(--base)] p-2">
+            <div key={option} className="rounded-lg bg-[var(--base)] p-2">
               <div className="flex items-center gap-1.5">
                 <GripVertical className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
                 <Input
@@ -263,7 +270,11 @@ export function ColumnHeaderPopover({
                 </button>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-1">
+              <div className="mt-2 space-y-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Color
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -282,7 +293,7 @@ export function ColumnHeaderPopover({
                 >
                   <Badge color={resolveFieldOptionColor(schemaField, option)}>Auto</Badge>
                 </button>
-                {HASH_PALETTE.map((color) => (
+                {NAMED_OPTION_COLORS.map(({ label, value: color }) => (
                   <button
                     key={color}
                     type="button"
@@ -302,16 +313,22 @@ export function ColumnHeaderPopover({
                       )
                     }
                     className={cn(
-                      "h-4 w-4 rounded-full border transition-transform hover:scale-110",
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
                       schemaField.optionColors?.[option] === color
-                        ? "border-[var(--text)]"
-                        : "border-transparent",
+                        ? "border-[var(--text)] text-[var(--text)]"
+                        : "border-[var(--border-subtle)] text-[var(--subtext-0)]",
                     )}
-                    style={{ backgroundColor: color }}
                     aria-label={`Use ${color} for ${option}`}
-                    title={option}
-                  />
+                    title={`${label} for ${option}`}
+                  >
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border border-black/10"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span>{label}</span>
+                  </button>
                 ))}
+                </div>
               </div>
             </div>
           ))}
@@ -330,7 +347,7 @@ export function ColumnHeaderPopover({
                 ),
               )
             }
-            className="w-full rounded-lg border border-dashed border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--overlay-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+            className="w-full rounded-lg bg-[var(--base)] px-3 py-1.5 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             + Add option
           </button>

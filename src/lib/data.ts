@@ -1282,6 +1282,7 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
   }
 
   const candidate = value as Partial<WorkspaceDatabaseViewConfig>;
+  const rawChartPalette = candidate.chartPalette as string | undefined;
   return {
     groupBy: typeof candidate.groupBy === "string" ? candidate.groupBy : undefined,
     sort: Array.isArray(candidate.sort)
@@ -1340,6 +1341,40 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
     cardFields: Array.isArray(candidate.cardFields)
       ? candidate.cardFields.filter((item): item is string => typeof item === "string")
       : undefined,
+    chartType:
+      candidate.chartType === "bar" || candidate.chartType === "line" || candidate.chartType === "donut"
+        ? candidate.chartType
+        : undefined,
+    chartValueField: typeof candidate.chartValueField === "string" ? candidate.chartValueField : undefined,
+    chartAggregation:
+      candidate.chartAggregation === "count" ||
+      candidate.chartAggregation === "sum" ||
+      candidate.chartAggregation === "avg" ||
+      candidate.chartAggregation === "min" ||
+      candidate.chartAggregation === "max"
+        ? candidate.chartAggregation
+        : undefined,
+    chartShowLegend:
+      typeof candidate.chartShowLegend === "boolean" ? candidate.chartShowLegend : undefined,
+    chartShowGrid:
+      typeof candidate.chartShowGrid === "boolean" ? candidate.chartShowGrid : undefined,
+    chartPalette:
+      rawChartPalette === "blue"
+        ? "blue"
+        : rawChartPalette === "rose" || rawChartPalette === "pastel"
+          ? "rose"
+          : rawChartPalette === "gold" || rawChartPalette === "warm"
+            ? "gold"
+            : rawChartPalette === "teal" || rawChartPalette === "cool"
+              ? "teal"
+              : undefined,
+    chartRange:
+      candidate.chartRange === "30d" ||
+      candidate.chartRange === "90d" ||
+      candidate.chartRange === "365d" ||
+      candidate.chartRange === "all"
+        ? candidate.chartRange
+        : undefined,
   };
 }
 
@@ -1364,21 +1399,32 @@ function hydrateWorkspaceDatabaseModel(
     icon: database.icon,
     schema: database.schema,
     headerFieldIds: database.header_field_ids ?? undefined,
-    views: views.map((view) => ({
-      id: view.id,
-      name: view.name,
-      type: view.type,
-      groupBy: view.config.groupBy,
-      cardCoverField: view.config.cardCoverField,
-      cardFields: view.config.cardFields,
-      sort: view.config.sort,
-      filter: view.config.filter,
-      hiddenFields: view.config.hiddenFields,
-      fieldOrder: view.config.fieldOrder,
-      columnWidths: view.config.columnWidths,
-      listPropertyWidth: view.config.listPropertyWidth,
-    })),
+    views: views.map(hydrateWorkspaceDatabaseViewModel),
     records: records.map(hydrateWorkspaceDatabaseRecord),
+  };
+}
+
+function hydrateWorkspaceDatabaseViewModel(view: WorkspaceDatabaseView): WorkspaceDatabaseModel["views"][number] {
+  return {
+    id: view.id,
+    name: view.name,
+    type: view.type,
+    groupBy: view.config.groupBy,
+    cardCoverField: view.config.cardCoverField,
+    cardFields: view.config.cardFields,
+    sort: view.config.sort,
+    filter: view.config.filter,
+    hiddenFields: view.config.hiddenFields,
+    fieldOrder: view.config.fieldOrder,
+    columnWidths: view.config.columnWidths,
+    listPropertyWidth: view.config.listPropertyWidth,
+    chartType: view.config.chartType,
+    chartValueField: view.config.chartValueField,
+    chartAggregation: view.config.chartAggregation,
+    chartShowLegend: view.config.chartShowLegend,
+    chartShowGrid: view.config.chartShowGrid,
+    chartPalette: view.config.chartPalette,
+    chartRange: view.config.chartRange,
   };
 }
 
@@ -1534,7 +1580,11 @@ export async function listWorkspaceDatabases() {
 }
 
 export async function listWorkspaceDatabaseCatalog() {
-  const [{ data: databaseRows, error: databaseError }, { data: recordRows, error: recordError }] =
+  const [
+    { data: databaseRows, error: databaseError },
+    { data: recordRows, error: recordError },
+    { data: viewRows, error: viewError },
+  ] =
     await Promise.all([
       supabase
         .from("workspace_databases")
@@ -1543,11 +1593,18 @@ export async function listWorkspaceDatabaseCatalog() {
       supabase
         .from("workspace_records")
         .select("id, database_id, fields, body, created_at, updated_at")
-        .order("updated_at", { ascending: false }),
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
+      supabase
+        .from("workspace_views")
+        .select("id, database_id, name, type, config, position, created_at, updated_at")
+        .order("database_id", { ascending: true })
+        .order("position", { ascending: true }),
     ]);
 
   if (databaseError) throw databaseError;
   if (recordError) throw recordError;
+  if (viewError) throw viewError;
 
   const recordsByDatabase = new Map<string, WorkspaceDatabaseRecordModel[]>();
   for (const row of (recordRows ?? []) as WorkspaceDatabaseRecordRow[]) {
@@ -1555,6 +1612,14 @@ export async function listWorkspaceDatabaseCatalog() {
     const bucket = recordsByDatabase.get(row.database_id) ?? [];
     bucket.push(record);
     recordsByDatabase.set(row.database_id, bucket);
+  }
+
+  const viewsByDatabase = new Map<string, WorkspaceDatabaseModel["views"]>();
+  for (const row of (viewRows ?? []) as WorkspaceDatabaseViewRow[]) {
+    const view = hydrateWorkspaceDatabaseViewModel(toWorkspaceDatabaseView(row));
+    const bucket = viewsByDatabase.get(row.database_id) ?? [];
+    bucket.push(view);
+    viewsByDatabase.set(row.database_id, bucket);
   }
 
   return ((databaseRows ?? []) as WorkspaceDatabaseRow[]).map((row) => {
@@ -1565,6 +1630,7 @@ export async function listWorkspaceDatabaseCatalog() {
       schema: database.schema,
       headerFieldIds: database.header_field_ids ?? [],
       records: recordsByDatabase.get(database.id) ?? [],
+      views: viewsByDatabase.get(database.id) ?? [],
     } satisfies WorkspaceDatabaseCatalogEntry;
   });
 }
@@ -1587,7 +1653,8 @@ export async function getWorkspaceDatabaseBundle(id: string) {
         .from("workspace_records")
         .select("id, database_id, fields, body, created_at, updated_at")
         .eq("database_id", id)
-        .order("updated_at", { ascending: false }),
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
     ]);
 
   if (databaseError) throw databaseError;

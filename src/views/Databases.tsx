@@ -1,20 +1,17 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Database, Loader2, Plus, Search } from "lucide-react";
+import { ArrowRight, Loader2, Plus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { createWorkspaceDatabase, listWorkspaceDatabaseCatalog, listWorkspaceDatabases } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 export function DatabasesView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
-  const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"updated" | "name" | "records">("updated");
 
   const {
@@ -42,24 +39,10 @@ export function DatabasesView() {
         updated_at: database?.updated_at ?? null,
         recordCount: linked?.records.length ?? 0,
         relationCount: schema.filter((field) => field.type === "relation").length,
-        headerCount: Array.isArray(database?.header_field_ids) ? database.header_field_ids.length : 0,
       };
     });
 
-    const query = search.trim().toLowerCase();
-    const filtered = query
-      ? normalized.filter((database) => {
-          const haystack = [
-            database.name,
-            ...database.schema.map((field) => field.name),
-          ]
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(query);
-        })
-      : normalized;
-
-    return filtered.sort((left, right) => {
+    return normalized.sort((left, right) => {
       if (sortBy === "name") {
         return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
       }
@@ -68,19 +51,7 @@ export function DatabasesView() {
       }
       return new Date(right.updated_at ?? 0).getTime() - new Date(left.updated_at ?? 0).getTime();
     });
-  }, [catalog, databases, search, sortBy]);
-
-  const stats = useMemo(() => {
-    const totalRecords = safeDatabases.reduce((sum, database) => sum + database.recordCount, 0);
-    const totalFields = safeDatabases.reduce((sum, database) => sum + database.schema.length, 0);
-    const lastUpdated = safeDatabases[0]?.updated_at ?? null;
-    return {
-      totalDatabases: safeDatabases.length,
-      totalRecords,
-      totalFields,
-      lastUpdated,
-    };
-  }, [safeDatabases]);
+  }, [catalog, databases, sortBy]);
 
   async function handleCreateDatabase() {
     if (isCreating) return;
@@ -101,216 +72,126 @@ export function DatabasesView() {
     }
   }
 
+  if (error) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+          <span className="text-label">Databases unavailable</span>
+          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
+            {error instanceof Error ? error.message : "The database list could not be loaded."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full overflow-y-auto bg-[var(--base)]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-8 py-10">
-        <div className="flex items-end justify-between gap-6">
-          <div className="space-y-2">
-            <div className="font-ui text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--overlay-1)]">
-              Workspace
-            </div>
-            <h1 className="text-[34px] font-semibold tracking-[-0.04em] text-[var(--text)]">
-              Databases
-            </h1>
-            <p className="max-w-2xl text-[14px] leading-6 text-[var(--subtext-0)]">
-              Supabase-backed structured workspaces for planning, tracking, and relation-heavy research.
-            </p>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <div className="flex flex-col gap-3">
+          <span className="text-label">Databases</span>
+          <div className="flex items-center gap-1">
+            {(["updated", "records", "name"] as const).map((option) => {
+              const labels: Record<typeof option, string> = {
+                updated: "Updated",
+                records: "Records",
+                name: "Name",
+              };
+
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setSortBy(option)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-ui text-[12px] font-medium",
+                    "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    sortBy === option
+                      ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                      : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                  )}
+                >
+                  <span>{labels[option]}</span>
+                </button>
+              );
+            })}
+            <span className="ml-2 rounded-md border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
+              {safeDatabases.length}
+            </span>
           </div>
-          <Button onClick={handleCreateDatabase} disabled={isCreating}>
-            {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            New database
-          </Button>
         </div>
 
-        {!isLoading && !error ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Databases"
-              value={String(stats.totalDatabases)}
-              detail="Structured workspaces"
-            />
-            <StatCard
-              label="Records"
-              value={String(stats.totalRecords)}
-              detail="Across all databases"
-            />
-            <StatCard
-              label="Fields"
-              value={String(stats.totalFields)}
-              detail="Schema properties live now"
-            />
-            <StatCard
-              label="Last updated"
-              value={formatDateTime(stats.lastUpdated)}
-              detail="Most recent database change"
-            />
-          </div>
-        ) : null}
+        <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
+          {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+          New database
+        </Button>
+      </div>
 
+      <div className="flex-1 overflow-y-auto bg-[var(--base)]">
         {isLoading ? (
-          <div className="flex h-64 items-center justify-center text-[13px] text-[var(--subtext-0)]">
+          <div className="flex items-center justify-center gap-2 p-10 font-ui text-[13px] text-[var(--overlay-1)]">
+            <Loader2 className="h-4 w-4 animate-spin" />
             Loading databases...
           </div>
-        ) : null}
+        ) : safeDatabases.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 p-16 text-center">
+            <p className="text-label">No databases yet</p>
+            <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+              Create your first database to start building structured records and views.
+            </p>
+            <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="mt-2 gap-1.5">
+              {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+              Create database
+            </Button>
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--border-subtle)]">
+            {safeDatabases.map((database) => {
+              const fieldPreview = database.schema.slice(0, 4).map((field) => field.name).join(" · ");
+              const extraFieldCount = Math.max(database.schema.length - 4, 0);
 
-        {error ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Databases unavailable</CardTitle>
-              <CardDescription>
-                {error instanceof Error ? error.message : "The database list could not be loaded."}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        ) : null}
-
-        {!isLoading && !error && safeDatabases.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No databases yet</CardTitle>
-              <CardDescription>
-                Start with one table-backed database, then add saved views, schema, and relations inside the editor.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={handleCreateDatabase} disabled={isCreating}>
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Create first database
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {!isLoading && !error && safeDatabases.length > 0 ? (
-          <>
-            <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--mantle)] p-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-1 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--base)] px-3">
-                <Search className="h-4 w-4 text-[var(--overlay-1)]" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search databases or fields"
-                  className="border-0 bg-transparent px-0 shadow-none focus:border-0"
-                />
-              </div>
-
-              <div className="flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--base)] p-1">
-                {(["updated", "records", "name"] as const).map((option) => {
-                  const labels: Record<typeof option, string> = { updated: "Updated", records: "Records", name: "Name" };
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setSortBy(option)}
-                      className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                        sortBy === option
-                          ? "bg-[var(--accent-soft)] text-[var(--text)]"
-                          : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                      }`}
-                    >
-                      {labels[option]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {safeDatabases.map((database) => (
-              <Link key={database.id} to={`/databases/${database.id}`}>
-                <Card
-                  interactive
-                  className="h-full bg-[var(--mantle)] transition-transform duration-150 hover:-translate-y-0.5"
+              return (
+                <Link
+                  key={database.id}
+                  to={`/databases/${database.id}`}
+                  className="group relative flex w-full items-start gap-4 px-6 py-4 transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]"
                 >
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--base)] text-[var(--accent)]">
-                        <Database className="h-4 w-4" />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-ui text-[14px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
+                        {database.name}
+                      </p>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)] transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:text-[var(--accent)]" />
+                      <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">
+                        {database.recordCount} rec
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--subtext-0)]">
+                      <span>{database.schema.length} {database.schema.length === 1 ? "field" : "fields"}</span>
+                      <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                      <span>{database.relationCount} {database.relationCount === 1 ? "relation" : "relations"}</span>
+                      <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                      <span>Updated {formatDateTime(database.updated_at)}</span>
+                    </div>
+
+                    {fieldPreview ? (
+                      <div className="mt-1.5 truncate font-ui text-[11px] text-[var(--overlay-1)]">
+                        {fieldPreview}
+                        {extraFieldCount > 0 ? ` · +${extraFieldCount} more` : ""}
                       </div>
-                      <ArrowRight className="mt-1 h-4 w-4 text-[var(--overlay-1)]" />
-                    </div>
-                    <CardTitle className="mt-4">{database.name}</CardTitle>
-                    <CardDescription>
-                      {database.recordCount} {database.recordCount === 1 ? "record" : "records"} ·{" "}
-                      {database.schema.length} {database.schema.length === 1 ? "field" : "fields"} · updated{" "}
-                      {formatDateTime(database.updated_at)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-2">
-                      <MiniStat label="Fields" value={String(database.schema.length)} />
-                      <MiniStat label="Relations" value={String(database.relationCount)} />
-                      <MiniStat label="Headers" value={String(database.headerCount)} />
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {database.schema.slice(0, 4).map((field) => (
-                        <span
-                          key={field.id}
-                          className="rounded-full border border-[var(--border)] bg-[var(--surface-wash)] px-2.5 py-1 text-[11px] font-medium text-[var(--subtext-0)]"
-                        >
-                          {field.name}
-                        </span>
-                      ))}
-                      {database.schema.length > 4 ? (
-                        <span className="rounded-full border border-dashed border-[var(--border)] px-2.5 py-1 text-[11px] font-medium text-[var(--overlay-1)]">
-                          +{database.schema.length - 4} more
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-4 text-[12px] font-medium text-[var(--accent)]">
-                      Open editor
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-            </div>
-          </>
-        ) : null}
+                    ) : null}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <Card className="bg-[var(--mantle)]">
-      <CardHeader className="pb-2">
-        <CardDescription className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-          {label}
-        </CardDescription>
-        <CardTitle className="text-[28px]">{value}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-[13px] text-[var(--subtext-0)]">{detail}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--base)] px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
-        {label}
-      </div>
-      <div className="mt-1 text-[16px] font-semibold tracking-[-0.02em] text-[var(--text)]">{value}</div>
     </div>
   );
 }

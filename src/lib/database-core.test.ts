@@ -85,6 +85,7 @@ describe("database-core", () => {
         schema: initiativeSchema,
         headerFieldIds: ["title"],
         records: initiativeRecords,
+        views: [],
       },
       {
         id: "db-clients",
@@ -95,6 +96,7 @@ describe("database-core", () => {
           { id: "client-a", name: "Alpha Holdings" },
           { id: "client-b", name: "Northstar Capital" },
         ],
+        views: [],
       },
     ];
 
@@ -148,6 +150,7 @@ describe("database-core", () => {
         schema: database.schema,
         headerFieldIds: database.headerFieldIds ?? [],
         records: database.records,
+        views: database.views,
       },
     ];
 

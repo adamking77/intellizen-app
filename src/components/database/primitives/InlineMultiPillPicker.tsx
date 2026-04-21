@@ -1,5 +1,4 @@
 import { useState, type RefObject } from "react";
-import { ChevronDown } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import {
@@ -40,7 +39,7 @@ export function InlineMultiPillPicker({
           event.stopPropagation();
           setOpen((current) => !current);
         }}
-        className="flex min-h-8 flex-wrap items-center gap-1 text-left"
+        className="flex min-h-9 min-w-[72px] flex-wrap items-center gap-1 rounded-xl border border-transparent px-2 py-1 text-left transition-[background-color,border-color,color] duration-150 hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)]"
       >
         {values.length ? (
           values.map((value) => (
@@ -51,7 +50,6 @@ export function InlineMultiPillPicker({
         ) : (
           <span className="text-[13px] text-[var(--overlay-1)] opacity-60">—</span>
         )}
-        <ChevronDown className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
       </button>
 
       <RecordPickerDropdown
@@ -59,6 +57,7 @@ export function InlineMultiPillPicker({
         open={open}
         options={normalizedOptions}
         selectedIds={values}
+        onClearSelection={() => onChange([])}
         onCreate={
           onCreate
             ? (label) => {

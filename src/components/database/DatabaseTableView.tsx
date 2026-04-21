@@ -1,44 +1,99 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowUpRight, Copy, Trash2 } from "lucide-react";
 
-import { ColumnHeaderPopover } from "@/components/database/primitives/ColumnHeaderPopover";
-import { InlineMultiPillPicker } from "@/components/database/primitives/InlineMultiPillPicker";
-import { InlinePillPicker } from "@/components/database/primitives/InlinePillPicker";
-import { InlineRelationEditor } from "@/components/database/primitives/InlineRelationEditor";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { resolveFieldOptionColor, resolveStatusColor } from "@/lib/database-colors";
+import { TableCell } from "@/components/database/primitives/TableCell";
+import { InlineEditor } from "@/components/database/primitives/InlineEditor";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+
+import { getReadableTextColor } from "@/lib/database-colors";
 import {
   applyFilters,
   applySorts,
-  getFieldDisplayValue,
-  getFieldValue,
-  getRecordTitle,
   getVisibleFields,
+  STATUS_OPTIONS,
 } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,
   WorkspaceDatabaseField,
-  WorkspaceDatabaseFieldValue,
+  WorkspaceDatabaseFieldType,
   WorkspaceDatabaseModel,
+  WorkspaceDatabaseSchemaSaveOptions,
 } from "@/lib/types";
-import { cn } from "@/lib/utils";
+
+const DEFAULT_COLUMN_WIDTH = 168;
+
+const OPTION_COLOR_PRESETS: Array<{ label: string; value: string; swatch: string }> = [
+  { label: "Gray", value: "#6b7280", swatch: "⚫" },
+  { label: "Brown", value: "#8b6b4a", swatch: "🟤" },
+  { label: "Amber", value: "#f59e0b", swatch: "🟡" },
+  { label: "Green", value: "#10b981", swatch: "🟢" },
+  { label: "Blue", value: "#3b82f6", swatch: "🔵" },
+  { label: "Purple", value: "#a855f7", swatch: "🟣" },
+  { label: "Red", value: "#ef4444", swatch: "🔴" },
+];
+
+const FIELD_TYPES: WorkspaceDatabaseFieldType[] = [
+  "text",
+  "number",
+  "select",
+  "multiselect",
+  "status",
+  "date",
+  "checkbox",
+  "url",
+  "email",
+  "phone",
+  "relation",
+  "rollup",
+  "formula",
+  "createdAt",
+  "lastEditedAt",
+];
+
+interface PropertyOptionDraft {
+  id: string;
+  name: string;
+  color: string;
+  originalName?: string;
+}
+
+function supportsOptions(type: WorkspaceDatabaseFieldType): boolean {
+  return type === "select" || type === "multiselect" || type === "status";
+}
+
+function toFieldForType(field: WorkspaceDatabaseField, nextType: WorkspaceDatabaseFieldType): WorkspaceDatabaseField {
+  const next: WorkspaceDatabaseField = { id: field.id, name: field.name, type: nextType };
+  if (supportsOptions(nextType)) {
+    next.options = field.options?.length
+      ? [...field.options]
+      : (nextType === "status" ? [...STATUS_OPTIONS] : []);
+    if (field.optionColors) next.optionColors = { ...field.optionColors };
+  }
+  if (nextType === "relation") {
+    next.relation = field.relation ? { ...field.relation } : {};
+  }
+  if (nextType === "rollup") {
+    next.rollup = field.rollup ? { ...field.rollup } : { relationFieldId: "", aggregation: "count" };
+  }
+  if (nextType === "formula") {
+    next.formula = field.formula ? { ...field.formula } : { expression: "" };
+  }
+  return next;
+}
+
+function signatureForField(field: WorkspaceDatabaseField): string {
+  return JSON.stringify(field);
+}
 
 interface DatabaseTableViewProps {
   database: WorkspaceDatabaseModel;
   view: WorkspaceDatabaseModel["views"][number];
   catalog: WorkspaceDatabaseCatalogEntry[];
   activeRecordId: string | null;
+  embedded?: boolean;
   onOpenRecord: (recordId: string) => void;
-  onUpdateField: (recordId: string, fieldId: string, value: WorkspaceDatabaseFieldValue) => Promise<void> | void;
+  onUpdateField: (recordId: string, fieldId: string, value: unknown) => Promise<void> | void;
   onUpdateView: (input: {
     groupBy?: string;
     sort?: WorkspaceDatabaseModel["views"][number]["sort"];
@@ -46,7 +101,11 @@ interface DatabaseTableViewProps {
     fieldOrder?: string[];
     columnWidths?: Record<string, number>;
   }) => void;
-  onSaveSchema: (schema: WorkspaceDatabaseModel["schema"], records?: WorkspaceDatabaseModel["records"]) => void;
+  onSaveSchema: (
+    schema: WorkspaceDatabaseModel["schema"],
+    records?: WorkspaceDatabaseModel["records"],
+    options?: WorkspaceDatabaseSchemaSaveOptions,
+  ) => void;
   onOpenSchema: () => void;
   onCreateRecord: () => void;
   onDuplicateRecord: (recordId: string) => void;
@@ -55,694 +114,806 @@ interface DatabaseTableViewProps {
   onDuplicateRecords: (recordIds: string[]) => void;
 }
 
+type EditingCell = { recordId: string; fieldId: string } | null;
+
 export function DatabaseTableView({
   database,
   view,
   catalog,
-  activeRecordId,
+  activeRecordId: _activeRecordId,
+  embedded = false,
   onOpenRecord,
   onUpdateField,
   onUpdateView,
   onSaveSchema,
-  onOpenSchema,
+  onOpenSchema: _onOpenSchema,
   onCreateRecord,
   onDuplicateRecord,
   onDeleteRecord,
   onDeleteRecords,
   onDuplicateRecords,
 }: DatabaseTableViewProps) {
+  const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(view.columnWidths ?? {});
-  const [popoverFieldId, setPopoverFieldId] = useState<string | null>(null);
-  const [resizeGuideX, setResizeGuideX] = useState<number | null>(null);
-  const [addFieldOpen, setAddFieldOpen] = useState(false);
-  const addFieldRef = useRef<HTMLDivElement | null>(null);
-  const headerButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const columnWidthsRef = useRef(columnWidths);
 
-  useEffect(() => {
-    if (!addFieldOpen) return;
-    function handle(event: MouseEvent) {
-      if (!addFieldRef.current || addFieldRef.current.contains(event.target as Node)) return;
-      setAddFieldOpen(false);
-    }
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [addFieldOpen]);
+  const [propertyFieldId, setPropertyFieldId] = useState<string | null>(null);
+  const [propertyName, setPropertyName] = useState("");
+  const [propertyType, setPropertyType] = useState<WorkspaceDatabaseFieldType>("text");
+  const [propertyOptionDrafts, setPropertyOptionDrafts] = useState<PropertyOptionDraft[]>([]);
+  const [propertyMenuAnchor, setPropertyMenuAnchor] = useState<{ left: number; top: number } | null>(null);
+  const propertyPanelRef = useRef<HTMLDivElement | null>(null);
+  const lastPropertySignatureRef = useRef<string>("");
 
-  function handleQuickAddField(name: string, type: WorkspaceDatabaseField["type"]) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const newField: WorkspaceDatabaseField = {
-      id: crypto.randomUUID(),
-      name: trimmed,
-      type,
-    };
-    if (type === "status" || type === "select" || type === "multiselect") {
-      newField.options = [];
-    }
-    if (type === "relation") {
-      newField.relation = { targetDatabaseId: database.id };
-    }
-    if (type === "rollup") {
-      newField.rollup = { relationFieldId: "", aggregation: "count" };
-    }
-    if (type === "formula") {
-      newField.formula = { expression: "" };
-    }
-    onSaveSchema([...database.schema, newField]);
-    setAddFieldOpen(false);
-  }
+  const [showAddField, setShowAddField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState<WorkspaceDatabaseFieldType>("text");
+  const addPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const [confirmDeleteRecordId, setConfirmDeleteRecordId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const visibleFields = useMemo(
+    () => getVisibleFields(database.schema, view),
+    [database.schema, view],
+  );
+
+  const propertyField = useMemo(
+    () => (propertyFieldId ? database.schema.find((field) => field.id === propertyFieldId) : undefined),
+    [propertyFieldId, database.schema],
+  );
 
   useEffect(() => {
     setColumnWidths(view.columnWidths ?? {});
-  }, [view.columnWidths]);
+  }, [view.id, view.columnWidths]);
 
-  const visibleFields = getVisibleFields(database.schema, view);
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
+
+  useEffect(() => {
+    const visibleIds = new Set(database.records.map((r) => r.id));
+    setSelectedRecordIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [database.records]);
+
   const filtered = applyFilters(database.records, view.filter, database.schema, catalog);
   const records = applySorts(filtered, view.sort, database.schema);
-  const selectedCount = selectedRecordIds.size;
-  const allSelected = records.length > 0 && records.every((record) => selectedRecordIds.has(record.id));
 
-  const groupedRecords = useMemo(() => {
-    const groupField = view.groupBy
-      ? database.schema.find((field) => field.id === view.groupBy)
-      : null;
-    if (!groupField || !["status", "select", "multiselect"].includes(groupField.type)) {
-      return null;
-    }
+  const selectedVisibleCount = useMemo(
+    () => records.filter((r) => selectedRecordIds.has(r.id)).length,
+    [records, selectedRecordIds],
+  );
 
-    const groups = new Map<string, WorkspaceDatabaseModel["records"]>();
-    for (const record of records) {
-      const rawValue = getFieldValue(record, groupField, database, catalog);
-      const values = Array.isArray(rawValue) ? (rawValue.length ? rawValue : [""]) : [String(rawValue ?? "")];
-      for (const value of values) {
-        const bucket = groups.get(value) ?? [];
-        bucket.push(record);
-        groups.set(value, bucket);
-      }
-    }
+  const allVisibleSelected = records.length > 0 && selectedVisibleCount === records.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < records.length;
 
-    const orderedValues = (groupField.options ?? []).filter((option) => groups.has(option));
-    if (groups.has("")) {
-      orderedValues.unshift("");
+  function toggleSelectAll(checked: boolean) {
+    if (checked) {
+      setSelectedRecordIds(new Set(records.map((r) => r.id)));
+      return;
     }
-    for (const value of groups.keys()) {
-      if (!orderedValues.includes(value)) {
-        orderedValues.push(value);
-      }
-    }
-    return { groupField, groups, orderedValues };
-  }, [catalog, database, records, view.groupBy]);
+    setSelectedRecordIds(new Set());
+  }
 
-  function toggleSelectedRecord(recordId: string, checked: boolean) {
-    setSelectedRecordIds((current) => {
-      const next = new Set(current);
+  function toggleSelectRow(recordId: string, checked: boolean) {
+    setSelectedRecordIds((prev) => {
+      const next = new Set(prev);
       if (checked) next.add(recordId);
       else next.delete(recordId);
       return next;
     });
   }
 
-  function defaultWidthForField(field: WorkspaceDatabaseField) {
-    switch (field.type) {
-      case "checkbox":
-        return 72;
-      case "date":
-      case "createdAt":
-      case "lastEditedAt":
-        return 140;
-      case "number":
-        return 120;
-      case "status":
-      case "select":
-        return 160;
-      case "multiselect":
-      case "relation":
-        return 220;
-      case "url":
-      case "email":
-      case "phone":
-        return 200;
-      case "text":
-      default:
-        return 200;
+  function runBulkDuplicate() {
+    const ids = records.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
+    onDuplicateRecords(ids);
+    setSelectedRecordIds(new Set());
+  }
+
+  function runBulkDelete() {
+    const ids = records.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
+    onDeleteRecords(ids);
+    setSelectedRecordIds(new Set());
+    setConfirmBulkDelete(false);
+  }
+
+  const pushPropertyChanges = useCallback(() => {
+    if (!propertyField) return;
+    const nextField = buildDraftField(propertyField);
+    const signature = signatureForField(nextField);
+    if (signature === lastPropertySignatureRef.current) {
+      return;
     }
-  }
+    lastPropertySignatureRef.current = signature;
+    const nextSchema = database.schema.map((field) => (field.id === propertyField.id ? nextField : field));
+    const nextRecords = buildPropertyRecordUpdates(propertyField, nextField);
+    onSaveSchema(nextSchema, nextRecords, { silent: true });
+  }, [database.schema, onSaveSchema, propertyField, propertyName, propertyOptionDrafts, propertyType]);
 
-  function columnWidthFor(field: WorkspaceDatabaseField) {
-    return columnWidths[field.id] ?? defaultWidthForField(field);
-  }
+  const closePropertyMenu = useCallback(() => {
+    pushPropertyChanges();
+    setPropertyFieldId(null);
+    setPropertyMenuAnchor(null);
+  }, [pushPropertyChanges]);
 
-  function autoFitColumn(field: WorkspaceDatabaseField) {
-    const next = defaultWidthForField(field);
-    const updated = { ...columnWidths };
-    delete updated[field.id];
-    setColumnWidths(updated);
-    onUpdateView({ columnWidths: updated });
-    return next;
-  }
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const targetElement = target instanceof Element ? target : null;
+      if (propertyPanelRef.current && !propertyPanelRef.current.contains(target)) {
+        if (targetElement?.closest(".db-property-color-menu")) {
+          return;
+        }
+        closePropertyMenu();
+      }
+      if (addPanelRef.current && !addPanelRef.current.contains(target)) {
+        setShowAddField(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [closePropertyMenu]);
 
-  function handleCreateOption(fieldId: string, label: string) {
-    const trimmed = label.trim();
-    if (!trimmed) return;
-    const existing = database.schema.find((candidate) => candidate.id === fieldId);
-    if (!existing) return;
-    if ((existing.options ?? []).some((option) => option.toLowerCase() === trimmed.toLowerCase())) return;
-    onSaveSchema(
-      database.schema.map((candidate) =>
-        candidate.id === fieldId
-          ? { ...candidate, options: [...(candidate.options ?? []), trimmed] }
-          : candidate,
-      ),
+  function openPropertyMenu(field: WorkspaceDatabaseField, anchorEl?: HTMLElement) {
+    if (propertyFieldId === field.id) {
+      closePropertyMenu();
+      return;
+    }
+    if (propertyFieldId && propertyFieldId !== field.id) {
+      pushPropertyChanges();
+    }
+    if (anchorEl) {
+      const rect = anchorEl.getBoundingClientRect();
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 540));
+      const top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 8));
+      setPropertyMenuAnchor({ left, top });
+    }
+    setPropertyFieldId(field.id);
+    setPropertyName(field.name);
+    setPropertyType(field.type);
+    setPropertyOptionDrafts(
+      (field.options ?? (field.type === "status" ? [...STATUS_OPTIONS] : []))
+        .map((option, index) => ({
+          id: `${field.id}-${index}-${crypto.randomUUID()}`,
+          name: option,
+          color: field.optionColors?.[option] ?? OPTION_COLOR_PRESETS[index % OPTION_COLOR_PRESETS.length].value,
+          originalName: option,
+        })),
     );
+    lastPropertySignatureRef.current = signatureForField(field);
+    setShowAddField(false);
   }
 
-  function handleResize(field: WorkspaceDatabaseField, event: React.PointerEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const fieldId = field.id;
-    const startX = event.clientX;
-    const startWidth = columnWidthFor(field);
-
-    function handleMove(moveEvent: PointerEvent) {
-      const nextWidth = Math.max(72, startWidth + (moveEvent.clientX - startX));
-      setColumnWidths((current) => ({ ...current, [fieldId]: nextWidth }));
-      setResizeGuideX(moveEvent.clientX);
+  function buildDraftField(base: WorkspaceDatabaseField): WorkspaceDatabaseField {
+    const nextField = toFieldForType(base, propertyType);
+    nextField.name = propertyName.trim() || base.name;
+    if (supportsOptions(propertyType)) {
+      const options: string[] = [];
+      const optionColors: Record<string, string> = {};
+      for (const draft of propertyOptionDrafts) {
+        const optionName = draft.name.trim();
+        if (!optionName || options.includes(optionName)) continue;
+        options.push(optionName);
+        optionColors[optionName] = draft.color;
+      }
+      nextField.options = options.length ? options : (propertyType === "status" ? [...STATUS_OPTIONS] : []);
+      nextField.optionColors = optionColors;
     }
+    return nextField;
+  }
 
-    function handleUp(moveEvent: PointerEvent) {
-      const nextWidth = Math.max(72, startWidth + (moveEvent.clientX - startX));
-      setResizeGuideX(null);
+  function addField() {
+    const name = newFieldName.trim();
+    if (!name) return;
+    const newField: WorkspaceDatabaseField = {
+      id: crypto.randomUUID(),
+      name,
+      type: newFieldType,
+    };
+    if (supportsOptions(newFieldType)) {
+      newField.options = newFieldType === "status" ? [...STATUS_OPTIONS] : [];
+    }
+    if (newFieldType === "relation") {
+      newField.relation = {};
+    }
+    if (newFieldType === "rollup") {
+      newField.rollup = { relationFieldId: "", aggregation: "count" };
+    }
+    if (newFieldType === "formula") {
+      newField.formula = { expression: "" };
+    }
+    onSaveSchema([...database.schema, newField]);
+    setNewFieldName("");
+    setNewFieldType("text");
+    setShowAddField(false);
+  }
+
+  function startColumnResize(e: React.PointerEvent<HTMLDivElement>, fieldId: string, currentWidth: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = currentWidth;
+    let nextWidth = startWidth;
+    const prevCursor = document.body.style.cursor;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (moveEvent: PointerEvent) => {
+      nextWidth = Math.max(80, startWidth + moveEvent.clientX - startX);
+      setColumnWidths((prev) => ({ ...prev, [fieldId]: nextWidth }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevUserSelect;
       onUpdateView({
         columnWidths: {
-          ...columnWidths,
+          ...(view.columnWidths ?? {}),
+          ...columnWidthsRef.current,
           [fieldId]: nextWidth,
         },
       });
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    }
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
   }
 
   function renderRow(record: WorkspaceDatabaseModel["records"][number]) {
+    const isEditableField = (field: WorkspaceDatabaseField) =>
+      field.type !== "createdAt"
+      && field.type !== "lastEditedAt"
+      && field.type !== "formula"
+      && field.type !== "rollup";
+    const firstVisibleFieldId = visibleFields[0]?.id;
+
     return (
-      <tr
-        key={record.id}
-        className={cn(
-          "group cursor-pointer transition-colors hover:bg-[var(--surface-wash)]",
-          activeRecordId === record.id && "bg-[var(--accent-soft)]",
-        )}
-        onClick={() => onOpenRecord(record.id)}
-      >
+      <tr key={record.id} className="db-row">
         <td
-          className="sticky left-0 z-[1] border-b border-[var(--border-subtle)] bg-[inherit] px-3 py-2.5 align-top"
-          onClick={(event) => event.stopPropagation()}
+          className="db-td db-td-check"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Checkbox
+          <input
+            type="checkbox"
+            className="db-row-check"
             checked={selectedRecordIds.has(record.id)}
-            onCheckedChange={(checked) => toggleSelectedRecord(record.id, checked)}
+            onChange={(e) => toggleSelectRow(record.id, e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
           />
         </td>
-        {visibleFields.map((field, index) => (
-          <td
-            key={field.id}
-            className="border-b border-[var(--border-subtle)] px-4 py-2.5 align-top"
-            style={{ width: columnWidthFor(field), minWidth: columnWidthFor(field) }}
-          >
-            <div className={cn("relative", index === 0 && "pr-22")}>
-              <InlineCell
-                database={database}
-                record={record}
-                field={field}
-                catalog={catalog}
-                onCommit={(value) => onUpdateField(record.id, field.id, value)}
-                onCreateOption={handleCreateOption}
+        {visibleFields.map((field) => {
+          const fieldWidth = columnWidths[field.id] ?? DEFAULT_COLUMN_WIDTH;
+          return (
+            <td
+              key={field.id}
+              className={`db-td${field.id === firstVisibleFieldId ? " db-td-primary" : ""}`}
+              style={{
+                width: fieldWidth,
+                minWidth: fieldWidth,
+                maxWidth: fieldWidth,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (e.target !== e.currentTarget) return;
+                if (editingCell?.recordId === record.id && editingCell.fieldId === field.id) return;
+                const target = e.target as HTMLElement;
+                if (target.closest("button, input, textarea, select, a, label, [contenteditable='true']")) return;
+                if (target.closest(".db-col-resize-handle")) return;
+                onOpenRecord(record.id);
+              }}
+            >
+              {editingCell?.recordId === record.id && editingCell.fieldId === field.id ? (
+                <InlineEditor
+                  record={record}
+                  field={field}
+                  database={database}
+                  catalog={catalog}
+                  onSave={(value) => {
+                    void onUpdateField(record.id, field.id, value);
+                    setEditingCell(null);
+                  }}
+                  onCancel={() => setEditingCell(null)}
+                />
+              ) : (
+                <>
+                  <div
+                    className="db-td-content"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (field.type === "checkbox") {
+                        onUpdateField(record.id, field.id, record[field.id] !== true);
+                        setEditingCell(null);
+                        return;
+                      }
+                      if (field.type === "relation") {
+                        onOpenRecord(record.id);
+                        return;
+                      }
+                      if (!isEditableField(field)) return;
+                      setEditingCell({ recordId: record.id, fieldId: field.id });
+                    }}
+                  >
+                    <TableCell
+                      record={record}
+                      field={field}
+                      database={database}
+                      catalog={catalog}
+                      onToggleCheckbox={() => {
+                        onUpdateField(record.id, field.id, record[field.id] !== true);
+                        setEditingCell(null);
+                      }}
+                    />
+                  </div>
+                  {field.id === firstVisibleFieldId && !embedded && (
+                    <div className="db-row-actions db-row-actions-inline">
+                      <button
+                        type="button"
+                        className="db-icon-btn-plain"
+                        title="Open record"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenRecord(record.id);
+                        }}
+                      >
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="db-icon-btn-plain"
+                        title="Duplicate record"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDuplicateRecord(record.id);
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="db-icon-btn-plain db-icon-btn-plain-danger"
+                        title="Delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteRecordId(record.id);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              <div
+                className="db-col-resize-handle db-col-resize-handle-cell"
+                onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
               />
-              {index === 0 ? (
-                <div className="absolute right-0 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-90 group-hover:opacity-100">
-                  <RowAction icon={<ExternalLink className="h-3.5 w-3.5" />} label="Open" onClick={() => onOpenRecord(record.id)} />
-                  <RowAction icon={<Copy className="h-3.5 w-3.5" />} label="Duplicate" onClick={() => onDuplicateRecord(record.id)} />
-                  <RowAction
-                    icon={<Trash2 className="h-3.5 w-3.5" />}
-                    label="Delete"
-                    className="hover:bg-[rgba(243,139,168,0.14)] hover:text-[var(--red)]"
-                    onClick={() => onDeleteRecord(record.id)}
-                  />
-                </div>
-              ) : null}
-            </div>
-          </td>
-        ))}
-        <td className="sticky right-0 z-[1] border-b border-[var(--border-subtle)] bg-[inherit] px-2" />
+            </td>
+          );
+        })}
       </tr>
     );
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
-      {resizeGuideX !== null ? (
-        <div
-          className="pointer-events-none absolute inset-y-0 z-30 w-px bg-[var(--accent)]"
-          style={{ left: resizeGuideX }}
-        />
-      ) : null}
+    <div className="db-table-root">
+      {selectedVisibleCount > 0 && (
+        <div className="db-bulk-actions db-bulk-actions-visible">
+          <span className="db-bulk-count">{selectedVisibleCount} selected</span>
+          <button className="db-btn" onClick={runBulkDuplicate}>
+            Duplicate selected
+          </button>
+          <button className="db-btn db-icon-btn-danger" onClick={() => setConfirmBulkDelete(true)}>
+            Delete selected
+          </button>
+          <span className="db-bulk-spacer" />
+          <button className="db-btn" onClick={() => setSelectedRecordIds(new Set())}>
+            Clear
+          </button>
+        </div>
+      )}
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="min-w-full border-separate border-spacing-0">
-          <thead className="sticky top-0 z-10 bg-[var(--mantle)]">
+      <div className="db-table-wrapper relative">
+        <table className="db-table">
+          <thead>
             <tr>
-              <th className="sticky left-0 z-[2] w-8 border-b border-[var(--border)] bg-[var(--mantle)] px-3 py-3">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={(checked) =>
-                    setSelectedRecordIds(checked ? new Set(records.map((record) => record.id)) : new Set())
-                  }
+              <th className="db-th db-th-check">
+                <input
+                  type="checkbox"
+                  className="db-row-check"
+                  ref={(el) => {
+                    if (!el) return;
+                    el.indeterminate = someVisibleSelected;
+                  }}
+                  checked={allVisibleSelected}
+                  onChange={(e) => toggleSelectAll(e.target.checked)}
                 />
               </th>
               {visibleFields.map((field) => {
-                const currentSort = view.sort.find((item) => item.fieldId === field.id);
+                const fieldWidth = columnWidths[field.id] ?? DEFAULT_COLUMN_WIDTH;
                 return (
                   <th
                     key={field.id}
-                    className="border-b border-[var(--border)] px-4 py-3 text-left align-middle"
-                    style={{ width: columnWidthFor(field), minWidth: columnWidthFor(field) }}
+                    className="db-th"
+                    style={{
+                      width: fieldWidth,
+                      minWidth: fieldWidth,
+                      maxWidth: fieldWidth,
+                    }}
                   >
-                    <div className="relative flex items-center">
+                    <div className="db-th-inner">
                       <button
-                        ref={(node) => {
-                          headerButtonRefs.current[field.id] = node;
+                        className="db-th-label db-th-label-action"
+                        title="Edit property"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPropertyMenu(field, e.currentTarget);
                         }}
-                        type="button"
-                        onClick={() => setPopoverFieldId((current) => (current === field.id ? null : field.id))}
-                        className="flex min-w-0 items-center gap-2 text-left"
                       >
-                        <span className="truncate font-ui text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                          {field.name}
-                        </span>
-                        {currentSort ? (
-                          currentSort.direction === "asc" ? (
-                            <ArrowUp className="h-3 w-3 text-[var(--accent)]" />
-                          ) : (
-                            <ArrowDown className="h-3 w-3 text-[var(--accent)]" />
-                          )
-                        ) : (
-                          <ChevronDown className="h-3 w-3 text-[var(--overlay-1)]" />
-                        )}
+                        {field.name}
                       </button>
-                      <div
-                        className="group/resize absolute inset-y-0 right-[-10px] w-3 cursor-col-resize"
-                        onPointerDown={(event) => handleResize(field, event)}
-                        onDoubleClick={(event) => {
-                          event.stopPropagation();
-                          autoFitColumn(field);
-                        }}
-                        title="Drag to resize · Double-click to auto-fit"
-                      >
-                        <div className="mx-auto h-full w-px bg-[var(--border-subtle)] transition-colors group-hover/resize:w-[2px] group-hover/resize:bg-[var(--accent)]" />
-                      </div>
-                      <ColumnHeaderPopover
-                        anchorRef={{ current: headerButtonRefs.current[field.id] }}
-                        database={database}
-                        field={field}
-                        open={popoverFieldId === field.id}
-                        currentSortDirection={currentSort?.direction}
-                        onClose={() => setPopoverFieldId(null)}
-                        onSaveSchema={onSaveSchema}
-                        onHideField={(fieldId) =>
-                          onUpdateView({
-                            hiddenFields: [...view.hiddenFields, fieldId],
-                          })
-                        }
-                        onToggleSort={(fieldId, direction) => {
-                          const existing = view.sort.find((candidate) => candidate.fieldId === fieldId);
-                          onUpdateView({
-                            sort: existing && existing.direction === direction
-                              ? view.sort.filter((candidate) => candidate.fieldId !== fieldId)
-                              : [
-                                  ...view.sort.filter((candidate) => candidate.fieldId !== fieldId),
-                                  { fieldId, direction },
-                                ],
-                          });
-                        }}
-                        onGroupByField={(fieldId) => onUpdateView({ groupBy: fieldId })}
-                      />
                     </div>
+                    <div
+                      className="db-col-resize-handle"
+                      onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
+                    />
                   </th>
                 );
               })}
-              <th className="sticky right-0 z-[2] w-10 border-b border-[var(--border)] bg-[var(--mantle)] px-2 py-3">
-                <div ref={addFieldRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setAddFieldOpen((open) => !open)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                    title="Add property"
-                    aria-label="Add property"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  {addFieldOpen ? (
-                    <AddFieldPopover
-                      onAdd={handleQuickAddField}
-                      onOpenSchema={() => {
-                        setAddFieldOpen(false);
-                        onOpenSchema();
-                      }}
-                    />
-                  ) : null}
-                </div>
+              <th className="db-th db-th-add-field">
+                <button
+                  className="db-add-field-btn"
+                  title="Add field"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAddField((v) => !v);
+                    closePropertyMenu();
+                  }}
+                >
+                  +
+                </button>
               </th>
             </tr>
           </thead>
-
           <tbody>
-            {records.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={visibleFields.length + 2}
-                  className="px-6 py-16 text-center text-[13px] text-[var(--subtext-0)]"
-                >
-                  No records yet. Create one to start shaping the database.
-                </td>
-              </tr>
-            ) : groupedRecords ? (
-              groupedRecords.orderedValues.flatMap((value) => {
-                const groupRecords = groupedRecords.groups.get(value) ?? [];
-                const color =
-                  groupedRecords.groupField.type === "status"
-                    ? resolveStatusColor(value)
-                    : resolveFieldOptionColor(groupedRecords.groupField, value || "No value");
-                return [
-                  <tr key={`group:${value || "empty"}`}>
-                    <td
-                      colSpan={visibleFields.length + 2}
-                      className="sticky top-[45px] z-[3] border-b border-[var(--border)] bg-[var(--base)] px-4 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-                        <span className="text-[12px] font-semibold text-[var(--text)]">
-                          {value || "No value"}
-                        </span>
-                        <span className="text-[11px] text-[var(--overlay-1)]">{groupRecords.length}</span>
-                      </div>
-                    </td>
-                  </tr>,
-                  ...groupRecords.map(renderRow),
-                ];
-              })
-            ) : (
-              records.map(renderRow)
-            )}
-
-            <tr>
-              <td colSpan={visibleFields.length + 2} className="border-b border-[var(--border-subtle)] px-4 py-2">
-                <button
-                  type="button"
-                  onClick={onCreateRecord}
-                  className="flex items-center gap-1.5 text-[12px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  New record
+            {records.map((record) => renderRow(record))}
+            <tr className="db-add-row">
+              <td colSpan={visibleFields.length + 2}>
+                <button className="db-add-record-btn" onClick={onCreateRecord}>
+                  + New record
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
 
-      {selectedCount > 0 ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-[var(--border-strong)] bg-[var(--mantle)] px-4 py-2 shadow-[var(--shadow-elevated)]">
-            <div className="text-[12px] text-[var(--subtext-0)]">{selectedCount} selected</div>
-            <button
-              type="button"
-              onClick={() => {
-                onDuplicateRecords([...selectedRecordIds]);
-                setSelectedRecordIds(new Set());
+        {propertyField && propertyMenuAnchor && (
+          <div
+            ref={propertyPanelRef}
+            className="db-dropdown-panel db-property-menu-panel fixed z-30"
+            style={{ left: propertyMenuAnchor.left, top: propertyMenuAnchor.top }}
+          >
+            <input
+              className="db-input db-property-menu-name-input w-full"
+              value={propertyName}
+              onChange={(e) => setPropertyName(e.target.value)}
+              placeholder="Property name"
+              onKeyDown={(e) => {
+                if (e.key === "Escape" || e.key === "Enter") {
+                  e.preventDefault();
+                  closePropertyMenu();
+                }
               }}
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--base)] px-3 py-1 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--surface-wash)]"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Duplicate
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onDeleteRecords([...selectedRecordIds]);
-                setSelectedRecordIds(new Set());
-              }}
-              className="rounded-full bg-[var(--red)] px-3 py-1 text-[12px] font-medium text-[var(--crust)]"
-            >
-              Delete
-            </button>
+            />
+            <div className="db-property-menu-type-row">
+              <span className="db-property-menu-type-label">TYPE</span>
+              <select
+                className="db-select db-property-menu-type-select"
+                value={propertyType}
+                onChange={(e) => {
+                    const nextType = e.target.value as WorkspaceDatabaseFieldType;
+                    setPropertyType(nextType);
+                    if (supportsOptions(nextType) && propertyOptionDrafts.length === 0) {
+                      const defaults = nextType === "status" ? [...STATUS_OPTIONS] : [];
+                      setPropertyOptionDrafts(
+                        defaults.map((option, index) => ({
+                          id: `${nextType}-${index}-${crypto.randomUUID()}`,
+                          name: option,
+                          color: OPTION_COLOR_PRESETS[index % OPTION_COLOR_PRESETS.length].value,
+                          originalName: option,
+                        })),
+                    );
+                  }
+                }}
+              >
+                {FIELD_TYPES.map((ft) => (
+                  <option key={ft} value={ft}>{ft}</option>
+                ))}
+              </select>
+            </div>
+            {supportsOptions(propertyType) && (
+              <div className="db-property-menu-options-wrap space-y-1">
+                <div className="db-panel-section-title">OPTIONS</div>
+                <div className="db-property-option-list">
+                  {propertyOptionDrafts.map((draft, index) => (
+                    <div key={draft.id} className="db-property-option-row">
+                      <input
+                        className="db-input db-property-option-name flex-1"
+                        value={draft.name}
+                        onChange={(e) =>
+                          setPropertyOptionDrafts((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], name: e.target.value };
+                            return next;
+                          })
+                        }
+                      />
+                      <PropertyColorButton
+                        color={draft.color}
+                        onChange={(nextColor) =>
+                          setPropertyOptionDrafts((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], color: nextColor };
+                            return next;
+                          })
+                        }
+                      />
+                      <button
+                        className="db-property-option-remove"
+                        title="Remove option"
+                        onClick={() =>
+                          setPropertyOptionDrafts((prev) => prev.filter((_, rowIndex) => rowIndex !== index))
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="db-btn"
+                  onClick={() =>
+                    setPropertyOptionDrafts((prev) => [
+                      ...prev,
+                      {
+                        id: crypto.randomUUID(),
+                        name: "",
+                        color: OPTION_COLOR_PRESETS[prev.length % OPTION_COLOR_PRESETS.length].value,
+                        originalName: undefined,
+                      },
+                    ])
+                  }
+                >
+                  + Add option
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
+        )}
 
-function InlineCell({
-  database,
-  record,
-  field,
-  catalog,
-  onCommit,
-  onCreateOption,
-}: {
-  database: WorkspaceDatabaseModel;
-  record: WorkspaceDatabaseModel["records"][number];
-  field: WorkspaceDatabaseField;
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  onCommit: (value: WorkspaceDatabaseFieldValue) => void;
-  onCreateOption: (fieldId: string, label: string) => void;
-}) {
-  const value = getFieldValue(record, field, database, catalog);
-
-  if (field.type === "checkbox") {
-    return (
-      <div className="flex min-h-8 items-center" onClick={(event) => event.stopPropagation()}>
-        <Checkbox checked={Boolean(value)} onCheckedChange={(checked) => onCommit(checked)} />
+        {showAddField && (
+          <div
+            ref={addPanelRef}
+            className="db-dropdown-panel absolute right-2 top-9 z-30 min-w-[220px]"
+          >
+            <div className="db-panel-section-title">Add field</div>
+            <input
+              className="db-input w-full"
+              value={newFieldName}
+              onChange={(e) => setNewFieldName(e.target.value)}
+              placeholder="Field name"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addField();
+              }}
+            />
+            <select
+              className="db-select w-full"
+              value={newFieldType}
+              onChange={(e) => setNewFieldType(e.target.value as WorkspaceDatabaseFieldType)}
+            >
+              {FIELD_TYPES.map((ft) => (
+                <option key={ft} value={ft}>{ft}</option>
+              ))}
+            </select>
+            <div className="db-panel-add flex items-center justify-end gap-2">
+              <button className="db-btn" onClick={() => setShowAddField(false)}>
+                Cancel
+              </button>
+              <button className="db-btn db-btn-primary" onClick={addField}>
+                Add
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-    );
-  }
 
-  if (field.type === "status") {
-    return (
-      <InlinePillPicker
-        options={field.options ?? []}
-        value={typeof value === "string" ? value : null}
-        groupStatus
-        getColor={resolveStatusColor}
-        onChange={onCommit}
-        onCreate={(label) => onCreateOption(field.id, label)}
-      />
-    );
-  }
-
-  if (field.type === "select") {
-    return (
-      <InlinePillPicker
-        options={field.options ?? []}
-        value={typeof value === "string" ? value : null}
-        getColor={(option) => resolveFieldOptionColor(field, option)}
-        onChange={onCommit}
-        onCreate={(label) => onCreateOption(field.id, label)}
-      />
-    );
-  }
-
-  if (field.type === "multiselect") {
-    return (
-      <InlineMultiPillPicker
-        options={field.options ?? []}
-        values={Array.isArray(value) ? value : []}
-        getColor={(option) => resolveFieldOptionColor(field, option)}
-        onChange={onCommit}
-        onCreate={(label) => onCreateOption(field.id, label)}
-      />
-    );
-  }
-
-  if (field.type === "relation") {
-    const targetDatabaseId = field.relation?.targetDatabaseId ?? database.id;
-    const targetDatabase =
-      catalog.find((candidate) => candidate.id === targetDatabaseId) ??
-      catalog.find((candidate) => candidate.id === database.id);
-    return (
-      <InlineRelationEditor
-        values={Array.isArray(value) ? value : []}
-        options={(targetDatabase?.records ?? []).map((candidate) => ({
-          id: candidate.id,
-          label: getRecordTitle(candidate, targetDatabase ?? database),
-          meta: candidate.id,
-        }))}
-        onChange={onCommit}
-      />
-    );
-  }
-
-  if (field.type === "text" || field.type === "url" || field.type === "email" || field.type === "phone") {
-    return (
-      <Input
-        defaultValue={typeof value === "string" ? value : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => onCommit(event.target.value || null)}
-        className="h-8 border-transparent bg-transparent px-0 shadow-none focus:border-[var(--accent)]"
-      />
-    );
-  }
-
-  if (field.type === "number") {
-    return (
-      <Input
-        type="number"
-        defaultValue={typeof value === "number" ? String(value) : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => {
-          const next = event.target.value.trim();
-          onCommit(next ? Number(next) : null);
+      <ConfirmDialog
+        open={confirmDeleteRecordId !== null}
+        title="Delete record"
+        message="This action cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (confirmDeleteRecordId) onDeleteRecord(confirmDeleteRecordId);
+          setConfirmDeleteRecordId(null);
         }}
-        className="h-8 border-transparent bg-transparent px-0 shadow-none focus:border-[var(--accent)]"
+        onCancel={() => setConfirmDeleteRecordId(null)}
       />
-    );
-  }
 
-  if (field.type === "date") {
-    return (
-      <Input
-        type="date"
-        defaultValue={typeof value === "string" ? value.slice(0, 10) : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => onCommit(event.target.value || null)}
-        className="h-8 border-transparent bg-transparent px-0 shadow-none focus:border-[var(--accent)]"
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title="Delete selected records"
+        message={`This will delete ${selectedVisibleCount} records. This action cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={runBulkDelete}
+        onCancel={() => setConfirmBulkDelete(false)}
       />
-    );
-  }
-
-  const displayValue = getFieldDisplayValue(record, field, database, catalog);
-  const computed = field.type === "createdAt" || field.type === "lastEditedAt" || field.type === "formula" || field.type === "rollup";
-  return (
-    <div className={cn("min-h-8 text-[13px]", computed && "opacity-50", !displayValue && "text-[var(--overlay-1)] opacity-60")}>
-      {displayValue || "—"}
     </div>
   );
+
+  function buildPropertyRecordUpdates(
+    baseField: WorkspaceDatabaseField,
+    nextField: WorkspaceDatabaseField,
+  ): WorkspaceDatabaseModel["records"] | undefined {
+    if (!supportsOptions(baseField.type) || !supportsOptions(nextField.type)) {
+      return undefined;
+    }
+
+    const mappedNames = new Map<string, string | null>();
+    const seenOriginalNames = new Set<string>();
+
+    for (const draft of propertyOptionDrafts) {
+      if (!draft.originalName) continue;
+      seenOriginalNames.add(draft.originalName);
+      const nextName = draft.name.trim();
+      mappedNames.set(draft.originalName, nextName || null);
+    }
+
+    const originalOptions = baseField.options ?? (baseField.type === "status" ? [...STATUS_OPTIONS] : []);
+    for (const option of originalOptions) {
+      if (!seenOriginalNames.has(option)) {
+        mappedNames.set(option, null);
+      }
+    }
+
+    let changed = false;
+    const nextRecords = database.records.map((record) => {
+      const currentValue = record[baseField.id];
+
+      if (baseField.type === "multiselect") {
+        if (!Array.isArray(currentValue)) return record;
+        let recordChanged = false;
+        const nextValue = currentValue
+          .map((item) => {
+            if (!mappedNames.has(item)) return item;
+            recordChanged = true;
+            return mappedNames.get(item);
+          })
+          .filter((item): item is string => Boolean(item));
+        const dedupedValue = Array.from(new Set(nextValue));
+        if (!recordChanged) return record;
+        changed = true;
+        return { ...record, [baseField.id]: dedupedValue };
+      }
+
+      if (typeof currentValue !== "string" || !mappedNames.has(currentValue)) {
+        return record;
+      }
+
+      const nextValue = mappedNames.get(currentValue) ?? null;
+      if (nextValue === currentValue) {
+        return record;
+      }
+      changed = true;
+      return { ...record, [baseField.id]: nextValue };
+    });
+
+    return changed ? nextRecords : undefined;
+  }
 }
 
-function RowAction({
-  icon,
-  label,
-  onClick,
-  className,
+function PropertyColorButton({
+  color,
+  onChange,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  className?: string;
+  color: string;
+  onChange: (nextColor: string) => void;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-        className,
-      )}
-      title={label}
-      aria-label={label}
-    >
-      {icon}
-    </button>
-  );
-}
-
-const QUICK_ADD_TYPES: Array<{ value: WorkspaceDatabaseField["type"]; label: string }> = [
-  { value: "text", label: "Text" },
-  { value: "number", label: "Number" },
-  { value: "status", label: "Status" },
-  { value: "select", label: "Select" },
-  { value: "multiselect", label: "Multi-select" },
-  { value: "date", label: "Date" },
-  { value: "checkbox", label: "Checkbox" },
-  { value: "url", label: "URL" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone" },
-  { value: "relation", label: "Relation" },
-  { value: "formula", label: "Formula" },
-  { value: "rollup", label: "Rollup" },
-  { value: "createdAt", label: "Created time" },
-  { value: "lastEditedAt", label: "Last edited time" },
-];
-
-function AddFieldPopover({
-  onAdd,
-  onOpenSchema,
-}: {
-  onAdd: (name: string, type: WorkspaceDatabaseField["type"]) => void;
-  onOpenSchema: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<WorkspaceDatabaseField["type"]>("text");
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!open) return;
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        hostRef.current
+        && !hostRef.current.contains(target)
+        && (!menuRef.current || !menuRef.current.contains(target))
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open]);
 
-  function submit() {
-    if (!name.trim()) return;
-    onAdd(name, type);
-    setName("");
-    setType("text");
-  }
+  const activePreset = OPTION_COLOR_PRESETS.find((preset) => preset.value.toLowerCase() === color.toLowerCase())
+    ?? OPTION_COLOR_PRESETS[0];
 
   return (
-    <div className="absolute right-0 top-full z-50 mt-1 w-[240px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Add property</div>
-      <Input
-        ref={inputRef}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            submit();
-          }
+    <div ref={hostRef} className="relative">
+      <button
+        type="button"
+        className="db-btn db-property-color-btn"
+        style={{
+          backgroundColor: activePreset.value,
+          color: getReadableTextColor(activePreset.value),
         }}
-        placeholder="Property name"
-        className="mb-2 h-8 text-[13px]"
-      />
-      <select
-        value={type}
-        onChange={(event) => setType(event.target.value as WorkspaceDatabaseField["type"])}
-        className="mb-3 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 text-[13px] text-[var(--text)] outline-none"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!open) {
+            const rect = hostRef.current?.getBoundingClientRect();
+            if (rect) {
+              const menuWidth = 120;
+              const menuHeight = 8 + (OPTION_COLOR_PRESETS.length * 32) + 8;
+              let left = rect.right + 8;
+              if (left + menuWidth > window.innerWidth - 8) {
+                left = Math.max(8, rect.left - menuWidth - 8);
+              }
+              let top = rect.top - 8;
+              if (top + menuHeight > window.innerHeight - 8) {
+                top = Math.max(8, window.innerHeight - menuHeight - 8);
+              }
+              setMenuPosition({ left, top });
+            }
+          }
+          setOpen((prev) => !prev);
+        }}
       >
-        {QUICK_ADD_TYPES.map((entry) => (
-          <option key={entry.value} value={entry.value}>{entry.label}</option>
-        ))}
-      </select>
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={onOpenSchema}
-          className="text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+        {activePreset.label}
+      </button>
+      {open && menuPosition && createPortal(
+        <div
+          ref={menuRef}
+          className="db-dropdown-panel db-property-color-menu"
+          style={{ position: "fixed", left: menuPosition.left, top: menuPosition.top, zIndex: 160 }}
         >
-          Edit schema…
-        </button>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!name.trim()}
-          className="rounded-md bg-[var(--accent)] px-3 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Add
-        </button>
-      </div>
+          {OPTION_COLOR_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              className={`db-record-picker-item db-property-color-item w-full text-left ${
+                preset.value.toLowerCase() === color.toLowerCase() ? "db-property-color-item--active" : ""
+              }`}
+              onClick={() => {
+                onChange(preset.value);
+                setOpen(false);
+              }}
+            >
+              <span
+                className="db-property-color-pill"
+                style={{
+                  backgroundColor: preset.value,
+                  color: getReadableTextColor(preset.value),
+                }}
+              >
+                {preset.label}
+              </span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

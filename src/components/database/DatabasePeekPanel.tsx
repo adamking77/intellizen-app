@@ -1,53 +1,30 @@
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Copy,
-  GripVertical,
-  Maximize2,
-  Minimize2,
-  Pin,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeftRight, Copy, Maximize2, Minimize2, Trash2, X } from "lucide-react";
 
 import { TaskRelationsSection } from "@/components/database/primitives/TaskRelationsSection";
+import { DatabaseRichTextEditor } from "@/components/database/primitives/DatabaseRichTextEditor";
+import { TableCell } from "@/components/database/primitives/TableCell";
+import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
-import { InlineMultiPillPicker } from "@/components/database/primitives/InlineMultiPillPicker";
-import { InlinePillPicker } from "@/components/database/primitives/InlinePillPicker";
-import { InlineRelationEditor } from "@/components/database/primitives/InlineRelationEditor";
-import { MarkdownToolbar } from "@/components/database/primitives/MarkdownToolbar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
   getFieldValue,
-  getRecordTitle,
   getSuggestedHeaderFields,
+  resolveRelationLabel,
 } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,
+  WorkspaceDatabaseField,
   WorkspaceDatabaseFieldValue,
   WorkspaceDatabaseModel,
+  WorkspaceDatabaseSchemaSaveOptions,
+  WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
-import { cn, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 
-let lastPanelWidth = 520;
+let lastPanelWidth = 560;
 
 interface DatabasePeekPanelProps {
   database: WorkspaceDatabaseModel;
@@ -66,6 +43,19 @@ interface DatabasePeekPanelProps {
     values: string[],
   ) => Promise<void> | void;
   onCreateRecord: (databaseId: string, seed?: Record<string, WorkspaceDatabaseFieldValue>) => Promise<string | null>;
+  onUpdateViewConfig: (
+    databaseId: string,
+    viewId: string,
+    input: Partial<WorkspaceDatabaseViewConfig>,
+  ) => Promise<void> | void;
+  onSaveSchema: (
+    databaseId: string,
+    schema: WorkspaceDatabaseModel["schema"],
+    records?: WorkspaceDatabaseModel["records"],
+    options?: WorkspaceDatabaseSchemaSaveOptions,
+  ) => Promise<void> | void;
+  onDeleteRecords: (recordIds: string[]) => Promise<void> | void;
+  onDuplicateRecords: (databaseId: string, recordIds: string[]) => Promise<void> | void;
   onSaveHeaderFields: (databaseId: string, fieldIds: string[]) => Promise<void> | void;
 }
 
@@ -81,522 +71,608 @@ export function DatabasePeekPanel({
   onUpdateBody,
   onUpdateRelation,
   onCreateRecord,
+  onUpdateViewConfig,
+  onSaveSchema,
+  onDeleteRecords,
+  onDuplicateRecords,
   onSaveHeaderFields,
 }: DatabasePeekPanelProps) {
-  const [width, setWidth] = useState(lastPanelWidth);
-  const [isFullPage, setIsFullPage] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [panelWidth, setPanelWidth] = useState(lastPanelWidth);
+  const [fullPage, setFullPage] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(String(record?._body ?? ""));
+  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [showHeaderPicker, setShowHeaderPicker] = useState(false);
+  const [headerDragId, setHeaderDragId] = useState<string | null>(null);
+  const [headerFieldIds, setHeaderFieldIds] = useState<string[]>([]);
+  const [headerFieldOrder, setHeaderFieldOrder] = useState<string[]>([]);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
-  const [customizeSummaryOpen, setCustomizeSummaryOpen] = useState(false);
-  const [entered, setEntered] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const customizeAnchorRef = useRef<HTMLDivElement | null>(null);
-  const widthRef = useRef(lastPanelWidth);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const lastSavedNotesRef = useRef(String(record?._body ?? ""));
+  const notesSaveSeqRef = useRef(0);
+  const headerPickerRef = useRef<HTMLDivElement | null>(null);
+  const propertyRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(raf);
+    requestAnimationFrame(() => setVisible(true));
   }, []);
 
   useEffect(() => {
-    if (!record) return;
-    const activeRecord = record;
+    setNotesDraft(String(record?._body ?? ""));
+    lastSavedNotesRef.current = String(record?._body ?? "");
+    setNotesStatus("idle");
+    setEditingFieldId(null);
+  }, [record?.id]);
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        void onDuplicate(database.id, activeRecord.id);
-      }
-      if (event.key === "Delete" && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement | null)?.tagName ?? "")) {
-        event.preventDefault();
-        void onDelete(database.id, activeRecord.id);
-      }
+  useEffect(() => {
+    if (!record || notesStatus !== "dirty") return;
+    const handle = window.setTimeout(() => {
+      const nextBody = notesDraft || null;
+      const requestId = ++notesSaveSeqRef.current;
+      setNotesStatus("saving");
+      Promise.resolve(onUpdateBody(record.id, nextBody))
+        .then(() => {
+          if (notesSaveSeqRef.current !== requestId) return;
+          lastSavedNotesRef.current = notesDraft;
+          setNotesStatus("saved");
+        })
+        .catch(() => {
+          if (notesSaveSeqRef.current !== requestId) return;
+          setNotesStatus("dirty");
+        });
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [notesDraft, notesStatus, onUpdateBody, record]);
+
+  useEffect(() => {
+    if (notesStatus !== "saved") return;
+    const handle = window.setTimeout(() => setNotesStatus("idle"), 1200);
+    return () => window.clearTimeout(handle);
+  }, [notesStatus]);
+
+  const animateClose = useCallback(() => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") animateClose();
     }
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [database.id, onClose, onDelete, onDuplicate, record]);
+  }, [animateClose]);
 
   useEffect(() => {
-    const persisted = window.localStorage.getItem("database-peek-width");
-    if (!persisted) return;
-    const parsed = Number(persisted);
-    if (Number.isFinite(parsed) && parsed >= 380) {
-      lastPanelWidth = parsed;
-      setWidth(parsed);
-    }
-  }, []);
+    if (!showHeaderPicker) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (headerPickerRef.current && !headerPickerRef.current.contains(target)) {
+        setShowHeaderPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [showHeaderPicker]);
 
-  const titleField =
-    (database.headerFieldIds?.[0] ? database.schema.find((field) => field.id === database.headerFieldIds?.[0]) : undefined) ??
-    database.schema.find((field) => field.type === "text") ??
-    database.schema[0];
-  const effectiveHeaderFieldIds = (database.headerFieldIds?.length
-    ? database.headerFieldIds
-    : getSuggestedHeaderFields(database)
-  ).filter((fieldId) => database.schema.some((field) => field.id === fieldId));
-  const summaryFieldIds = effectiveHeaderFieldIds.filter((fieldId) => fieldId !== titleField?.id).slice(0, 5);
-  const summaryFields = summaryFieldIds
-    .map((fieldId) => database.schema.find((field) => field.id === fieldId))
-    .filter((field): field is NonNullable<typeof field> => Boolean(field));
-  const nonPinnedFields = database.schema.filter(
-    (field) => field.id !== titleField?.id && !summaryFieldIds.includes(field.id),
-  );
-  const taskRelationFields = database.schema.filter((field) => {
-    if (field.type !== "relation") return false;
-    const targetDatabaseId = field.relation?.targetDatabaseId ?? database.id;
-    const targetDatabase =
-      targetDatabaseId === database.id
-        ? database
-        : catalog.find((entry) => entry.id === targetDatabaseId);
-    return Boolean(
-      targetDatabase?.schema.some((candidate) => candidate.type === "status" || candidate.type === "checkbox"),
-    );
-  });
-
-  if (!record) {
-    return null;
+  function handleChange(fieldId: string, value: string | number | boolean | string[] | null) {
+    if (!record) return;
+    void onUpdateField(record.id, fieldId, value);
   }
 
-  function startResize(event: React.PointerEvent<HTMLDivElement>) {
+  function handleDelete() {
+    if (!record) return;
+    void onDelete(database.id, record.id);
+    animateClose();
+  }
+
+  const titleField = database.schema.find((field) => field.type === "text");
+  const titleValue = titleField ? String(record?.[titleField.id] ?? "") : "Untitled";
+  useEffect(() => {
+    setTitleDraft(titleValue);
+  }, [record?.id, titleValue]);
+
+  const bodyFields = useMemo(
+    () => database.schema.filter((field) => field !== titleField),
+    [database.schema, titleField],
+  );
+
+  const suggestedHeaderFields = useMemo(
+    () => getSuggestedHeaderFields(database),
+    [database],
+  );
+
+  const displayedHeaderFields = useMemo(() => {
+    const selected = headerFieldIds
+      .map((fieldId) => bodyFields.find((field) => field.id === fieldId))
+      .filter((field): field is WorkspaceDatabaseField => Boolean(field));
+    if (selected.length) return selected.slice(0, 5);
+    return suggestedHeaderFields
+      .map((fieldId) => bodyFields.find((field) => field.id === fieldId))
+      .filter((field): field is WorkspaceDatabaseField => Boolean(field))
+      .slice(0, 5);
+  }, [bodyFields, headerFieldIds, suggestedHeaderFields]);
+
+  const createdAtField = database.schema.find((field) => field.type === "createdAt");
+  const editedAtField = database.schema.find((field) => field.type === "lastEditedAt");
+
+  useEffect(() => {
+    const allowed = new Set(bodyFields.map((field) => field.id));
+    const configured = (database.headerFieldIds ?? []).filter((fieldId) => allowed.has(fieldId)).slice(0, 5);
+    setHeaderFieldIds(configured);
+    setHeaderFieldOrder([
+      ...configured,
+      ...bodyFields.map((field) => field.id).filter((fieldId) => !configured.includes(fieldId)),
+    ]);
+  }, [database.headerFieldIds, bodyFields]);
+
+  function handlePanelResizeStart(event: React.MouseEvent<HTMLDivElement>) {
+    if (fullPage) return;
     event.preventDefault();
     const startX = event.clientX;
-    const startWidth = widthRef.current;
-    document.body.style.cursor = "ew-resize";
-    document.body.style.userSelect = "none";
-
-    function handleMove(moveEvent: PointerEvent) {
-      const nextWidth = Math.max(380, Math.min(window.innerWidth * 0.92, startWidth + (startX - moveEvent.clientX)));
-      widthRef.current = nextWidth;
-      setWidth(nextWidth);
-    }
-
-    function handleUp() {
-      lastPanelWidth = widthRef.current;
-      window.localStorage.setItem("database-peek-width", String(widthRef.current));
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    }
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
+    const startWidth = panelWidth;
+    const min = 380;
+    const max = Math.max(min, Math.floor(window.innerWidth * 0.92));
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = Math.max(min, Math.min(max, startWidth + (startX - moveEvent.clientX)));
+      lastPanelWidth = next;
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
-    if (!event.over || event.active.id === event.over.id || !titleField) return;
-    const next = arrayMove(summaryFieldIds, summaryFieldIds.indexOf(String(event.active.id)), summaryFieldIds.indexOf(String(event.over.id)));
-    void onSaveHeaderFields(database.id, [titleField.id, ...next]);
+  function togglePanelWidth() {
+    if (fullPage) return;
+    const compactWidth = 440;
+    const expandedWidth = Math.min(Math.floor(window.innerWidth * 0.72), 1040);
+    const nextWidth = panelWidth < ((compactWidth + expandedWidth) / 2) ? expandedWidth : compactWidth;
+    lastPanelWidth = nextWidth;
+    setPanelWidth(nextWidth);
   }
+
+  function updateNotes(nextNotes: string) {
+    setNotesDraft(nextNotes);
+    setNotesStatus(nextNotes === lastSavedNotesRef.current ? "idle" : "dirty");
+  }
+
+  function flushNotesSave() {
+    if (!record || notesStatus !== "dirty") return;
+    const nextBody = notesDraft || null;
+    const requestId = ++notesSaveSeqRef.current;
+    setNotesStatus("saving");
+    Promise.resolve(onUpdateBody(record.id, nextBody))
+      .then(() => {
+        if (notesSaveSeqRef.current !== requestId) return;
+        lastSavedNotesRef.current = notesDraft;
+        setNotesStatus("saved");
+      })
+      .catch(() => {
+        if (notesSaveSeqRef.current !== requestId) return;
+        setNotesStatus("dirty");
+      });
+  }
+
+  function persistHeaderFields(nextFieldIds: string[]) {
+    void onSaveHeaderFields(database.id, nextFieldIds);
+  }
+
+  if (!record) return null;
+
+  const isEditableField = (field: WorkspaceDatabaseField) =>
+    field.type !== "createdAt"
+    && field.type !== "lastEditedAt"
+    && field.type !== "formula"
+    && field.type !== "rollup";
 
   return (
-    <aside
-      className={cn(
-        "absolute inset-y-0 right-0 z-40 flex flex-col border-l border-[var(--border)] bg-[var(--base)] transition-transform duration-200 ease-[var(--ease-out)]",
-        isFullPage ? "w-full" : "",
-      )}
-      style={{
-        width: isFullPage ? "100%" : width,
-        transform: entered ? "translateX(0)" : "translateX(100%)",
-      }}
-    >
+    <>
       <div
-        className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize bg-transparent"
-        onPointerDown={startResize}
+        className="fixed inset-0 z-40"
+        style={{
+          backgroundColor: visible ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0)",
+          transition: "background-color 200ms ease-out",
+        }}
+        onClick={animateClose}
       />
 
-      <div className="border-b border-[var(--border)] px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 space-y-2">
-            {titleField ? (
-              <Input
-                defaultValue={String(record[titleField.id] ?? "")}
-                onBlur={(event) => onUpdateField(record.id, titleField.id, event.target.value || null)}
-                className="h-auto border-transparent bg-transparent px-0 text-[20px] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none"
-              />
-            ) : (
-              <div className="text-[20px] font-semibold tracking-[-0.03em] text-[var(--text)]">
-                {getRecordTitle(record, database)}
+      <div
+        className={`db-record-panel fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-200 ease-out ${fullPage ? "db-record-panel--fullpage" : ""}`}
+        style={{
+          width: fullPage ? "100vw" : `${panelWidth}px`,
+          minWidth: fullPage ? undefined : "360px",
+          transform: visible ? "translateX(0)" : "translateX(100%)",
+          boxShadow: visible ? undefined : "none",
+        }}
+      >
+        {!fullPage && (
+          <div
+            className="db-record-resize-handle"
+            onMouseDown={handlePanelResizeStart}
+            title="Resize panel"
+          />
+        )}
+
+        <div className="db-record-header flex-shrink-0">
+          <div className="db-record-title-wrap">
+            <input
+              className="db-record-title-input"
+              value={titleDraft}
+              placeholder="Untitled"
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => {
+                if (titleField && titleDraft !== titleValue) {
+                  handleChange(titleField.id, titleDraft || null);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLInputElement).blur();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setTitleDraft(titleValue);
+                }
+              }}
+            />
+          </div>
+          <div className="db-record-header-actions">
+            <button type="button" className="db-icon-btn-plain" onClick={togglePanelWidth} title="Resize panel">
+              <ArrowLeftRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="db-icon-btn-plain"
+              onClick={() => setFullPage((v) => !v)}
+              title={fullPage ? "Exit full page" : "Open as page"}
+            >
+              {fullPage ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              className="db-icon-btn-plain"
+              onClick={() => { if (record) void onDuplicate(database.id, record.id); }}
+              title="Duplicate record"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="db-icon-btn-plain db-icon-btn-plain-danger"
+              onClick={() => setConfirmDelete(true)}
+              title="Delete record"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <button type="button" className="db-icon-btn-plain" onClick={animateClose} title="Close (Esc)">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {(createdAtField || editedAtField) && (
+          <div className="db-record-meta">
+            {createdAtField && <span className="db-record-meta-item">Created {formatDateTime(record._createdAt ?? null)}</span>}
+            {editedAtField && <span className="db-record-meta-item">Edited {formatDateTime(record._updatedAt ?? null)}</span>}
+          </div>
+        )}
+
+        <div className="db-record-body flex-1 overflow-y-auto">
+          {displayedHeaderFields.length > 0 && (
+            <div className="db-record-section db-record-key-section px-6 pt-4 pb-1 relative">
+              <div className="db-record-section-head">
+                <div className="db-record-section-title">Summary</div>
+                <button
+                  className="db-btn db-record-editor-btn db-record-key-config-btn text-[11px] opacity-65 hover:opacity-100"
+                  onClick={() => setShowHeaderPicker((v) => !v)}
+                >
+                  Customize view
+                </button>
               </div>
-            )}
-            <div className="text-[12px] text-[var(--overlay-1)]">
-              Created {formatDateTime(record._createdAt ?? null)} · Edited {formatDateTime(record._updatedAt ?? null)}
+              <div className="db-record-key-props">
+                {displayedHeaderFields.map((field) => (
+                  <button
+                    key={field.id}
+                    type="button"
+                    className="db-record-key-prop"
+                    onClick={() => propertyRowRefs.current.get(field.id)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                  >
+                    <span className="db-record-key-label">{field.name}</span>
+                    <div className="db-record-key-value">
+                      <SummaryFieldValue field={field} record={record} database={database} catalog={catalog} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {showHeaderPicker && (
+                <div
+                  ref={headerPickerRef}
+                  className="db-dropdown-panel db-record-header-fields-panel absolute right-6 top-9 z-20 p-2 min-w-[240px]"
+                >
+                  <div className="db-record-header-fields-title text-xs font-medium mb-1">Pin properties to header</div>
+                  <div className="db-record-header-fields-hint text-[11px] mb-2">Choose up to 5 and drag to reorder.</div>
+                  <div className="db-record-header-fields-list max-h-[220px] overflow-y-auto space-y-0.5">
+                    {headerFieldOrder.map((fieldId) => {
+                      const field = bodyFields.find((candidate) => candidate.id === fieldId);
+                      if (!field) return null;
+                      const selected = headerFieldIds.includes(field.id);
+                      return (
+                        <label
+                          key={field.id}
+                          className="db-record-header-field-row flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer"
+                          draggable
+                          onDragStart={() => setHeaderDragId(field.id)}
+                          onDragEnd={() => setHeaderDragId(null)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (!headerDragId || headerDragId === field.id) return;
+                            setHeaderFieldOrder((prev) => {
+                              const next = [...prev];
+                              const from = next.indexOf(headerDragId);
+                              const to = next.indexOf(field.id);
+                              if (from < 0 || to < 0) return prev;
+                              const [moved] = next.splice(from, 1);
+                              next.splice(to, 0, moved);
+                              const reorderedSelected = next.filter((id) => headerFieldIds.includes(id)).slice(0, 5);
+                              setHeaderFieldIds(reorderedSelected);
+                              persistHeaderFields(reorderedSelected);
+                              return next;
+                            });
+                          }}
+                        >
+                          <span className="db-record-header-field-handle opacity-40">⋮⋮</span>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={!selected && headerFieldIds.length >= 5}
+                            onChange={(e) => {
+                              const nextSelected = e.target.checked
+                                ? headerFieldOrder.filter((id) => id === field.id || headerFieldIds.includes(id)).slice(0, 5)
+                                : headerFieldIds.filter((id) => id !== field.id);
+                              setHeaderFieldIds(nextSelected);
+                              persistHeaderFields(nextSelected);
+                            }}
+                          />
+                          <span className="db-record-header-field-name">{field.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="db-panel-add flex items-center justify-between mt-2">
+                    <button
+                      className="db-btn"
+                      onClick={() => {
+                        setHeaderFieldIds([]);
+                        setHeaderFieldOrder(bodyFields.map((field) => field.id));
+                        persistHeaderFields([]);
+                      }}
+                    >
+                      Reset
+                    </button>
+                    <button className="db-btn" onClick={() => setShowHeaderPicker(false)}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="db-record-section px-6 py-3">
+            <details
+              className="db-record-properties-details"
+              open={propertiesOpen}
+              onToggle={(event) => setPropertiesOpen((event.currentTarget as HTMLDetailsElement).open)}
+            >
+              <summary className="db-record-properties-summary">
+                <span className="db-record-section-title">Properties</span>
+                <span className="db-record-section-count">{bodyFields.length}</span>
+              </summary>
+              <div className="db-record-prop-list">
+                {bodyFields.map((field) => (
+	                  <div
+	                    key={field.id}
+                    ref={(node) => {
+                      if (node) propertyRowRefs.current.set(field.id, node);
+                      else propertyRowRefs.current.delete(field.id);
+                    }}
+	                    className="db-record-prop-row"
+	                    onClick={(event) => {
+	                      const target = event.target as HTMLElement;
+	                      if (target.closest("a, button, input, textarea, select, label")) return;
+	                      if (field.type === "checkbox") {
+	                        handleChange(field.id, record[field.id] !== true);
+	                        setEditingFieldId(null);
+	                        return;
+	                      }
+	                      if (!isEditableField(field)) return;
+	                      setEditingFieldId((current) => (current === field.id ? null : field.id));
+	                    }}
+	                  >
+                    <div className="db-record-prop-label">{field.name}</div>
+                    <div className="db-record-prop-value">
+                      {editingFieldId === field.id ? (
+                        <InlineEditor
+                          record={record}
+                          field={field}
+                          database={database}
+                          catalog={catalog}
+                          onSave={(value) => {
+                            void onUpdateField(record.id, field.id, value as WorkspaceDatabaseFieldValue);
+                            setEditingFieldId(null);
+                          }}
+                          onCancel={() => setEditingFieldId(null)}
+                        />
+                      ) : (
+                        <TableCell
+                          record={record}
+                          field={field}
+                          database={database}
+                          catalog={catalog}
+                          onToggleCheckbox={() => {
+                            handleChange(field.id, record[field.id] !== true);
+                            setEditingFieldId(null);
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          </div>
+
+          {database.schema
+            .filter((field) => field.type === "relation")
+            .map((field) => {
+              const targetDatabase = resolveTargetDatabase(database, field, catalog);
+              if (!targetDatabase) return null;
+              return (
+                <TaskRelationsSection
+                  key={field.id}
+                  sourceDatabaseId={database.id}
+                  sourceRecordId={record.id}
+                  fieldId={field.id}
+                  fieldName={field.name}
+                  targetDatabase={targetDatabase}
+                  relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
+                  catalog={catalog}
+                  onOpenRecord={onOpenRecord}
+                  onCreateRecord={onCreateRecord}
+                  onUpdateField={onUpdateField}
+                  onUpdateRelation={onUpdateRelation}
+                  onUpdateViewConfig={onUpdateViewConfig}
+                  onSaveSchema={onSaveSchema}
+                  onDeleteRecord={onDelete}
+                  onDeleteRecords={onDeleteRecords}
+                  onDuplicateRecord={onDuplicate}
+                  onDuplicateRecords={onDuplicateRecords}
+                />
+              );
+            })}
+
+          <div className="db-record-section px-6 pb-6">
+            <div className="db-record-section-head db-record-notes-head">
+              <div className="db-record-notes-meta">
+                <div className="db-record-section-title mb-0">Notes</div>
+                <span className="db-record-notes-status">
+                  {notesStatus === "saving"
+                    ? "Saving..."
+                    : notesStatus === "saved"
+                      ? "Saved"
+                      : notesStatus === "dirty"
+                        ? "Editing..."
+                        : ""}
+                </span>
+                <span className="db-record-editor-count">{wordCount(notesDraft)} words</span>
+              </div>
+            </div>
+            <div className="db-record-editor db-record-notes-rich" onBlur={flushNotesSave}>
+              <DatabaseRichTextEditor
+                initialValue={notesDraft}
+                onChange={updateNotes}
+              />
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <IconAction
-              label={isFullPage ? "Exit full page" : "Full page"}
-              icon={isFullPage ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              onClick={() => setIsFullPage((current) => !current)}
-            />
-            <IconAction label="Duplicate" icon={<Copy className="h-4 w-4" />} onClick={() => void onDuplicate(database.id, record.id)} />
-            <IconAction
-              label="Delete"
-              icon={<Trash2 className="h-4 w-4" />}
-              className="hover:bg-[rgba(243,139,168,0.14)] hover:text-[var(--red)]"
-              onClick={() => void onDelete(database.id, record.id)}
-            />
-            <IconAction label="Close" icon={<X className="h-4 w-4" />} onClick={onClose} />
-          </div>
+        </div>
+
+        <div className="db-record-footer">
+          <button className="db-btn db-btn-danger" onClick={() => setConfirmDelete(true)}>
+            Delete
+          </button>
+          <span className="db-toolbar-spacer" />
+          <span className="db-record-footer-note">Changes save automatically</span>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-        <section className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--mantle)] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[13px] font-semibold text-[var(--text)]">Summary</div>
-            <div ref={customizeAnchorRef}>
-              <button
-                type="button"
-                onClick={() => setCustomizeSummaryOpen((current) => !current)}
-                className="text-[12px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
-              >
-                Customize view
-              </button>
-              {customizeSummaryOpen ? (
-                <div className="absolute right-6 mt-2 w-64 rounded-2xl border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]">
-                  {database.schema
-                    .filter((field) => field.id !== titleField?.id)
-                    .map((field) => {
-                      const selected = summaryFieldIds.includes(field.id);
-                      return (
-                        <button
-                          key={field.id}
-                          type="button"
-                          onClick={() => {
-                            const nextSummary = selected
-                              ? summaryFieldIds.filter((candidate) => candidate !== field.id)
-                              : [...summaryFieldIds, field.id].slice(0, 5);
-                            void onSaveHeaderFields(database.id, titleField ? [titleField.id, ...nextSummary] : nextSummary);
-                          }}
-                          className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                        >
-                          <span>{field.name}</span>
-                          {selected ? <Pin className="h-3.5 w-3.5 text-[var(--accent)]" /> : null}
-                        </button>
-                      );
-                    })}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={summaryFieldIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {summaryFields.length ? (
-                  summaryFields.map((field) => (
-                    <SummaryFieldRow
-                      key={field.id}
-                      database={database}
-                      field={field}
-                      record={record}
-                      catalog={catalog}
-                      onUpdateField={onUpdateField}
-                      onUpdateRelation={onUpdateRelation}
-                    />
-                  ))
-                ) : (
-                  <div className="text-[12px] text-[var(--overlay-1)]">No pinned summary fields</div>
-                )}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </section>
-
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--mantle)] p-4">
-          <button
-            type="button"
-            onClick={() => setPropertiesOpen((current) => !current)}
-            className="flex w-full items-center justify-between text-left"
-          >
-            <div className="text-[13px] font-semibold text-[var(--text)]">
-              Properties ({nonPinnedFields.length})
-            </div>
-            <div className="text-[12px] text-[var(--overlay-1)]">{propertiesOpen ? "Hide" : "Show"}</div>
-          </button>
-
-          {propertiesOpen ? (
-            <div className="mt-4 space-y-3">
-              {nonPinnedFields.map((field) => (
-                <div key={field.id} className="grid gap-2 md:grid-cols-[140px_minmax(0,1fr)] md:items-start">
-                  <div className="pt-1 text-[12px] font-medium text-[var(--subtext-0)]">{field.name}</div>
-                  <FieldValueEditor
-                    database={database}
-                    field={field}
-                    record={record}
-                    catalog={catalog}
-                    onUpdateField={onUpdateField}
-                    onUpdateRelation={onUpdateRelation}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
-
-        {taskRelationFields.map((field) => {
-          const targetDatabaseId = field.relation?.targetDatabaseId ?? database.id;
-          const targetCatalog = targetDatabaseId === database.id ? null : catalog.find((entry) => entry.id === targetDatabaseId);
-          const targetDatabase: WorkspaceDatabaseModel =
-            targetCatalog
-              ? {
-                  id: targetCatalog.id,
-                  name: targetCatalog.name,
-                  schema: targetCatalog.schema,
-                  records: targetCatalog.records,
-                  views: [],
-                  headerFieldIds: targetCatalog.headerFieldIds,
-                }
-              : database;
-          return (
-            <TaskRelationsSection
-              key={field.id}
-              sourceDatabaseId={database.id}
-              sourceRecordId={record.id}
-              fieldId={field.id}
-              fieldName={field.name}
-              targetDatabase={targetDatabase}
-              relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
-              catalog={catalog}
-              onOpenRecord={onOpenRecord}
-              onCreateRecord={onCreateRecord}
-              onUpdateField={onUpdateField}
-              onUpdateRelation={onUpdateRelation}
-            />
-          );
-        })}
-
-        <section className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--mantle)] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[13px] font-semibold text-[var(--text)]">Notes</div>
-            <div className="text-[12px] text-[var(--overlay-1)]">
-              {(record._body?.trim().split(/\s+/).filter(Boolean).length ?? 0)} words
-            </div>
-          </div>
-          <MarkdownToolbar textareaRef={textareaRef} />
-          <Textarea
-            ref={textareaRef}
-            defaultValue={record._body ?? ""}
-            onBlur={(event) => onUpdateBody(record.id, event.target.value || null)}
-            placeholder="Record notes, context, and long-form detail"
-            className="min-h-[220px] bg-[var(--base)]"
-          />
-        </section>
-      </div>
-    </aside>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete record"
+        message="This action cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </>
   );
 }
 
-function SummaryFieldRow({
-  database,
-  field,
-  record,
-  catalog,
-  onUpdateField,
-  onUpdateRelation,
-}: {
-  database: WorkspaceDatabaseModel;
-  field: WorkspaceDatabaseModel["schema"][number];
-  record: WorkspaceDatabaseModel["records"][number];
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  onUpdateField: (recordId: string, fieldId: string, value: WorkspaceDatabaseFieldValue) => Promise<void> | void;
-  onUpdateRelation: (
-    databaseId: string,
-    recordId: string,
-    fieldId: string,
-    values: string[],
-  ) => Promise<void> | void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--base)] px-3 py-2"
-    >
-      <button
-        type="button"
-        className="mt-1 text-[var(--overlay-1)]"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">{field.name}</div>
-        <FieldValueEditor
-          database={database}
-          field={field}
-          record={record}
-          catalog={catalog}
-          onUpdateField={onUpdateField}
-          onUpdateRelation={onUpdateRelation}
-        />
-      </div>
-    </div>
-  );
+function wordCount(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
 }
 
-function FieldValueEditor({
-  database,
+function SummaryFieldValue({
   field,
   record,
+  database,
   catalog,
-  onUpdateField,
-  onUpdateRelation,
 }: {
-  database: WorkspaceDatabaseModel;
-  field: WorkspaceDatabaseModel["schema"][number];
+  field: WorkspaceDatabaseField;
   record: WorkspaceDatabaseModel["records"][number];
+  database: WorkspaceDatabaseModel;
   catalog: WorkspaceDatabaseCatalogEntry[];
-  onUpdateField: (recordId: string, fieldId: string, value: WorkspaceDatabaseFieldValue) => Promise<void> | void;
-  onUpdateRelation: (
-    databaseId: string,
-    recordId: string,
-    fieldId: string,
-    values: string[],
-  ) => Promise<void> | void;
 }) {
   const value = getFieldValue(record, field, database, catalog);
   const displayValue = getFieldDisplayValue(record, field, database, catalog);
 
+  if (field.type === "status" && typeof value === "string" && value) {
+    return <Badge color={resolveStatusColor(value, field)}>{value}</Badge>;
+  }
+  if (field.type === "select" && typeof value === "string" && value) {
+    return <Badge color={resolveFieldOptionColor(field, value)}>{value}</Badge>;
+  }
+  if (field.type === "multiselect" && Array.isArray(value) && value.length > 0) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {value.map((v) => <Badge key={v} color={resolveFieldOptionColor(field, v)}>{v}</Badge>)}
+      </div>
+    );
+  }
+  if (field.type === "relation" && Array.isArray(value) && value.length > 0) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {value.map((id) => {
+          const label = resolveRelationLabel(field, String(id), catalog);
+          return <Badge key={id} color={resolveRelationColor(label)}>{label}</Badge>;
+        })}
+      </div>
+    );
+  }
   if (field.type === "checkbox") {
-    return (
-      <div onClick={(event) => event.stopPropagation()}>
-        <Checkbox checked={Boolean(value)} onCheckedChange={(checked) => onUpdateField(record.id, field.id, checked)} />
-      </div>
-    );
+    return <span>{value === true ? "Yes" : "No"}</span>;
   }
-
-  if (field.type === "status") {
-    return (
-      <InlinePillPicker
-        options={field.options ?? []}
-        value={typeof value === "string" ? value : null}
-        getColor={resolveStatusColor}
-        onChange={(next) => onUpdateField(record.id, field.id, next)}
-      />
-    );
-  }
-
-  if (field.type === "select") {
-    return (
-      <InlinePillPicker
-        options={field.options ?? []}
-        value={typeof value === "string" ? value : null}
-        getColor={(option) => resolveFieldOptionColor(field, option)}
-        onChange={(next) => onUpdateField(record.id, field.id, next)}
-      />
-    );
-  }
-
-  if (field.type === "multiselect") {
-    return (
-      <InlineMultiPillPicker
-        options={field.options ?? []}
-        values={Array.isArray(value) ? value : []}
-        getColor={(option) => resolveFieldOptionColor(field, option)}
-        onChange={(next) => onUpdateField(record.id, field.id, next)}
-      />
-    );
-  }
-
-  if (field.type === "relation") {
-    const targetDatabaseId = field.relation?.targetDatabaseId ?? database.id;
-    const targetDatabase =
-      catalog.find((candidate) => candidate.id === targetDatabaseId) ??
-      catalog.find((candidate) => candidate.id === database.id);
-    return (
-      <InlineRelationEditor
-        values={Array.isArray(value) ? value : []}
-        options={(targetDatabase?.records ?? []).map((candidate) => ({
-          id: candidate.id,
-          label: getRecordTitle(candidate, targetDatabase ?? database),
-          meta: candidate.id,
-        }))}
-        onChange={(next) => onUpdateRelation(database.id, record.id, field.id, next)}
-      />
-    );
-  }
-
-  if (field.type === "text" || field.type === "url" || field.type === "email" || field.type === "phone") {
-    return (
-      <Input
-        defaultValue={typeof value === "string" ? value : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => onUpdateField(record.id, field.id, event.target.value || null)}
-        className="h-8 bg-[var(--base)]"
-      />
-    );
-  }
-
-  if (field.type === "number") {
-    return (
-      <Input
-        type="number"
-        defaultValue={typeof value === "number" ? String(value) : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => onUpdateField(record.id, field.id, event.target.value ? Number(event.target.value) : null)}
-        className="h-8 bg-[var(--base)]"
-      />
-    );
-  }
-
-  if (field.type === "date") {
-    return (
-      <Input
-        type="date"
-        defaultValue={typeof value === "string" ? value.slice(0, 10) : ""}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => onUpdateField(record.id, field.id, event.target.value || null)}
-        className="h-8 bg-[var(--base)]"
-      />
-    );
-  }
-
-  if (field.type === "createdAt" || field.type === "lastEditedAt" || field.type === "formula" || field.type === "rollup") {
-    return (
-      <div className="opacity-60">
-        <Badge>{displayValue || "No value"}</Badge>
-      </div>
-    );
-  }
-
-  return (
-    <Badge color={resolveRelationColor(displayValue || "No value")}>
-      {displayValue || "No value"}
-    </Badge>
-  );
+  return <span className="truncate">{displayValue || "—"}</span>;
 }
 
-function IconAction({
-  icon,
-  label,
-  onClick,
-  className,
-}: {
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-        className,
-      )}
-      title={label}
-      aria-label={label}
-    >
-      {icon}
-    </button>
-  );
+function resolveTargetDatabase(
+  database: WorkspaceDatabaseModel,
+  field: WorkspaceDatabaseField,
+  catalog: WorkspaceDatabaseCatalogEntry[],
+) {
+  const targetDatabaseId = field.relation?.targetDatabaseId ?? database.id;
+  if (targetDatabaseId === database.id) {
+    return database;
+  }
+  const entry = catalog.find((candidate) => candidate.id === targetDatabaseId);
+  if (!entry) return null;
+  return {
+    id: entry.id,
+    name: entry.name,
+    schema: entry.schema,
+    records: entry.records,
+    views: entry.views,
+    headerFieldIds: entry.headerFieldIds,
+  } satisfies WorkspaceDatabaseModel;
 }
