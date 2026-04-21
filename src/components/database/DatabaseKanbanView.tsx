@@ -33,6 +33,7 @@ import type {
   WorkspaceDatabaseFieldValue,
   WorkspaceDatabaseModel,
 } from "@/lib/types";
+import { formatDate } from "@/lib/utils";
 
 interface DatabaseKanbanViewProps {
   database: WorkspaceDatabaseModel;
@@ -356,7 +357,6 @@ function KanbanCard({
     .filter((field): field is WorkspaceDatabaseField => Boolean(field));
   const propertyRows: Array<{
     key: string;
-    label: string;
     kind: "badges" | "text";
     badges?: Array<{ key: string; label: string; color?: string | null }>;
     value?: string;
@@ -370,7 +370,7 @@ function KanbanCard({
 
     if (field.type === "checkbox") {
       if (value === true) {
-        propertyRows.push({ key: field.id, label: field.name, kind: "text", value: "Yes" });
+        propertyRows.push({ key: field.id, kind: "text", value: field.name });
       }
       continue;
     }
@@ -379,7 +379,6 @@ function KanbanCard({
       const textValue = String(value);
       propertyRows.push({
         key: field.id,
-        label: field.name,
         kind: "badges",
         badges: [{
           key: field.id,
@@ -402,7 +401,6 @@ function KanbanCard({
       }
       propertyRows.push({
         key: field.id,
-        label: field.name,
         kind: "badges",
         badges,
       });
@@ -423,18 +421,18 @@ function KanbanCard({
       }
       propertyRows.push({
         key: field.id,
-        label: field.name,
         kind: "badges",
         badges,
       });
       continue;
     }
 
-    const displayValue = getFieldDisplayValue(record, field, database, catalog);
+    const displayValue = field.type === "date"
+      ? formatDate(String(value))
+      : getFieldDisplayValue(record, field, database, catalog);
     if (!displayValue) continue;
     propertyRows.push({
       key: field.id,
-      label: field.name,
       kind: "text",
       value: displayValue,
     });
@@ -487,7 +485,6 @@ function KanbanCard({
           <div className="db-kanban-card-fields">
             {propertyRows.map((row) => (
               <div key={row.key} className="db-kanban-card-field">
-                <span className="db-kanban-card-field-label">{row.label}</span>
                 {row.kind === "badges" ? (
                   <div className="db-kanban-card-field-badges">
                     {row.badges?.map((badge) => (

@@ -1552,6 +1552,7 @@ pre {
   align-items: center;
   gap: 2px;
   padding-bottom: 6px;
+  scrollbar-gutter: stable;
 }
 
 .db-tab-wrapper {
@@ -2926,7 +2927,7 @@ pre {
 
 .db-kanban-column {
   flex-shrink: 0;
-  width: 260px;
+  width: 288px;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -2976,7 +2977,7 @@ pre {
 
 .db-kanban-card {
   border-radius: 12px;
-  padding: 12px 12px 13px;
+  padding: 10px 10px 11px;
   font-size: 12px;
   cursor: grab;
   flex-shrink: 0;
@@ -3006,10 +3007,10 @@ pre {
 }
 
 .db-kanban-card-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  line-height: 1.35;
-  margin-bottom: 10px;
+  line-height: 1.3;
+  margin-bottom: 8px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -3020,16 +3021,16 @@ pre {
 .db-kanban-card-fields {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .db-kanban-card-field {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--subtext-0);
 }
 
@@ -3045,13 +3046,13 @@ pre {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--subtext-0);
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .db-kanban-card-field-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .db-kanban-card-actions {
@@ -3085,11 +3086,218 @@ pre {
   background: var(--surface-wash);
 }
 
+/* ─── Database dashboard ───────────────────────────────── */
+.db-dashboard-grid-shell {
+  width: 100%;
+}
+
+.db-dashboard-grid {
+  min-height: 240px;
+}
+
+.db-dashboard-grid > .react-grid-item {
+  transition:
+    left 180ms ease,
+    top 180ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.db-dashboard-grid > .react-grid-item.react-draggable-dragging,
+.db-dashboard-grid > .react-grid-item.resizing {
+  z-index: 12;
+}
+
+.db-dashboard-grid > .react-grid-item > .react-resizable {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.db-dashboard-grid > .react-grid-item > .react-resizable-handle::after {
+  content: none !important;
+}
+
+.db-dashboard-grid > .react-grid-placeholder {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-soft) 74%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border) 74%);
+}
+
+.db-dashboard-widget {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-wash) 28%, var(--mantle) 72%), var(--mantle));
+  transition:
+    border-color 140ms ease,
+    background-color 160ms ease;
+}
+
+.db-dashboard-widget:hover {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact {
+  height: 100%;
+}
+
+.db-dashboard-widget[data-view-type="chart"] {
+  background: var(--base);
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact .db-chart-surface {
+  height: 100%;
+  padding: 10px 12px 12px;
+  align-items: center;
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact .db-chart-frame {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+}
+
+.db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-root--compact .db-chart-surface {
+  padding-inline: 8px;
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-svg {
+  min-height: 0;
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-svg--donut {
+  min-height: 0;
+}
+
+.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-svg {
+  min-height: 0;
+}
+
+.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-svg--donut {
+  min-height: 0;
+}
+
+.db-dashboard-widget-grip {
+  cursor: grab;
+}
+
+.db-dashboard-widget-grip:active {
+  cursor: grabbing;
+}
+
+.db-dashboard-widget .react-resizable-handle {
+  position: absolute;
+  background: none !important;
+  background-image: none !important;
+  padding: 0;
+  margin: 0 !important;
+  transform: none !important;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.db-dashboard-widget:hover .react-resizable-handle,
+.db-dashboard-widget .react-grid-item.resizing .react-resizable-handle,
+.db-dashboard-grid > .react-grid-item.resizing .react-resizable-handle {
+  opacity: 1;
+}
+
+.db-dashboard-widget .react-resizable-handle::before {
+  content: none;
+}
+
+.db-dashboard-widget .react-resizable-handle-e,
+.db-dashboard-widget .react-resizable-handle-w {
+  top: 10px;
+  bottom: 10px;
+  width: 12px;
+}
+
+.db-dashboard-widget .react-resizable-handle-e {
+  right: -6px;
+  cursor: ew-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-w {
+  left: -6px;
+  cursor: ew-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-e::after,
+.db-dashboard-widget .react-resizable-handle-w::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 38%, var(--overlay-1) 62%);
+  opacity: 0.78;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.db-dashboard-widget:hover .react-resizable-handle-e::after,
+.db-dashboard-widget:hover .react-resizable-handle-w::after,
+.db-dashboard-widget:hover .react-resizable-handle-n::after,
+.db-dashboard-widget:hover .react-resizable-handle-s::after {
+  opacity: 1;
+}
+
+.db-dashboard-widget .react-resizable-handle-e::after {
+  right: 4px;
+}
+
+.db-dashboard-widget .react-resizable-handle-w::after {
+  left: 4px;
+}
+
+.db-dashboard-widget .react-resizable-handle-n,
+.db-dashboard-widget .react-resizable-handle-s {
+  left: 10px;
+  right: 10px;
+  height: 12px;
+}
+
+.db-dashboard-widget .react-resizable-handle-n {
+  top: -6px;
+  cursor: ns-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-s {
+  bottom: -6px;
+  cursor: ns-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-n::after,
+.db-dashboard-widget .react-resizable-handle-s::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 38%, var(--overlay-1) 62%);
+  opacity: 0.78;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.db-dashboard-widget .react-resizable-handle-n::after {
+  top: 4px;
+}
+
+.db-dashboard-widget .react-resizable-handle-s::after {
+  bottom: 4px;
+}
+
 /* ─── Chart view ────────────────────────────────────────── */
 .db-chart-root {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.db-chart-root--compact .db-chart-surface {
+  padding-top: 10px;
 }
 
 .db-chart-header {
@@ -3288,7 +3496,8 @@ pre {
 
 .db-chart-donut-segment {
   cursor: pointer;
-  transition: opacity 120ms ease;
+  transition:
+    opacity 120ms ease;
 }
 
 .db-chart-donut-layout {
@@ -3296,13 +3505,33 @@ pre {
   grid-template-columns: minmax(0, 1fr) 240px;
   gap: 12px;
   align-items: center;
+  justify-items: center;
+  justify-content: center;
   height: 100%;
+}
+
+.db-chart-donut-layout--side {
+  grid-template-columns: auto minmax(180px, 220px);
+}
+
+.db-chart-donut-layout--compact.db-chart-donut-layout--side {
+  gap: 10px;
+}
+
+.db-chart-donut-layout--stacked {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  align-content: start;
 }
 
 .db-chart-donut-total {
   font-size: 24px;
   font-weight: 700;
   fill: var(--text);
+}
+
+.db-chart-donut-layout--compact .db-chart-donut-total {
+  font-size: 28px;
 }
 
 .db-chart-donut-caption {
@@ -3312,11 +3541,33 @@ pre {
   letter-spacing: 0.12em;
 }
 
+.db-chart-donut-layout--compact .db-chart-donut-caption {
+  font-size: 12px;
+}
+
 .db-chart-legend {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 4px 0;
+  min-width: 0;
+}
+
+.db-chart-donut-layout--stacked .db-chart-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+  padding-top: 0;
+  max-height: none;
+  overflow: visible;
+  align-content: start;
+  width: min(100%, 420px);
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-donut-layout:not(.db-chart-donut-layout--stacked) .db-chart-legend {
+  max-height: 100%;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .db-chart-legend-row {
@@ -3328,7 +3579,19 @@ pre {
   cursor: pointer;
   padding: 8px 10px;
   border-radius: 10px;
-  transition: background-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-legend-row {
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.db-chart-donut-layout .db-chart-svg--donut {
+  display: block;
+  flex: none;
 }
 
 .db-chart-legend-row:hover {
@@ -3355,7 +3618,7 @@ pre {
 }
 
 @media (max-width: 980px) {
-  .db-chart-donut-layout {
+  .db-chart-root:not(.db-chart-root--compact) .db-chart-donut-layout {
     grid-template-columns: 1fr;
   }
 }

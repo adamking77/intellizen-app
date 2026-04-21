@@ -99,6 +99,7 @@ interface ViewTabBarProps {
   onOpenSchema: () => void;
   onImportCsv: () => void;
   onExportCsv: () => void;
+  onPinToDashboard: () => void;
   isImportingCsv: boolean;
 }
 
@@ -116,6 +117,7 @@ export function ViewTabBar({
   onOpenSchema,
   onImportCsv,
   onExportCsv,
+  onPinToDashboard,
   isImportingCsv,
 }: ViewTabBarProps) {
   const [addViewOpen, setAddViewOpen] = useState(false);
@@ -222,11 +224,11 @@ export function ViewTabBar({
 
   return (
     <>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={views.map((view) => view.id)} strategy={horizontalListSortingStrategy}>
-            <div className="db-tabs min-w-0 overflow-x-auto">
+            <div className="db-tabs min-w-0 flex-1 overflow-x-auto">
               {views.map((view) => (
                 <SortableViewTab
                   key={view.id}
@@ -278,7 +280,7 @@ export function ViewTabBar({
         </div>
       </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
         <div ref={filterRef} className="relative">
           <Button
             variant={filterCount > 0 ? "glow" : "ghost"}
@@ -336,6 +338,16 @@ export function ViewTabBar({
           </Button>
           {moreOpen ? (
             <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[180px]">
+              <button
+                type="button"
+                className="db-context-menu-item"
+                onClick={() => {
+                  closePanels();
+                  onPinToDashboard();
+                }}
+              >
+                Pin to dashboard
+              </button>
               <button
                 type="button"
                 className="db-context-menu-item"

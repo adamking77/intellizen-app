@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { DatabaseCalendarView } from "@/components/database/DatabaseCalendarView";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
@@ -22,6 +22,12 @@ import {
   findDefaultKanbanField,
   prepareCsvImport,
 } from "@/lib/database-core";
+import {
+  loadDatabaseDashboardPins,
+  saveDatabaseDashboardPins,
+  supportsPinnedDashboardView,
+  upsertDatabaseDashboardPin,
+} from "@/lib/database-dashboard";
 import { getVaultAbsolutePath, writeVaultFile } from "@/lib/vault";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { dirname } from "@tauri-apps/api/path";
@@ -76,6 +82,7 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
 export function DatabaseEditorView() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const databaseId = params.id ?? "";
 
@@ -107,10 +114,25 @@ export function DatabaseEditorView() {
       setActiveViewId(null);
       return;
     }
+    const requestedViewId = searchParams.get("view");
     setActiveViewId((current) =>
-      current && database.views.some((v) => v.id === current) ? current : database.views[0].id,
+      requestedViewId && database.views.some((v) => v.id === requestedViewId)
+        ? requestedViewId
+        : current && database.views.some((v) => v.id === current)
+          ? current
+          : database.views[0].id,
     );
-  }, [database]);
+  }, [database, searchParams]);
+
+  useEffect(() => {
+    if (!activeViewId) return;
+    if (searchParams.get("view") === activeViewId) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("view", activeViewId);
+      return next;
+    }, { replace: true });
+  }, [activeViewId, searchParams, setSearchParams]);
 
   const activeView = useMemo(
     () => database?.views.find((v) => v.id === activeViewId) ?? database?.views[0] ?? null,
@@ -548,6 +570,24 @@ export function DatabaseEditorView() {
     }
   }
 
+  function handlePinActiveViewToDashboard() {
+    if (!database || !activeView) return;
+    if (!supportsPinnedDashboardView(activeView.type)) {
+      toast.error("Dashboard currently supports pinned chart, table, and list views.");
+      return;
+    }
+    const result = upsertDatabaseDashboardPin(loadDatabaseDashboardPins(), {
+      databaseId: database.id,
+      viewId: activeView.id,
+    });
+    saveDatabaseDashboardPins(result.pins);
+    if (result.added) {
+      toast.success("View pinned to dashboard");
+    } else {
+      toast.info("View is already pinned to dashboard");
+    }
+  }
+
   async function handleDeleteView(viewId: string) {
     if (!database || database.views.length <= 1) return;
     try {
@@ -922,6 +962,7 @@ export function DatabaseEditorView() {
           onOpenSchema={handleOpenSchema}
           onImportCsv={() => csvInputRef.current?.click()}
           onExportCsv={handleCsvExport}
+          onPinToDashboard={handlePinActiveViewToDashboard}
           isImportingCsv={isImportingCsv}
         />
       </div>

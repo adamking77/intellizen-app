@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -26,6 +26,11 @@ interface DatabaseChartViewProps {
   view: WorkspaceDatabaseModel["views"][number];
   catalog: WorkspaceDatabaseCatalogEntry[];
   onCreateRecord: () => void;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
 }
 
 interface ChartDatum {
@@ -95,6 +100,11 @@ export function DatabaseChartView({
   view,
   catalog,
   onCreateRecord,
+  compact = false,
+  compactWidthUnits = 0,
+  compactHeightUnits = 0,
+  compactPixelWidth = 0,
+  compactPixelHeight = 0,
 }: DatabaseChartViewProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [tooltip, setTooltip] = useState<ChartTooltipState | null>(null);
@@ -233,13 +243,15 @@ export function DatabaseChartView({
   };
 
   return (
-    <div className="db-chart-root">
-      <div className="db-chart-header">
-        <div className="db-chart-meta">
-          <span className="db-chart-summary">{summaryLabel}</span>
-          <span className="db-chart-caption">{captionParts.join(" · ")}</span>
+    <div className={`db-chart-root${compact ? " db-chart-root--compact" : ""}`}>
+      {!compact ? (
+        <div className="db-chart-header">
+          <div className="db-chart-meta">
+            <span className="db-chart-summary">{summaryLabel}</span>
+            <span className="db-chart-caption">{captionParts.join(" · ")}</span>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="db-chart-surface">
         <div
@@ -273,6 +285,11 @@ export function DatabaseChartView({
               total={total}
               colors={palette}
               showLegend={view.chartShowLegend ?? true}
+              compact={compact}
+              compactWidthUnits={compactWidthUnits}
+              compactHeightUnits={compactHeightUnits}
+              compactPixelWidth={compactPixelWidth}
+              compactPixelHeight={compactPixelHeight}
               onTooltipHover={handleTooltipHover}
               onTooltipLeave={handleTooltipLeave}
               onTooltipToggle={handleTooltipToggle}
@@ -283,6 +300,11 @@ export function DatabaseChartView({
               colors={palette}
               max={max}
               showGrid={view.chartShowGrid ?? true}
+              compact={compact}
+              compactWidthUnits={compactWidthUnits}
+              compactHeightUnits={compactHeightUnits}
+              compactPixelWidth={compactPixelWidth}
+              compactPixelHeight={compactPixelHeight}
               onTooltipHover={handleTooltipHover}
               onTooltipLeave={handleTooltipLeave}
               onTooltipToggle={handleTooltipToggle}
@@ -293,6 +315,11 @@ export function DatabaseChartView({
               colors={palette}
               max={max}
               showGrid={view.chartShowGrid ?? true}
+              compact={compact}
+              compactWidthUnits={compactWidthUnits}
+              compactHeightUnits={compactHeightUnits}
+              compactPixelWidth={compactPixelWidth}
+              compactPixelHeight={compactPixelHeight}
               onTooltipHover={handleTooltipHover}
               onTooltipLeave={handleTooltipLeave}
               onTooltipToggle={handleTooltipToggle}
@@ -461,6 +488,11 @@ function BarChartSvg({
   colors,
   max,
   showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
   onTooltipHover,
   onTooltipLeave,
   onTooltipToggle,
@@ -469,6 +501,11 @@ function BarChartSvg({
   colors: string[];
   max: number;
   showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
   onTooltipHover: (
     event: ReactMouseEvent<SVGElement | HTMLDivElement>,
     datum: ChartDatum,
@@ -483,13 +520,20 @@ function BarChartSvg({
     detail?: string,
   ) => void;
 }) {
-  const width = 680;
-  const height = 292;
-  const padding = { top: 20, right: 18, bottom: 70, left: 52 };
+  const size = getCompactCartesianMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const width = size.width;
+  const height = size.height;
+  const padding = size.padding;
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
   const step = innerWidth / Math.max(data.length, 1);
-  const barWidth = Math.min(step * 0.48, 36);
+  const barWidth = Math.min(step * 0.42, compact ? 28 : 36);
   const ticks = createTicks(max);
   const labelStep = getAxisLabelStep(data.length);
 
@@ -558,6 +602,11 @@ function LineChartSvg({
   colors,
   max,
   showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
   onTooltipHover,
   onTooltipLeave,
   onTooltipToggle,
@@ -566,6 +615,11 @@ function LineChartSvg({
   colors: string[];
   max: number;
   showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
   onTooltipHover: (
     event: ReactMouseEvent<SVGElement | HTMLDivElement>,
     datum: ChartDatum,
@@ -580,9 +634,16 @@ function LineChartSvg({
     detail?: string,
   ) => void;
 }) {
-  const width = 680;
-  const height = 292;
-  const padding = { top: 20, right: 18, bottom: 70, left: 52 };
+  const size = getCompactCartesianMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const width = size.width;
+  const height = size.height;
+  const padding = size.padding;
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
   const ticks = createTicks(max);
@@ -659,6 +720,11 @@ function DonutChartSvg({
   total,
   colors,
   showLegend,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
   onTooltipHover,
   onTooltipLeave,
   onTooltipToggle,
@@ -667,6 +733,11 @@ function DonutChartSvg({
   total: number;
   colors: string[];
   showLegend: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
   onTooltipHover: (
     event: ReactMouseEvent<SVGElement | HTMLDivElement>,
     datum: ChartDatum,
@@ -681,17 +752,39 @@ function DonutChartSvg({
     detail?: string,
   ) => void;
 }) {
-  const width = 760;
-  const height = 340;
-  const cx = 190;
-  const cy = 168;
-  const outerRadius = 112;
-  const innerRadius = 68;
+  const config = getDonutChartMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    showLegend,
+    compactPixelWidth,
+    compactPixelHeight,
+    data.length,
+  );
+  const width = config.width;
+  const height = config.height;
+  const cx = config.cx;
+  const cy = config.cy;
+  const outerRadius = config.outerRadius;
+  const innerRadius = config.innerRadius;
   let currentAngle = -90;
+  const layoutClass =
+    config.legendPlacement === "side"
+      ? " db-chart-donut-layout--side"
+      : config.legendPlacement === "below"
+        ? " db-chart-donut-layout--stacked"
+        : "";
+  const compactClass = compact ? " db-chart-donut-layout--compact" : "";
+  const svgStyle = {
+    width: `${config.width}px`,
+    height: `${config.height}px`,
+    maxWidth: "100%",
+    maxHeight: "100%",
+  } satisfies CSSProperties;
 
   return (
-    <div className="db-chart-donut-layout">
-      <svg className="db-chart-svg db-chart-svg--donut" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+    <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
+      <svg className="db-chart-svg db-chart-svg--donut" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={svgStyle}>
         {data.map((datum, index) => {
           const sweep = total > 0 ? (datum.value / total) * 360 : 0;
           const path = describeDonutArc(cx, cy, innerRadius, outerRadius, currentAngle, currentAngle + sweep);
@@ -717,7 +810,7 @@ function DonutChartSvg({
         </text>
       </svg>
 
-      {showLegend ? (
+      {config.showLegend ? (
         <div className="db-chart-legend">
           {data.map((datum, index) => (
             <div
@@ -746,6 +839,177 @@ function DonutChartSvg({
 function createTicks(max: number) {
   const safeMax = Math.max(max, 1);
   return Array.from({ length: 4 }, (_, index) => Math.round((safeMax / 4) * (index + 1))).reverse();
+}
+
+function getCompactCartesianMetrics(
+  compact: boolean | undefined,
+  compactWidthUnits: number | undefined,
+  compactHeightUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+  compactPixelHeight: number | undefined,
+) {
+  if (!compact) {
+    return {
+      width: 680,
+      height: 292,
+      padding: { top: 20, right: 18, bottom: 70, left: 52 },
+    };
+  }
+
+  const widthUnits = compactWidthUnits ?? 0;
+  const heightUnits = compactHeightUnits ?? 0;
+  const pixelWidth = compactPixelWidth ?? 0;
+  const pixelHeight = compactPixelHeight ?? 0;
+
+  if (pixelWidth > 0 && pixelHeight > 0) {
+    const width = clamp(pixelWidth - 28, 280, 760);
+    const height = clamp(pixelHeight - 18, 190, 312);
+    const bottom = width < 420 ? 52 : width < 560 ? 58 : 64;
+    const left = width < 420 ? 40 : width < 560 ? 46 : 52;
+    const right = width < 420 ? 12 : 18;
+    return {
+      width,
+      height,
+      padding: { top: 18, right, bottom, left },
+    };
+  }
+
+  if (widthUnits <= 4) {
+    return {
+      width: 500,
+      height: heightUnits >= 12 ? 278 : 246,
+      padding: { top: 18, right: 14, bottom: 58, left: 44 },
+    };
+  }
+
+  if (widthUnits <= 7) {
+    return {
+      width: 600,
+      height: heightUnits >= 12 ? 286 : 258,
+      padding: { top: 18, right: 16, bottom: 62, left: 48 },
+    };
+  }
+
+  return {
+    width: 700,
+    height: heightUnits >= 12 ? 296 : 272,
+    padding: { top: 20, right: 18, bottom: 66, left: 52 },
+  };
+}
+
+function getDonutChartMetrics(
+  compact: boolean | undefined,
+  compactWidthUnits: number | undefined,
+  compactHeightUnits: number | undefined,
+  showLegend: boolean,
+  compactPixelWidth: number | undefined,
+  compactPixelHeight: number | undefined,
+  itemCount: number,
+) {
+  if (!compact) {
+    return {
+      width: 760,
+      height: 340,
+      cx: 190,
+      cy: 168,
+      outerRadius: 112,
+      innerRadius: 68,
+      showLegend,
+      legendPlacement: "side" as const,
+    };
+  }
+
+  const widthUnits = compactWidthUnits ?? 0;
+  const heightUnits = compactHeightUnits ?? 0;
+  const pixelWidth = compactPixelWidth ?? 0;
+  const pixelHeight = compactPixelHeight ?? 0;
+
+  if (pixelWidth > 0 && pixelHeight > 0) {
+    const availableWidth = Math.max(pixelWidth - 16, 240);
+    const availableHeight = Math.max(pixelHeight - 12, 190);
+    const canShowSideLegend =
+      showLegend &&
+      availableWidth >= 480 &&
+      availableHeight >= 220 &&
+      availableWidth / Math.max(availableHeight, 1) >= 1.22;
+
+    if (canShowSideLegend) {
+      const legendWidth = clamp(Math.round(availableWidth * 0.24), 160, 210);
+      const chartWidth = availableWidth - legendWidth - 16;
+      const diameter = clamp(
+        Math.min(chartWidth * 0.9, availableHeight * 0.78),
+        132,
+        286,
+      );
+      const outerRadius = Math.floor(diameter / 2);
+      const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 44);
+      return {
+        width: diameter + 24,
+        height: diameter + 24,
+        cx: (diameter + 24) / 2,
+        cy: (diameter + 24) / 2,
+        outerRadius,
+        innerRadius,
+        showLegend,
+        legendPlacement: "side" as const,
+      };
+    }
+
+    const stackedColumns = availableWidth >= 300 ? 2 : 1;
+    const legendRows = showLegend ? Math.ceil(itemCount / stackedColumns) : 0;
+    const legendBlockHeight = showLegend
+      ? legendRows * 30 + Math.max(legendRows - 1, 0) * 8 + 12
+      : 0;
+    const chartHeight = availableHeight - legendBlockHeight - (showLegend ? 10 : 0);
+    const diameter = clamp(
+      Math.min(availableWidth * 0.64, chartHeight * 0.84),
+      108,
+      248,
+    );
+    const outerRadius = Math.floor(diameter / 2);
+    const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 42);
+    return {
+      width: diameter + 24,
+      height: diameter + 24,
+      cx: (diameter + 24) / 2,
+      cy: (diameter + 24) / 2,
+      outerRadius,
+      innerRadius,
+      showLegend,
+      legendPlacement: showLegend ? ("below" as const) : ("hidden" as const),
+    };
+  }
+
+  const canShowSideLegend = showLegend && widthUnits >= 6;
+  const renderLegend = showLegend;
+
+  if (canShowSideLegend) {
+    return {
+      width: widthUnits >= 9 ? 720 : 640,
+      height: heightUnits >= 13 ? 360 : 326,
+      cx: widthUnits >= 9 ? 190 : 176,
+      cy: heightUnits >= 13 ? 178 : 162,
+      outerRadius: widthUnits >= 9 ? 122 : 112,
+      innerRadius: widthUnits >= 9 ? 76 : 68,
+      showLegend: true,
+      legendPlacement: "side" as const,
+    };
+  }
+
+  return {
+    width: 480,
+    height: renderLegend ? (heightUnits >= 12 ? 368 : 328) : 336,
+    cx: 240,
+    cy: renderLegend ? (heightUnits >= 12 ? 138 : 132) : 168,
+    outerRadius: renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118,
+    innerRadius: renderLegend ? (heightUnits >= 12 ? 68 : 64) : 72,
+    showLegend: renderLegend,
+    legendPlacement: renderLegend ? ("below" as const) : ("hidden" as const),
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function formatTick(value: number) {
@@ -801,10 +1065,6 @@ function getChartRangeCutoff(range: WorkspaceDatabaseChartRange) {
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - days);
   return cutoff.getTime();
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
 
 function describeDonutArc(
