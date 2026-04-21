@@ -225,100 +225,100 @@ export function ViewTabBar({
   return (
     <>
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={views.map((view) => view.id)} strategy={horizontalListSortingStrategy}>
-            <div className="db-tabs min-w-0 flex-1 overflow-x-auto">
-              {views.map((view) => (
-                <SortableViewTab
-                  key={view.id}
-                  view={view}
-                  activeViewId={activeView.id}
-                  editingViewId={editingViewId}
-                  renameDraft={renameDraft}
-                  setRenameDraft={setRenameDraft}
-                  onCommitRename={commitRename}
-                  onCancelRename={() => setEditingViewId(null)}
-                  onSwitchView={onSwitchView}
-                  onStartRename={startRename}
-                  onDeleteView={onDeleteView}
-                  showClose={views.length > 1}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={views.map((view) => view.id)} strategy={horizontalListSortingStrategy}>
+              <div className="db-tabs min-w-0 flex-1 overflow-x-auto">
+                {views.map((view) => (
+                  <SortableViewTab
+                    key={view.id}
+                    view={view}
+                    activeViewId={activeView.id}
+                    editingViewId={editingViewId}
+                    renameDraft={renameDraft}
+                    setRenameDraft={setRenameDraft}
+                    onCommitRename={commitRename}
+                    onCancelRename={() => setEditingViewId(null)}
+                    onSwitchView={onSwitchView}
+                    onStartRename={startRename}
+                    onDeleteView={onDeleteView}
+                    showClose={views.length > 1}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
 
-        <div ref={addViewRef} className="relative shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => togglePanel("add")}
-            aria-label="Add view"
-            className="h-8 w-8"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-          {addViewOpen ? (
-            <div className="db-dropdown-panel absolute left-0 top-full z-50 mt-2 min-w-[180px]">
-              {(["table", "kanban", "list", "gallery", "calendar", "chart"] as WorkspaceDatabaseViewType[]).map((viewType) => (
-                <button
-                  key={viewType}
-                  type="button"
-                  className="db-context-menu-item"
-                  onClick={() => {
-                    onCreateView(viewType);
-                    closePanels();
-                  }}
-                >
-                  <span className="mr-2 inline-flex align-middle">{VIEW_ICONS[viewType]}</span>
-                  {VIEW_DEFAULT_NAMES[viewType]}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <div ref={addViewRef} className="relative shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => togglePanel("add")}
+              aria-label="Add view"
+              className="h-8 w-8"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            {addViewOpen ? (
+              <div className="db-dropdown-panel absolute left-0 top-full z-50 mt-2 min-w-[180px]">
+                {(["table", "kanban", "list", "gallery", "calendar", "chart"] as WorkspaceDatabaseViewType[]).map((viewType) => (
+                  <button
+                    key={viewType}
+                    type="button"
+                    className="db-context-menu-item"
+                    onClick={() => {
+                      onCreateView(viewType);
+                      closePanels();
+                    }}
+                  >
+                    <span className="mr-2 inline-flex align-middle">{VIEW_ICONS[viewType]}</span>
+                    {VIEW_DEFAULT_NAMES[viewType]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
 
         <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
-        <div ref={filterRef} className="relative">
-          <Button
-            variant={filterCount > 0 ? "glow" : "ghost"}
-            size="sm"
-            onClick={() => togglePanel("filter")}
-          >
-            <Funnel className="h-3.5 w-3.5" />
-            {filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
-          </Button>
-          {filterOpen ? (
-            <FilterPanel
-              activeView={activeView}
-              schema={database.schema}
-              onClose={() => setFilterOpen(false)}
-              onUpdateViewConfig={onUpdateViewConfig}
-            />
-          ) : null}
-        </div>
+          <div ref={filterRef} className="relative">
+            <Button
+              variant={filterCount > 0 ? "glow" : "ghost"}
+              size="sm"
+              onClick={() => togglePanel("filter")}
+            >
+              <Funnel className="h-3.5 w-3.5" />
+              {filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
+            </Button>
+            {filterOpen ? (
+              <FilterPanel
+                activeView={activeView}
+                schema={database.schema}
+                onClose={() => setFilterOpen(false)}
+                onUpdateViewConfig={onUpdateViewConfig}
+              />
+            ) : null}
+          </div>
 
-        <div ref={sortRef} className="relative">
-          <Button
-            variant={sortCount > 0 ? "glow" : "ghost"}
-            size="sm"
-            onClick={() => togglePanel("sort")}
-          >
-            <ArrowUpDown className="h-3.5 w-3.5" />
-            {sortCount > 0 ? `Sort (${sortCount})` : "Sort"}
-          </Button>
-          {sortOpen ? (
-            <SortPanel
-              activeView={activeView}
-              schema={database.schema}
-              onClose={() => setSortOpen(false)}
-              onToggleSort={toggleSort}
-              onClearSort={() => onUpdateViewConfig({ sort: [] })}
-            />
-          ) : null}
-        </div>
+          <div ref={sortRef} className="relative">
+            <Button
+              variant={sortCount > 0 ? "glow" : "ghost"}
+              size="sm"
+              onClick={() => togglePanel("sort")}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {sortCount > 0 ? `Sort (${sortCount})` : "Sort"}
+            </Button>
+            {sortOpen ? (
+              <SortPanel
+                activeView={activeView}
+                schema={database.schema}
+                onClose={() => setSortOpen(false)}
+                onToggleSort={toggleSort}
+                onClearSort={() => onUpdateViewConfig({ sort: [] })}
+              />
+            ) : null}
+          </div>
 
           <Button
             variant={hasDisplaySettings ? "glow" : "ghost"}
@@ -332,64 +332,64 @@ export function ViewTabBar({
             Settings
           </Button>
 
-        <div ref={moreRef} className="relative">
-          <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} className="h-8 w-8">
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-          {moreOpen ? (
-            <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[180px]">
-              <button
-                type="button"
-                className="db-context-menu-item"
-                onClick={() => {
-                  closePanels();
-                  onPinToDashboard();
-                }}
-              >
-                Pin to dashboard
-              </button>
-              <button
-                type="button"
-                className="db-context-menu-item"
-                onClick={() => {
-                  closePanels();
-                  onOpenSchema();
-                }}
-              >
-                Manage fields
-              </button>
-              <button
-                type="button"
-                className="db-context-menu-item"
-                onClick={() => {
-                  closePanels();
-                  onImportCsv();
-                }}
-                disabled={isImportingCsv}
-              >
-                <Upload className="mr-2 inline h-3.5 w-3.5 align-middle" />
-                {isImportingCsv ? "Importing..." : "Import CSV"}
-              </button>
-              <button
-                type="button"
-                className="db-context-menu-item"
-                onClick={() => {
-                  closePanels();
-                  onExportCsv();
-                }}
-              >
-                <Download className="mr-2 inline h-3.5 w-3.5 align-middle" />
-                Export CSV
-              </button>
-            </div>
-          ) : null}
-        </div>
+          <div ref={moreRef} className="relative">
+            <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} className="h-8 w-8">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+            {moreOpen ? (
+              <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[180px]">
+                <button
+                  type="button"
+                  className="db-context-menu-item"
+                  onClick={() => {
+                    closePanels();
+                    onPinToDashboard();
+                  }}
+                >
+                  Pin to dashboard
+                </button>
+                <button
+                  type="button"
+                  className="db-context-menu-item"
+                  onClick={() => {
+                    closePanels();
+                    onOpenSchema();
+                  }}
+                >
+                  Manage fields
+                </button>
+                <button
+                  type="button"
+                  className="db-context-menu-item"
+                  onClick={() => {
+                    closePanels();
+                    onImportCsv();
+                  }}
+                  disabled={isImportingCsv}
+                >
+                  <Upload className="mr-2 inline h-3.5 w-3.5 align-middle" />
+                  {isImportingCsv ? "Importing..." : "Import CSV"}
+                </button>
+                <button
+                  type="button"
+                  className="db-context-menu-item"
+                  onClick={() => {
+                    closePanels();
+                    onExportCsv();
+                  }}
+                >
+                  <Download className="mr-2 inline h-3.5 w-3.5 align-middle" />
+                  Export CSV
+                </button>
+              </div>
+            ) : null}
+          </div>
 
-        <Button size="sm" onClick={onCreateRecord}>
-          <Plus className="h-3.5 w-3.5" />
-          New record
-        </Button>
-      </div>
+          <Button size="sm" onClick={onCreateRecord}>
+            <Plus className="h-3.5 w-3.5" />
+            New record
+          </Button>
+        </div>
       </div>
 
       <ViewSettingsModal

@@ -376,18 +376,20 @@ export function DatabaseTableView({
 
     return (
       <tr key={record.id} className="db-row">
-        <td
-          className="db-td db-td-check"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            className="db-row-check"
-            checked={selectedRecordIds.has(record.id)}
-            onChange={(e) => toggleSelectRow(record.id, e.target.checked)}
+        {!embedded ? (
+          <td
+            className="db-td db-td-check"
             onClick={(e) => e.stopPropagation()}
-          />
-        </td>
+          >
+            <input
+              type="checkbox"
+              className="db-row-check"
+              checked={selectedRecordIds.has(record.id)}
+              onChange={(e) => toggleSelectRow(record.id, e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </td>
+        ) : null}
         {visibleFields.map((field) => {
           const fieldWidth = columnWidths[field.id] ?? DEFAULT_COLUMN_WIDTH;
           return (
@@ -427,6 +429,10 @@ export function DatabaseTableView({
                     className="db-td-content"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (embedded) {
+                        onOpenRecord(record.id);
+                        return;
+                      }
                       if (field.type === "checkbox") {
                         onUpdateField(record.id, field.id, record[field.id] !== true);
                         setEditingCell(null);
@@ -490,10 +496,12 @@ export function DatabaseTableView({
                   )}
                 </>
               )}
-              <div
-                className="db-col-resize-handle db-col-resize-handle-cell"
-                onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
-              />
+              {!embedded ? (
+                <div
+                  className="db-col-resize-handle db-col-resize-handle-cell"
+                  onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
+                />
+              ) : null}
             </td>
           );
         })}
@@ -503,7 +511,7 @@ export function DatabaseTableView({
 
   return (
     <div className="db-table-root">
-      {selectedVisibleCount > 0 && (
+      {!embedded && selectedVisibleCount > 0 && (
         <div className="db-bulk-actions db-bulk-actions-visible">
           <span className="db-bulk-count">{selectedVisibleCount} selected</span>
           <button className="db-btn" onClick={runBulkDuplicate}>
@@ -523,18 +531,20 @@ export function DatabaseTableView({
         <table className="db-table">
           <thead>
             <tr>
-              <th className="db-th db-th-check">
-                <input
-                  type="checkbox"
-                  className="db-row-check"
-                  ref={(el) => {
-                    if (!el) return;
-                    el.indeterminate = someVisibleSelected;
-                  }}
-                  checked={allVisibleSelected}
-                  onChange={(e) => toggleSelectAll(e.target.checked)}
-                />
-              </th>
+              {!embedded ? (
+                <th className="db-th db-th-check">
+                  <input
+                    type="checkbox"
+                    className="db-row-check"
+                    ref={(el) => {
+                      if (!el) return;
+                      el.indeterminate = someVisibleSelected;
+                    }}
+                    checked={allVisibleSelected}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                  />
+                </th>
+              ) : null}
               {visibleFields.map((field) => {
                 const fieldWidth = columnWidths[field.id] ?? DEFAULT_COLUMN_WIDTH;
                 return (
@@ -548,52 +558,62 @@ export function DatabaseTableView({
                     }}
                   >
                     <div className="db-th-inner">
-                      <button
-                        className="db-th-label db-th-label-action"
-                        title="Edit property"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPropertyMenu(field, e.currentTarget);
-                        }}
-                      >
-                        {field.name}
-                      </button>
+                      {embedded ? (
+                        <span className="db-th-label">{field.name}</span>
+                      ) : (
+                        <button
+                          className="db-th-label db-th-label-action"
+                          title="Edit property"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPropertyMenu(field, e.currentTarget);
+                          }}
+                        >
+                          {field.name}
+                        </button>
+                      )}
                     </div>
-                    <div
-                      className="db-col-resize-handle"
-                      onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
-                    />
+                    {!embedded ? (
+                      <div
+                        className="db-col-resize-handle"
+                        onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
+                      />
+                    ) : null}
                   </th>
                 );
               })}
-              <th className="db-th db-th-add-field">
-                <button
-                  className="db-add-field-btn"
-                  title="Add field"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAddField((v) => !v);
-                    closePropertyMenu();
-                  }}
-                >
-                  +
-                </button>
-              </th>
+              {!embedded ? (
+                <th className="db-th db-th-add-field">
+                  <button
+                    className="db-add-field-btn"
+                    title="Add field"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAddField((v) => !v);
+                      closePropertyMenu();
+                    }}
+                  >
+                    +
+                  </button>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
             {records.map((record) => renderRow(record))}
-            <tr className="db-add-row">
-              <td colSpan={visibleFields.length + 2}>
-                <button className="db-add-record-btn" onClick={onCreateRecord}>
-                  + New record
-                </button>
-              </td>
-            </tr>
+            {!embedded ? (
+              <tr className="db-add-row">
+                <td colSpan={visibleFields.length + 2}>
+                  <button className="db-add-record-btn" onClick={onCreateRecord}>
+                    + New record
+                  </button>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
 
-        {propertyField && propertyMenuAnchor && (
+        {!embedded && propertyField && propertyMenuAnchor && (
           <div
             ref={propertyPanelRef}
             className="db-dropdown-panel db-property-menu-panel fixed z-30"
@@ -697,7 +717,7 @@ export function DatabaseTableView({
           </div>
         )}
 
-        {showAddField && (
+        {!embedded && showAddField && (
           <div
             ref={addPanelRef}
             className="db-dropdown-panel absolute right-2 top-9 z-30 min-w-[220px]"

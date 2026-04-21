@@ -16,6 +16,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
+import { DatabaseListView } from "@/components/database/DatabaseListView";
+import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { Button } from "@/components/ui/button";
 import {
   loadDatabaseDashboardPins,
@@ -23,12 +25,6 @@ import {
   supportsPinnedDashboardView,
   type DatabaseDashboardPin,
 } from "@/lib/database-dashboard";
-import {
-  getFieldDisplayValue,
-  getRecordTitle,
-  getViewRecords,
-  getVisibleFields,
-} from "@/lib/database-core";
 import { createWorkspaceDatabase, listWorkspaceDatabaseCatalog, listWorkspaceDatabases } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
@@ -200,7 +196,7 @@ export function DatabasesView() {
         <aside
           style={{ width: railCollapsed ? 0 : DATABASE_RAIL_WIDTH_EXPANDED }}
           className={cn(
-            "flex shrink-0 flex-col overflow-hidden bg-[var(--mantle)]",
+            "flex shrink-0 flex-col overflow-hidden bg-[var(--base)]",
             "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
             !railCollapsed && "border-r border-[var(--border)]",
           )}
@@ -329,12 +325,12 @@ export function DatabasesView() {
           </div>
         </aside>
 
-        <div className="relative min-w-0 flex-1 overflow-y-auto">
+        <div className="relative min-w-0 flex-1">
           {railCollapsed ? (
             <button
               type="button"
               onClick={() => setRailCollapsed(false)}
-              className="absolute left-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--mantle)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               aria-label="Expand database rail"
               title="Show databases"
             >
@@ -342,8 +338,9 @@ export function DatabasesView() {
             </button>
           ) : null}
 
+          <div className={cn("h-full overflow-y-auto", railCollapsed && "pl-14")}>
           {pinnedWidgets.length > 0 ? (
-            <section className="border-b border-[var(--border)] px-6 py-5">
+            <section className="px-6 py-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-ui text-[14px] font-semibold text-[var(--text)]">Pinned views</h2>
@@ -402,6 +399,7 @@ export function DatabasesView() {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
@@ -461,7 +459,7 @@ function PinnedWidgetCard({
         </button>
       </div>
       <div className="min-h-0 flex-1">
-        <DashboardWidgetBody widget={widget} catalog={catalog} />
+        <DashboardWidgetBody widget={widget} catalog={catalog} onOpen={onOpen} />
       </div>
     </div>
   );
@@ -470,9 +468,11 @@ function PinnedWidgetCard({
 function DashboardWidgetBody({
   widget,
   catalog,
+  onOpen,
 }: {
   widget: PinnedWidgetModel;
   catalog: WorkspaceDatabaseCatalogEntry[];
+  onOpen: () => void;
 }) {
   const [contentRef, contentSize] = useElementSize<HTMLDivElement>();
   const databaseModel: WorkspaceDatabaseModel = {
@@ -504,23 +504,36 @@ function DashboardWidgetBody({
 
   if (widget.view.type === "table") {
     return (
-      <CompactTableWidget
+      <DatabaseTableView
+        embedded
         database={databaseModel}
         view={widget.view}
         catalog={catalog}
-        widthUnits={widget.pin.w}
-        heightUnits={widget.pin.h}
+        activeRecordId={null}
+        onOpenRecord={onOpen}
+        onUpdateField={() => {}}
+        onUpdateView={() => {}}
+        onSaveSchema={() => {}}
+        onOpenSchema={() => {}}
+        onCreateRecord={() => {}}
+        onDuplicateRecord={() => {}}
+        onDeleteRecord={() => {}}
+        onDeleteRecords={() => {}}
+        onDuplicateRecords={() => {}}
       />
     );
   }
 
   return (
-    <CompactListWidget
+    <DatabaseListView
+      embedded
       database={databaseModel}
       view={widget.view}
       catalog={catalog}
-      widthUnits={widget.pin.w}
-      heightUnits={widget.pin.h}
+      activeRecordId={null}
+      onOpenRecord={onOpen}
+      onCreateRecord={() => {}}
+      onUpdateView={() => {}}
     />
   );
 }
@@ -556,107 +569,4 @@ function useElementSize<T extends HTMLElement>() {
   }, []);
 
   return [ref, size] as const;
-}
-
-function CompactTableWidget({
-  database,
-  view,
-  catalog,
-  widthUnits,
-  heightUnits,
-}: {
-  database: WorkspaceDatabaseModel;
-  view: WorkspaceDatabaseModel["views"][number];
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  widthUnits: number;
-  heightUnits: number;
-}) {
-  const visibleFieldLimit = widthUnits <= 4 ? 2 : widthUnits <= 7 ? 3 : 4;
-  const recordLimit = heightUnits <= 10 ? 4 : heightUnits <= 14 ? 6 : 8;
-  const visibleFields = getVisibleFields(database.schema, view).slice(0, visibleFieldLimit);
-  const records = getViewRecords(database, view, catalog).slice(0, recordLimit);
-
-  return (
-    <div className="h-full overflow-auto px-3 py-3">
-      <div className="min-w-full overflow-hidden rounded-lg border border-[var(--border)]">
-        <div className="grid bg-[var(--base)] text-[11px] text-[var(--overlay-1)]" style={{ gridTemplateColumns: `repeat(${visibleFields.length || 1}, minmax(0, 1fr))` }}>
-          {visibleFields.map((field) => (
-            <div key={field.id} className="border-b border-r border-[var(--border)] px-3 py-2 last:border-r-0">
-              {field.name}
-            </div>
-          ))}
-        </div>
-        {records.length > 0 ? (
-          records.map((record) => (
-            <div
-              key={record.id}
-              className="grid text-[12px] text-[var(--subtext-0)]"
-              style={{ gridTemplateColumns: `repeat(${visibleFields.length || 1}, minmax(0, 1fr))` }}
-            >
-              {visibleFields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className={cn(
-                    "truncate border-r border-t border-[var(--border)] px-3 py-2.5",
-                    index === visibleFields.length - 1 && "border-r-0",
-                  )}
-                >
-                  {field.id === database.headerFieldIds?.[0]
-                    ? getRecordTitle(record, database)
-                    : getFieldDisplayValue(record, field, database, catalog) || "—"}
-                </div>
-              ))}
-            </div>
-          ))
-        ) : (
-          <div className="px-3 py-6 text-center text-[12px] text-[var(--overlay-1)]">No records</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CompactListWidget({
-  database,
-  view,
-  catalog,
-  widthUnits,
-  heightUnits,
-}: {
-  database: WorkspaceDatabaseModel;
-  view: WorkspaceDatabaseModel["views"][number];
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  widthUnits: number;
-  heightUnits: number;
-}) {
-  const titleFieldId =
-    database.headerFieldIds?.[0] ??
-    database.schema.find((field) => field.type === "text")?.id ??
-    database.schema[0]?.id;
-  const summaryField = widthUnits <= 4 ? null : getVisibleFields(database.schema, view).find((field) => field.id !== titleFieldId);
-  const recordLimit = heightUnits <= 10 ? 5 : heightUnits <= 14 ? 7 : 9;
-  const records = getViewRecords(database, view, catalog).slice(0, recordLimit);
-
-  return (
-    <div className="h-full overflow-auto px-3 py-3">
-      <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
-        {records.length > 0 ? (
-          records.map((record) => (
-            <div key={record.id} className="px-3 py-3">
-              <div className="truncate font-ui text-[13px] font-medium text-[var(--text)]">
-                {getRecordTitle(record, database)}
-              </div>
-              {summaryField ? (
-                <div className="mt-1 truncate text-[11px] text-[var(--overlay-1)]">
-                  {summaryField.name}: {getFieldDisplayValue(record, summaryField, database, catalog) || "—"}
-                </div>
-              ) : null}
-            </div>
-          ))
-        ) : (
-          <div className="px-3 py-6 text-center text-[12px] text-[var(--overlay-1)]">No records</div>
-        )}
-      </div>
-    </div>
-  );
 }

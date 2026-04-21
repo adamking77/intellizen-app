@@ -3145,6 +3145,15 @@ pre {
   background: var(--base);
 }
 
+.db-dashboard-widget[data-view-type="list"] {
+  background: var(--base);
+}
+
+.db-dashboard-widget[data-view-type="list"] .db-list-root {
+  height: 100%;
+  min-height: 0;
+}
+
 .db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact .db-chart-surface {
   height: 100%;
   padding: 10px 12px 12px;

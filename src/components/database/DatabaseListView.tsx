@@ -16,12 +16,14 @@ import type {
   WorkspaceDatabaseModel,
   WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface DatabaseListViewProps {
   database: WorkspaceDatabaseModel;
   view: WorkspaceDatabaseModel["views"][number];
   catalog: WorkspaceDatabaseCatalogEntry[];
   activeRecordId: string | null;
+  embedded?: boolean;
   onOpenRecord: (recordId: string) => void;
   onCreateRecord: () => void;
   onUpdateView: (config: Partial<WorkspaceDatabaseViewConfig>) => void;
@@ -34,6 +36,7 @@ export function DatabaseListView({
   view,
   catalog,
   activeRecordId,
+  embedded = false,
   onOpenRecord,
   onCreateRecord,
   onUpdateView,
@@ -81,7 +84,7 @@ export function DatabaseListView({
   }
 
   return (
-    <div className="db-list-root flex min-h-0 flex-col flex-1 overflow-y-auto">
+    <div className={cn("db-list-root flex min-h-0 flex-col overflow-y-auto", embedded ? "h-full" : "flex-1")}>
       {records.map((record) => {
         const title = getRecordTitle(record, database);
         const shownFields = summaryFields.filter((field) => {
@@ -106,17 +109,19 @@ export function DatabaseListView({
                     <div
                       key={field.id}
                       className="db-list-property-row"
-                      style={{ gridTemplateColumns: `${propertyLabelWidth}px 16px minmax(0, 1fr)` } as CSSProperties}
+                      style={{ gridTemplateColumns: embedded ? `${propertyLabelWidth}px minmax(0, 1fr)` : `${propertyLabelWidth}px 16px minmax(0, 1fr)` } as CSSProperties}
                     >
                       <div className="db-list-property-label">{field.name}</div>
-                      <div
-                        className="db-list-property-divider"
-                        onPointerDown={handlePropertyResizeStart}
-                        onClick={(e) => e.stopPropagation()}
-                        role="separator"
-                        aria-orientation="vertical"
-                        aria-label="Resize list property label column"
-                      />
+                      {!embedded ? (
+                        <div
+                          className="db-list-property-divider"
+                          onPointerDown={handlePropertyResizeStart}
+                          onClick={(e) => e.stopPropagation()}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="Resize list property label column"
+                        />
+                      ) : null}
                       <div className="db-list-property-value">
                         <ListPropertyValue field={field} record={record} database={database} catalog={catalog} />
                       </div>
@@ -127,29 +132,33 @@ export function DatabaseListView({
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              className="db-list-record-open"
-              title="Open record"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenRecord(record.id);
-              }}
-            >
-              ↗
-            </button>
+            {!embedded ? (
+              <button
+                type="button"
+                className="db-list-record-open"
+                title="Open record"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenRecord(record.id);
+                }}
+              >
+                ↗
+              </button>
+            ) : null}
           </div>
         );
       })}
-      <div className="db-list-add-row">
-        <button
-          type="button"
-          className="db-add-record-btn"
-          onClick={onCreateRecord}
-        >
-          + New record
-        </button>
-      </div>
+      {!embedded ? (
+        <div className="db-list-add-row">
+          <button
+            type="button"
+            className="db-add-record-btn"
+            onClick={onCreateRecord}
+          >
+            + New record
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
