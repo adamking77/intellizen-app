@@ -2,7 +2,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  closestCenter,
+  pointerWithin,
   useDraggable,
   useDroppable,
   useSensor,
@@ -58,7 +58,7 @@ export function DatabaseKanbanView({
   onDeleteRecord,
 }: DatabaseKanbanViewProps) {
   const [draggingRecordId, setDraggingRecordId] = useState<string | null>(null);
-  const [previewColumnValue, setPreviewColumnValue] = useState<string | null>(null);
+  const [overColumnValue, setOverColumnValue] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<{ recordId: string; value: string } | null>(null);
   const pendingMoveTimeoutRef = useRef<number | null>(null);
   const records = getViewRecords(database, view, catalog);
@@ -86,10 +86,6 @@ export function DatabaseKanbanView({
     if (!groupField) return records;
 
     const overrides = new Map<string, string>();
-    if (draggingRecordId !== null && previewColumnValue !== null) {
-      overrides.set(draggingRecordId, previewColumnValue);
-    }
-
     if (pendingMove) {
       const persistedValue = actualRecordColumnMap.get(pendingMove.recordId) ?? "";
       if (persistedValue !== pendingMove.value) {
@@ -107,7 +103,7 @@ export function DatabaseKanbanView({
         [groupField.id]: overrideValue || null,
       };
     });
-  }, [actualRecordColumnMap, draggingRecordId, groupField, pendingMove, previewColumnValue, records]);
+  }, [actualRecordColumnMap, groupField, pendingMove, records]);
 
   const { columns } = useMemo(
     () => getKanbanColumns(database, view, displayedRecords),
@@ -163,22 +159,22 @@ export function DatabaseKanbanView({
   function handleDragStart(event: DragStartEvent) {
     const recordId = String(event.active.id);
     setDraggingRecordId(recordId);
-    setPreviewColumnValue(actualRecordColumnMap.get(recordId) ?? "");
+    setOverColumnValue(actualRecordColumnMap.get(recordId) ?? "");
   }
 
   function handleDragOver(event: DragOverEvent) {
     if (!draggingRecordId) return;
     const nextValue = resolveColumnValue(event.over ? String(event.over.id) : null);
     if (nextValue === null) return;
-    setPreviewColumnValue((current) => (current === nextValue ? current : nextValue));
+    setOverColumnValue((current) => (current === nextValue ? current : nextValue));
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const recordId = String(event.active.id);
     const currentValue = actualRecordColumnMap.get(recordId) ?? "";
-    const nextValue = resolveColumnValue(event.over ? String(event.over.id) : null);
+    const nextValue = resolveColumnValue(event.over ? String(event.over.id) : null) ?? overColumnValue;
     setDraggingRecordId(null);
-    setPreviewColumnValue(null);
+    setOverColumnValue(null);
     if (nextValue === null) return;
     if (nextValue === currentValue) return;
     setPendingMove({ recordId, value: nextValue });
@@ -195,13 +191,13 @@ export function DatabaseKanbanView({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={() => {
         setDraggingRecordId(null);
-        setPreviewColumnValue(null);
+        setOverColumnValue(null);
       }}
     >
       <div className="db-kanban-root">
@@ -220,6 +216,7 @@ export function DatabaseKanbanView({
               cardFieldIds={cardFieldIds}
               activeRecordId={activeRecordId}
               draggingRecordId={draggingRecordId}
+              activeDropColumnValue={draggingRecordId ? overColumnValue : null}
               onOpenRecord={onOpenRecord}
               onCreateRecord={onCreateRecord}
               onDuplicateRecord={onDuplicateRecord}
@@ -262,6 +259,7 @@ function KanbanColumn({
   cardFieldIds,
   activeRecordId,
   draggingRecordId,
+  activeDropColumnValue,
   onOpenRecord,
   onCreateRecord,
   onDuplicateRecord,
@@ -275,27 +273,24 @@ function KanbanColumn({
   cardFieldIds: string[];
   activeRecordId: string | null;
   draggingRecordId: string | null;
+  activeDropColumnValue: string | null;
   onOpenRecord: (recordId: string) => void;
   onCreateRecord: (seed?: Record<string, WorkspaceDatabaseFieldValue>) => void;
   onDuplicateRecord: (recordId: string) => void;
   onDeleteRecord: (recordId: string) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `column:${column.value}` });
-  const visibleCount = column.records.filter((record) => record.id !== draggingRecordId).length;
+  const isActiveDropTarget = activeDropColumnValue === column.value || (isOver && draggingRecordId !== null);
 
   return (
     <div
       ref={setNodeRef}
-      className="db-kanban-column"
-      style={{
-        backgroundColor: isOver ? "var(--surface-wash)" : undefined,
-        borderColor: isOver ? "var(--accent)" : undefined,
-      }}
+      className={`db-kanban-column${isActiveDropTarget ? " db-kanban-column--active-drop" : ""}`}
     >
       <div className="db-kanban-column-header">
         <span className="db-kanban-column-dot" style={{ backgroundColor: color }} />
         <span className="db-kanban-column-title">{column.label}</span>
-        <span className="db-kanban-column-count">{visibleCount}</span>
+        <span className="db-kanban-column-count">{column.records.length}</span>
       </div>
 
       <div className="db-kanban-column-body">
@@ -533,20 +528,22 @@ function selectKanbanCardFieldIds(
   groupFieldId?: string,
 ) {
   const excluded = new Set([titleFieldId, groupFieldId].filter(Boolean));
-
-  if (view.cardFields?.length) {
-    return view.cardFields
-      .filter((fieldId) => !excluded.has(fieldId))
-      .filter((fieldId) => database.schema.some((field) => field.id === fieldId))
-      .slice(0, 3);
-  }
-
-  return [...database.schema]
+  const fallback = [...database.schema]
     .filter((field) => !excluded.has(field.id))
     .filter((field) => field.type !== "createdAt" && field.type !== "lastEditedAt" && field.type !== "formula" && field.type !== "rollup")
     .sort((left, right) => rankKanbanCardField(left) - rankKanbanCardField(right) || left.name.localeCompare(right.name))
     .slice(0, 3)
     .map((field) => field.id);
+
+  if (view.cardFields?.length) {
+    const configured = view.cardFields
+      .filter((fieldId) => !excluded.has(fieldId))
+      .filter((fieldId) => database.schema.some((field) => field.id === fieldId))
+      .slice(0, 3);
+    return configured.length > 0 ? configured : fallback;
+  }
+
+  return fallback;
 }
 
 function rankKanbanCardField(field: WorkspaceDatabaseField) {

@@ -81,7 +81,7 @@ export function DatabaseListView({
   }
 
   return (
-    <div className="db-list-root flex flex-col flex-1 overflow-y-auto">
+    <div className="db-list-root flex min-h-0 flex-col flex-1 overflow-y-auto">
       {records.map((record) => {
         const title = getRecordTitle(record, database);
         const shownFields = summaryFields.filter((field) => {

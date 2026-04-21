@@ -929,7 +929,7 @@ export function DatabaseEditorView() {
       {/* Content */}
       <div className="relative flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-hidden px-6 pb-6 pt-5">
-          <div className="h-full">
+          <div className="flex h-full min-h-0 flex-col">
             {activeView.type === "list" ? (
               <DatabaseListView
                 database={database}

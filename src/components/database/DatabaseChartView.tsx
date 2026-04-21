@@ -146,7 +146,11 @@ export function DatabaseChartView({
     return (
       <EmptyState
         title="No chart data"
-        description="Adjust the current filters or add records that match this view."
+        description={
+          chartType === "line" && chartRange !== "all"
+            ? "Adjust the current filters, widen the time range, or add records in this range."
+            : "Adjust the current filters or add records that match this view."
+        }
         action={{ label: "+ New record", onClick: onCreateRecord }}
       />
     );
@@ -163,6 +167,7 @@ export function DatabaseChartView({
   const chartContextLabel =
     chartType === "line" ? `${chartData.length} points` : `${chartData.length} groups`;
   const rangeLabel = chartType === "line" ? formatChartRangeLabel(chartRange) : null;
+  const captionParts = [`${valueLabel} by ${groupField.name}`, chartContextLabel, rangeLabel].filter(Boolean);
 
   const positionTooltip = (event: ReactMouseEvent<SVGElement | HTMLDivElement>) => {
     const frameRect = frameRef.current?.getBoundingClientRect();
@@ -232,13 +237,7 @@ export function DatabaseChartView({
       <div className="db-chart-header">
         <div className="db-chart-meta">
           <span className="db-chart-summary">{summaryLabel}</span>
-          <span className="db-chart-caption">
-            {valueLabel} by {groupField.name}
-            {rangeLabel ? ` · ${rangeLabel}` : ""}
-          </span>
-        </div>
-        <div className="db-chart-meta db-chart-meta--right">
-          <span className="db-chart-note">{chartContextLabel}</span>
+          <span className="db-chart-caption">{captionParts.join(" · ")}</span>
         </div>
       </div>
 
@@ -597,6 +596,7 @@ function LineChartSvg({
   });
 
   const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1]?.x ?? padding.left} ${padding.top + innerHeight} L ${points[0]?.x ?? padding.left} ${padding.top + innerHeight} Z`;
 
   return (
     <svg className="db-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
@@ -613,6 +613,7 @@ function LineChartSvg({
       }) : null}
 
       <line className="db-chart-axis" x1={padding.left} x2={width - padding.right} y1={padding.top + innerHeight} y2={padding.top + innerHeight} />
+      <path className="db-chart-line-area" d={areaPath} fill={colors[0]} />
       <path className="db-chart-line" d={linePath} stroke={colors[0]} />
 
       {points.map((point, index) => (
@@ -634,6 +635,13 @@ function LineChartSvg({
             cy={point.y}
             r={4}
             fill={colors[index % colors.length]}
+          />
+          <circle
+            className="db-chart-point-core"
+            cx={point.x}
+            cy={point.y}
+            r={2}
+            fill="var(--base)"
           />
           {shouldRenderAxisLabel(index, data.length, labelStep) ? (
             <text className="db-chart-axis-label" x={point.x} y={height - 26} textAnchor="middle">
