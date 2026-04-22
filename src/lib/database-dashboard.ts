@@ -15,6 +15,16 @@ const DEFAULT_PIN_W = 4;
 const DEFAULT_PIN_H = 11;
 const STORAGE_KEY = "intelizen:database-dashboard-pins";
 
+type PinnedViewType = WorkspaceDatabaseModel["views"][number]["type"];
+type PinnedChartType = WorkspaceDatabaseModel["views"][number]["chartType"];
+
+interface DashboardPinSizing {
+  defaultW: number;
+  defaultH: number;
+  minW: number;
+  minH: number;
+}
+
 export function loadDatabaseDashboardPins(): DatabaseDashboardPin[] {
   if (typeof window === "undefined") return [];
   try {
@@ -39,20 +49,25 @@ export function supportsPinnedDashboardView(type: WorkspaceDatabaseModel["views"
 
 export function upsertDatabaseDashboardPin(
   pins: DatabaseDashboardPin[],
-  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId"> & {
+    viewType?: PinnedViewType;
+    chartType?: PinnedChartType;
+  },
 ) {
   const existing = pins.find((pin) => pin.viewId === input.viewId);
   if (existing) {
     return { pins, added: false, pin: existing };
   }
 
+  const sizing = getDashboardPinSizing(input.viewType, input.chartType);
+
   const pin: DatabaseDashboardPin = {
     id: crypto.randomUUID(),
     databaseId: input.databaseId,
     viewId: input.viewId,
-    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
-    w: DEFAULT_PIN_W,
-    h: DEFAULT_PIN_H,
+    ...getNextPinPlacement(pins, sizing.defaultW),
+    w: sizing.defaultW,
+    h: sizing.defaultH,
   };
 
   return {
@@ -60,6 +75,31 @@ export function upsertDatabaseDashboardPin(
     added: true,
     pin,
   };
+}
+
+export function getDashboardPinSizing(
+  viewType: PinnedViewType | undefined,
+  chartType?: PinnedChartType,
+): DashboardPinSizing {
+  if (viewType === "table") {
+    return { defaultW: 6, defaultH: 12, minW: 5, minH: 9 };
+  }
+
+  if (viewType === "list") {
+    return { defaultW: 4, defaultH: 10, minW: 4, minH: 8 };
+  }
+
+  if (viewType === "chart") {
+    if (chartType === "donut") {
+      return { defaultW: 6, defaultH: 12, minW: 5, minH: 9 };
+    }
+    if (chartType === "line") {
+      return { defaultW: 6, defaultH: 11, minW: 5, minH: 8 };
+    }
+    return { defaultW: 5, defaultH: 11, minW: 5, minH: 8 };
+  }
+
+  return { defaultW: DEFAULT_PIN_W, defaultH: DEFAULT_PIN_H, minW: 4, minH: 8 };
 }
 
 function migrateDashboardPins(values: unknown[]): DatabaseDashboardPin[] {

@@ -1,14 +1,13 @@
 import { lazy, Suspense, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronLeft,
   ChevronRight,
   FileText,
   FolderOpen,
   FolderPlus,
   Layers,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -362,8 +361,9 @@ export function ReportsView() {
       <aside
         style={{ width: leftOpen ? 300 : 0 }}
         className={cn(
-          "relative flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--mantle)]",
+          "relative flex h-full shrink-0 flex-col overflow-hidden bg-[var(--mantle)]",
           "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          leftOpen && "border-r border-[var(--border)]",
         )}
       >
         {leftOpen ? (
@@ -373,9 +373,11 @@ export function ReportsView() {
               <button
                 type="button"
                 onClick={() => setLeftOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                aria-label="Collapse reports sidebar"
+                title="Collapse reports"
               >
-                <PanelLeftClose className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
             </div>
 
@@ -499,16 +501,7 @@ export function ReportsView() {
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            {!leftOpen ? (
-              <button
-                type="button"
-                onClick={() => setLeftOpen(true)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-            ) : null}
+          <div className={cn("flex min-w-0 items-center gap-3", !leftOpen && "pl-11")}>
             <span className="text-label">Reports</span>
             {breadcrumb && !isCramped ? (
               <div className="flex min-w-0 items-center gap-1.5">
@@ -524,8 +517,20 @@ export function ReportsView() {
           ) : null}
         </div>
 
+        {!leftOpen ? (
+          <button
+            type="button"
+            onClick={() => setLeftOpen(true)}
+            className="absolute left-3 top-3 z-40 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            aria-label="Expand reports sidebar"
+            title="Show reports"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        ) : null}
+
         <div className="flex-1 overflow-y-auto">
-          {selection?.kind === "doc" && selectedDoc ? (
+          {selection?.kind === "doc" && selectedDoc && fileContent !== null ? (
             <div className="px-[10%] py-10">
               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
                 {selectedDoc.document_type} · {selectedDoc.domain}
@@ -546,7 +551,7 @@ export function ReportsView() {
             <div className="flex h-full items-center justify-center">
               <Loader2 className={cn("h-4 w-4 text-[var(--subtext-0)]", loadingDoc && "animate-spin")} />
             </div>
-          ) : selection?.kind === "file" && selectedFile ? (
+          ) : selection?.kind === "file" && selectedFile && fileContent !== null ? (
             isFileEditable ? (
               <div className="px-[10%] py-10">
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">

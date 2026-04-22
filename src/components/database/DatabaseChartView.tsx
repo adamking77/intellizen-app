@@ -1,12 +1,12 @@
-import { useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useId, useMemo } from "react";
+import type { CSSProperties } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   findDefaultChartGroupField,
   findDefaultChartValueField,
-  getFieldValue,
   getChartGroupCandidates,
+  getFieldValue,
   getViewRecords,
   resolveRelationLabel,
 } from "@/lib/database-core";
@@ -20,6 +20,22 @@ import type {
   WorkspaceDatabaseRecordModel,
 } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import {
+  Area,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { TooltipContentProps } from "recharts";
 
 interface DatabaseChartViewProps {
   database: WorkspaceDatabaseModel;
@@ -37,62 +53,76 @@ interface ChartDatum {
   key: string;
   label: string;
   value: number;
+  color?: string;
 }
 
-interface ChartTooltipState {
-  key: string;
-  label: string;
-  metric: string;
-  value: string;
-  detail?: string;
-  color: string;
-  x: number;
-  y: number;
-  locked: boolean;
-  placement: "above" | "below";
+interface ChartTheme {
+  series: string[];
+  primary: string;
+  secondary: string;
+  panelEdge: string;
+  grid: string;
+  axis: string;
+  axisLabel: string;
+  cursor: string;
+  tooltipBorder: string;
+  tooltipShadow: string;
+  legendHover: string;
 }
 
-const CHART_PALETTES: Record<WorkspaceDatabaseChartPalette, string[]> = {
-  blue: [
-    "var(--accent)",
-    "var(--lavender)",
-    "var(--sapphire)",
-    "var(--teal)",
-    "var(--sky)",
-    "var(--blue)",
-    "var(--mauve)",
-    "var(--green)",
-  ],
-  rose: [
-    "var(--flamingo)",
-    "var(--rosewater)",
-    "var(--pink)",
-    "var(--lavender)",
-    "var(--mauve)",
-    "var(--yellow)",
-    "var(--peach)",
-    "var(--red)",
-  ],
-  gold: [
-    "var(--yellow)",
-    "var(--peach)",
-    "var(--rosewater)",
-    "var(--flamingo)",
-    "var(--rosewater)",
-    "var(--red)",
-    "var(--maroon)",
-    "var(--flamingo)",
-  ],
-  teal: [
-    "var(--sky)",
-    "var(--teal)",
-    "var(--sapphire)",
-    "var(--green)",
-    "var(--accent)",
-    "var(--lavender)",
-    "var(--mauve)",
-    "var(--blue)",
-  ],
+const CHART_THEMES: Record<WorkspaceDatabaseChartPalette, ChartTheme> = {
+  blue: {
+    series: ["var(--accent)", "var(--lavender)", "var(--sapphire)", "var(--teal)", "var(--sky)", "var(--blue)", "var(--mauve)", "var(--green)"],
+    primary: "var(--accent)",
+    secondary: "var(--lavender)",
+    panelEdge: "color-mix(in srgb, var(--accent) 18%, var(--border) 82%)",
+    grid: "color-mix(in srgb, var(--accent) 12%, var(--border-subtle) 88%)",
+    axis: "color-mix(in srgb, var(--accent) 18%, var(--border) 82%)",
+    axisLabel: "color-mix(in srgb, var(--subtext-0) 76%, var(--accent) 24%)",
+    cursor: "color-mix(in srgb, var(--accent) 14%, transparent 86%)",
+    tooltipBorder: "color-mix(in srgb, var(--accent) 28%, var(--border) 72%)",
+    tooltipShadow: "0 18px 42px rgba(10, 14, 24, 0.44)",
+    legendHover: "color-mix(in srgb, var(--accent-soft) 70%, var(--surface-wash) 30%)",
+  },
+  rose: {
+    series: ["var(--red)", "var(--pink)", "var(--flamingo)", "var(--rosewater)", "var(--mauve)", "var(--peach)", "var(--yellow)", "var(--lavender)"],
+    primary: "var(--red)",
+    secondary: "var(--pink)",
+    panelEdge: "color-mix(in srgb, var(--red) 20%, var(--border) 80%)",
+    grid: "color-mix(in srgb, var(--red) 12%, var(--border-subtle) 88%)",
+    axis: "color-mix(in srgb, var(--red) 20%, var(--border) 80%)",
+    axisLabel: "color-mix(in srgb, var(--subtext-0) 76%, var(--pink) 24%)",
+    cursor: "color-mix(in srgb, var(--red) 13%, transparent 87%)",
+    tooltipBorder: "color-mix(in srgb, var(--pink) 26%, var(--border) 74%)",
+    tooltipShadow: "0 18px 42px rgba(30, 12, 18, 0.42)",
+    legendHover: "color-mix(in srgb, var(--red) 11%, var(--surface-wash) 89%)",
+  },
+  gold: {
+    series: ["var(--yellow)", "var(--peach)", "var(--rosewater)", "var(--flamingo)", "var(--maroon)", "var(--red)", "var(--green)", "var(--lavender)"],
+    primary: "var(--yellow)",
+    secondary: "var(--peach)",
+    panelEdge: "color-mix(in srgb, var(--yellow) 16%, var(--border) 84%)",
+    grid: "color-mix(in srgb, var(--yellow) 12%, var(--border-subtle) 88%)",
+    axis: "color-mix(in srgb, var(--yellow) 18%, var(--border) 82%)",
+    axisLabel: "color-mix(in srgb, var(--subtext-0) 78%, var(--yellow) 22%)",
+    cursor: "color-mix(in srgb, var(--yellow) 13%, transparent 87%)",
+    tooltipBorder: "color-mix(in srgb, var(--peach) 24%, var(--border) 76%)",
+    tooltipShadow: "0 18px 42px rgba(32, 20, 8, 0.4)",
+    legendHover: "color-mix(in srgb, var(--yellow) 11%, var(--surface-wash) 89%)",
+  },
+  teal: {
+    series: ["var(--teal)", "var(--sky)", "var(--sapphire)", "var(--green)", "var(--accent)", "var(--lavender)", "var(--mauve)", "var(--blue)"],
+    primary: "var(--teal)",
+    secondary: "var(--sky)",
+    panelEdge: "color-mix(in srgb, var(--teal) 18%, var(--border) 82%)",
+    grid: "color-mix(in srgb, var(--teal) 12%, var(--border-subtle) 88%)",
+    axis: "color-mix(in srgb, var(--teal) 18%, var(--border) 82%)",
+    axisLabel: "color-mix(in srgb, var(--subtext-0) 76%, var(--teal) 24%)",
+    cursor: "color-mix(in srgb, var(--teal) 13%, transparent 87%)",
+    tooltipBorder: "color-mix(in srgb, var(--sky) 24%, var(--border) 76%)",
+    tooltipShadow: "0 18px 42px rgba(8, 28, 28, 0.4)",
+    legendHover: "color-mix(in srgb, var(--teal) 11%, var(--surface-wash) 89%)",
+  },
 };
 
 export function DatabaseChartView({
@@ -106,26 +136,33 @@ export function DatabaseChartView({
   compactPixelWidth = 0,
   compactPixelHeight = 0,
 }: DatabaseChartViewProps) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const [tooltip, setTooltip] = useState<ChartTooltipState | null>(null);
+  const gradientId = useId().replace(/:/g, "");
   const chartType = view.chartType ?? "bar";
   const chartRange = view.chartRange ?? "90d";
   const aggregation = view.chartAggregation ?? "count";
-  const palette = CHART_PALETTES[view.chartPalette ?? "blue"];
-  const groupField = database.schema.find((field) => field.id === view.groupBy) ?? findDefaultChartGroupField(database, chartType);
-  const valueField = database.schema.find((field) => field.id === view.chartValueField) ?? findDefaultChartValueField(database);
+  const theme = CHART_THEMES[view.chartPalette ?? "blue"];
+  const groupField =
+    database.schema.find((field) => field.id === view.groupBy) ?? findDefaultChartGroupField(database, chartType);
+  const valueField =
+    database.schema.find((field) => field.id === view.chartValueField) ?? findDefaultChartValueField(database);
   const isValidGroupField = groupField
     ? getChartGroupCandidates(database, chartType).some((field) => field.id === groupField.id)
     : false;
+
   const records = useMemo(() => getViewRecords(database, view, catalog), [catalog, database, view]);
   const chartRecords = useMemo(
     () => filterChartRecords(records, database, catalog, groupField, chartType, chartRange),
     [catalog, chartRange, chartType, database, groupField, records],
   );
 
-  const chartData = useMemo(
+  const rawChartData = useMemo(
     () => buildChartData(chartRecords, database, catalog, groupField, valueField, aggregation, chartType),
     [aggregation, catalog, chartRecords, chartType, database, groupField, valueField],
+  );
+
+  const chartData = useMemo(
+    () => rawChartData.map((datum, index) => ({ ...datum, color: theme.series[index % theme.series.length] })),
+    [rawChartData, theme.series],
   );
 
   if (!groupField || !isValidGroupField) {
@@ -167,83 +204,14 @@ export function DatabaseChartView({
   }
 
   const total = chartData.reduce((sum, datum) => sum + datum.value, 0);
-  const max = Math.max(...chartData.map((datum) => datum.value), 0);
-  const summaryLabel = aggregation === "count"
-    ? `${total} records`
-    : `${formatAggregateValue(total)} ${aggregation}`;
-  const valueLabel = aggregation === "count"
-    ? "Count records"
-    : `${capitalize(aggregation)} ${valueField?.name ?? "value"}`;
-  const chartContextLabel =
-    chartType === "line" ? `${chartData.length} points` : `${chartData.length} groups`;
+  const summaryLabel = aggregation === "count" ? `${total} records` : `${formatAggregateValue(total)} ${aggregation}`;
+  const valueLabel = aggregation === "count" ? "Count records" : `${capitalize(aggregation)} ${valueField?.name ?? "value"}`;
+  const chartContextLabel = chartType === "line" ? `${chartData.length} points` : `${chartData.length} groups`;
   const rangeLabel = chartType === "line" ? formatChartRangeLabel(chartRange) : null;
   const captionParts = [`${valueLabel} by ${groupField.name}`, chartContextLabel, rangeLabel].filter(Boolean);
 
-  const positionTooltip = (event: ReactMouseEvent<SVGElement | HTMLDivElement>) => {
-    const frameRect = frameRef.current?.getBoundingClientRect();
-    if (!frameRect) return { x: 0, y: 0 };
-    const inset = 28;
-    return {
-      x: clamp(event.clientX - frameRect.left, inset, frameRect.width - inset),
-      y: clamp(event.clientY - frameRect.top, inset, frameRect.height - inset),
-    };
-  };
-
-  const buildTooltipState = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    options?: { locked?: boolean; detail?: string },
-  ): ChartTooltipState => {
-    const position = positionTooltip(event);
-    return {
-      key: datum.key,
-      label: datum.label,
-      metric: valueLabel,
-      value: formatAggregateValue(datum.value),
-      detail: options?.detail,
-      color,
-      x: position.x,
-      y: position.y,
-      locked: options?.locked ?? false,
-      placement: position.y < 86 ? "below" : "above",
-    };
-  };
-
-  const handleTooltipHover = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => {
-    setTooltip((current) => {
-      if (current?.locked && current.key !== datum.key) return current;
-      const next = buildTooltipState(event, datum, color, { detail, locked: current?.locked ?? false });
-      return next;
-    });
-  };
-
-  const handleTooltipLeave = () => {
-    setTooltip((current) => (current?.locked ? current : null));
-  };
-
-  const handleTooltipToggle = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => {
-    event.stopPropagation();
-    setTooltip((current) => {
-      if (current?.locked && current.key === datum.key) {
-        return null;
-      }
-      return buildTooltipState(event, datum, color, { detail, locked: true });
-    });
-  };
-
   return (
-    <div className={`db-chart-root${compact ? " db-chart-root--compact" : ""}`}>
+    <div className={`db-chart-root${compact ? " db-chart-root--compact" : ""}`} style={getChartThemeStyle(theme)}>
       {!compact ? (
         <div className="db-chart-header">
           <div className="db-chart-meta">
@@ -254,79 +222,342 @@ export function DatabaseChartView({
       ) : null}
 
       <div className="db-chart-surface">
-        <div
-          ref={frameRef}
-          className={`db-chart-frame${chartType === "donut" ? " db-chart-frame--donut" : " db-chart-frame--cartesian"}`}
-          onClick={() => setTooltip((current) => (current?.locked ? null : current))}
-        >
-          {tooltip ? (
-            <div
-              className={`db-chart-tooltip db-chart-tooltip--${tooltip.placement}${tooltip.locked ? " db-chart-tooltip--locked" : ""}`}
-              style={{ left: tooltip.x, top: tooltip.y }}
-            >
-              <div className="db-chart-tooltip-title">
-                <span
-                  aria-hidden
-                  className="db-chart-tooltip-swatch"
-                  style={{ backgroundColor: tooltip.color }}
-                />
-                <span className="db-chart-tooltip-label">{tooltip.label}</span>
-              </div>
-              <div className="db-chart-tooltip-row">
-                <span className="db-chart-tooltip-metric">{tooltip.metric}</span>
-                <span className="db-chart-tooltip-value">{tooltip.value}</span>
-              </div>
-              {tooltip.detail ? <div className="db-chart-tooltip-detail">{tooltip.detail}</div> : null}
-            </div>
-          ) : null}
+        <div className={`db-chart-frame${chartType === "donut" ? " db-chart-frame--donut" : " db-chart-frame--cartesian"}`}>
           {chartType === "donut" ? (
-            <DonutChartSvg
+            <DonutChartPanel
               data={chartData}
               total={total}
-              colors={palette}
+              metricLabel={valueLabel}
               showLegend={view.chartShowLegend ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
               compactPixelWidth={compactPixelWidth}
               compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
             />
           ) : chartType === "line" ? (
-            <LineChartSvg
+            <LineChartPanel
               data={chartData}
-              colors={palette}
-              max={max}
+              metricLabel={valueLabel}
+              gradientId={gradientId}
               showGrid={view.chartShowGrid ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
               compactPixelWidth={compactPixelWidth}
               compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
             />
           ) : (
-            <BarChartSvg
+            <BarChartPanel
               data={chartData}
-              colors={palette}
-              max={max}
+              metricLabel={valueLabel}
               showGrid={view.chartShowGrid ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
               compactPixelWidth={compactPixelWidth}
               compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
             />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function BarChartPanel({
+  data,
+  metricLabel,
+  showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  metricLabel: string;
+  showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const metrics = getCompactCartesianMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+
+  return (
+    <div className={`db-chart-panel db-chart-panel--cartesian${compact ? " db-chart-panel--embedded" : ""}`}>
+      <div className="db-chart-recharts db-chart-recharts--cartesian" style={getChartFrameStyle(metrics.width, metrics.height)}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={metrics.padding} barCategoryGap={compact ? "40%" : "28%"}>
+            {showGrid ? <CartesianGrid vertical={false} stroke="var(--db-chart-grid)" strokeDasharray="3 6" /> : null}
+            <XAxis
+              dataKey="label"
+              axisLine={{ stroke: "var(--db-chart-axis)" }}
+              tickLine={false}
+              tickMargin={12}
+              minTickGap={12}
+              interval="preserveStartEnd"
+              tick={{ fontSize: 10, fill: "var(--db-chart-axis-label)" }}
+              tickFormatter={(value) => truncateLabel(String(value), compact ? 10 : 12)}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={Math.max(metrics.padding.left - 10, 36)}
+              tick={{ fontSize: 10, fill: "var(--db-chart-axis-label)" }}
+              tickFormatter={formatTick}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--db-chart-cursor)" }}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 3, outline: "none" }}
+              content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+            />
+            <Bar
+              dataKey="value"
+              radius={[0, 0, 0, 0]}
+              maxBarSize={compact ? 18 : 26}
+              isAnimationActive
+              animationDuration={560}
+              animationBegin={60}
+            >
+              {data.map((datum) => (
+                <Cell key={datum.key} fill={datum.color} stroke="color-mix(in srgb, var(--crust) 24%, transparent 76%)" strokeWidth={1} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function LineChartPanel({
+  data,
+  metricLabel,
+  gradientId,
+  showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  metricLabel: string;
+  gradientId: string;
+  showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const metrics = getCompactCartesianMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const lineColor = data[0]?.color ?? "var(--accent)";
+
+  return (
+    <div className={`db-chart-panel db-chart-panel--cartesian${compact ? " db-chart-panel--embedded" : ""}`}>
+      <div className="db-chart-recharts db-chart-recharts--cartesian" style={getChartFrameStyle(metrics.width, metrics.height)}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={metrics.padding}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={lineColor} stopOpacity={0.34} />
+                <stop offset="100%" stopColor={lineColor} stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            {showGrid ? <CartesianGrid vertical={false} stroke="var(--db-chart-grid)" strokeDasharray="3 6" /> : null}
+            <XAxis
+              dataKey="label"
+              axisLine={{ stroke: "var(--db-chart-axis)" }}
+              tickLine={false}
+              tickMargin={12}
+              minTickGap={12}
+              interval="preserveStartEnd"
+              tick={{ fontSize: 10, fill: "var(--db-chart-axis-label)" }}
+              tickFormatter={(value) => truncateLabel(String(value), compact ? 10 : 12)}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={Math.max(metrics.padding.left - 10, 36)}
+              tick={{ fontSize: 10, fill: "var(--db-chart-axis-label)" }}
+              tickFormatter={formatTick}
+            />
+            <Tooltip
+              cursor={{ stroke: "var(--db-chart-axis)", strokeDasharray: "4 6", strokeOpacity: 0.8 }}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 3, outline: "none" }}
+              content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+            />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="none"
+              fill={`url(#${gradientId})`}
+              isAnimationActive
+              animationDuration={700}
+              animationBegin={40}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={lineColor}
+              strokeWidth={3}
+              dot={{ r: 4, fill: lineColor, stroke: "var(--db-chart-panel-edge)", strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: lineColor, stroke: "var(--base)", strokeWidth: 2 }}
+              isAnimationActive
+              animationDuration={700}
+              animationBegin={40}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function DonutChartPanel({
+  data,
+  total,
+  metricLabel,
+  showLegend,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  total: number;
+  metricLabel: string;
+  showLegend: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const config = getDonutChartMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    showLegend,
+    compactPixelWidth,
+    compactPixelHeight,
+    data.length,
+  );
+  const layoutClass =
+    config.legendPlacement === "side"
+      ? " db-chart-donut-layout--side"
+      : config.legendPlacement === "below"
+        ? " db-chart-donut-layout--stacked"
+        : "";
+  const compactClass = compact ? " db-chart-donut-layout--compact" : "";
+
+  return (
+    <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
+      <div
+        className={`db-chart-panel db-chart-panel--donut${compact ? " db-chart-panel--embedded" : ""}`}
+        style={getFixedChartFrameStyle(config.width, config.height)}
+      >
+        <div className="db-chart-donut-chart-shell" style={getFixedChartFrameStyle(config.width, config.height)}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                allowEscapeViewBox={{ x: true, y: true }}
+                wrapperStyle={{ zIndex: 3, outline: "none" }}
+                content={(props) => (
+                  <ChartTooltipCard
+                    {...props}
+                    metricLabel={metricLabel}
+                    detailFormatter={(datum) => formatShare(datum.value, total)}
+                  />
+                )}
+              />
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="label"
+                cx="50%"
+                cy="50%"
+                innerRadius={config.innerRadius}
+                outerRadius={config.outerRadius}
+                paddingAngle={1}
+                cornerRadius={3}
+                stroke="none"
+                strokeWidth={0}
+                isAnimationActive
+                animationDuration={680}
+                animationBegin={80}
+              >
+                {data.map((datum) => (
+                  <Cell key={datum.key} fill={datum.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+
+          <div className="db-chart-donut-center" aria-hidden>
+            <div className="db-chart-donut-total-text">{formatAggregateValue(total)}</div>
+            <div className="db-chart-donut-center-caption">Total</div>
+          </div>
+        </div>
+      </div>
+
+      {config.showLegend ? (
+        <div className="db-chart-legend">
+          {data.map((datum) => (
+            <div key={datum.key} className="db-chart-legend-row">
+              <span aria-hidden className="db-chart-legend-swatch" style={{ backgroundColor: datum.color }} />
+              <span className="db-chart-legend-label">{datum.label}</span>
+              <span className="db-chart-legend-value">{formatAggregateValue(datum.value)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChartTooltipCard({
+  active,
+  payload,
+  metricLabel,
+  detailFormatter,
+}: TooltipContentProps & {
+  metricLabel: string;
+  detailFormatter?: (datum: ChartDatum) => string | undefined;
+}) {
+  const datum = payload?.[0]?.payload as ChartDatum | undefined;
+  if (!active || !datum) return null;
+
+  return (
+    <div className="db-chart-tooltip-card">
+      <div className="db-chart-tooltip-title">
+        <span aria-hidden className="db-chart-tooltip-swatch" style={{ backgroundColor: datum.color }} />
+        <span className="db-chart-tooltip-label">{datum.label}</span>
+      </div>
+      <div className="db-chart-tooltip-row">
+        <span className="db-chart-tooltip-metric">{metricLabel}</span>
+        <span className="db-chart-tooltip-value">{formatAggregateValue(datum.value)}</span>
+      </div>
+      {detailFormatter ? <div className="db-chart-tooltip-detail">{detailFormatter(datum)}</div> : null}
     </div>
   );
 }
@@ -475,370 +706,35 @@ function compareChartKeys(left: string, right: string) {
   return left.localeCompare(right, undefined, { sensitivity: "base" });
 }
 
-function formatAggregateValue(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+function getChartFrameStyle(width: number, height: number) {
+  return {
+    width: "100%",
+    maxWidth: `${width}px`,
+    height: `${height}px`,
+  };
 }
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function BarChartSvg({
-  data,
-  colors,
-  max,
-  showGrid,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  colors: string[];
-  max: number;
-  showGrid: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const size = getCompactCartesianMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    compactPixelWidth,
-    compactPixelHeight,
-  );
-  const width = size.width;
-  const height = size.height;
-  const padding = size.padding;
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const step = innerWidth / Math.max(data.length, 1);
-  const barWidth = Math.min(step * 0.42, compact ? 28 : 36);
-  const ticks = createTicks(max);
-  const labelStep = getAxisLabelStep(data.length);
-
-  return (
-    <svg className="db-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-      {showGrid ? ticks.map((tick) => {
-        const y = padding.top + innerHeight - (tick / Math.max(max, 1)) * innerHeight;
-        return (
-          <g key={tick}>
-            <line className="db-chart-grid" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-            <text className="db-chart-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">
-              {formatTick(tick)}
-            </text>
-          </g>
-        );
-      }) : null}
-
-      <line className="db-chart-axis" x1={padding.left} x2={width - padding.right} y1={padding.top + innerHeight} y2={padding.top + innerHeight} />
-
-      {data.map((datum, index) => {
-        const color = colors[index % colors.length];
-        const x = padding.left + step * index + (step - barWidth) / 2;
-        const barHeight = max > 0 ? (datum.value / max) * innerHeight : 0;
-        const y = padding.top + innerHeight - barHeight;
-        return (
-          <g key={datum.key}>
-            <rect
-              className="db-chart-hitbox"
-              x={x - Math.max((Math.max(barWidth, 24) - barWidth) / 2, 6)}
-              y={padding.top}
-              width={Math.max(barWidth + 12, 28)}
-              height={innerHeight}
-              onMouseEnter={(event) => onTooltipHover(event, datum, color)}
-              onMouseMove={(event) => onTooltipHover(event, datum, color)}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, color)}
-            />
-            <rect
-              className="db-chart-bar"
-              x={x}
-              y={y}
-              width={barWidth}
-              height={Math.max(barHeight, 2)}
-              rx={8}
-              ry={8}
-              fill={color}
-              onMouseEnter={(event) => onTooltipHover(event, datum, color)}
-              onMouseMove={(event) => onTooltipHover(event, datum, color)}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, color)}
-            />
-            {shouldRenderAxisLabel(index, data.length, labelStep) ? (
-              <text className="db-chart-axis-label" x={x + barWidth / 2} y={height - 26} textAnchor="middle">
-                {truncateLabel(datum.label)}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function LineChartSvg({
-  data,
-  colors,
-  max,
-  showGrid,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  colors: string[];
-  max: number;
-  showGrid: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const size = getCompactCartesianMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    compactPixelWidth,
-    compactPixelHeight,
-  );
-  const width = size.width;
-  const height = size.height;
-  const padding = size.padding;
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const ticks = createTicks(max);
-  const step = innerWidth / Math.max(data.length - 1, 1);
-  const labelStep = getAxisLabelStep(data.length);
-
-  const points = data.map((datum, index) => {
-    const x = data.length === 1 ? padding.left + innerWidth / 2 : padding.left + step * index;
-    const y = padding.top + innerHeight - (datum.value / Math.max(max, 1)) * innerHeight;
-    return { x, y, datum };
-  });
-
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  const areaPath = `${linePath} L ${points[points.length - 1]?.x ?? padding.left} ${padding.top + innerHeight} L ${points[0]?.x ?? padding.left} ${padding.top + innerHeight} Z`;
-
-  return (
-    <svg className="db-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-      {showGrid ? ticks.map((tick) => {
-        const y = padding.top + innerHeight - (tick / Math.max(max, 1)) * innerHeight;
-        return (
-          <g key={tick}>
-            <line className="db-chart-grid" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-            <text className="db-chart-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">
-              {formatTick(tick)}
-            </text>
-          </g>
-        );
-      }) : null}
-
-      <line className="db-chart-axis" x1={padding.left} x2={width - padding.right} y1={padding.top + innerHeight} y2={padding.top + innerHeight} />
-      <path className="db-chart-line-area" d={areaPath} fill={colors[0]} />
-      <path className="db-chart-line" d={linePath} stroke={colors[0]} />
-
-      {points.map((point, index) => (
-        <g key={point.datum.key}>
-          <rect
-            className="db-chart-hitbox"
-            x={point.x - (data.length === 1 ? 36 : Math.max(step, 44) / 2)}
-            y={padding.top}
-            width={data.length === 1 ? 72 : Math.max(step, 44)}
-            height={innerHeight}
-            onMouseEnter={(event) => onTooltipHover(event, point.datum, colors[index % colors.length])}
-            onMouseMove={(event) => onTooltipHover(event, point.datum, colors[index % colors.length])}
-            onMouseLeave={onTooltipLeave}
-            onClick={(event) => onTooltipToggle(event, point.datum, colors[index % colors.length])}
-          />
-          <circle
-            className="db-chart-point"
-            cx={point.x}
-            cy={point.y}
-            r={4}
-            fill={colors[index % colors.length]}
-          />
-          <circle
-            className="db-chart-point-core"
-            cx={point.x}
-            cy={point.y}
-            r={2}
-            fill="var(--base)"
-          />
-          {shouldRenderAxisLabel(index, data.length, labelStep) ? (
-            <text className="db-chart-axis-label" x={point.x} y={height - 26} textAnchor="middle">
-              {truncateLabel(point.datum.label)}
-            </text>
-          ) : null}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function DonutChartSvg({
-  data,
-  total,
-  colors,
-  showLegend,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  total: number;
-  colors: string[];
-  showLegend: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const config = getDonutChartMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    showLegend,
-    compactPixelWidth,
-    compactPixelHeight,
-    data.length,
-  );
-  const width = config.width;
-  const height = config.height;
-  const cx = config.cx;
-  const cy = config.cy;
-  const outerRadius = config.outerRadius;
-  const innerRadius = config.innerRadius;
-  let currentAngle = -90;
-  const layoutClass =
-    config.legendPlacement === "side"
-      ? " db-chart-donut-layout--side"
-      : config.legendPlacement === "below"
-        ? " db-chart-donut-layout--stacked"
-        : "";
-  const compactClass = compact ? " db-chart-donut-layout--compact" : "";
-  const svgStyle = {
-    width: `${config.width}px`,
-    height: `${config.height}px`,
+function getFixedChartFrameStyle(width: number, height: number) {
+  return {
+    width: `${width}px`,
     maxWidth: "100%",
-    maxHeight: "100%",
-  } satisfies CSSProperties;
-
-  return (
-    <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
-      <svg className="db-chart-svg db-chart-svg--donut" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={svgStyle}>
-        {data.map((datum, index) => {
-          const sweep = total > 0 ? (datum.value / total) * 360 : 0;
-          const path = describeDonutArc(cx, cy, innerRadius, outerRadius, currentAngle, currentAngle + sweep);
-          currentAngle += sweep;
-          return (
-            <path
-              key={datum.key}
-              d={path}
-              fill={colors[index % colors.length]}
-              className="db-chart-donut-segment"
-              onMouseEnter={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseMove={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-            />
-          );
-        })}
-        <text className="db-chart-donut-total" x={cx} y={cy - 2} textAnchor="middle">
-          {formatAggregateValue(total)}
-        </text>
-        <text className="db-chart-donut-caption" x={cx} y={cy + 18} textAnchor="middle">
-          Total
-        </text>
-      </svg>
-
-      {config.showLegend ? (
-        <div className="db-chart-legend">
-          {data.map((datum, index) => (
-            <div
-              key={datum.key}
-              className="db-chart-legend-row"
-              onMouseEnter={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseMove={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-            >
-              <span
-                aria-hidden
-                className="db-chart-legend-swatch"
-                style={{ backgroundColor: colors[index % colors.length] }}
-              />
-              <span className="db-chart-legend-label">{datum.label}</span>
-              <span className="db-chart-legend-value">{formatAggregateValue(datum.value)}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+    height: `${height}px`,
+  };
 }
 
-function createTicks(max: number) {
-  const safeMax = Math.max(max, 1);
-  return Array.from({ length: 4 }, (_, index) => Math.round((safeMax / 4) * (index + 1))).reverse();
+function getChartThemeStyle(theme: ChartTheme) {
+  return {
+    "--db-chart-primary": theme.primary,
+    "--db-chart-secondary": theme.secondary,
+    "--db-chart-panel-edge": theme.panelEdge,
+    "--db-chart-grid": theme.grid,
+    "--db-chart-axis": theme.axis,
+    "--db-chart-axis-label": theme.axisLabel,
+    "--db-chart-cursor": theme.cursor,
+    "--db-chart-tooltip-border": theme.tooltipBorder,
+    "--db-chart-tooltip-shadow": theme.tooltipShadow,
+    "--db-chart-legend-hover": theme.legendHover,
+  } as CSSProperties;
 }
 
 function getCompactCartesianMetrics(
@@ -876,17 +772,17 @@ function getCompactCartesianMetrics(
 
   if (widthUnits <= 4) {
     return {
-      width: 500,
-      height: heightUnits >= 12 ? 278 : 246,
-      padding: { top: 18, right: 14, bottom: 58, left: 44 },
+      width: 320,
+      height: heightUnits >= 12 ? 236 : 212,
+      padding: { top: 16, right: 12, bottom: 48, left: 38 },
     };
   }
 
-  if (widthUnits <= 7) {
+  if (widthUnits <= 6) {
     return {
-      width: 600,
-      height: heightUnits >= 12 ? 286 : 258,
-      padding: { top: 18, right: 16, bottom: 62, left: 48 },
+      width: 480,
+      height: heightUnits >= 12 ? 260 : 232,
+      padding: { top: 18, right: 16, bottom: 56, left: 44 },
     };
   }
 
@@ -910,10 +806,8 @@ function getDonutChartMetrics(
     return {
       width: 760,
       height: 340,
-      cx: 190,
-      cy: 168,
-      outerRadius: 112,
       innerRadius: 68,
+      outerRadius: 112,
       showLegend,
       legendPlacement: "side" as const,
     };
@@ -936,20 +830,13 @@ function getDonutChartMetrics(
     if (canShowSideLegend) {
       const legendWidth = clamp(Math.round(availableWidth * 0.24), 160, 210);
       const chartWidth = availableWidth - legendWidth - 16;
-      const diameter = clamp(
-        Math.min(chartWidth * 0.9, availableHeight * 0.78),
-        132,
-        286,
-      );
+      const diameter = clamp(Math.min(chartWidth * 0.9, availableHeight * 0.78), 132, 286);
       const outerRadius = Math.floor(diameter / 2);
-      const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 44);
       return {
         width: diameter + 24,
         height: diameter + 24,
-        cx: (diameter + 24) / 2,
-        cy: (diameter + 24) / 2,
+        innerRadius: Math.max(Math.floor(outerRadius * 0.62), 44),
         outerRadius,
-        innerRadius,
         showLegend,
         legendPlacement: "side" as const,
       };
@@ -957,24 +844,15 @@ function getDonutChartMetrics(
 
     const stackedColumns = availableWidth >= 300 ? 2 : 1;
     const legendRows = showLegend ? Math.ceil(itemCount / stackedColumns) : 0;
-    const legendBlockHeight = showLegend
-      ? legendRows * 30 + Math.max(legendRows - 1, 0) * 8 + 12
-      : 0;
+    const legendBlockHeight = showLegend ? legendRows * 30 + Math.max(legendRows - 1, 0) * 8 + 12 : 0;
     const chartHeight = availableHeight - legendBlockHeight - (showLegend ? 10 : 0);
-    const diameter = clamp(
-      Math.min(availableWidth * 0.64, chartHeight * 0.84),
-      108,
-      248,
-    );
+    const diameter = clamp(Math.min(availableWidth * 0.64, chartHeight * 0.84), 108, 248);
     const outerRadius = Math.floor(diameter / 2);
-    const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 42);
     return {
       width: diameter + 24,
       height: diameter + 24,
-      cx: (diameter + 24) / 2,
-      cy: (diameter + 24) / 2,
+      innerRadius: Math.max(Math.floor(outerRadius * 0.62), 42),
       outerRadius,
-      innerRadius,
       showLegend,
       legendPlacement: showLegend ? ("below" as const) : ("hidden" as const),
     };
@@ -984,13 +862,12 @@ function getDonutChartMetrics(
   const renderLegend = showLegend;
 
   if (canShowSideLegend) {
+    const outerRadius = widthUnits >= 9 ? 122 : 112;
     return {
       width: widthUnits >= 9 ? 720 : 640,
       height: heightUnits >= 13 ? 360 : 326,
-      cx: widthUnits >= 9 ? 190 : 176,
-      cy: heightUnits >= 13 ? 178 : 162,
-      outerRadius: widthUnits >= 9 ? 122 : 112,
       innerRadius: widthUnits >= 9 ? 76 : 68,
+      outerRadius,
       showLegend: true,
       legendPlacement: "side" as const,
     };
@@ -999,10 +876,8 @@ function getDonutChartMetrics(
   return {
     width: 480,
     height: renderLegend ? (heightUnits >= 12 ? 368 : 328) : 336,
-    cx: 240,
-    cy: renderLegend ? (heightUnits >= 12 ? 138 : 132) : 168,
-    outerRadius: renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118,
     innerRadius: renderLegend ? (heightUnits >= 12 ? 68 : 64) : 72,
+    outerRadius: renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118,
     showLegend: renderLegend,
     legendPlacement: renderLegend ? ("below" as const) : ("hidden" as const),
   };
@@ -1024,15 +899,12 @@ function truncateLabel(value: string, max = 12) {
   return `${value.slice(0, max - 1)}…`;
 }
 
-function getAxisLabelStep(length: number) {
-  if (length > 20) return 4;
-  if (length > 12) return 3;
-  if (length > 8) return 2;
-  return 1;
+function formatAggregateValue(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function shouldRenderAxisLabel(index: number, length: number, step: number) {
-  return index === 0 || index === length - 1 || index % step === 0;
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function formatShare(value: number, total: number) {
@@ -1055,45 +927,10 @@ function formatChartRangeLabel(range: WorkspaceDatabaseChartRange) {
 }
 
 function getChartRangeCutoff(range: WorkspaceDatabaseChartRange) {
-  const days =
-    range === "30d" ? 30
-      : range === "90d" ? 90
-        : range === "365d" ? 365
-          : 0;
+  const days = range === "30d" ? 30 : range === "90d" ? 90 : range === "365d" ? 365 : 0;
   if (!days) return null;
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - days);
   return cutoff.getTime();
-}
-
-function describeDonutArc(
-  cx: number,
-  cy: number,
-  innerRadius: number,
-  outerRadius: number,
-  startAngle: number,
-  endAngle: number,
-) {
-  const startOuter = polarToCartesian(cx, cy, outerRadius, endAngle);
-  const endOuter = polarToCartesian(cx, cy, outerRadius, startAngle);
-  const startInner = polarToCartesian(cx, cy, innerRadius, startAngle);
-  const endInner = polarToCartesian(cx, cy, innerRadius, endAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-
-  return [
-    "M", startOuter.x, startOuter.y,
-    "A", outerRadius, outerRadius, 0, largeArcFlag, 0, endOuter.x, endOuter.y,
-    "L", startInner.x, startInner.y,
-    "A", innerRadius, innerRadius, 0, largeArcFlag, 1, endInner.x, endInner.y,
-    "Z",
-  ].join(" ");
-}
-
-function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: number) {
-  const angleRad = ((angleDeg - 90) * Math.PI) / 180;
-  return {
-    x: cx + radius * Math.cos(angleRad),
-    y: cy + radius * Math.sin(angleRad),
-  };
 }

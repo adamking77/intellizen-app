@@ -18,15 +18,15 @@ export function InlineMarkdownEditor({ initialValue, onChange }: InlineMarkdownE
   const editor = useCreateBlockNote({
     defaultStyles: false,
   });
+  const didHydrateRef = useRef(false);
   const isHydratingRef = useRef(false);
-  const lastLoadedValueRef = useRef<string | null>(null);
-  const lastEmittedValueRef = useRef<string | null>(null);
+  const lastSyncedValueRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (lastLoadedValueRef.current === initialValue) return;
+    if (didHydrateRef.current) return;
 
-    lastLoadedValueRef.current = initialValue;
-    lastEmittedValueRef.current = initialValue;
+    didHydrateRef.current = true;
+    lastSyncedValueRef.current = initialValue;
     isHydratingRef.current = true;
 
     const blocks = initialValue.trim()
@@ -45,9 +45,9 @@ export function InlineMarkdownEditor({ initialValue, onChange }: InlineMarkdownE
       if (isHydratingRef.current) return;
 
       const nextValue = editor.blocksToMarkdownLossy(editor.document);
-      if (nextValue === lastEmittedValueRef.current) return;
+      if (nextValue === lastSyncedValueRef.current) return;
 
-      lastEmittedValueRef.current = nextValue;
+      lastSyncedValueRef.current = nextValue;
       onChange(nextValue);
     });
   }, [editor, onChange]);
