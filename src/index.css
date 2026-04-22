@@ -232,7 +232,7 @@ pre {
   --bn-colors-disabled-background: var(--surface-0);
   --bn-colors-shadow: rgba(0, 0, 0, 0.45);
   --bn-colors-border: var(--border);
-  --bn-colors-side-menu: var(--overlay-1);
+  --bn-colors-side-menu: var(--accent);
 }
 
 .intelizen-live-markdown .bn-editor {
@@ -275,6 +275,29 @@ pre {
   padding: 0;
   color: var(--text);
   caret-color: var(--accent);
+}
+
+.intelizen-live-markdown .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after,
+.intelizen-live-markdown .bn-inline-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  color: var(--subtext-0) !important;
+}
+
+.intelizen-live-markdown .bn-side-menu,
+.intelizen-live-markdown .bn-side-menu * {
+  color: var(--accent);
+}
+
+.intelizen-live-markdown .bn-side-menu .bn-button:hover,
+.intelizen-live-markdown .bn-side-menu button:hover,
+.intelizen-live-markdown .bn-toggle-add-block-button:hover,
+.intelizen-live-markdown .bn-toggle-button:hover {
+  color: var(--accent-hover);
+}
+
+.intelizen-live-markdown .bn-side-menu svg,
+.intelizen-live-markdown .bn-toggle-button svg {
+  color: inherit;
+  fill: currentColor;
 }
 
 .intelizen-live-markdown .bn-editor:focus-within {
@@ -577,6 +600,77 @@ pre {
 
 .bn-mt-suggestion-menu-item-subtitle {
   opacity: 0.72;
+}
+
+.bn-suggestion-menu {
+  padding: 8px !important;
+}
+
+.bn-suggestion-menu .bn-suggestion-menu-label {
+  padding: 6px 10px 4px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--overlay-1) !important;
+}
+
+.bn-suggestion-menu .bn-suggestion-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 9px 10px !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section {
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  min-width: 18px;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  justify-content: center !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] svg {
+  width: 17px !important;
+  height: 17px !important;
+  color: currentColor !important;
+  fill: currentColor !important;
+  opacity: 0.92;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-body {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-title {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  color: var(--text) !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-subtitle {
+  margin-top: 2px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  color: var(--overlay-1) !important;
+  opacity: 1 !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] {
+  color: var(--overlay-1) !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] .mantine-Badge-root {
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  color: var(--overlay-1) !important;
 }
 
 /* ============================================================
@@ -3170,7 +3264,15 @@ pre {
   padding-inline: 8px;
 }
 
+.db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-root--compact .db-chart-caption {
+  display: none;
+}
+
 .db-dashboard-widget[data-view-type="chart"] .db-chart-svg {
+  min-height: 0;
+}
+
+.db-dashboard-widget[data-view-type="chart"] .db-chart-recharts {
   min-height: 0;
 }
 
@@ -3179,6 +3281,10 @@ pre {
 }
 
 .db-dashboard-widget--tall[data-view-type="chart"] .db-chart-svg {
+  min-height: 0;
+}
+
+.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-recharts {
   min-height: 0;
 }
 
@@ -3202,6 +3308,7 @@ pre {
   margin: 0 !important;
   transform: none !important;
   opacity: 0;
+  z-index: 4;
   transition: opacity 120ms ease;
 }
 
@@ -3217,18 +3324,18 @@ pre {
 
 .db-dashboard-widget .react-resizable-handle-e,
 .db-dashboard-widget .react-resizable-handle-w {
-  top: 10px;
-  bottom: 10px;
-  width: 12px;
+  top: 8px;
+  bottom: 8px;
+  width: 22px;
 }
 
 .db-dashboard-widget .react-resizable-handle-e {
-  right: -6px;
+  right: -11px;
   cursor: ew-resize;
 }
 
 .db-dashboard-widget .react-resizable-handle-w {
-  left: -6px;
+  left: -11px;
   cursor: ew-resize;
 }
 
@@ -3236,9 +3343,9 @@ pre {
 .db-dashboard-widget .react-resizable-handle-w::after {
   content: "";
   position: absolute;
-  top: 18px;
-  bottom: 18px;
-  width: 2px;
+  top: 20px;
+  bottom: 20px;
+  width: 3px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 38%, var(--overlay-1) 62%);
   opacity: 0.78;
@@ -3253,27 +3360,27 @@ pre {
 }
 
 .db-dashboard-widget .react-resizable-handle-e::after {
-  right: 4px;
+  right: 7px;
 }
 
 .db-dashboard-widget .react-resizable-handle-w::after {
-  left: 4px;
+  left: 7px;
 }
 
 .db-dashboard-widget .react-resizable-handle-n,
 .db-dashboard-widget .react-resizable-handle-s {
-  left: 10px;
-  right: 10px;
-  height: 12px;
+  left: 8px;
+  right: 8px;
+  height: 22px;
 }
 
 .db-dashboard-widget .react-resizable-handle-n {
-  top: -6px;
+  top: -11px;
   cursor: ns-resize;
 }
 
 .db-dashboard-widget .react-resizable-handle-s {
-  bottom: -6px;
+  bottom: -11px;
   cursor: ns-resize;
 }
 
@@ -3281,9 +3388,9 @@ pre {
 .db-dashboard-widget .react-resizable-handle-s::after {
   content: "";
   position: absolute;
-  left: 18px;
-  right: 18px;
-  height: 2px;
+  left: 20px;
+  right: 20px;
+  height: 3px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 38%, var(--overlay-1) 62%);
   opacity: 0.78;
@@ -3291,11 +3398,96 @@ pre {
 }
 
 .db-dashboard-widget .react-resizable-handle-n::after {
-  top: 4px;
+  top: 7px;
 }
 
 .db-dashboard-widget .react-resizable-handle-s::after {
+  bottom: 7px;
+}
+
+.db-dashboard-widget .react-resizable-handle-ne,
+.db-dashboard-widget .react-resizable-handle-nw,
+.db-dashboard-widget .react-resizable-handle-se,
+.db-dashboard-widget .react-resizable-handle-sw {
+  width: 24px;
+  height: 24px;
+}
+
+.db-dashboard-widget .react-resizable-handle-ne {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-nw {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-se {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-sw {
+  left: -10px;
+  bottom: -10px;
+  cursor: nesw-resize;
+}
+
+.db-dashboard-widget .react-resizable-handle-ne::after,
+.db-dashboard-widget .react-resizable-handle-nw::after,
+.db-dashboard-widget .react-resizable-handle-se::after,
+.db-dashboard-widget .react-resizable-handle-sw::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--overlay-1) 58%);
+  border-style: solid;
+  opacity: 0.82;
+  transition: opacity 120ms ease, border-color 120ms ease;
+}
+
+.db-dashboard-widget .react-resizable-handle-ne::after {
+  top: 4px;
+  right: 4px;
+  border-width: 3px 3px 0 0;
+  border-top-right-radius: 8px;
+}
+
+.db-dashboard-widget .react-resizable-handle-nw::after {
+  top: 4px;
+  left: 4px;
+  border-width: 3px 0 0 3px;
+  border-top-left-radius: 8px;
+}
+
+.db-dashboard-widget .react-resizable-handle-se::after {
+  right: 4px;
   bottom: 4px;
+  border-width: 0 3px 3px 0;
+  border-bottom-right-radius: 8px;
+}
+
+.db-dashboard-widget .react-resizable-handle-sw::after {
+  left: 4px;
+  bottom: 4px;
+  border-width: 0 0 3px 3px;
+  border-bottom-left-radius: 8px;
+}
+
+.db-dashboard-widget:hover .react-resizable-handle-ne::after,
+.db-dashboard-widget:hover .react-resizable-handle-nw::after,
+.db-dashboard-widget:hover .react-resizable-handle-se::after,
+.db-dashboard-widget:hover .react-resizable-handle-sw::after,
+.db-dashboard-grid > .react-grid-item.resizing .react-resizable-handle-ne::after,
+.db-dashboard-grid > .react-grid-item.resizing .react-resizable-handle-nw::after,
+.db-dashboard-grid > .react-grid-item.resizing .react-resizable-handle-se::after,
+.db-dashboard-grid > .react-grid-item.resizing .react-resizable-handle-sw::after {
+  opacity: 1;
 }
 
 /* ─── Chart view ────────────────────────────────────────── */
@@ -3303,6 +3495,16 @@ pre {
   display: flex;
   flex-direction: column;
   height: 100%;
+  --db-chart-primary: var(--accent);
+  --db-chart-secondary: var(--lavender);
+  --db-chart-panel-edge: color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+  --db-chart-grid: color-mix(in srgb, var(--accent) 12%, var(--border-subtle) 88%);
+  --db-chart-axis: color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+  --db-chart-axis-label: color-mix(in srgb, var(--subtext-0) 76%, var(--accent) 24%);
+  --db-chart-cursor: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  --db-chart-tooltip-border: color-mix(in srgb, var(--accent) 28%, var(--border) 72%);
+  --db-chart-tooltip-shadow: 0 18px 42px rgba(10, 14, 24, 0.44);
+  --db-chart-legend-hover: color-mix(in srgb, var(--accent-soft) 70%, var(--surface-wash) 30%);
 }
 
 .db-chart-root--compact .db-chart-surface {
@@ -3330,11 +3532,12 @@ pre {
   font-weight: 600;
   line-height: 1.1;
   color: var(--text);
+  text-wrap: balance;
 }
 
 .db-chart-caption {
   font-size: 11px;
-  color: var(--subtext-0);
+  color: var(--db-chart-axis-label);
 }
 
 .db-chart-surface {
@@ -3361,6 +3564,68 @@ pre {
   width: min(100%, 980px);
 }
 
+.db-chart-panel {
+  border: 1px solid var(--db-chart-panel-edge);
+  border-radius: 18px;
+  background: var(--base);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.db-chart-panel--cartesian {
+  padding: 14px 12px 10px;
+}
+
+.db-chart-panel--donut {
+  padding: 14px 12px;
+}
+
+.db-chart-panel--embedded {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.db-chart-panel--embedded.db-chart-panel--donut {
+  padding: 0;
+}
+
+.db-chart-recharts {
+  width: 100%;
+  min-height: 0;
+}
+
+.db-chart-donut-chart-shell {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.db-chart-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.db-chart-donut-total-text {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+.db-chart-donut-center-caption {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--db-chart-axis-label);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
 .db-chart-tooltip {
   position: absolute;
   z-index: 3;
@@ -3373,6 +3638,17 @@ pre {
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
   transform: translate(-50%, calc(-100% - 12px));
   pointer-events: none;
+}
+
+.db-chart-tooltip-card {
+  min-width: 168px;
+  max-width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--db-chart-tooltip-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--base) 92%, var(--mantle) 8%);
+  box-shadow: var(--db-chart-tooltip-shadow);
+  backdrop-filter: blur(16px);
 }
 
 .db-chart-tooltip--below {
@@ -3557,7 +3833,7 @@ pre {
 .db-chart-legend {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   padding: 4px 0;
   min-width: 0;
 }
@@ -3571,6 +3847,11 @@ pre {
   overflow: visible;
   align-content: start;
   width: min(100%, 420px);
+}
+
+.db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-donut-layout--stacked .db-chart-legend {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
 }
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-donut-layout:not(.db-chart-donut-layout--stacked) .db-chart-legend {
@@ -3588,14 +3869,24 @@ pre {
   cursor: pointer;
   padding: 8px 10px;
   border-radius: 10px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--surface-wash) 70%, transparent 30%);
   transition:
     background-color 120ms ease,
-    color 120ms ease;
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
 }
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-legend-row {
   padding: 7px 9px;
   font-size: 12px;
+}
+
+.db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-legend-row {
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 9px;
+  padding: 6px 8px;
 }
 
 .db-chart-donut-layout .db-chart-svg--donut {
@@ -3604,7 +3895,9 @@ pre {
 }
 
 .db-chart-legend-row:hover {
-  background: var(--surface-wash);
+  background: var(--db-chart-legend-hover);
+  border-color: var(--db-chart-panel-edge);
+  transform: translateY(-1px);
 }
 
 .db-chart-legend-swatch {
@@ -3618,12 +3911,16 @@ pre {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--subtext-0);
+  color: color-mix(in srgb, var(--subtext-0) 84%, var(--db-chart-primary) 16%);
 }
 
 .db-chart-legend-value {
-  color: var(--text);
+  color: color-mix(in srgb, var(--text) 84%, var(--db-chart-primary) 16%);
   font-variant-numeric: tabular-nums;
+}
+
+.db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-legend-value {
+  display: none;
 }
 
 @media (max-width: 980px) {

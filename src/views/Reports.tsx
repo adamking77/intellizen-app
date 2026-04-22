@@ -525,7 +525,7 @@ export function ReportsView() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {selection?.kind === "doc" && selectedDoc ? (
+          {selection?.kind === "doc" && selectedDoc && fileContent !== null ? (
             <div className="px-[10%] py-10">
               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
                 {selectedDoc.document_type} · {selectedDoc.domain}
@@ -546,7 +546,7 @@ export function ReportsView() {
             <div className="flex h-full items-center justify-center">
               <Loader2 className={cn("h-4 w-4 text-[var(--subtext-0)]", loadingDoc && "animate-spin")} />
             </div>
-          ) : selection?.kind === "file" && selectedFile ? (
+          ) : selection?.kind === "file" && selectedFile && fileContent !== null ? (
             isFileEditable ? (
               <div className="px-[10%] py-10">
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">

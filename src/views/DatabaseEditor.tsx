@@ -579,6 +579,8 @@ export function DatabaseEditorView() {
     const result = upsertDatabaseDashboardPin(loadDatabaseDashboardPins(), {
       databaseId: database.id,
       viewId: activeView.id,
+      viewType: activeView.type,
+      chartType: activeView.chartType,
     });
     saveDatabaseDashboardPins(result.pins);
     if (result.added) {

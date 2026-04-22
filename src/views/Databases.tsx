@@ -20,6 +20,7 @@ import { DatabaseListView } from "@/components/database/DatabaseListView";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { Button } from "@/components/ui/button";
 import {
+  getDashboardPinSizing,
   loadDatabaseDashboardPins,
   saveDatabaseDashboardPins,
   supportsPinnedDashboardView,
@@ -114,15 +115,18 @@ export function DatabasesView() {
 
   const gridLayout = useMemo<Layout>(
     () =>
-      pinnedWidgets.map((widget) => ({
-        i: widget.pin.id,
-        x: widget.pin.x,
-        y: widget.pin.y,
-        w: widget.pin.w,
-        h: widget.pin.h,
-        minW: 4,
-        minH: 8,
-      })),
+      pinnedWidgets.map((widget) => {
+        const sizing = getDashboardPinSizing(widget.view.type, widget.view.chartType);
+        return {
+          i: widget.pin.id,
+          x: widget.pin.x,
+          y: widget.pin.y,
+          w: widget.pin.w,
+          h: widget.pin.h,
+          minW: sizing.minW,
+          minH: sizing.minH,
+        };
+      }),
     [pinnedWidgets],
   );
 
@@ -373,7 +377,7 @@ export function DatabasesView() {
                     }}
                     resizeConfig={{
                       enabled: true,
-                      handles: ["n", "s", "e", "w"],
+                      handles: ["n", "s", "e", "w", "ne", "nw", "se", "sw"],
                     }}
                     onLayoutChange={handleGridChange}
                   >
