@@ -533,7 +533,9 @@ function BarChartSvg({
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
   const step = innerWidth / Math.max(data.length, 1);
-  const barWidth = Math.min(step * 0.42, compact ? 28 : 36);
+  const compactBarScale = getCompactBarScale(compact, compactWidthUnits, compactPixelWidth);
+  const barWidth = Math.min(step * 0.42, compact ? 36 * compactBarScale : 32);
+  const barRadius = compact ? 4 : 5;
   const ticks = createTicks(max);
   const labelStep = getAxisLabelStep(data.length);
 
@@ -577,8 +579,8 @@ function BarChartSvg({
               y={y}
               width={barWidth}
               height={Math.max(barHeight, 2)}
-              rx={8}
-              ry={8}
+              rx={barRadius}
+              ry={barRadius}
               fill={color}
               onMouseEnter={(event) => onTooltipHover(event, datum, color)}
               onMouseMove={(event) => onTooltipHover(event, datum, color)}
@@ -913,7 +915,7 @@ function getDonutChartMetrics(
       cx: 190,
       cy: 168,
       outerRadius: 112,
-      innerRadius: 68,
+      innerRadius: 74,
       showLegend,
       legendPlacement: "side" as const,
     };
@@ -942,7 +944,13 @@ function getDonutChartMetrics(
         286,
       );
       const outerRadius = Math.floor(diameter / 2);
-      const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 44);
+      const thickness = getCompactDonutThickness({
+        compactWidthUnits,
+        compactHeightUnits,
+        compactPixelWidth,
+        compactPixelHeight,
+      });
+      const innerRadius = Math.max(outerRadius - thickness, 44);
       return {
         width: diameter + 24,
         height: diameter + 24,
@@ -967,7 +975,13 @@ function getDonutChartMetrics(
       248,
     );
     const outerRadius = Math.floor(diameter / 2);
-    const innerRadius = Math.max(Math.floor(outerRadius * 0.62), 42);
+    const thickness = getCompactDonutThickness({
+      compactWidthUnits,
+      compactHeightUnits,
+      compactPixelWidth,
+      compactPixelHeight,
+    });
+    const innerRadius = Math.max(outerRadius - thickness, 42);
     return {
       width: diameter + 24,
       height: diameter + 24,
@@ -990,22 +1004,81 @@ function getDonutChartMetrics(
       cx: widthUnits >= 9 ? 190 : 176,
       cy: heightUnits >= 13 ? 178 : 162,
       outerRadius: widthUnits >= 9 ? 122 : 112,
-      innerRadius: widthUnits >= 9 ? 76 : 68,
+      innerRadius:
+        (widthUnits >= 9 ? 122 : 112) -
+        getCompactDonutThickness({
+          compactWidthUnits,
+          compactHeightUnits,
+          compactPixelWidth,
+          compactPixelHeight,
+        }),
       showLegend: true,
       legendPlacement: "side" as const,
     };
   }
 
+  const outerRadius = renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118;
   return {
     width: 480,
     height: renderLegend ? (heightUnits >= 12 ? 368 : 328) : 336,
     cx: 240,
     cy: renderLegend ? (heightUnits >= 12 ? 138 : 132) : 168,
-    outerRadius: renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118,
-    innerRadius: renderLegend ? (heightUnits >= 12 ? 68 : 64) : 72,
+    outerRadius,
+    innerRadius:
+      outerRadius -
+      getCompactDonutThickness({
+        compactWidthUnits,
+        compactHeightUnits,
+        compactPixelWidth,
+        compactPixelHeight,
+      }),
     showLegend: renderLegend,
     legendPlacement: renderLegend ? ("below" as const) : ("hidden" as const),
   };
+}
+
+function getCompactBarScale(
+  compact: boolean | undefined,
+  compactWidthUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+) {
+  if (!compact) return 1;
+
+  const pixelWidth = compactPixelWidth ?? 0;
+  if (pixelWidth > 0) {
+    return clamp(pixelWidth / 680, 0.44, 0.82);
+  }
+
+  const widthUnits = compactWidthUnits ?? 0;
+  if (widthUnits <= 4) return 0.52;
+  if (widthUnits <= 7) return 0.66;
+  return 0.78;
+}
+
+function getCompactDonutThickness({
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  compactWidthUnits: number | undefined;
+  compactHeightUnits: number | undefined;
+  compactPixelWidth: number | undefined;
+  compactPixelHeight: number | undefined;
+}) {
+  const pixelWidth = compactPixelWidth ?? 0;
+  const pixelHeight = compactPixelHeight ?? 0;
+
+  if (pixelWidth > 0 && pixelHeight > 0) {
+    const scale = Math.min(pixelWidth / 760, pixelHeight / 340);
+    return clamp(Math.round(44 * scale), 18, 30);
+  }
+
+  const widthUnits = compactWidthUnits ?? 0;
+  const heightUnits = compactHeightUnits ?? 0;
+  if (widthUnits <= 4) return heightUnits >= 12 ? 22 : 20;
+  if (widthUnits <= 7) return heightUnits >= 12 ? 26 : 24;
+  return heightUnits >= 12 ? 30 : 28;
 }
 
 function clamp(value: number, min: number, max: number) {
