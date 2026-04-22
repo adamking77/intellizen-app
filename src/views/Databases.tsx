@@ -153,7 +153,7 @@ export function DatabasesView() {
     setPins((current) => current.filter((pin) => pin.id !== pinId));
   }
 
-  function handleGridChange(layout: Layout) {
+  function commitGridLayout(layout: Layout) {
     setPins((current) => current.map((pin) => {
       const item = layout.find((entry: LayoutItem) => entry.i === pin.id);
       if (!item) return pin;
@@ -360,7 +360,6 @@ export function DatabasesView() {
               <div ref={gridShellRef} className="db-dashboard-grid-shell">
                 {pinnedWidgets.length > 0 && gridShellSize.width > 0 ? (
                   <GridLayout
-                    key={`dashboard-grid:${gridShellSize.width || 0}:${railCollapsed ? "collapsed" : "expanded"}`}
                     width={gridShellSize.width}
                     className="db-dashboard-grid"
                     layout={gridLayout}
@@ -380,7 +379,8 @@ export function DatabasesView() {
                       enabled: true,
                       handles: ["n", "s", "e", "w"],
                     }}
-                    onLayoutChange={handleGridChange}
+                    onDragStop={(layout) => commitGridLayout(layout)}
+                    onResizeStop={(layout) => commitGridLayout(layout)}
                   >
                     {pinnedWidgets.map((widget) => (
                       <div key={widget.pin.id} className="min-h-0">
@@ -479,7 +479,6 @@ function DashboardWidgetBody({
   catalog: WorkspaceDatabaseCatalogEntry[];
   onOpen: () => void;
 }) {
-  const [contentRef, contentSize] = useElementSize<HTMLDivElement>();
   const databaseModel: WorkspaceDatabaseModel = {
     id: widget.database.id,
     name: widget.database.name,
@@ -491,9 +490,8 @@ function DashboardWidgetBody({
 
   if (widget.view.type === "chart") {
     return (
-      <div ref={contentRef} className="h-full min-h-0 min-w-0 w-full overflow-hidden">
+      <div className="h-full min-h-0 min-w-0 w-full overflow-hidden">
         <DatabaseChartView
-          key={`${widget.pin.id}:${contentSize.width}x${contentSize.height}`}
           compact
           database={databaseModel}
           view={widget.view}
@@ -501,8 +499,6 @@ function DashboardWidgetBody({
           onCreateRecord={() => {}}
           compactWidthUnits={widget.pin.w}
           compactHeightUnits={widget.pin.h}
-          compactPixelWidth={contentSize.width}
-          compactPixelHeight={contentSize.height}
         />
       </div>
     );

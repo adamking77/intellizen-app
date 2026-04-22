@@ -1,5 +1,19 @@
-import { useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -37,20 +51,21 @@ interface ChartDatum {
   key: string;
   label: string;
   value: number;
+  color?: string;
+  detail?: string;
 }
 
-interface ChartTooltipState {
-  key: string;
-  label: string;
-  metric: string;
-  value: string;
-  detail?: string;
-  color: string;
-  x: number;
-  y: number;
-  locked: boolean;
-  placement: "above" | "below";
+interface ChartTooltipEntry {
+  color?: string;
+  payload?: ChartDatum;
 }
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: readonly ChartTooltipEntry[];
+}
+
+type CartesianWidthTier = 0 | 1 | 2 | 3 | 4;
 
 const CHART_PALETTES: Record<WorkspaceDatabaseChartPalette, string[]> = {
   blue: [
@@ -95,6 +110,23 @@ const CHART_PALETTES: Record<WorkspaceDatabaseChartPalette, string[]> = {
   ],
 };
 
+const CHART_FRAME_SNAP_PX = 12;
+const DONUT_SIDE_ENTER_MIN_WIDTH = 520;
+const DONUT_SIDE_ENTER_MIN_HEIGHT = 220;
+const DONUT_SIDE_ENTER_MIN_RATIO = 1.35;
+const DONUT_SIDE_EXIT_MIN_WIDTH = 488;
+const DONUT_SIDE_EXIT_MIN_HEIGHT = 208;
+const DONUT_SIDE_EXIT_MIN_RATIO = 1.27;
+const CARTESIAN_TIER_ENTER_WIDTHS = [180, 280, 420, 560] as const;
+const CARTESIAN_TIER_EXIT_WIDTHS = [168, 264, 396, 528] as const;
+const CHART_TOOLTIP_WRAPPER_STYLE = {
+  zIndex: 3,
+  outline: "none",
+  pointerEvents: "none",
+  transition: "transform 390ms cubic-bezier(0.22, 1, 0.36, 1), opacity 250ms ease-out",
+  willChange: "transform, opacity",
+} satisfies CSSProperties;
+
 export function DatabaseChartView({
   database,
   view,
@@ -106,8 +138,12 @@ export function DatabaseChartView({
   compactPixelWidth = 0,
   compactPixelHeight = 0,
 }: DatabaseChartViewProps) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const [tooltip, setTooltip] = useState<ChartTooltipState | null>(null);
+  const [frameRef, frameSize] = useMeasuredElementSize<HTMLDivElement>();
+  const cartesianWidthTier = useStableCartesianWidthTier(
+    compact,
+    compactWidthUnits,
+    frameSize.width || compactPixelWidth,
+  );
   const chartType = view.chartType ?? "bar";
   const chartRange = view.chartRange ?? "90d";
   const aggregation = view.chartAggregation ?? "count";
@@ -122,7 +158,6 @@ export function DatabaseChartView({
     () => filterChartRecords(records, database, catalog, groupField, chartType, chartRange),
     [catalog, chartRange, chartType, database, groupField, records],
   );
-
   const chartData = useMemo(
     () => buildChartData(chartRecords, database, catalog, groupField, valueField, aggregation, chartType),
     [aggregation, catalog, chartRecords, chartType, database, groupField, valueField],
@@ -167,7 +202,6 @@ export function DatabaseChartView({
   }
 
   const total = chartData.reduce((sum, datum) => sum + datum.value, 0);
-  const max = Math.max(...chartData.map((datum) => datum.value), 0);
   const summaryLabel = aggregation === "count"
     ? `${total} records`
     : `${formatAggregateValue(total)} ${aggregation}`;
@@ -178,69 +212,18 @@ export function DatabaseChartView({
     chartType === "line" ? `${chartData.length} points` : `${chartData.length} groups`;
   const rangeLabel = chartType === "line" ? formatChartRangeLabel(chartRange) : null;
   const captionParts = [`${valueLabel} by ${groupField.name}`, chartContextLabel, rangeLabel].filter(Boolean);
-
-  const positionTooltip = (event: ReactMouseEvent<SVGElement | HTMLDivElement>) => {
-    const frameRect = frameRef.current?.getBoundingClientRect();
-    if (!frameRect) return { x: 0, y: 0 };
-    const inset = 28;
-    return {
-      x: clamp(event.clientX - frameRect.left, inset, frameRect.width - inset),
-      y: clamp(event.clientY - frameRect.top, inset, frameRect.height - inset),
-    };
-  };
-
-  const buildTooltipState = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    options?: { locked?: boolean; detail?: string },
-  ): ChartTooltipState => {
-    const position = positionTooltip(event);
-    return {
-      key: datum.key,
-      label: datum.label,
-      metric: valueLabel,
-      value: formatAggregateValue(datum.value),
-      detail: options?.detail,
-      color,
-      x: position.x,
-      y: position.y,
-      locked: options?.locked ?? false,
-      placement: position.y < 86 ? "below" : "above",
-    };
-  };
-
-  const handleTooltipHover = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => {
-    setTooltip((current) => {
-      if (current?.locked && current.key !== datum.key) return current;
-      const next = buildTooltipState(event, datum, color, { detail, locked: current?.locked ?? false });
-      return next;
-    });
-  };
-
-  const handleTooltipLeave = () => {
-    setTooltip((current) => (current?.locked ? current : null));
-  };
-
-  const handleTooltipToggle = (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => {
-    event.stopPropagation();
-    setTooltip((current) => {
-      if (current?.locked && current.key === datum.key) {
-        return null;
-      }
-      return buildTooltipState(event, datum, color, { detail, locked: true });
-    });
-  };
+  const labelByKey = useMemo(
+    () => new Map(chartData.map((datum) => [datum.key, datum.label])),
+    [chartData],
+  );
+  const seriesData = useMemo(
+    () => chartData.map((datum, index) => ({
+      ...datum,
+      color: chartType === "line" ? palette[0] : palette[index % palette.length],
+      detail: chartType === "donut" ? formatShare(datum.value, total) : undefined,
+    })),
+    [chartData, chartType, palette, total],
+  );
 
   return (
     <div className={`db-chart-root${compact ? " db-chart-root--compact" : ""}`}>
@@ -257,78 +240,463 @@ export function DatabaseChartView({
         <div
           ref={frameRef}
           className={`db-chart-frame${chartType === "donut" ? " db-chart-frame--donut" : " db-chart-frame--cartesian"}`}
-          onClick={() => setTooltip((current) => (current?.locked ? null : current))}
         >
-          {tooltip ? (
-            <div
-              className={`db-chart-tooltip db-chart-tooltip--${tooltip.placement}${tooltip.locked ? " db-chart-tooltip--locked" : ""}`}
-              style={{ left: tooltip.x, top: tooltip.y }}
-            >
-              <div className="db-chart-tooltip-title">
-                <span
-                  aria-hidden
-                  className="db-chart-tooltip-swatch"
-                  style={{ backgroundColor: tooltip.color }}
-                />
-                <span className="db-chart-tooltip-label">{tooltip.label}</span>
-              </div>
-              <div className="db-chart-tooltip-row">
-                <span className="db-chart-tooltip-metric">{tooltip.metric}</span>
-                <span className="db-chart-tooltip-value">{tooltip.value}</span>
-              </div>
-              {tooltip.detail ? <div className="db-chart-tooltip-detail">{tooltip.detail}</div> : null}
-            </div>
-          ) : null}
           {chartType === "donut" ? (
-            <DonutChartSvg
-              data={chartData}
+            <DonutChart
+              data={seriesData}
               total={total}
-              colors={palette}
+              metricLabel={valueLabel}
               showLegend={view.chartShowLegend ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
-              compactPixelWidth={compactPixelWidth}
-              compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
+              compactPixelWidth={frameSize.width || compactPixelWidth}
+              compactPixelHeight={frameSize.height || compactPixelHeight}
             />
           ) : chartType === "line" ? (
-            <LineChartSvg
-              data={chartData}
-              colors={palette}
-              max={max}
+            <LineChartCard
+              data={seriesData}
+              metricLabel={valueLabel}
+              labelByKey={labelByKey}
               showGrid={view.chartShowGrid ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
-              compactPixelWidth={compactPixelWidth}
-              compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
+              compactWidthTier={cartesianWidthTier}
+              compactPixelWidth={frameSize.width || compactPixelWidth}
+              compactPixelHeight={frameSize.height || compactPixelHeight}
             />
           ) : (
-            <BarChartSvg
-              data={chartData}
-              colors={palette}
-              max={max}
+            <BarChartCard
+              data={seriesData}
+              metricLabel={valueLabel}
+              labelByKey={labelByKey}
               showGrid={view.chartShowGrid ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
-              compactPixelWidth={compactPixelWidth}
-              compactPixelHeight={compactPixelHeight}
-              onTooltipHover={handleTooltipHover}
-              onTooltipLeave={handleTooltipLeave}
-              onTooltipToggle={handleTooltipToggle}
+              compactPixelWidth={frameSize.width || compactPixelWidth}
+              compactPixelHeight={frameSize.height || compactPixelHeight}
             />
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function BarChartCard({
+  data,
+  metricLabel,
+  labelByKey,
+  showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactWidthTier,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  metricLabel: string;
+  labelByKey: Map<string, string>;
+  showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactWidthTier?: CartesianWidthTier;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const metrics = getCartesianChartMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactWidthTier,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const tickInterval = Math.max(0, getAxisLabelStep(data.length) - 1);
+
+  return (
+    <div className="db-chart-canvas" style={{ height: `${metrics.height}px` }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={metrics.margin} barCategoryGap={compact ? "26%" : "30%"}>
+          {showGrid ? <CartesianGrid vertical={false} stroke="var(--border-subtle)" className="db-chart-grid" /> : null}
+          <XAxis
+            dataKey="key"
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
+            tickMargin={12}
+            interval={tickInterval}
+            minTickGap={compact ? 10 : 16}
+            tickFormatter={(key) => truncateLabel(labelByKey.get(String(key)) ?? String(key))}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
+            tickMargin={8}
+            width={Math.max(metrics.margin.left - 8, 28)}
+            tickFormatter={(value) => formatTick(typeof value === "number" ? value : Number(value))}
+          />
+          <Tooltip
+            cursor={false}
+            wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
+            content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+          />
+          <Bar
+            dataKey="value"
+            radius={[metrics.barRadius, metrics.barRadius, 0, 0]}
+            maxBarSize={metrics.maxBarSize}
+            isAnimationActive={false}
+          >
+            {data.map((datum) => (
+              <Cell key={datum.key} className="db-chart-bar" fill={datum.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function LineChartCard({
+  data,
+  metricLabel,
+  labelByKey,
+  showGrid,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactWidthTier,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  metricLabel: string;
+  labelByKey: Map<string, string>;
+  showGrid: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactWidthTier?: CartesianWidthTier;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const metrics = getCartesianChartMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    compactWidthTier,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const gradientId = useId();
+  const lineColor = data[0]?.color ?? "var(--accent)";
+  const tickInterval = Math.max(0, getAxisLabelStep(data.length) - 1);
+
+  return (
+    <div className="db-chart-canvas" style={{ height: `${metrics.height}px` }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={metrics.margin}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={lineColor} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          {showGrid ? <CartesianGrid vertical={false} stroke="var(--border-subtle)" className="db-chart-grid" /> : null}
+          <XAxis
+            dataKey="key"
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
+            tickMargin={12}
+            interval={tickInterval}
+            minTickGap={compact ? 10 : 16}
+            tickFormatter={(key) => truncateLabel(labelByKey.get(String(key)) ?? String(key))}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
+            tickMargin={8}
+            width={Math.max(metrics.margin.left - 8, 28)}
+            tickFormatter={(value) => formatTick(typeof value === "number" ? value : Number(value))}
+          />
+          <Tooltip
+            cursor={false}
+            wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
+            content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={lineColor}
+            strokeWidth={3}
+            fill={`url(#${gradientId})`}
+            fillOpacity={1}
+            isAnimationActive={false}
+            dot={{
+              r: 4,
+              fill: lineColor,
+              stroke: "var(--mantle)",
+              strokeWidth: 2,
+              className: "db-chart-point",
+            }}
+            activeDot={{
+              r: 5,
+              fill: lineColor,
+              stroke: "var(--mantle)",
+              strokeWidth: 2,
+              className: "db-chart-point",
+            }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DonutChart({
+  data,
+  total,
+  metricLabel,
+  showLegend,
+  compact,
+  compactWidthUnits,
+  compactHeightUnits,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  data: ChartDatum[];
+  total: number;
+  metricLabel: string;
+  showLegend: boolean;
+  compact?: boolean;
+  compactWidthUnits?: number;
+  compactHeightUnits?: number;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const legendPlacement = useStableDonutLegendPlacement(
+    compact,
+    showLegend,
+    compactWidthUnits,
+    compactPixelWidth,
+    compactPixelHeight,
+  );
+  const config = getDonutChartMetrics(
+    compact,
+    compactWidthUnits,
+    compactHeightUnits,
+    showLegend,
+    legendPlacement,
+    compactPixelWidth,
+    compactPixelHeight,
+    data.length,
+  );
+  const layoutClass =
+    config.legendPlacement === "side"
+      ? " db-chart-donut-layout--side"
+      : config.legendPlacement === "below"
+        ? " db-chart-donut-layout--stacked"
+        : "";
+  const compactClass = compact ? " db-chart-donut-layout--compact" : "";
+  const canvasStyle = {
+    width: `${config.chartWidth}px`,
+    height: `${config.height}px`,
+  } satisfies CSSProperties;
+
+  return (
+    <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
+      <div className="db-chart-donut-canvas" style={canvasStyle}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+            <Tooltip
+              cursor={false}
+              wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
+              content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+            />
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              startAngle={90}
+              endAngle={-270}
+              innerRadius={config.innerRadius}
+              outerRadius={config.outerRadius}
+              paddingAngle={data.length > 1 ? 1.2 : 0}
+              cornerRadius={3}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {data.map((datum) => (
+                <Cell key={datum.key} className="db-chart-donut-segment" fill={datum.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="db-chart-donut-center">
+          <div className="db-chart-donut-total">{formatAggregateValue(total)}</div>
+          <div className="db-chart-donut-caption">Total</div>
+        </div>
+      </div>
+
+      {config.showLegend ? (
+        <div className="db-chart-legend">
+          {data.map((datum) => (
+            <div key={datum.key} className="db-chart-legend-row">
+              <span
+                aria-hidden
+                className="db-chart-legend-swatch"
+                style={{ backgroundColor: datum.color }}
+              />
+              <span className="db-chart-legend-label">{datum.label}</span>
+              <span className="db-chart-legend-value">{formatAggregateValue(datum.value)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChartTooltipCard({
+  active,
+  payload,
+  metricLabel,
+}: ChartTooltipProps & {
+  metricLabel: string;
+}) {
+  if (!active || !payload?.length) return null;
+
+  const entry = payload[0];
+  const datum = entry.payload;
+  if (!datum) return null;
+  const color = entry.color ?? datum.color ?? "var(--accent)";
+
+  return (
+    <div className="db-chart-tooltip">
+      <div className="db-chart-tooltip-title">
+        <span
+          aria-hidden
+          className="db-chart-tooltip-swatch"
+          style={{ backgroundColor: color }}
+        />
+        <span className="db-chart-tooltip-label">{datum.label}</span>
+      </div>
+      <div className="db-chart-tooltip-row">
+        <span className="db-chart-tooltip-metric">{metricLabel}</span>
+        <span className="db-chart-tooltip-value">{formatAggregateValue(datum.value)}</span>
+      </div>
+      {datum.detail ? <div className="db-chart-tooltip-detail">{datum.detail}</div> : null}
+    </div>
+  );
+}
+
+function useMeasuredElementSize<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    let frameId = 0;
+
+    const update = (width: number, height: number) => {
+      const nextWidth = snapChartFrameSize(width);
+      const nextHeight = snapChartFrameSize(height);
+      setSize((current) => {
+        if (current.width === nextWidth && current.height === nextHeight) {
+          return current;
+        }
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    update(node.clientWidth, node.clientHeight);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = 0;
+        update(entry.contentRect.width, entry.contentRect.height);
+      });
+    });
+
+    observer.observe(node);
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      observer.disconnect();
+    };
+  }, []);
+
+  return [ref, size] as const;
+}
+
+function useStableDonutLegendPlacement(
+  compact: boolean | undefined,
+  showLegend: boolean,
+  compactWidthUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+  compactPixelHeight: number | undefined,
+) {
+  const [placement, setPlacement] = useState<"side" | "below" | "hidden">(() =>
+    getDonutLegendPlacement(
+      compact,
+      showLegend,
+      compactWidthUnits,
+      compactPixelWidth,
+      compactPixelHeight,
+      null,
+    ),
+  );
+
+  useLayoutEffect(() => {
+    const nextPlacement = getDonutLegendPlacement(
+      compact,
+      showLegend,
+      compactWidthUnits,
+      compactPixelWidth,
+      compactPixelHeight,
+      placement,
+    );
+    if (nextPlacement !== placement) {
+      setPlacement(nextPlacement);
+    }
+  }, [compact, compactPixelHeight, compactPixelWidth, compactWidthUnits, placement, showLegend]);
+
+  return placement;
+}
+
+function useStableCartesianWidthTier(
+  compact: boolean | undefined,
+  compactWidthUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+) {
+  const [tier, setTier] = useState<CartesianWidthTier>(() =>
+    getCartesianWidthTier(compact, compactWidthUnits, compactPixelWidth, null),
+  );
+
+  useLayoutEffect(() => {
+    const nextTier = getCartesianWidthTier(compact, compactWidthUnits, compactPixelWidth, tier);
+    if (nextTier !== tier) {
+      setTier(nextTier);
+    }
+  }, [compact, compactPixelWidth, compactWidthUnits, tier]);
+
+  return tier;
 }
 
 function buildChartData(
@@ -483,378 +851,20 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function BarChartSvg({
-  data,
-  colors,
-  max,
-  showGrid,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  colors: string[];
-  max: number;
-  showGrid: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const size = getCompactCartesianMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    compactPixelWidth,
-    compactPixelHeight,
-  );
-  const width = size.width;
-  const height = size.height;
-  const padding = size.padding;
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const step = innerWidth / Math.max(data.length, 1);
-  const compactBarScale = getCompactBarScale(compact, compactWidthUnits, compactPixelWidth);
-  const barWidth = Math.min(step * 0.42, compact ? 36 * compactBarScale : 32);
-  const barRadius = compact ? 4 : 5;
-  const ticks = createTicks(max);
-  const labelStep = getAxisLabelStep(data.length);
-
-  return (
-    <svg className="db-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-      {showGrid ? ticks.map((tick) => {
-        const y = padding.top + innerHeight - (tick / Math.max(max, 1)) * innerHeight;
-        return (
-          <g key={tick}>
-            <line className="db-chart-grid" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-            <text className="db-chart-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">
-              {formatTick(tick)}
-            </text>
-          </g>
-        );
-      }) : null}
-
-      <line className="db-chart-axis" x1={padding.left} x2={width - padding.right} y1={padding.top + innerHeight} y2={padding.top + innerHeight} />
-
-      {data.map((datum, index) => {
-        const color = colors[index % colors.length];
-        const x = padding.left + step * index + (step - barWidth) / 2;
-        const barHeight = max > 0 ? (datum.value / max) * innerHeight : 0;
-        const y = padding.top + innerHeight - barHeight;
-        return (
-          <g key={datum.key}>
-            <rect
-              className="db-chart-hitbox"
-              x={x - Math.max((Math.max(barWidth, 24) - barWidth) / 2, 6)}
-              y={padding.top}
-              width={Math.max(barWidth + 12, 28)}
-              height={innerHeight}
-              onMouseEnter={(event) => onTooltipHover(event, datum, color)}
-              onMouseMove={(event) => onTooltipHover(event, datum, color)}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, color)}
-            />
-            <rect
-              className="db-chart-bar"
-              x={x}
-              y={y}
-              width={barWidth}
-              height={Math.max(barHeight, 2)}
-              rx={barRadius}
-              ry={barRadius}
-              fill={color}
-              onMouseEnter={(event) => onTooltipHover(event, datum, color)}
-              onMouseMove={(event) => onTooltipHover(event, datum, color)}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, color)}
-            />
-            {shouldRenderAxisLabel(index, data.length, labelStep) ? (
-              <text className="db-chart-axis-label" x={x + barWidth / 2} y={height - 26} textAnchor="middle">
-                {truncateLabel(datum.label)}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function LineChartSvg({
-  data,
-  colors,
-  max,
-  showGrid,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  colors: string[];
-  max: number;
-  showGrid: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const size = getCompactCartesianMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    compactPixelWidth,
-    compactPixelHeight,
-  );
-  const width = size.width;
-  const height = size.height;
-  const padding = size.padding;
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const ticks = createTicks(max);
-  const step = innerWidth / Math.max(data.length - 1, 1);
-  const labelStep = getAxisLabelStep(data.length);
-
-  const points = data.map((datum, index) => {
-    const x = data.length === 1 ? padding.left + innerWidth / 2 : padding.left + step * index;
-    const y = padding.top + innerHeight - (datum.value / Math.max(max, 1)) * innerHeight;
-    return { x, y, datum };
-  });
-
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  const areaPath = `${linePath} L ${points[points.length - 1]?.x ?? padding.left} ${padding.top + innerHeight} L ${points[0]?.x ?? padding.left} ${padding.top + innerHeight} Z`;
-
-  return (
-    <svg className="db-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-      {showGrid ? ticks.map((tick) => {
-        const y = padding.top + innerHeight - (tick / Math.max(max, 1)) * innerHeight;
-        return (
-          <g key={tick}>
-            <line className="db-chart-grid" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-            <text className="db-chart-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">
-              {formatTick(tick)}
-            </text>
-          </g>
-        );
-      }) : null}
-
-      <line className="db-chart-axis" x1={padding.left} x2={width - padding.right} y1={padding.top + innerHeight} y2={padding.top + innerHeight} />
-      <path className="db-chart-line-area" d={areaPath} fill={colors[0]} />
-      <path className="db-chart-line" d={linePath} stroke={colors[0]} />
-
-      {points.map((point, index) => (
-        <g key={point.datum.key}>
-          <rect
-            className="db-chart-hitbox"
-            x={point.x - (data.length === 1 ? 36 : Math.max(step, 44) / 2)}
-            y={padding.top}
-            width={data.length === 1 ? 72 : Math.max(step, 44)}
-            height={innerHeight}
-            onMouseEnter={(event) => onTooltipHover(event, point.datum, colors[index % colors.length])}
-            onMouseMove={(event) => onTooltipHover(event, point.datum, colors[index % colors.length])}
-            onMouseLeave={onTooltipLeave}
-            onClick={(event) => onTooltipToggle(event, point.datum, colors[index % colors.length])}
-          />
-          <circle
-            className="db-chart-point"
-            cx={point.x}
-            cy={point.y}
-            r={4}
-            fill={colors[index % colors.length]}
-          />
-          <circle
-            className="db-chart-point-core"
-            cx={point.x}
-            cy={point.y}
-            r={2}
-            fill="var(--base)"
-          />
-          {shouldRenderAxisLabel(index, data.length, labelStep) ? (
-            <text className="db-chart-axis-label" x={point.x} y={height - 26} textAnchor="middle">
-              {truncateLabel(point.datum.label)}
-            </text>
-          ) : null}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function DonutChartSvg({
-  data,
-  total,
-  colors,
-  showLegend,
-  compact,
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-  onTooltipHover,
-  onTooltipLeave,
-  onTooltipToggle,
-}: {
-  data: ChartDatum[];
-  total: number;
-  colors: string[];
-  showLegend: boolean;
-  compact?: boolean;
-  compactWidthUnits?: number;
-  compactHeightUnits?: number;
-  compactPixelWidth?: number;
-  compactPixelHeight?: number;
-  onTooltipHover: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-  onTooltipLeave: () => void;
-  onTooltipToggle: (
-    event: ReactMouseEvent<SVGElement | HTMLDivElement>,
-    datum: ChartDatum,
-    color: string,
-    detail?: string,
-  ) => void;
-}) {
-  const config = getDonutChartMetrics(
-    compact,
-    compactWidthUnits,
-    compactHeightUnits,
-    showLegend,
-    compactPixelWidth,
-    compactPixelHeight,
-    data.length,
-  );
-  const width = config.width;
-  const height = config.height;
-  const cx = config.cx;
-  const cy = config.cy;
-  const outerRadius = config.outerRadius;
-  const innerRadius = config.innerRadius;
-  let currentAngle = -90;
-  const layoutClass =
-    config.legendPlacement === "side"
-      ? " db-chart-donut-layout--side"
-      : config.legendPlacement === "below"
-        ? " db-chart-donut-layout--stacked"
-        : "";
-  const compactClass = compact ? " db-chart-donut-layout--compact" : "";
-  const svgStyle = {
-    width: `${config.width}px`,
-    height: `${config.height}px`,
-    maxWidth: "100%",
-    maxHeight: "100%",
-  } satisfies CSSProperties;
-
-  return (
-    <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
-      <svg className="db-chart-svg db-chart-svg--donut" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={svgStyle}>
-        {data.map((datum, index) => {
-          const sweep = total > 0 ? (datum.value / total) * 360 : 0;
-          const path = describeDonutArc(cx, cy, innerRadius, outerRadius, currentAngle, currentAngle + sweep);
-          currentAngle += sweep;
-          return (
-            <path
-              key={datum.key}
-              d={path}
-              fill={colors[index % colors.length]}
-              className="db-chart-donut-segment"
-              onMouseEnter={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseMove={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-            />
-          );
-        })}
-        <text className="db-chart-donut-total" x={cx} y={cy - 2} textAnchor="middle">
-          {formatAggregateValue(total)}
-        </text>
-        <text className="db-chart-donut-caption" x={cx} y={cy + 18} textAnchor="middle">
-          Total
-        </text>
-      </svg>
-
-      {config.showLegend ? (
-        <div className="db-chart-legend">
-          {data.map((datum, index) => (
-            <div
-              key={datum.key}
-              className="db-chart-legend-row"
-              onMouseEnter={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseMove={(event) => onTooltipHover(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-              onMouseLeave={onTooltipLeave}
-              onClick={(event) => onTooltipToggle(event, datum, colors[index % colors.length], formatShare(datum.value, total))}
-            >
-              <span
-                aria-hidden
-                className="db-chart-legend-swatch"
-                style={{ backgroundColor: colors[index % colors.length] }}
-              />
-              <span className="db-chart-legend-label">{datum.label}</span>
-              <span className="db-chart-legend-value">{formatAggregateValue(datum.value)}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function createTicks(max: number) {
-  const safeMax = Math.max(max, 1);
-  return Array.from({ length: 4 }, (_, index) => Math.round((safeMax / 4) * (index + 1))).reverse();
-}
-
-function getCompactCartesianMetrics(
+function getCartesianChartMetrics(
   compact: boolean | undefined,
   compactWidthUnits: number | undefined,
   compactHeightUnits: number | undefined,
+  compactWidthTier: CartesianWidthTier | undefined,
   compactPixelWidth: number | undefined,
   compactPixelHeight: number | undefined,
 ) {
   if (!compact) {
     return {
-      width: 680,
       height: 292,
-      padding: { top: 20, right: 18, bottom: 70, left: 52 },
+      margin: { top: 20, right: 18, bottom: 20, left: 8 },
+      maxBarSize: 32,
+      barRadius: 5,
     };
   }
 
@@ -864,39 +874,89 @@ function getCompactCartesianMetrics(
   const pixelHeight = compactPixelHeight ?? 0;
 
   if (pixelWidth > 0 && pixelHeight > 0) {
-    const width = clamp(pixelWidth - 24, 96, 760);
     const height = clamp(pixelHeight - 16, 136, 312);
-    const bottom = width < 180 ? 34 : width < 280 ? 42 : width < 420 ? 52 : width < 560 ? 58 : 64;
-    const left = width < 180 ? 18 : width < 280 ? 30 : width < 420 ? 40 : width < 560 ? 46 : 52;
-    const right = width < 180 ? 6 : width < 280 ? 10 : width < 420 ? 12 : 18;
+    const widthTier = compactWidthTier ?? getCartesianWidthTier(compact, compactWidthUnits, pixelWidth, null);
+    const left = widthTier === 0 ? 4 : widthTier === 1 ? 8 : widthTier === 2 ? 12 : 16;
+    const right = widthTier === 0 ? 4 : widthTier === 1 ? 8 : widthTier === 2 ? 10 : 14;
+    const compactBarScale = getCompactBarScale(compact, compactWidthUnits, compactPixelWidth);
     return {
-      width,
       height,
-      padding: { top: 18, right, bottom, left },
+      margin: { top: 18, right, bottom: 12, left },
+      maxBarSize: Math.max(16, Math.round((36 * compactBarScale) / 2) * 2),
+      barRadius: 4,
     };
   }
 
   if (widthUnits <= 4) {
     return {
-      width: 500,
       height: heightUnits >= 12 ? 278 : 246,
-      padding: { top: 18, right: 14, bottom: 58, left: 44 },
+      margin: { top: 18, right: 8, bottom: 12, left: 6 },
+      maxBarSize: 20,
+      barRadius: 4,
     };
   }
 
   if (widthUnits <= 7) {
     return {
-      width: 600,
       height: heightUnits >= 12 ? 286 : 258,
-      padding: { top: 18, right: 16, bottom: 62, left: 48 },
+      margin: { top: 18, right: 10, bottom: 12, left: 8 },
+      maxBarSize: 24,
+      barRadius: 4,
     };
   }
 
   return {
-    width: 700,
     height: heightUnits >= 12 ? 296 : 272,
-    padding: { top: 20, right: 18, bottom: 66, left: 52 },
+    margin: { top: 20, right: 14, bottom: 12, left: 10 },
+    maxBarSize: 28,
+    barRadius: 4,
   };
+}
+
+function getCartesianWidthTier(
+  compact: boolean | undefined,
+  compactWidthUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+  currentTier: CartesianWidthTier | null,
+): CartesianWidthTier {
+  if (!compact) return 4;
+
+  const pixelWidth = compactPixelWidth ?? 0;
+  if (pixelWidth > 0) {
+    const width = clamp(pixelWidth - 24, 96, 760);
+    if (currentTier === null) {
+      if (width < CARTESIAN_TIER_ENTER_WIDTHS[0]) return 0;
+      if (width < CARTESIAN_TIER_ENTER_WIDTHS[1]) return 1;
+      if (width < CARTESIAN_TIER_ENTER_WIDTHS[2]) return 2;
+      if (width < CARTESIAN_TIER_ENTER_WIDTHS[3]) return 3;
+      return 4;
+    }
+
+    if (currentTier === 0) {
+      return width >= CARTESIAN_TIER_ENTER_WIDTHS[0] ? 1 : 0;
+    }
+    if (currentTier === 1) {
+      if (width < CARTESIAN_TIER_EXIT_WIDTHS[0]) return 0;
+      if (width >= CARTESIAN_TIER_ENTER_WIDTHS[1]) return 2;
+      return 1;
+    }
+    if (currentTier === 2) {
+      if (width < CARTESIAN_TIER_EXIT_WIDTHS[1]) return 1;
+      if (width >= CARTESIAN_TIER_ENTER_WIDTHS[2]) return 3;
+      return 2;
+    }
+    if (currentTier === 3) {
+      if (width < CARTESIAN_TIER_EXIT_WIDTHS[2]) return 2;
+      if (width >= CARTESIAN_TIER_ENTER_WIDTHS[3]) return 4;
+      return 3;
+    }
+    return width < CARTESIAN_TIER_EXIT_WIDTHS[3] ? 3 : 4;
+  }
+
+  const widthUnits = compactWidthUnits ?? 0;
+  if (widthUnits <= 4) return 1;
+  if (widthUnits <= 7) return 2;
+  return 4;
 }
 
 function getDonutChartMetrics(
@@ -904,18 +964,17 @@ function getDonutChartMetrics(
   compactWidthUnits: number | undefined,
   compactHeightUnits: number | undefined,
   showLegend: boolean,
+  legendPlacement: "side" | "below" | "hidden",
   compactPixelWidth: number | undefined,
   compactPixelHeight: number | undefined,
   itemCount: number,
 ) {
   if (!compact) {
     return {
-      width: 720,
-      height: 340,
-      cx: 180,
-      cy: 168,
-      outerRadius: 112,
-      innerRadius: getDonutInnerRadius(112),
+      chartWidth: 300,
+      height: 300,
+      outerRadius: 92,
+      innerRadius: getDonutInnerRadius(92),
       showLegend,
       legendPlacement: "side" as const,
     };
@@ -929,13 +988,7 @@ function getDonutChartMetrics(
   if (pixelWidth > 0 && pixelHeight > 0) {
     const availableWidth = Math.max(pixelWidth - 16, 116);
     const availableHeight = Math.max(pixelHeight - 12, 140);
-    const canShowSideLegend =
-      showLegend &&
-      availableWidth >= 520 &&
-      availableHeight >= 220 &&
-      availableWidth / Math.max(availableHeight, 1) >= 1.35;
-
-    if (canShowSideLegend) {
+    if (legendPlacement === "side") {
       const legendWidth = clamp(Math.round(availableWidth * 0.24), 160, 210);
       const chartWidth = availableWidth - legendWidth - 16;
       const diameter = clamp(
@@ -944,14 +997,11 @@ function getDonutChartMetrics(
         286,
       );
       const outerRadius = Math.floor(diameter / 2);
-      const innerRadius = getDonutInnerRadius(outerRadius, 44);
       return {
-        width: diameter + 24,
+        chartWidth: diameter + 24,
         height: diameter + 24,
-        cx: (diameter + 24) / 2,
-        cy: (diameter + 24) / 2,
         outerRadius,
-        innerRadius,
+        innerRadius: getDonutInnerRadius(outerRadius, 44),
         showLegend,
         legendPlacement: "side" as const,
       };
@@ -963,36 +1013,32 @@ function getDonutChartMetrics(
       ? legendRows * 30 + Math.max(legendRows - 1, 0) * 8 + 12
       : 0;
     const chartHeight = availableHeight - legendBlockHeight - (showLegend ? 10 : 0);
-      const diameter = clamp(
-        Math.min(availableWidth * 0.64, chartHeight * 0.84),
-        72,
-        248,
-      );
-      const outerRadius = Math.floor(diameter / 2);
-      const innerRadius = getDonutInnerRadius(outerRadius, 42);
-      return {
-        width: diameter + 24,
-        height: diameter + 24,
-        cx: (diameter + 24) / 2,
-        cy: (diameter + 24) / 2,
+    const diameter = clamp(
+      Math.min(availableWidth * 0.64, chartHeight * 0.84),
+      72,
+      248,
+    );
+    const outerRadius = Math.floor(diameter / 2);
+    return {
+      chartWidth: diameter + 24,
+      height: diameter + 24,
       outerRadius,
-      innerRadius,
+      innerRadius: getDonutInnerRadius(outerRadius, 42),
       showLegend,
-      legendPlacement: showLegend ? ("below" as const) : ("hidden" as const),
+      legendPlacement,
     };
   }
 
-  const canShowSideLegend = showLegend && widthUnits >= 9;
-  const renderLegend = showLegend;
+  const canShowSideLegend = legendPlacement === "side";
+  const renderLegend = legendPlacement !== "hidden";
 
   if (canShowSideLegend) {
+    const outerRadius = widthUnits >= 9 ? 122 : 112;
     return {
-      width: widthUnits >= 9 ? 720 : 640,
+      chartWidth: outerRadius * 2 + 24,
       height: heightUnits >= 13 ? 360 : 326,
-      cx: widthUnits >= 9 ? 190 : 176,
-      cy: heightUnits >= 13 ? 178 : 162,
-      outerRadius: widthUnits >= 9 ? 122 : 112,
-      innerRadius: getDonutInnerRadius(widthUnits >= 9 ? 122 : 112),
+      outerRadius,
+      innerRadius: getDonutInnerRadius(outerRadius),
       showLegend: true,
       legendPlacement: "side" as const,
     };
@@ -1000,15 +1046,43 @@ function getDonutChartMetrics(
 
   const outerRadius = renderLegend ? (heightUnits >= 12 ? 112 : 104) : 118;
   return {
-    width: 480,
-    height: renderLegend ? (heightUnits >= 12 ? 368 : 328) : 336,
-    cx: 240,
-    cy: renderLegend ? (heightUnits >= 12 ? 138 : 132) : 168,
+    chartWidth: outerRadius * 2 + 24,
+    height: outerRadius * 2 + 24,
     outerRadius,
     innerRadius: getDonutInnerRadius(outerRadius),
     showLegend: renderLegend,
     legendPlacement: renderLegend ? ("below" as const) : ("hidden" as const),
   };
+}
+
+function getDonutLegendPlacement(
+  compact: boolean | undefined,
+  showLegend: boolean,
+  compactWidthUnits: number | undefined,
+  compactPixelWidth: number | undefined,
+  compactPixelHeight: number | undefined,
+  currentPlacement: "side" | "below" | "hidden" | null,
+) {
+  if (!showLegend) return "hidden" as const;
+  if (!compact) return "side" as const;
+
+  const pixelWidth = compactPixelWidth ?? 0;
+  const pixelHeight = compactPixelHeight ?? 0;
+
+  if (pixelWidth > 0 && pixelHeight > 0) {
+    const availableWidth = Math.max(pixelWidth - 16, 116);
+    const availableHeight = Math.max(pixelHeight - 12, 140);
+    const ratio = availableWidth / Math.max(availableHeight, 1);
+    const isCurrentlySide = currentPlacement === "side";
+    const minWidth = isCurrentlySide ? DONUT_SIDE_EXIT_MIN_WIDTH : DONUT_SIDE_ENTER_MIN_WIDTH;
+    const minHeight = isCurrentlySide ? DONUT_SIDE_EXIT_MIN_HEIGHT : DONUT_SIDE_ENTER_MIN_HEIGHT;
+    const minRatio = isCurrentlySide ? DONUT_SIDE_EXIT_MIN_RATIO : DONUT_SIDE_ENTER_MIN_RATIO;
+    return availableWidth >= minWidth && availableHeight >= minHeight && ratio >= minRatio
+      ? "side"
+      : "below";
+  }
+
+  return (compactWidthUnits ?? 0) >= 9 ? "side" : "below";
 }
 
 function getDonutInnerRadius(outerRadius: number, minInnerRadius = 0) {
@@ -1037,6 +1111,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function snapChartFrameSize(value: number) {
+  return Math.max(Math.round(value / CHART_FRAME_SNAP_PX) * CHART_FRAME_SNAP_PX, 0);
+}
+
 function formatTick(value: number) {
   if (value >= 1000) {
     return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
@@ -1054,10 +1132,6 @@ function getAxisLabelStep(length: number) {
   if (length > 12) return 3;
   if (length > 8) return 2;
   return 1;
-}
-
-function shouldRenderAxisLabel(index: number, length: number, step: number) {
-  return index === 0 || index === length - 1 || index % step === 0;
 }
 
 function formatShare(value: number, total: number) {
@@ -1090,35 +1164,4 @@ function getChartRangeCutoff(range: WorkspaceDatabaseChartRange) {
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - days);
   return cutoff.getTime();
-}
-
-function describeDonutArc(
-  cx: number,
-  cy: number,
-  innerRadius: number,
-  outerRadius: number,
-  startAngle: number,
-  endAngle: number,
-) {
-  const startOuter = polarToCartesian(cx, cy, outerRadius, endAngle);
-  const endOuter = polarToCartesian(cx, cy, outerRadius, startAngle);
-  const startInner = polarToCartesian(cx, cy, innerRadius, startAngle);
-  const endInner = polarToCartesian(cx, cy, innerRadius, endAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-
-  return [
-    "M", startOuter.x, startOuter.y,
-    "A", outerRadius, outerRadius, 0, largeArcFlag, 0, endOuter.x, endOuter.y,
-    "L", startInner.x, startInner.y,
-    "A", innerRadius, innerRadius, 0, largeArcFlag, 1, endInner.x, endInner.y,
-    "Z",
-  ].join(" ");
-}
-
-function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: number) {
-  const angleRad = ((angleDeg - 90) * Math.PI) / 180;
-  return {
-    x: cx + radius * Math.cos(angleRad),
-    y: cy + radius * Math.sin(angleRad),
-  };
 }

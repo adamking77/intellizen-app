@@ -3176,19 +3176,10 @@ pre {
   padding-inline: 8px;
 }
 
-.db-dashboard-widget[data-view-type="chart"] .db-chart-svg {
-  min-height: 0;
-}
-
-.db-dashboard-widget[data-view-type="chart"] .db-chart-svg--donut {
-  min-height: 0;
-}
-
-.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-svg {
-  min-height: 0;
-}
-
-.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-svg--donut {
+.db-dashboard-widget[data-view-type="chart"] .db-chart-canvas,
+.db-dashboard-widget[data-view-type="chart"] .db-chart-donut-canvas,
+.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-canvas,
+.db-dashboard-widget--tall[data-view-type="chart"] .db-chart-donut-canvas {
   min-height: 0;
 }
 
@@ -3364,29 +3355,22 @@ pre {
 }
 
 .db-chart-frame--donut {
-  width: min(100%, 980px);
+  width: min(100%, 720px);
+}
+
+.db-chart-canvas {
+  width: 100%;
+  min-height: 0;
 }
 
 .db-chart-tooltip {
-  position: absolute;
-  z-index: 3;
   min-width: 168px;
   max-width: 240px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--base) 96%, var(--mantle) 4%);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
-  transform: translate(-50%, calc(-100% - 12px));
+  background: var(--mantle);
+  box-shadow: var(--shadow-elevated);
   pointer-events: none;
-}
-
-.db-chart-tooltip--below {
-  transform: translate(-50%, 12px);
-}
-
-.db-chart-tooltip--locked {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
 }
 
 .db-chart-tooltip-title {
@@ -3439,41 +3423,14 @@ pre {
   color: var(--overlay-1);
 }
 
-.db-chart-svg {
-  width: 100%;
-  height: 100%;
-  min-height: 292px;
-}
-
-.db-chart-svg--donut {
-  min-height: 300px;
-}
-
 .db-chart-grid {
-  stroke: var(--border-subtle);
-  stroke-width: 1;
-}
-
-.db-chart-axis {
-  stroke: var(--border);
-  stroke-width: 1;
-}
-
-.db-chart-axis-label {
-  font-size: 10px;
-  fill: var(--overlay-1);
-}
-
-.db-chart-hitbox {
-  fill: transparent;
-  cursor: pointer;
+  stroke-dasharray: none;
 }
 
 .db-chart-bar {
   cursor: pointer;
   transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+    opacity 120ms ease;
 }
 
 .db-chart-root:hover .db-chart-bar,
@@ -3488,25 +3445,8 @@ pre {
   opacity: 1;
 }
 
-.db-chart-line {
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.db-chart-line-area {
-  opacity: 0.14;
-}
-
 .db-chart-point {
-  cursor: pointer;
-  stroke: var(--mantle);
-  stroke-width: 2;
-}
-
-.db-chart-point-core {
-  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
 .db-chart-donut-segment {
@@ -3528,7 +3468,8 @@ pre {
 }
 
 .db-chart-donut-layout--side {
-  grid-template-columns: minmax(0, auto) minmax(0, 220px);
+  grid-template-columns: minmax(0, auto) minmax(0, 196px);
+  gap: 10px;
 }
 
 .db-chart-donut-layout--compact.db-chart-donut-layout--side {
@@ -3541,10 +3482,25 @@ pre {
   align-content: start;
 }
 
+.db-chart-donut-canvas {
+  position: relative;
+  min-width: 0;
+}
+
+.db-chart-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .db-chart-donut-total {
   font-size: 24px;
   font-weight: 700;
-  fill: var(--text);
+  color: var(--text);
 }
 
 .db-chart-donut-layout--compact .db-chart-donut-total {
@@ -3553,7 +3509,7 @@ pre {
 
 .db-chart-donut-caption {
   font-size: 11px;
-  fill: var(--overlay-1);
+  color: var(--overlay-1);
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -3604,12 +3560,6 @@ pre {
 .db-dashboard-widget[data-view-type="chart"] .db-chart-legend-row {
   padding: 7px 9px;
   font-size: 12px;
-}
-
-.db-chart-donut-layout .db-chart-svg--donut {
-  display: block;
-  flex: none;
-  min-width: 0;
 }
 
 .db-chart-legend-row:hover {
