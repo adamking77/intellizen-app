@@ -1,6 +1,6 @@
 import "react-grid-layout/css/styles.css";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import GridLayout, { type Layout, type LayoutItem } from "react-grid-layout";
 import {
@@ -358,9 +358,10 @@ export function DatabasesView() {
               </div>
 
               <div ref={gridShellRef} className="db-dashboard-grid-shell">
-                {pinnedWidgets.length > 0 ? (
+                {pinnedWidgets.length > 0 && gridShellSize.width > 0 ? (
                   <GridLayout
-                    width={gridShellSize.width || 1200}
+                    key={`dashboard-grid:${gridShellSize.width || 0}:${railCollapsed ? "collapsed" : "expanded"}`}
+                    width={gridShellSize.width}
                     className="db-dashboard-grid"
                     layout={gridLayout}
                     gridConfig={{
@@ -462,7 +463,7 @@ function PinnedWidgetCard({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1">
         <DashboardWidgetBody widget={widget} catalog={catalog} onOpen={onOpen} />
       </div>
     </div>
@@ -490,8 +491,9 @@ function DashboardWidgetBody({
 
   if (widget.view.type === "chart") {
     return (
-      <div ref={contentRef} className="h-full min-h-0">
+      <div ref={contentRef} className="h-full min-h-0 min-w-0 w-full overflow-hidden">
         <DatabaseChartView
+          key={`${widget.pin.id}:${contentSize.width}x${contentSize.height}`}
           compact
           database={databaseModel}
           view={widget.view}
@@ -546,7 +548,7 @@ function useElementSize<T extends HTMLElement>() {
   const ref = useRef<T | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = ref.current;
     if (!node || typeof ResizeObserver === "undefined") return;
 

@@ -864,11 +864,11 @@ function getCompactCartesianMetrics(
   const pixelHeight = compactPixelHeight ?? 0;
 
   if (pixelWidth > 0 && pixelHeight > 0) {
-    const width = clamp(pixelWidth - 24, 180, 760);
-    const height = clamp(pixelHeight - 16, 170, 312);
-    const bottom = width < 280 ? 42 : width < 420 ? 52 : width < 560 ? 58 : 64;
-    const left = width < 280 ? 30 : width < 420 ? 40 : width < 560 ? 46 : 52;
-    const right = width < 280 ? 10 : width < 420 ? 12 : 18;
+    const width = clamp(pixelWidth - 24, 96, 760);
+    const height = clamp(pixelHeight - 16, 136, 312);
+    const bottom = width < 180 ? 34 : width < 280 ? 42 : width < 420 ? 52 : width < 560 ? 58 : 64;
+    const left = width < 180 ? 18 : width < 280 ? 30 : width < 420 ? 40 : width < 560 ? 46 : 52;
+    const right = width < 180 ? 6 : width < 280 ? 10 : width < 420 ? 12 : 18;
     return {
       width,
       height,
@@ -927,8 +927,8 @@ function getDonutChartMetrics(
   const pixelHeight = compactPixelHeight ?? 0;
 
   if (pixelWidth > 0 && pixelHeight > 0) {
-    const availableWidth = Math.max(pixelWidth - 16, 180);
-    const availableHeight = Math.max(pixelHeight - 12, 170);
+    const availableWidth = Math.max(pixelWidth - 16, 116);
+    const availableHeight = Math.max(pixelHeight - 12, 140);
     const canShowSideLegend =
       showLegend &&
       availableWidth >= 520 &&
@@ -965,7 +965,7 @@ function getDonutChartMetrics(
     const chartHeight = availableHeight - legendBlockHeight - (showLegend ? 10 : 0);
       const diameter = clamp(
         Math.min(availableWidth * 0.64, chartHeight * 0.84),
-        92,
+        72,
         248,
       );
       const outerRadius = Math.floor(diameter / 2);
@@ -1024,7 +1024,7 @@ function getCompactBarScale(
 
   const pixelWidth = compactPixelWidth ?? 0;
   if (pixelWidth > 0) {
-    return clamp(pixelWidth / 680, 0.44, 0.82);
+    return clamp(pixelWidth / 680, 0.2, 0.82);
   }
 
   const widthUnits = compactWidthUnits ?? 0;

@@ -3139,6 +3139,8 @@ pre {
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact {
   height: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .db-dashboard-widget[data-view-type="chart"] {
@@ -3156,14 +3158,18 @@ pre {
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact .db-chart-surface {
   height: 100%;
+  width: 100%;
+  min-width: 0;
   padding: 10px 12px 12px;
   align-items: center;
+  overflow: hidden;
 }
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact .db-chart-frame {
   width: 100%;
   max-width: none;
   height: 100%;
+  min-width: 0;
 }
 
 .db-dashboard-widget--narrow[data-view-type="chart"] .db-chart-root--compact .db-chart-surface {
@@ -3517,10 +3523,12 @@ pre {
   justify-items: center;
   justify-content: center;
   height: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .db-chart-donut-layout--side {
-  grid-template-columns: auto minmax(180px, 220px);
+  grid-template-columns: minmax(0, auto) minmax(0, 220px);
 }
 
 .db-chart-donut-layout--compact.db-chart-donut-layout--side {
@@ -3601,6 +3609,7 @@ pre {
 .db-chart-donut-layout .db-chart-svg--donut {
   display: block;
   flex: none;
+  min-width: 0;
 }
 
 .db-chart-legend-row:hover {
