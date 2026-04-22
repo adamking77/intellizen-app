@@ -44,6 +44,7 @@ export interface IntelSignal {
 
 export interface Operation {
   id: number;
+  record_id?: string | null;
   name: string;
   description: string | null;
   status: OperationStatus;
@@ -53,12 +54,14 @@ export interface Operation {
 
 export interface Project {
   id: number;
+  record_id?: string | null;
   name: string;
   type: ProjectType;
   watch_domain: string | null;
   status: ProjectStatus;
   notes: string | null;
   operation_id: number | null;
+  operation_record_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -181,10 +184,12 @@ export interface Investigation {
   id: number;
   case_id: string;
   operation_id: number | null;
+  operation_record_id?: string | null;
   name: string;
   status: InvestigationStatus;
   current_phase: number;
   project_id: number | null;
+  project_record_id?: string | null;
   use_case: InvestigationUseCase;
   subject_definition: string | null;
   investigation_scope: string | null;
@@ -215,6 +220,7 @@ export interface VaultFile {
   id: number;
   case_id: string | null;
   project_id: number | null;
+  project_record_id?: string | null;
   phase: number | null;
   file_type: VaultFileType;
   file_path: string;
@@ -230,6 +236,7 @@ export interface WorkspaceNodeSummary {
   parent_id: number | null;
   case_id: string | null;
   project_id: number | null;
+  project_record_id?: string | null;
   kind: WorkspaceNodeKind;
   name: string;
   path: string;
@@ -469,6 +476,7 @@ export interface CanvasDocumentSummary {
   id: number;
   name: string;
   project_id: number | null;
+  project_record_id?: string | null;
   case_id: string | null;
   created_at: string;
   updated_at: string;

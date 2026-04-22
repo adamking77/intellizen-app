@@ -516,6 +516,8 @@ export function InvestigationView() {
 
       await createVaultFile({
         caseId: selectedInvestigation.case_id,
+        projectId: selectedInvestigation.project_id,
+        projectRecordId: selectedInvestigation.project_record_id ?? null,
         phase: 3,
         fileType: "analysis",
         filePath,

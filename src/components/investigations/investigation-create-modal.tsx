@@ -63,7 +63,13 @@ export function InvestigationCreateModal({
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createInvestigation({ name: name.trim(), projectId, operationId, useCase }),
+      createInvestigation({
+        name: name.trim(),
+        projectId,
+        projectRecordId: linkedProject?.record_id ?? null,
+        operationId,
+        useCase,
+      }),
     onSuccess: async (investigation) => {
       await queryClient.invalidateQueries({ queryKey: ["investigations"] });
       setName("");

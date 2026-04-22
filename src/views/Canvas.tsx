@@ -135,6 +135,7 @@ export function CanvasView() {
           id: created.id,
           name: created.name,
           project_id: created.project_id,
+          project_record_id: created.project_record_id,
           case_id: created.case_id,
           created_at: created.created_at,
           updated_at: created.updated_at,

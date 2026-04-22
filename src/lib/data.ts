@@ -43,6 +43,37 @@ import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import { supabase } from "@/lib/supabase";
 
+const SYSTEM_WORKSPACE_DATABASE_ICONS = {
+  operations: "intel-system:operations",
+  projects: "intel-system:projects",
+} as const;
+
+const OPERATIONS_DB_FIELDS = {
+  legacyId: "legacy_operation_id",
+  name: "name",
+  description: "description",
+  status: "status",
+  projects: "projects",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+} as const;
+
+const PROJECTS_DB_FIELDS = {
+  legacyId: "legacy_project_id",
+  name: "name",
+  type: "type",
+  watchDomain: "watch_domain",
+  status: "status",
+  notes: "notes",
+  operation: "operation",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+} as const;
+
+let operationalWorkspaceSyncPromise: Promise<void> | null = null;
+
+type OperationalSystemKind = keyof typeof SYSTEM_WORKSPACE_DATABASE_ICONS;
+
 export async function listMonitors() {
   const { data, error } = await supabase
     .from("monitors")
@@ -149,7 +180,12 @@ export async function listOperations() {
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as Operation[];
+  const operations = (data ?? []) as Operation[];
+  const recordMap = await getOperationalWorkspaceRecordMap("operations");
+  return operations.map((operation) => ({
+    ...operation,
+    record_id: recordMap.get(operation.id)?.recordId ?? null,
+  }));
 }
 
 export async function createOperation(input: {
@@ -163,6 +199,9 @@ export async function createOperation(input: {
     .single();
 
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync operations workspace database", syncError);
+  });
   return data as Operation;
 }
 
@@ -178,12 +217,18 @@ export async function updateOperation(
     .single();
 
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync operations workspace database", syncError);
+  });
   return data as Operation;
 }
 
 export async function deleteOperation(id: number) {
   const { error } = await supabase.from("operations").delete().eq("id", id);
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync operations workspace database", syncError);
+  });
 }
 
 export async function listProjects() {
@@ -193,7 +238,16 @@ export async function listProjects() {
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as Project[];
+  const projects = (data ?? []) as Project[];
+  const projectRecordMap = await getOperationalWorkspaceRecordMap("projects");
+  const operationRecordMap = await getOperationalWorkspaceRecordMap("operations");
+  return projects.map((project) => ({
+    ...project,
+    record_id: projectRecordMap.get(project.id)?.recordId ?? null,
+    operation_record_id: project.operation_id != null
+      ? (operationRecordMap.get(project.operation_id)?.recordId ?? null)
+      : null,
+  }));
 }
 
 export async function createProject(input: {
@@ -216,6 +270,9 @@ export async function createProject(input: {
     .single();
 
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync projects workspace database", syncError);
+  });
   return data as Project;
 }
 
@@ -231,6 +288,9 @@ export async function updateProject(
     .single();
 
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync projects workspace database", syncError);
+  });
   return data as Project;
 }
 
@@ -241,6 +301,9 @@ export async function deleteProject(id: number) {
     .eq("id", id);
 
   if (error) throw error;
+  void syncOperationalWorkspaceDatabases().catch((syncError) => {
+    console.error("Failed to sync projects workspace database", syncError);
+  });
 }
 
 export async function listProjectSignalCounts(): Promise<Record<number, number>> {
@@ -670,7 +733,16 @@ export async function listInvestigations() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as Investigation[];
+  const investigations = (data ?? []) as Investigation[];
+  return Promise.all(
+    investigations.map(async (investigation) => ({
+      ...investigation,
+      project_record_id:
+        investigation.project_record_id ?? await getOperationalWorkspaceRecordIdByLegacyId("projects", investigation.project_id),
+      operation_record_id:
+        investigation.operation_record_id ?? await getOperationalWorkspaceRecordIdByLegacyId("operations", investigation.operation_id),
+    })),
+  );
 }
 
 export async function getInvestigation(caseId: string) {
@@ -681,27 +753,42 @@ export async function getInvestigation(caseId: string) {
     .single();
 
   if (error) throw error;
-  return data as Investigation;
+  const investigation = data as Investigation;
+  return {
+    ...investigation,
+    project_record_id:
+      investigation.project_record_id ?? await getOperationalWorkspaceRecordIdByLegacyId("projects", investigation.project_id),
+    operation_record_id:
+      investigation.operation_record_id ?? await getOperationalWorkspaceRecordIdByLegacyId("operations", investigation.operation_id),
+  } satisfies Investigation;
 }
 
 export async function createInvestigation(input: {
   name: string;
   projectId?: number | null;
+  projectRecordId?: string | null;
   operationId?: number | null;
+  operationRecordId?: string | null;
   useCase?: import("@/lib/types").InvestigationUseCase;
 }) {
   const MAX_CASE_ID_ATTEMPTS = 5;
 
   for (let attempt = 0; attempt < MAX_CASE_ID_ATTEMPTS; attempt += 1) {
     const caseId = generateCaseId();
+    const projectId = input.projectId ?? await getOperationalLegacyIdByRecordId("projects", input.projectRecordId);
+    const operationId = input.operationId ?? await getOperationalLegacyIdByRecordId("operations", input.operationRecordId);
+    const projectRecordId = input.projectRecordId ?? await getOperationalWorkspaceRecordIdByLegacyId("projects", projectId);
+    const operationRecordId = input.operationRecordId ?? await getOperationalWorkspaceRecordIdByLegacyId("operations", operationId);
     const { data, error } = await supabase
       .from("investigations")
       .insert([
         {
           case_id: caseId,
           name: input.name,
-          project_id: input.projectId ?? null,
-          operation_id: input.operationId ?? null,
+          project_id: projectId ?? null,
+          project_record_id: projectRecordId ?? null,
+          operation_id: operationId ?? null,
+          operation_record_id: operationRecordId ?? null,
           use_case: input.useCase ?? "scoping",
           current_phase: 1,
           status: "active",
@@ -756,9 +843,36 @@ export async function updateInvestigation(
   caseId: string,
   input: Partial<Omit<Investigation, "id" | "case_id" | "created_at" | "updated_at">>
 ) {
+  const projectId = input.project_id !== undefined
+    ? input.project_id
+    : input.project_record_id !== undefined
+      ? await getOperationalLegacyIdByRecordId("projects", input.project_record_id)
+      : undefined;
+  const operationId = input.operation_id !== undefined
+    ? input.operation_id
+    : input.operation_record_id !== undefined
+      ? await getOperationalLegacyIdByRecordId("operations", input.operation_record_id)
+      : undefined;
+  const projectRecordId = input.project_record_id !== undefined
+    ? input.project_record_id
+    : input.project_id !== undefined
+      ? await getOperationalWorkspaceRecordIdByLegacyId("projects", input.project_id)
+      : undefined;
+  const operationRecordId = input.operation_record_id !== undefined
+    ? input.operation_record_id
+    : input.operation_id !== undefined
+      ? await getOperationalWorkspaceRecordIdByLegacyId("operations", input.operation_id)
+      : undefined;
+  const nextInput = {
+    ...input,
+    ...(projectId !== undefined ? { project_id: projectId } : {}),
+    ...(projectRecordId !== undefined ? { project_record_id: projectRecordId } : {}),
+    ...(operationId !== undefined ? { operation_id: operationId } : {}),
+    ...(operationRecordId !== undefined ? { operation_record_id: operationRecordId } : {}),
+  };
   const { data, error } = await supabase
     .from("investigations")
-    .update(input)
+    .update(nextInput)
     .eq("case_id", caseId)
     .select("*")
     .single();
@@ -784,6 +898,44 @@ export async function updateInvestigationPhase(
 
   if (error) throw error;
   return data as Investigation;
+}
+
+async function resolveProjectReference(input: {
+  projectId?: number | null;
+  projectRecordId?: string | null;
+}) {
+  const projectId =
+    input.projectId ?? await getOperationalLegacyIdByRecordId("projects", input.projectRecordId);
+  const projectRecordId =
+    input.projectRecordId ?? await getOperationalWorkspaceRecordIdByLegacyId("projects", projectId);
+  return {
+    projectId: projectId ?? null,
+    projectRecordId: projectRecordId ?? null,
+  };
+}
+
+async function attachProjectRecordId<T extends { project_id: number | null; project_record_id?: string | null }>(
+  row: T,
+): Promise<T & { project_record_id: string | null }> {
+  const projectRecordId =
+    row.project_record_id ??
+    await getOperationalWorkspaceRecordIdByLegacyId("projects", row.project_id);
+  return {
+    ...row,
+    project_record_id: projectRecordId ?? null,
+  };
+}
+
+async function attachProjectRecordIds<T extends { project_id: number | null; project_record_id?: string | null }>(
+  rows: T[],
+): Promise<Array<T & { project_record_id: string | null }>> {
+  const projectRecordMap = await getOperationalWorkspaceRecordMap("projects");
+  return rows.map((row) => ({
+    ...row,
+    project_record_id:
+      row.project_record_id ??
+      (row.project_id != null ? (projectRecordMap.get(row.project_id)?.recordId ?? null) : null),
+  }));
 }
 
 // Phase 1: Brief
@@ -951,12 +1103,13 @@ export async function listVaultFiles(caseId: string) {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as VaultFile[];
+  return attachProjectRecordIds((data ?? []) as VaultFile[]);
 }
 
 export async function createVaultFile(input: {
   caseId?: string | null;
   projectId?: number | null;
+  projectRecordId?: string | null;
   phase?: number;
   fileType: VaultFile["file_type"];
   filePath: string;
@@ -964,12 +1117,17 @@ export async function createVaultFile(input: {
   reportType?: VaultFile["report_type"];
   content?: string | null;
 }) {
+  const { projectId, projectRecordId } = await resolveProjectReference({
+    projectId: input.projectId,
+    projectRecordId: input.projectRecordId,
+  });
   const { data, error } = await supabase
     .from("vault_files")
     .insert([
       {
         case_id: input.caseId ?? null,
-        project_id: input.projectId ?? null,
+        project_id: projectId,
+        project_record_id: projectRecordId,
         phase: input.phase ?? null,
         file_type: input.fileType,
         file_path: input.filePath,
@@ -982,7 +1140,7 @@ export async function createVaultFile(input: {
     .single();
 
   if (error) throw error;
-  return data as VaultFile;
+  return attachProjectRecordId(data as VaultFile);
 }
 
 export async function getVaultFile(id: number) {
@@ -993,7 +1151,7 @@ export async function getVaultFile(id: number) {
     .single();
 
   if (error) throw error;
-  return data as VaultFile;
+  return attachProjectRecordId(data as VaultFile);
 }
 
 export async function updateVaultFileContent(id: number, content: string) {
@@ -1005,7 +1163,7 @@ export async function updateVaultFileContent(id: number, content: string) {
     .single();
 
   if (error) throw error;
-  return data as VaultFile;
+  return attachProjectRecordId(data as VaultFile);
 }
 
 export async function deleteVaultFile(id: number) {
@@ -1014,14 +1172,19 @@ export async function deleteVaultFile(id: number) {
 }
 
 export async function listProjectVaultFiles(projectId: number) {
+  const projectRecordId = await getOperationalWorkspaceRecordIdByLegacyId("projects", projectId);
+  const projectFilters = [`project_id.eq.${projectId}`];
+  if (projectRecordId) {
+    projectFilters.push(`project_record_id.eq.${projectRecordId}`);
+  }
   const { data, error } = await supabase
     .from("vault_files")
     .select("*")
-    .eq("project_id", projectId)
+    .or(projectFilters.join(","))
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as VaultFile[];
+  return attachProjectRecordIds((data ?? []) as VaultFile[]);
 }
 
 export async function listAllVaultFiles() {
@@ -1031,21 +1194,27 @@ export async function listAllVaultFiles() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as VaultFile[];
+  return attachProjectRecordIds((data ?? []) as VaultFile[]);
 }
 
 export async function createGraphExportVaultFile(input: {
   caseId?: string | null;
   projectId?: number | null;
+  projectRecordId?: string | null;
   filePath: string;
   fileName: string;
 }) {
+  const { projectId, projectRecordId } = await resolveProjectReference({
+    projectId: input.projectId,
+    projectRecordId: input.projectRecordId,
+  });
   const { data, error } = await supabase
     .from("vault_files")
     .insert([
       {
         case_id: input.caseId ?? null,
-        project_id: input.projectId ?? null,
+        project_id: projectId,
+        project_record_id: projectRecordId,
         file_type: "graph_export",
         file_path: input.filePath,
         file_name: input.fileName,
@@ -1057,17 +1226,22 @@ export async function createGraphExportVaultFile(input: {
     .single();
 
   if (error) throw error;
-  return data as VaultFile;
+  return attachProjectRecordId(data as VaultFile);
 }
 
 async function getWorkspaceParentContext(parentId: number | null) {
   if (parentId == null) {
-    return { path: "", caseId: null as string | null, projectId: null as number | null };
+    return {
+      path: "",
+      caseId: null as string | null,
+      projectId: null as number | null,
+      projectRecordId: null as string | null,
+    };
   }
 
   const { data, error } = await supabase
     .from("workspace_nodes")
-    .select("id, kind, path, case_id, project_id")
+    .select("id, kind, path, case_id, project_id, project_record_id")
     .eq("id", parentId)
     .single();
 
@@ -1080,17 +1254,20 @@ async function getWorkspaceParentContext(parentId: number | null) {
     path: data.path as string,
     caseId: (data.case_id as string | null) ?? null,
     projectId: (data.project_id as number | null) ?? null,
+    projectRecordId:
+      (data.project_record_id as string | null) ??
+      await getOperationalWorkspaceRecordIdByLegacyId("projects", (data.project_id as number | null) ?? null),
   };
 }
 
 export async function listWorkspaceNodes() {
   const { data, error } = await supabase
     .from("workspace_nodes")
-    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
     .order("path", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as WorkspaceNodeSummary[];
+  return attachProjectRecordIds((data ?? []) as WorkspaceNodeSummary[]);
 }
 
 export async function ensureWorkspaceSystemNodes() {
@@ -1112,9 +1289,15 @@ export async function ensureWorkspaceSystemNodes() {
     parentId: number | null;
     caseId?: string | null;
     projectId?: number | null;
+    projectRecordId?: string | null;
   }) {
     const existing = foldersByPath.get(input.path);
     if (existing) return existing;
+
+    const { projectId, projectRecordId } = await resolveProjectReference({
+      projectId: input.projectId,
+      projectRecordId: input.projectRecordId,
+    });
 
     const { data, error } = await supabase
       .from("workspace_nodes")
@@ -1122,19 +1305,20 @@ export async function ensureWorkspaceSystemNodes() {
         {
           parent_id: input.parentId,
           case_id: input.caseId ?? null,
-          project_id: input.projectId ?? null,
+          project_id: projectId,
+          project_record_id: projectRecordId,
           kind: "folder",
           name: input.name,
           path: input.path,
           content: null,
         },
       ])
-      .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+      .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
       .single();
 
     if (error) throw error;
 
-    const folder = data as WorkspaceNodeSummary;
+    const folder = await attachProjectRecordId(data as WorkspaceNodeSummary);
     foldersByPath.set(folder.path, folder);
     return folder;
   }
@@ -1163,6 +1347,7 @@ export async function ensureWorkspaceSystemNodes() {
       path: `Projects/${project.id}`,
       parentId: projectsRoot.id,
       projectId: project.id,
+      projectRecordId: project.record_id ?? null,
     });
   }
 
@@ -1190,7 +1375,7 @@ export async function getWorkspaceNode(id: number) {
     .single();
 
   if (error) throw error;
-  return data as WorkspaceNode;
+  return attachProjectRecordId(data as WorkspaceNode);
 }
 
 export async function createWorkspaceFolder(input: {
@@ -1198,11 +1383,15 @@ export async function createWorkspaceFolder(input: {
   name: string;
   caseId?: string | null;
   projectId?: number | null;
+  projectRecordId?: string | null;
 }) {
   const parent = await getWorkspaceParentContext(input.parentId ?? null);
   const path = parent.path ? `${parent.path}/${input.name}` : input.name;
   const caseId = input.caseId ?? parent.caseId ?? null;
-  const projectId = input.projectId ?? parent.projectId ?? null;
+  const { projectId, projectRecordId } = await resolveProjectReference({
+    projectId: input.projectId ?? parent.projectId ?? null,
+    projectRecordId: input.projectRecordId ?? parent.projectRecordId ?? null,
+  });
 
   const { data, error } = await supabase
     .from("workspace_nodes")
@@ -1211,6 +1400,7 @@ export async function createWorkspaceFolder(input: {
         parent_id: input.parentId ?? null,
         case_id: caseId,
         project_id: projectId,
+        project_record_id: projectRecordId,
         kind: "folder",
         name: input.name,
         path,
@@ -1221,7 +1411,7 @@ export async function createWorkspaceFolder(input: {
     .single();
 
   if (error) throw error;
-  return data as WorkspaceNode;
+  return attachProjectRecordId(data as WorkspaceNode);
 }
 
 export async function createWorkspaceFile(input: {
@@ -1230,11 +1420,15 @@ export async function createWorkspaceFile(input: {
   content?: string;
   caseId?: string | null;
   projectId?: number | null;
+  projectRecordId?: string | null;
 }) {
   const parent = await getWorkspaceParentContext(input.parentId ?? null);
   const path = parent.path ? `${parent.path}/${input.name}` : input.name;
   const caseId = input.caseId ?? parent.caseId ?? null;
-  const projectId = input.projectId ?? parent.projectId ?? null;
+  const { projectId, projectRecordId } = await resolveProjectReference({
+    projectId: input.projectId ?? parent.projectId ?? null,
+    projectRecordId: input.projectRecordId ?? parent.projectRecordId ?? null,
+  });
 
   const { data, error } = await supabase
     .from("workspace_nodes")
@@ -1243,6 +1437,7 @@ export async function createWorkspaceFile(input: {
         parent_id: input.parentId ?? null,
         case_id: caseId,
         project_id: projectId,
+        project_record_id: projectRecordId,
         kind: "file",
         name: input.name,
         path,
@@ -1253,7 +1448,7 @@ export async function createWorkspaceFile(input: {
     .single();
 
   if (error) throw error;
-  return data as WorkspaceNode;
+  return attachProjectRecordId(data as WorkspaceNode);
 }
 
 export async function updateWorkspaceFileContent(id: number, content: string) {
@@ -1265,7 +1460,7 @@ export async function updateWorkspaceFileContent(id: number, content: string) {
     .single();
 
   if (error) throw error;
-  return data as WorkspaceNode;
+  return attachProjectRecordId(data as WorkspaceNode);
 }
 
 // ─── Workspace databases ──────────────────────────────────────────────────────
@@ -1568,7 +1763,494 @@ async function updateWorkspaceRecordFields(
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
+function buildOperationsWorkspaceSchema(projectsDatabaseId?: string): WorkspaceDatabaseField[] {
+  return [
+    {
+      id: OPERATIONS_DB_FIELDS.legacyId,
+      name: "Legacy ID",
+      type: "number",
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.name,
+      name: "Operation",
+      type: "text",
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.status,
+      name: "Status",
+      type: "select",
+      options: ["active", "archived"],
+      optionColors: {
+        active: "#10b981",
+        archived: "#6b7280",
+      },
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.description,
+      name: "Description",
+      type: "text",
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.projects,
+      name: "Projects",
+      type: "relation",
+      relation: {
+        targetDatabaseId: projectsDatabaseId,
+        targetRelationFieldId: PROJECTS_DB_FIELDS.operation,
+      },
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.createdAt,
+      name: "Created",
+      type: "createdAt",
+    },
+    {
+      id: OPERATIONS_DB_FIELDS.updatedAt,
+      name: "Updated",
+      type: "lastEditedAt",
+    },
+  ];
+}
+
+function buildProjectsWorkspaceSchema(operationsDatabaseId?: string): WorkspaceDatabaseField[] {
+  return [
+    {
+      id: PROJECTS_DB_FIELDS.legacyId,
+      name: "Legacy ID",
+      type: "number",
+    },
+    {
+      id: PROJECTS_DB_FIELDS.name,
+      name: "Project",
+      type: "text",
+    },
+    {
+      id: PROJECTS_DB_FIELDS.status,
+      name: "Status",
+      type: "select",
+      options: ["active", "archived"],
+      optionColors: {
+        active: "#10b981",
+        archived: "#6b7280",
+      },
+    },
+    {
+      id: PROJECTS_DB_FIELDS.type,
+      name: "Type",
+      type: "select",
+      options: ["report", "scoping", "research", "client_case"],
+    },
+    {
+      id: PROJECTS_DB_FIELDS.watchDomain,
+      name: "Watch domain",
+      type: "text",
+    },
+    {
+      id: PROJECTS_DB_FIELDS.operation,
+      name: "Operation",
+      type: "relation",
+      relation: {
+        targetDatabaseId: operationsDatabaseId,
+        targetRelationFieldId: OPERATIONS_DB_FIELDS.projects,
+      },
+    },
+    {
+      id: PROJECTS_DB_FIELDS.notes,
+      name: "Notes",
+      type: "text",
+    },
+    {
+      id: PROJECTS_DB_FIELDS.createdAt,
+      name: "Created",
+      type: "createdAt",
+    },
+    {
+      id: PROJECTS_DB_FIELDS.updatedAt,
+      name: "Updated",
+      type: "lastEditedAt",
+    },
+  ];
+}
+
+function fieldsEqual(
+  left: Record<string, WorkspaceDatabaseFieldValue>,
+  right: Record<string, WorkspaceDatabaseFieldValue>,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function isOperationalSystemWorkspaceIcon(icon: string | null | undefined): icon is (typeof SYSTEM_WORKSPACE_DATABASE_ICONS)[OperationalSystemKind] {
+  return Boolean(icon && Object.values(SYSTEM_WORKSPACE_DATABASE_ICONS).includes(icon as (typeof SYSTEM_WORKSPACE_DATABASE_ICONS)[OperationalSystemKind]));
+}
+
+function getOperationalSystemKindFromIcon(icon: string | null | undefined): OperationalSystemKind | null {
+  if (icon === SYSTEM_WORKSPACE_DATABASE_ICONS.operations) return "operations";
+  if (icon === SYSTEM_WORKSPACE_DATABASE_ICONS.projects) return "projects";
+  return null;
+}
+
+async function getWorkspaceDatabaseSummaryById(id: string) {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
+}
+
+async function getOperationalSystemKindForDatabaseId(id: string) {
+  const database = await getWorkspaceDatabaseSummaryById(id);
+  return getOperationalSystemKindFromIcon(database.icon);
+}
+
+async function findWorkspaceRecordByLegacyId(
+  databaseId: string,
+  legacyFieldId: string,
+  legacyId: number,
+) {
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .select("id, database_id, fields, body, created_at, updated_at")
+    .eq("database_id", databaseId);
+
+  if (error) throw error;
+  const row = ((data ?? []) as WorkspaceDatabaseRecordRow[]).find(
+    (candidate) => candidate.fields?.[legacyFieldId] === legacyId,
+  );
+  return row ? toWorkspaceDatabaseRecord(row) : null;
+}
+
+async function getOperationalWorkspaceRecordIdByLegacyId(
+  kind: OperationalSystemKind,
+  legacyId: number | null | undefined,
+) {
+  if (legacyId == null) return null;
+  const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
+  const databaseId = kind === "operations" ? operationsDatabase.id : projectsDatabase.id;
+  const legacyFieldId = kind === "operations" ? OPERATIONS_DB_FIELDS.legacyId : PROJECTS_DB_FIELDS.legacyId;
+  const record = await findWorkspaceRecordByLegacyId(databaseId, legacyFieldId, legacyId);
+  return record?.id ?? null;
+}
+
+async function getOperationalLegacyIdByRecordId(
+  kind: OperationalSystemKind,
+  recordId: string | null | undefined,
+) {
+  if (!recordId) return null;
+  const legacyFieldId = kind === "operations" ? OPERATIONS_DB_FIELDS.legacyId : PROJECTS_DB_FIELDS.legacyId;
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .select("id, fields")
+    .eq("id", recordId)
+    .maybeSingle();
+
+  if (error) throw error;
+  const legacyId = data?.fields?.[legacyFieldId];
+  return typeof legacyId === "number" ? legacyId : null;
+}
+
+async function getOperationalWorkspaceRecordMap(kind: OperationalSystemKind) {
+  const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
+  const databaseId = kind === "operations" ? operationsDatabase.id : projectsDatabase.id;
+  const legacyFieldId = kind === "operations" ? OPERATIONS_DB_FIELDS.legacyId : PROJECTS_DB_FIELDS.legacyId;
+  const relationFieldId = kind === "projects" ? PROJECTS_DB_FIELDS.operation : undefined;
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .select("id, fields")
+    .eq("database_id", databaseId);
+
+  if (error) throw error;
+
+  const byLegacyId = new Map<number, { recordId: string; relationIds?: string[] }>();
+  for (const row of (data ?? []) as Array<{ id: string; fields: Record<string, WorkspaceDatabaseFieldValue> }>) {
+    const legacyId = row.fields?.[legacyFieldId];
+    if (typeof legacyId !== "number") continue;
+    const relationIds = relationFieldId && Array.isArray(row.fields?.[relationFieldId])
+      ? (row.fields[relationFieldId] as string[])
+      : undefined;
+    byLegacyId.set(legacyId, { recordId: row.id, relationIds });
+  }
+  return byLegacyId;
+}
+
+async function getLegacyIdMapForWorkspaceRecords(recordIds: string[], legacyFieldId: string) {
+  if (recordIds.length === 0) return new Map<string, number>();
+  const { data, error } = await supabase
+    .from("workspace_records")
+    .select("id, fields")
+    .in("id", recordIds);
+
+  if (error) throw error;
+  const map = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ id: string; fields: Record<string, WorkspaceDatabaseFieldValue> }>) {
+    const legacyId = row.fields?.[legacyFieldId];
+    if (typeof legacyId === "number") {
+      map.set(row.id, legacyId);
+    }
+  }
+  return map;
+}
+
+function sanitizeOperationStatus(value: WorkspaceDatabaseFieldValue) {
+  return value === "archived" ? "archived" : "active";
+}
+
+function sanitizeProjectStatus(value: WorkspaceDatabaseFieldValue) {
+  return value === "archived" ? "archived" : "active";
+}
+
+function sanitizeProjectType(value: WorkspaceDatabaseFieldValue): Project["type"] {
+  return value === "report" || value === "scoping" || value === "client_case" ? value : "research";
+}
+
+async function ensureOperationalWorkspaceDatabases() {
+  const { data, error } = await supabase
+    .from("workspace_databases")
+    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .in("icon", [SYSTEM_WORKSPACE_DATABASE_ICONS.operations, SYSTEM_WORKSPACE_DATABASE_ICONS.projects]);
+
+  if (error) throw error;
+
+  const existing = new Map(
+    ((data ?? []) as WorkspaceDatabaseRow[]).map((row) => [row.icon ?? "", toWorkspaceDatabase(row)]),
+  );
+
+  let operationsDatabase = existing.get(SYSTEM_WORKSPACE_DATABASE_ICONS.operations);
+  let projectsDatabase = existing.get(SYSTEM_WORKSPACE_DATABASE_ICONS.projects);
+
+  if (!operationsDatabase) {
+    const created = await createWorkspaceDatabase({
+      name: "Operations",
+      icon: SYSTEM_WORKSPACE_DATABASE_ICONS.operations,
+      schema: buildOperationsWorkspaceSchema(),
+    });
+    operationsDatabase = created.database;
+    await Promise.all([
+      updateWorkspaceDatabaseHeaderFields(created.database.id, [OPERATIONS_DB_FIELDS.name], true),
+      updateWorkspaceView(created.views[0].id, {
+        config: {
+          ...created.views[0].config,
+          hiddenFields: [OPERATIONS_DB_FIELDS.legacyId],
+          fieldOrder: [
+            OPERATIONS_DB_FIELDS.name,
+            OPERATIONS_DB_FIELDS.status,
+            OPERATIONS_DB_FIELDS.description,
+            OPERATIONS_DB_FIELDS.projects,
+            OPERATIONS_DB_FIELDS.createdAt,
+            OPERATIONS_DB_FIELDS.updatedAt,
+            OPERATIONS_DB_FIELDS.legacyId,
+          ],
+        },
+      }),
+    ]);
+  }
+
+  if (!projectsDatabase) {
+    const created = await createWorkspaceDatabase({
+      name: "Projects",
+      icon: SYSTEM_WORKSPACE_DATABASE_ICONS.projects,
+      schema: buildProjectsWorkspaceSchema(operationsDatabase?.id),
+    });
+    projectsDatabase = created.database;
+    await Promise.all([
+      updateWorkspaceDatabaseHeaderFields(created.database.id, [PROJECTS_DB_FIELDS.name], true),
+      updateWorkspaceView(created.views[0].id, {
+        config: {
+          ...created.views[0].config,
+          hiddenFields: [PROJECTS_DB_FIELDS.legacyId],
+          fieldOrder: [
+            PROJECTS_DB_FIELDS.name,
+            PROJECTS_DB_FIELDS.status,
+            PROJECTS_DB_FIELDS.type,
+            PROJECTS_DB_FIELDS.watchDomain,
+            PROJECTS_DB_FIELDS.operation,
+            PROJECTS_DB_FIELDS.notes,
+            PROJECTS_DB_FIELDS.createdAt,
+            PROJECTS_DB_FIELDS.updatedAt,
+            PROJECTS_DB_FIELDS.legacyId,
+          ],
+        },
+      }),
+    ]);
+  }
+
+  if (!operationsDatabase || !projectsDatabase) {
+    throw new Error("Operational workspace databases could not be created.");
+  }
+
+  const nextOperationsSchema = buildOperationsWorkspaceSchema(projectsDatabase.id);
+  const nextProjectsSchema = buildProjectsWorkspaceSchema(operationsDatabase.id);
+
+  if (JSON.stringify(operationsDatabase.schema) !== JSON.stringify(nextOperationsSchema)) {
+    operationsDatabase = await updateWorkspaceDatabaseSchema(operationsDatabase.id, nextOperationsSchema, true);
+  }
+
+  if (JSON.stringify(projectsDatabase.schema) !== JSON.stringify(nextProjectsSchema)) {
+    projectsDatabase = await updateWorkspaceDatabaseSchema(projectsDatabase.id, nextProjectsSchema, true);
+  }
+
+  return {
+    operationsDatabase,
+    projectsDatabase,
+  };
+}
+
+async function syncOperationalWorkspaceDatabasesInner() {
+  const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
+
+  const [
+    { data: operationRows, error: operationsError },
+    { data: projectRows, error: projectsError },
+    { data: operationRecordRows, error: operationRecordsError },
+    { data: projectRecordRows, error: projectRecordsError },
+  ] = await Promise.all([
+    supabase.from("operations").select("*").order("id", { ascending: true }),
+    supabase.from("projects").select("*").order("id", { ascending: true }),
+    supabase
+      .from("workspace_records")
+      .select("id, database_id, fields, body, created_at, updated_at")
+      .eq("database_id", operationsDatabase.id),
+    supabase
+      .from("workspace_records")
+      .select("id, database_id, fields, body, created_at, updated_at")
+      .eq("database_id", projectsDatabase.id),
+  ]);
+
+  if (operationsError) throw operationsError;
+  if (projectsError) throw projectsError;
+  if (operationRecordsError) throw operationRecordsError;
+  if (projectRecordsError) throw projectRecordsError;
+
+  const operations = (operationRows ?? []) as Operation[];
+  const projects = (projectRows ?? []) as Project[];
+  const operationRecords = ((operationRecordRows ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  const projectRecords = ((projectRecordRows ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+
+  const operationRecordByLegacyId = new Map<number, WorkspaceDatabaseRecord>();
+  for (const record of operationRecords) {
+    const legacyId = record.fields[OPERATIONS_DB_FIELDS.legacyId];
+    if (typeof legacyId === "number") {
+      operationRecordByLegacyId.set(legacyId, record);
+    }
+  }
+
+  const projectRecordByLegacyId = new Map<number, WorkspaceDatabaseRecord>();
+  for (const record of projectRecords) {
+    const legacyId = record.fields[PROJECTS_DB_FIELDS.legacyId];
+    if (typeof legacyId === "number") {
+      projectRecordByLegacyId.set(legacyId, record);
+    }
+  }
+
+  for (const operation of operations) {
+    const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
+      [OPERATIONS_DB_FIELDS.legacyId]: operation.id,
+      [OPERATIONS_DB_FIELDS.name]: operation.name,
+      [OPERATIONS_DB_FIELDS.status]: operation.status,
+      [OPERATIONS_DB_FIELDS.description]: operation.description ?? null,
+      [OPERATIONS_DB_FIELDS.projects]: [],
+    };
+    const existing = operationRecordByLegacyId.get(operation.id);
+    if (!existing) {
+      const created = await createWorkspaceRecord({
+        databaseId: operationsDatabase.id,
+        fields: nextFields,
+        skipSystemSync: true,
+      });
+      operationRecordByLegacyId.set(operation.id, created);
+      continue;
+    }
+    if (!fieldsEqual(existing.fields, nextFields)) {
+      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+      operationRecordByLegacyId.set(operation.id, updated);
+    }
+  }
+
+  for (const project of projects) {
+    const relatedOperationRecord = project.operation_id != null
+      ? operationRecordByLegacyId.get(project.operation_id)
+      : undefined;
+    const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
+      [PROJECTS_DB_FIELDS.legacyId]: project.id,
+      [PROJECTS_DB_FIELDS.name]: project.name,
+      [PROJECTS_DB_FIELDS.status]: project.status,
+      [PROJECTS_DB_FIELDS.type]: project.type,
+      [PROJECTS_DB_FIELDS.watchDomain]: project.watch_domain ?? null,
+      [PROJECTS_DB_FIELDS.notes]: project.notes ?? null,
+      [PROJECTS_DB_FIELDS.operation]: relatedOperationRecord ? [relatedOperationRecord.id] : [],
+    };
+    const existing = projectRecordByLegacyId.get(project.id);
+    if (!existing) {
+      const created = await createWorkspaceRecord({
+        databaseId: projectsDatabase.id,
+        fields: nextFields,
+        skipSystemSync: true,
+      });
+      projectRecordByLegacyId.set(project.id, created);
+      continue;
+    }
+    if (!fieldsEqual(existing.fields, nextFields)) {
+      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+      projectRecordByLegacyId.set(project.id, updated);
+    }
+  }
+
+  const projectsByOperationId = new Map<number, string[]>();
+  for (const project of projects) {
+    if (project.operation_id == null) continue;
+    const projectRecord = projectRecordByLegacyId.get(project.id);
+    if (!projectRecord) continue;
+    const bucket = projectsByOperationId.get(project.operation_id) ?? [];
+    bucket.push(projectRecord.id);
+    projectsByOperationId.set(project.operation_id, bucket);
+  }
+
+  for (const operation of operations) {
+    const existing = operationRecordByLegacyId.get(operation.id);
+    if (!existing) continue;
+    const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
+      [OPERATIONS_DB_FIELDS.legacyId]: operation.id,
+      [OPERATIONS_DB_FIELDS.name]: operation.name,
+      [OPERATIONS_DB_FIELDS.status]: operation.status,
+      [OPERATIONS_DB_FIELDS.description]: operation.description ?? null,
+      [OPERATIONS_DB_FIELDS.projects]: projectsByOperationId.get(operation.id) ?? [],
+    };
+    if (!fieldsEqual(existing.fields, nextFields)) {
+      await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+    }
+  }
+
+  const validOperationIds = new Set(operations.map((operation) => operation.id));
+  const validProjectIds = new Set(projects.map((project) => project.id));
+
+  for (const record of operationRecords) {
+    const legacyId = record.fields[OPERATIONS_DB_FIELDS.legacyId];
+    if (typeof legacyId === "number" && !validOperationIds.has(legacyId)) {
+      await deleteWorkspaceRecord(record.id, true);
+    }
+  }
+
+  for (const record of projectRecords) {
+    const legacyId = record.fields[PROJECTS_DB_FIELDS.legacyId];
+    if (typeof legacyId === "number" && !validProjectIds.has(legacyId)) {
+      await deleteWorkspaceRecord(record.id, true);
+    }
+  }
+}
+
+export async function syncOperationalWorkspaceDatabases() {
+  if (!operationalWorkspaceSyncPromise) {
+    operationalWorkspaceSyncPromise = syncOperationalWorkspaceDatabasesInner().finally(() => {
+      operationalWorkspaceSyncPromise = null;
+    });
+  }
+  return operationalWorkspaceSyncPromise;
+}
+
 export async function listWorkspaceDatabases() {
+  await syncOperationalWorkspaceDatabases();
   const { data, error } = await supabase
     .from("workspace_databases")
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
@@ -1580,6 +2262,7 @@ export async function listWorkspaceDatabases() {
 }
 
 export async function listWorkspaceDatabaseCatalog() {
+  await syncOperationalWorkspaceDatabases();
   const [
     { data: databaseRows, error: databaseError },
     { data: recordRows, error: recordError },
@@ -1636,6 +2319,7 @@ export async function listWorkspaceDatabaseCatalog() {
 }
 
 export async function getWorkspaceDatabaseBundle(id: string) {
+  await syncOperationalWorkspaceDatabases();
   const [{ data: databaseRow, error: databaseError }, { data: viewRows, error: viewError }, { data: recordRows, error: recordError }] =
     await Promise.all([
       supabase
@@ -1724,6 +2408,10 @@ export async function updateWorkspaceDatabase(
   id: string,
   input: Partial<Pick<WorkspaceDatabase, "name" | "icon">>,
 ) {
+  const database = await getWorkspaceDatabaseSummaryById(id);
+  if (isOperationalSystemWorkspaceIcon(database.icon)) {
+    throw new Error("System databases cannot be renamed or reconfigured.");
+  }
   const { data, error } = await supabase
     .from("workspace_databases")
     .update(input)
@@ -1735,7 +2423,11 @@ export async function updateWorkspaceDatabase(
   return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
 }
 
-export async function updateWorkspaceDatabaseSchema(id: string, schema: WorkspaceDatabaseField[]) {
+export async function updateWorkspaceDatabaseSchema(id: string, schema: WorkspaceDatabaseField[], allowSystem = false) {
+  const database = await getWorkspaceDatabaseSummaryById(id);
+  if (!allowSystem && isOperationalSystemWorkspaceIcon(database.icon)) {
+    throw new Error("System database schemas are managed automatically.");
+  }
   const { data, error } = await supabase
     .from("workspace_databases")
     .update({ schema })
@@ -1747,7 +2439,11 @@ export async function updateWorkspaceDatabaseSchema(id: string, schema: Workspac
   return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
 }
 
-export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: string[]) {
+export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: string[], allowSystem = false) {
+  const database = await getWorkspaceDatabaseSummaryById(id);
+  if (!allowSystem && isOperationalSystemWorkspaceIcon(database.icon)) {
+    throw new Error("System database header fields are managed automatically.");
+  }
   const { data, error } = await supabase
     .from("workspace_databases")
     .update({ header_field_ids: fieldIds })
@@ -1824,7 +2520,93 @@ export async function createWorkspaceRecord(input: {
   databaseId: string;
   fields?: Record<string, WorkspaceDatabaseFieldValue>;
   body?: string | null;
+  skipSystemSync?: boolean;
 }) {
+  if (!input.skipSystemSync) {
+    const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
+    if (input.databaseId === operationsDatabase.id) {
+      const { data, error } = await supabase
+        .from("operations")
+        .insert([
+          {
+            name: String(input.fields?.[OPERATIONS_DB_FIELDS.name] ?? "Untitled operation").trim() || "Untitled operation",
+            description:
+              typeof input.fields?.[OPERATIONS_DB_FIELDS.description] === "string"
+                ? input.fields[OPERATIONS_DB_FIELDS.description]
+                : null,
+            status: sanitizeOperationStatus(input.fields?.[OPERATIONS_DB_FIELDS.status]),
+          },
+        ])
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      const operation = data as Operation;
+
+      const linkedProjectIds = Array.isArray(input.fields?.[OPERATIONS_DB_FIELDS.projects])
+        ? (input.fields?.[OPERATIONS_DB_FIELDS.projects] as string[])
+        : [];
+      if (linkedProjectIds.length > 0) {
+        const projectIdMap = await getLegacyIdMapForWorkspaceRecords(linkedProjectIds, PROJECTS_DB_FIELDS.legacyId);
+        for (const projectId of projectIdMap.values()) {
+          const { error: linkError } = await supabase
+            .from("projects")
+            .update({ operation_id: operation.id })
+            .eq("id", projectId);
+          if (linkError) throw linkError;
+        }
+      }
+
+      await syncOperationalWorkspaceDatabases();
+      const record = await findWorkspaceRecordByLegacyId(operationsDatabase.id, OPERATIONS_DB_FIELDS.legacyId, operation.id);
+      if (!record) throw new Error("Operation workspace record was not created.");
+      if (input.body !== undefined) {
+        return updateWorkspaceRecordFields(record.id, record.fields, input.body);
+      }
+      return record;
+    }
+
+    if (input.databaseId === projectsDatabase.id) {
+      const linkedOperationIds = Array.isArray(input.fields?.[PROJECTS_DB_FIELDS.operation])
+        ? (input.fields?.[PROJECTS_DB_FIELDS.operation] as string[])
+        : [];
+      const operationIdMap = await getLegacyIdMapForWorkspaceRecords(linkedOperationIds.slice(0, 1), OPERATIONS_DB_FIELDS.legacyId);
+      const operationId = linkedOperationIds[0] ? (operationIdMap.get(linkedOperationIds[0]) ?? null) : null;
+
+      const { data, error } = await supabase
+        .from("projects")
+        .insert([
+          {
+            name: String(input.fields?.[PROJECTS_DB_FIELDS.name] ?? "Untitled project").trim() || "Untitled project",
+            type: sanitizeProjectType(input.fields?.[PROJECTS_DB_FIELDS.type]),
+            watch_domain:
+              typeof input.fields?.[PROJECTS_DB_FIELDS.watchDomain] === "string"
+                ? input.fields[PROJECTS_DB_FIELDS.watchDomain]
+                : null,
+            status: sanitizeProjectStatus(input.fields?.[PROJECTS_DB_FIELDS.status]),
+            notes:
+              typeof input.fields?.[PROJECTS_DB_FIELDS.notes] === "string"
+                ? input.fields[PROJECTS_DB_FIELDS.notes]
+                : null,
+            operation_id: operationId,
+          },
+        ])
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      const project = data as Project;
+
+      await syncOperationalWorkspaceDatabases();
+      const record = await findWorkspaceRecordByLegacyId(projectsDatabase.id, PROJECTS_DB_FIELDS.legacyId, project.id);
+      if (!record) throw new Error("Project workspace record was not created.");
+      if (input.body !== undefined) {
+        return updateWorkspaceRecordFields(record.id, record.fields, input.body);
+      }
+      return record;
+    }
+  }
+
   const { data, error } = await supabase
     .from("workspace_records")
     .insert([
@@ -1872,6 +2654,7 @@ export async function updateWorkspaceRecord(
     fieldId?: string;
     value?: WorkspaceDatabaseFieldValue;
   },
+  skipSystemSync = false,
 ) {
   const { data: existing, error: existingError } = await supabase
     .from("workspace_records")
@@ -1888,10 +2671,134 @@ export async function updateWorkspaceRecord(
       ? { ...current.fields, [input.fieldId]: input.value }
       : current.fields;
 
+  if (!skipSystemSync) {
+    const systemKind = await getOperationalSystemKindForDatabaseId(current.database_id);
+    if (systemKind === "operations") {
+      const legacyId = current.fields[OPERATIONS_DB_FIELDS.legacyId];
+      if (typeof legacyId === "number") {
+        const updatePayload: Partial<Pick<Operation, "name" | "description" | "status">> = {
+          name: String(nextFields[OPERATIONS_DB_FIELDS.name] ?? current.fields[OPERATIONS_DB_FIELDS.name] ?? "Untitled operation").trim() || "Untitled operation",
+          description:
+            typeof nextFields[OPERATIONS_DB_FIELDS.description] === "string"
+              ? String(nextFields[OPERATIONS_DB_FIELDS.description])
+              : null,
+          status: sanitizeOperationStatus(nextFields[OPERATIONS_DB_FIELDS.status]),
+        };
+        const { error } = await supabase.from("operations").update(updatePayload).eq("id", legacyId);
+        if (error) throw error;
+
+        if (Array.isArray(nextFields[OPERATIONS_DB_FIELDS.projects])) {
+          const desiredProjectMap = await getLegacyIdMapForWorkspaceRecords(
+            nextFields[OPERATIONS_DB_FIELDS.projects] as string[],
+            PROJECTS_DB_FIELDS.legacyId,
+          );
+          const desiredProjectIds = new Set(desiredProjectMap.values());
+          const { data: currentProjects, error: currentProjectsError } = await supabase
+            .from("projects")
+            .select("id")
+            .eq("operation_id", legacyId);
+          if (currentProjectsError) throw currentProjectsError;
+          const currentProjectIds = new Set(((currentProjects ?? []) as Array<{ id: number }>).map((project) => project.id));
+          for (const projectId of Array.from(currentProjectIds).filter((candidate) => !desiredProjectIds.has(candidate))) {
+            const { error: unlinkError } = await supabase
+              .from("projects")
+              .update({ operation_id: null })
+              .eq("id", projectId);
+            if (unlinkError) throw unlinkError;
+          }
+          for (const projectId of Array.from(desiredProjectIds).filter((candidate) => !currentProjectIds.has(candidate))) {
+            const { error: linkError } = await supabase
+              .from("projects")
+              .update({ operation_id: legacyId })
+              .eq("id", projectId);
+            if (linkError) throw linkError;
+          }
+        }
+
+        await syncOperationalWorkspaceDatabases();
+        const { operationsDatabase } = await ensureOperationalWorkspaceDatabases();
+        const record = await findWorkspaceRecordByLegacyId(operationsDatabase.id, OPERATIONS_DB_FIELDS.legacyId, legacyId);
+        if (!record) throw new Error("Operation workspace record could not be refreshed.");
+        if (input.body !== undefined) {
+          return updateWorkspaceRecordFields(record.id, record.fields, input.body);
+        }
+        return record;
+      }
+    }
+
+    if (systemKind === "projects") {
+      const legacyId = current.fields[PROJECTS_DB_FIELDS.legacyId];
+      if (typeof legacyId === "number") {
+        const relationIds = Array.isArray(nextFields[PROJECTS_DB_FIELDS.operation])
+          ? (nextFields[PROJECTS_DB_FIELDS.operation] as string[])
+          : [];
+        const operationIdMap = await getLegacyIdMapForWorkspaceRecords(relationIds.slice(0, 1), OPERATIONS_DB_FIELDS.legacyId);
+        const nextOperationId = relationIds[0] ? (operationIdMap.get(relationIds[0]) ?? null) : null;
+        const updatePayload: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id">> = {
+          name: String(nextFields[PROJECTS_DB_FIELDS.name] ?? current.fields[PROJECTS_DB_FIELDS.name] ?? "Untitled project").trim() || "Untitled project",
+          type: sanitizeProjectType(nextFields[PROJECTS_DB_FIELDS.type]),
+          watch_domain:
+            typeof nextFields[PROJECTS_DB_FIELDS.watchDomain] === "string"
+              ? String(nextFields[PROJECTS_DB_FIELDS.watchDomain])
+              : null,
+          status: sanitizeProjectStatus(nextFields[PROJECTS_DB_FIELDS.status]),
+          notes:
+            typeof nextFields[PROJECTS_DB_FIELDS.notes] === "string"
+              ? String(nextFields[PROJECTS_DB_FIELDS.notes])
+              : null,
+          operation_id: nextOperationId,
+        };
+        const { error } = await supabase.from("projects").update(updatePayload).eq("id", legacyId);
+        if (error) throw error;
+
+        await syncOperationalWorkspaceDatabases();
+        const { projectsDatabase } = await ensureOperationalWorkspaceDatabases();
+        const record = await findWorkspaceRecordByLegacyId(projectsDatabase.id, PROJECTS_DB_FIELDS.legacyId, legacyId);
+        if (!record) throw new Error("Project workspace record could not be refreshed.");
+        if (input.body !== undefined) {
+          return updateWorkspaceRecordFields(record.id, record.fields, input.body);
+        }
+        return record;
+      }
+    }
+  }
+
   return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body);
 }
 
-export async function deleteWorkspaceRecord(id: string) {
+export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {
+  if (!skipSystemSync) {
+    const { data: existing, error: existingError } = await supabase
+      .from("workspace_records")
+      .select("id, database_id, fields, body, created_at, updated_at")
+      .eq("id", id)
+      .single();
+
+    if (existingError) throw existingError;
+    const current = toWorkspaceDatabaseRecord(existing as WorkspaceDatabaseRecordRow);
+    const systemKind = await getOperationalSystemKindForDatabaseId(current.database_id);
+
+    if (systemKind === "operations") {
+      const legacyId = current.fields[OPERATIONS_DB_FIELDS.legacyId];
+      if (typeof legacyId === "number") {
+        const { error } = await supabase.from("operations").delete().eq("id", legacyId);
+        if (error) throw error;
+        await syncOperationalWorkspaceDatabases();
+        return;
+      }
+    }
+
+    if (systemKind === "projects") {
+      const legacyId = current.fields[PROJECTS_DB_FIELDS.legacyId];
+      if (typeof legacyId === "number") {
+        const { error } = await supabase.from("projects").delete().eq("id", legacyId);
+        if (error) throw error;
+        await syncOperationalWorkspaceDatabases();
+        return;
+      }
+    }
+  }
+
   const { error } = await supabase.from("workspace_records").delete().eq("id", id);
   if (error) throw error;
 }
@@ -1902,6 +2809,17 @@ export async function updateWorkspaceRelationLinks(input: {
   relationFieldId: string;
   recordIds: string[];
 }) {
+  const systemKind = await getOperationalSystemKindForDatabaseId(input.databaseId);
+  if (
+    (systemKind === "operations" && input.relationFieldId === OPERATIONS_DB_FIELDS.projects) ||
+    (systemKind === "projects" && input.relationFieldId === PROJECTS_DB_FIELDS.operation)
+  ) {
+    return updateWorkspaceRecord(input.recordId, {
+      fieldId: input.relationFieldId,
+      value: [...new Set(input.recordIds.filter(Boolean))],
+    });
+  }
+
   const bundle = await getWorkspaceDatabaseBundle(input.databaseId);
   const sourceField = bundle.database.schema.find((field) => field.id === input.relationFieldId);
   if (!sourceField || sourceField.type !== "relation") {
@@ -1974,37 +2892,43 @@ export async function updateWorkspaceRelationLinks(input: {
 export async function listCanvasDocuments() {
   const { data, error } = await supabase
     .from("canvas_documents")
-    .select("id, name, project_id, case_id, created_at, updated_at")
+    .select("id, name, project_id, project_record_id, case_id, created_at, updated_at")
     .order("updated_at", { ascending: false })
     .order("id", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as CanvasDocumentSummary[];
+  return attachProjectRecordIds((data ?? []) as CanvasDocumentSummary[]);
 }
 
 export async function getCanvasDocument(id: number) {
   const { data, error } = await supabase
     .from("canvas_documents")
-    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
     .eq("id", id)
     .single();
 
   if (error) throw error;
-  return data as CanvasDocument;
+  return attachProjectRecordId(data as CanvasDocument);
 }
 
 export async function createCanvasDocument(input?: {
   name?: string;
   projectId?: number | null;
+  projectRecordId?: string | null;
   caseId?: string | null;
   contentJson?: CanvasDocumentData;
 }) {
+  const { projectId, projectRecordId } = await resolveProjectReference({
+    projectId: input?.projectId,
+    projectRecordId: input?.projectRecordId,
+  });
   const { data, error } = await supabase
     .from("canvas_documents")
     .insert([
       {
         name: input?.name?.trim() || "Untitled canvas",
-        project_id: input?.projectId ?? null,
+        project_id: projectId,
+        project_record_id: projectRecordId,
         case_id: input?.caseId ?? null,
         content_json:
           input?.contentJson ??
@@ -2018,11 +2942,11 @@ export async function createCanvasDocument(input?: {
           } satisfies CanvasDocumentData),
       },
     ])
-    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
     .single();
 
   if (error) throw error;
-  return data as CanvasDocument;
+  return attachProjectRecordId(data as CanvasDocument);
 }
 
 export async function updateCanvasDocument(
@@ -2030,13 +2954,21 @@ export async function updateCanvasDocument(
   input: Partial<{
     name: string;
     projectId: number | null;
+    projectRecordId: string | null;
     caseId: string | null;
     contentJson: CanvasDocumentData;
   }>,
 ) {
   const update: Record<string, unknown> = {};
   if (input.name !== undefined) update.name = input.name;
-  if (input.projectId !== undefined) update.project_id = input.projectId;
+  if (input.projectId !== undefined || input.projectRecordId !== undefined) {
+    const { projectId, projectRecordId } = await resolveProjectReference({
+      projectId: input.projectId,
+      projectRecordId: input.projectRecordId,
+    });
+    update.project_id = projectId;
+    update.project_record_id = projectRecordId;
+  }
   if (input.caseId !== undefined) update.case_id = input.caseId;
   if (input.contentJson !== undefined) update.content_json = input.contentJson;
 
@@ -2044,11 +2976,11 @@ export async function updateCanvasDocument(
     .from("canvas_documents")
     .update(update)
     .eq("id", id)
-    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
     .single();
 
   if (error) throw error;
-  return data as CanvasDocument;
+  return attachProjectRecordId(data as CanvasDocument);
 }
 
 export async function updateCanvasDocumentContent(id: number, contentJson: CanvasDocumentData) {
@@ -2056,11 +2988,11 @@ export async function updateCanvasDocumentContent(id: number, contentJson: Canva
     .from("canvas_documents")
     .update({ content_json: contentJson })
     .eq("id", id)
-    .select("id, name, project_id, case_id, content_json, created_at, updated_at")
+    .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
     .single();
 
   if (error) throw error;
-  return data as CanvasDocument;
+  return attachProjectRecordId(data as CanvasDocument);
 }
 
 export async function deleteCanvasDocument(id: number) {
@@ -2073,17 +3005,18 @@ export async function deleteCanvasDocument(id: number) {
 export async function listStrategyFolders() {
   const { data, error } = await supabase
     .from("workspace_nodes")
-    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
     .eq("kind", "folder")
     .is("case_id", null)
     .is("project_id", null)
+    .is("project_record_id", null)
     .not("path", "in", '("Workspace","Projects","Investigations")')
     .not("path", "like", "Projects/%")
     .not("path", "like", "Investigations/%")
     .order("path", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as WorkspaceNodeSummary[];
+  return attachProjectRecordIds((data ?? []) as WorkspaceNodeSummary[]);
 }
 
 export async function createStrategyFolder(input: {
@@ -2113,17 +3046,18 @@ export async function createStrategyFolder(input: {
         parent_id: parentId,
         case_id: null,
         project_id: null,
+        project_record_id: null,
         kind: "folder",
         name: input.name,
         path,
         content: null,
       },
     ])
-    .select("id, parent_id, case_id, project_id, kind, name, path, created_at, updated_at")
+    .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
     .single();
 
   if (error) throw error;
-  return data as WorkspaceNodeSummary;
+  return attachProjectRecordId(data as WorkspaceNodeSummary);
 }
 
 export async function listVaultDocuments() {

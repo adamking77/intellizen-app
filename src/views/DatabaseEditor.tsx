@@ -38,6 +38,7 @@ import {
   deleteWorkspaceRecord,
   deleteWorkspaceView,
   getWorkspaceDatabaseBundle,
+  isOperationalSystemWorkspaceIcon,
   listWorkspaceDatabaseCatalog,
   updateWorkspaceDatabase,
   updateWorkspaceDatabaseHeaderFields,
@@ -108,6 +109,7 @@ export function DatabaseEditorView() {
   });
 
   const database = bundle?.model;
+  const isSystemDatabase = isOperationalSystemWorkspaceIcon(bundle?.database.icon);
 
   useEffect(() => {
     if (!database?.views.length) {
@@ -875,6 +877,7 @@ export function DatabaseEditorView() {
   }
 
   function handleOpenSchema() {
+    if (isSystemDatabase) return;
     setSchemaOpen(true);
     setActivePeek(null);
   }
@@ -943,7 +946,11 @@ export function DatabaseEditorView() {
         <Input
           key={bundle.database.id}
           defaultValue={bundle.database.name}
-          onBlur={(e) => handleUpdateDatabaseName(e.target.value)}
+          onBlur={(e) => {
+            if (isSystemDatabase) return;
+            void handleUpdateDatabaseName(e.target.value);
+          }}
+          disabled={isSystemDatabase}
           className="mb-4 h-auto border-transparent bg-transparent px-0 text-[22px] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
         />
 
@@ -959,8 +966,8 @@ export function DatabaseEditorView() {
           onReorderViews={handleReorderViews}
           onUpdateViewConfig={handleUpdateViewConfig}
           onCreateRecord={() => handleCreateRecord()}
-          onOpenSchema={handleOpenSchema}
-          onImportCsv={() => csvInputRef.current?.click()}
+          onOpenSchema={isSystemDatabase ? () => {} : handleOpenSchema}
+          onImportCsv={isSystemDatabase ? () => {} : () => csvInputRef.current?.click()}
           onExportCsv={handleCsvExport}
           onPinToDashboard={handlePinActiveViewToDashboard}
           isImportingCsv={isImportingCsv}
@@ -1029,7 +1036,7 @@ export function DatabaseEditorView() {
                 onUpdateField={handleUpdateRecordField}
                 onUpdateView={handleUpdateViewConfig}
                 onSaveSchema={handleSaveSchema}
-                onOpenSchema={handleOpenSchema}
+                onOpenSchema={isSystemDatabase ? () => {} : handleOpenSchema}
                 onCreateRecord={() => void handleCreateRecord()}
                 onDuplicateRecord={(recordId) => void handleDuplicateRecord(database.id, recordId)}
                 onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
@@ -1041,7 +1048,7 @@ export function DatabaseEditorView() {
         </div>
 
         <DatabaseSchemaEditor
-          open={schemaOpen}
+          open={schemaOpen && !isSystemDatabase}
           database={database}
           activeView={activeView}
           catalog={catalog}

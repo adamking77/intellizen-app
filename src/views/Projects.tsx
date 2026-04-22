@@ -24,6 +24,7 @@ import {
   listProjectVaultFiles,
   listProjects,
   removeSignalFromProject,
+  syncOperationalWorkspaceDatabases,
   updateOperation,
   updateProject,
 } from "@/lib/data";
@@ -119,6 +120,12 @@ export function ProjectsView() {
   const { data: operations } = useQuery({
     queryKey: ["operations"],
     queryFn: listOperations,
+  });
+
+  useQuery({
+    queryKey: ["operational-workspace-sync"],
+    queryFn: syncOperationalWorkspaceDatabases,
+    staleTime: 60_000,
   });
 
   const { data: projects, error } = useQuery({
