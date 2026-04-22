@@ -1,8 +1,8 @@
 import "react-grid-layout/css/styles.css";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import GridLayout, { type Layout, type LayoutItem, useContainerWidth } from "react-grid-layout";
+import GridLayout, { type Layout, type LayoutItem } from "react-grid-layout";
 import {
   ArrowRight,
   ChevronLeft,
@@ -44,7 +44,7 @@ interface PinnedWidgetModel {
 export function DatabasesView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 });
+  const [gridShellRef, gridShellSize] = useElementSize<HTMLDivElement>();
   const [isCreating, setIsCreating] = useState(false);
   const [pins, setPins] = useState<DatabaseDashboardPin[]>(() => loadDatabaseDashboardPins());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
@@ -60,7 +60,10 @@ export function DatabasesView() {
     queryKey: ["workspace-databases"],
     queryFn: listWorkspaceDatabases,
   });
-  const { data: catalog = [] } = useQuery({
+  const {
+    data: catalog = [],
+    isLoading: catalogLoading,
+  } = useQuery({
     queryKey: ["workspace-database-catalog"],
     queryFn: listWorkspaceDatabaseCatalog,
   });
@@ -107,10 +110,11 @@ export function DatabasesView() {
   }, [catalog, pins]);
 
   useEffect(() => {
+    if (catalogLoading) return;
     if (pinnedWidgets.length === pins.length) return;
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
     setPins((current) => current.filter((pin) => validIds.has(pin.id)));
-  }, [pins.length, pinnedWidgets]);
+  }, [catalogLoading, pins.length, pinnedWidgets]);
 
   const gridLayout = useMemo<Layout>(
     () =>
@@ -353,10 +357,10 @@ export function DatabasesView() {
                 </span>
               </div>
 
-              <div ref={containerRef as RefObject<HTMLDivElement>} className="db-dashboard-grid-shell">
-                {mounted ? (
+              <div ref={gridShellRef} className="db-dashboard-grid-shell">
+                {pinnedWidgets.length > 0 ? (
                   <GridLayout
-                    width={width}
+                    width={gridShellSize.width || 1200}
                     className="db-dashboard-grid"
                     layout={gridLayout}
                     gridConfig={{

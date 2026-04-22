@@ -71,8 +71,23 @@ const PROJECTS_DB_FIELDS = {
 } as const;
 
 let operationalWorkspaceSyncPromise: Promise<void> | null = null;
+let operationalWorkspaceLastSyncedAt = 0;
+let operationalWorkspaceSyncDirty = true;
+
+const OPERATIONAL_WORKSPACE_SYNC_MAX_AGE_MS = 60_000;
 
 type OperationalSystemKind = keyof typeof SYSTEM_WORKSPACE_DATABASE_ICONS;
+
+function markOperationalWorkspaceSyncDirty() {
+  operationalWorkspaceSyncDirty = true;
+}
+
+function shouldSyncOperationalWorkspaceDatabases(force = false) {
+  if (force) return true;
+  if (operationalWorkspaceSyncDirty) return true;
+  if (!operationalWorkspaceLastSyncedAt) return true;
+  return Date.now() - operationalWorkspaceLastSyncedAt >= OPERATIONAL_WORKSPACE_SYNC_MAX_AGE_MS;
+}
 
 export async function listMonitors() {
   const { data, error } = await supabase
@@ -199,6 +214,7 @@ export async function createOperation(input: {
     .single();
 
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync operations workspace database", syncError);
   });
@@ -217,6 +233,7 @@ export async function updateOperation(
     .single();
 
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync operations workspace database", syncError);
   });
@@ -226,6 +243,7 @@ export async function updateOperation(
 export async function deleteOperation(id: number) {
   const { error } = await supabase.from("operations").delete().eq("id", id);
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync operations workspace database", syncError);
   });
@@ -270,6 +288,7 @@ export async function createProject(input: {
     .single();
 
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync projects workspace database", syncError);
   });
@@ -288,6 +307,7 @@ export async function updateProject(
     .single();
 
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync projects workspace database", syncError);
   });
@@ -301,6 +321,7 @@ export async function deleteProject(id: number) {
     .eq("id", id);
 
   if (error) throw error;
+  markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
     console.error("Failed to sync projects workspace database", syncError);
   });
@@ -2240,11 +2261,23 @@ async function syncOperationalWorkspaceDatabasesInner() {
   }
 }
 
-export async function syncOperationalWorkspaceDatabases() {
+export async function syncOperationalWorkspaceDatabases(options?: { force?: boolean }) {
+  if (!shouldSyncOperationalWorkspaceDatabases(options?.force)) {
+    return;
+  }
   if (!operationalWorkspaceSyncPromise) {
-    operationalWorkspaceSyncPromise = syncOperationalWorkspaceDatabasesInner().finally(() => {
-      operationalWorkspaceSyncPromise = null;
-    });
+    operationalWorkspaceSyncPromise = syncOperationalWorkspaceDatabasesInner()
+      .then(() => {
+        operationalWorkspaceLastSyncedAt = Date.now();
+        operationalWorkspaceSyncDirty = false;
+      })
+      .catch((error) => {
+        operationalWorkspaceSyncDirty = true;
+        throw error;
+      })
+      .finally(() => {
+        operationalWorkspaceSyncPromise = null;
+      });
   }
   return operationalWorkspaceSyncPromise;
 }
@@ -2318,36 +2351,50 @@ export async function listWorkspaceDatabaseCatalog() {
   });
 }
 
-export async function getWorkspaceDatabaseBundle(id: string) {
-  await syncOperationalWorkspaceDatabases();
-  const [{ data: databaseRow, error: databaseError }, { data: viewRows, error: viewError }, { data: recordRows, error: recordError }] =
-    await Promise.all([
-      supabase
-        .from("workspace_databases")
-        .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
-        .eq("id", id)
-        .single(),
-      supabase
-        .from("workspace_views")
-        .select("id, database_id, name, type, config, position, created_at, updated_at")
-        .eq("database_id", id)
-        .order("position", { ascending: true })
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("workspace_records")
-        .select("id, database_id, fields, body, created_at, updated_at")
-        .eq("database_id", id)
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true }),
-    ]);
+async function fetchWorkspaceDatabaseBundleRows(id: string) {
+  const [
+    { data: databaseRow, error: databaseError },
+    { data: viewRows, error: viewError },
+    { data: recordRows, error: recordError },
+  ] = await Promise.all([
+    supabase
+      .from("workspace_databases")
+      .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("workspace_views")
+      .select("id, database_id, name, type, config, position, created_at, updated_at")
+      .eq("database_id", id)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("workspace_records")
+      .select("id, database_id, fields, body, created_at, updated_at")
+      .eq("database_id", id)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
+  ]);
 
   if (databaseError) throw databaseError;
   if (viewError) throw viewError;
   if (recordError) throw recordError;
 
-  const database = toWorkspaceDatabase(databaseRow as WorkspaceDatabaseRow);
-  const views = ((viewRows ?? []) as WorkspaceDatabaseViewRow[]).map(toWorkspaceDatabaseView);
-  const records = ((recordRows ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  return {
+    databaseRow: databaseRow as WorkspaceDatabaseRow,
+    viewRows: (viewRows ?? []) as WorkspaceDatabaseViewRow[],
+    recordRows: (recordRows ?? []) as WorkspaceDatabaseRecordRow[],
+  };
+}
+
+function buildWorkspaceDatabaseBundleFromRows(input: {
+  databaseRow: WorkspaceDatabaseRow;
+  viewRows: WorkspaceDatabaseViewRow[];
+  recordRows: WorkspaceDatabaseRecordRow[];
+}) {
+  const database = toWorkspaceDatabase(input.databaseRow);
+  const views = input.viewRows.map(toWorkspaceDatabaseView);
+  const records = input.recordRows.map(toWorkspaceDatabaseRecord);
 
   return {
     database,
@@ -2355,6 +2402,21 @@ export async function getWorkspaceDatabaseBundle(id: string) {
     records,
     model: hydrateWorkspaceDatabaseModel(database, views, records),
   } satisfies WorkspaceDatabaseBundle;
+}
+
+export async function getWorkspaceDatabaseBundle(id: string) {
+  const initialRows = await fetchWorkspaceDatabaseBundleRows(id);
+  const initialDatabase = toWorkspaceDatabase(initialRows.databaseRow);
+
+  if (
+    isOperationalSystemWorkspaceIcon(initialDatabase.icon) &&
+    shouldSyncOperationalWorkspaceDatabases()
+  ) {
+    await syncOperationalWorkspaceDatabases();
+    return buildWorkspaceDatabaseBundleFromRows(await fetchWorkspaceDatabaseBundleRows(id));
+  }
+
+  return buildWorkspaceDatabaseBundleFromRows(initialRows);
 }
 
 export async function createWorkspaceDatabase(input?: {

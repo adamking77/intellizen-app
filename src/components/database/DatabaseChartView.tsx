@@ -864,11 +864,11 @@ function getCompactCartesianMetrics(
   const pixelHeight = compactPixelHeight ?? 0;
 
   if (pixelWidth > 0 && pixelHeight > 0) {
-    const width = clamp(pixelWidth - 28, 280, 760);
-    const height = clamp(pixelHeight - 18, 190, 312);
-    const bottom = width < 420 ? 52 : width < 560 ? 58 : 64;
-    const left = width < 420 ? 40 : width < 560 ? 46 : 52;
-    const right = width < 420 ? 12 : 18;
+    const width = clamp(pixelWidth - 24, 180, 760);
+    const height = clamp(pixelHeight - 16, 170, 312);
+    const bottom = width < 280 ? 42 : width < 420 ? 52 : width < 560 ? 58 : 64;
+    const left = width < 280 ? 30 : width < 420 ? 40 : width < 560 ? 46 : 52;
+    const right = width < 280 ? 10 : width < 420 ? 12 : 18;
     return {
       width,
       height,
@@ -910,12 +910,12 @@ function getDonutChartMetrics(
 ) {
   if (!compact) {
     return {
-      width: 760,
+      width: 720,
       height: 340,
-      cx: 190,
+      cx: 180,
       cy: 168,
       outerRadius: 112,
-      innerRadius: 74,
+      innerRadius: getDonutInnerRadius(112),
       showLegend,
       legendPlacement: "side" as const,
     };
@@ -927,13 +927,13 @@ function getDonutChartMetrics(
   const pixelHeight = compactPixelHeight ?? 0;
 
   if (pixelWidth > 0 && pixelHeight > 0) {
-    const availableWidth = Math.max(pixelWidth - 16, 240);
-    const availableHeight = Math.max(pixelHeight - 12, 190);
+    const availableWidth = Math.max(pixelWidth - 16, 180);
+    const availableHeight = Math.max(pixelHeight - 12, 170);
     const canShowSideLegend =
       showLegend &&
-      availableWidth >= 480 &&
+      availableWidth >= 520 &&
       availableHeight >= 220 &&
-      availableWidth / Math.max(availableHeight, 1) >= 1.22;
+      availableWidth / Math.max(availableHeight, 1) >= 1.35;
 
     if (canShowSideLegend) {
       const legendWidth = clamp(Math.round(availableWidth * 0.24), 160, 210);
@@ -944,13 +944,7 @@ function getDonutChartMetrics(
         286,
       );
       const outerRadius = Math.floor(diameter / 2);
-      const thickness = getCompactDonutThickness({
-        compactWidthUnits,
-        compactHeightUnits,
-        compactPixelWidth,
-        compactPixelHeight,
-      });
-      const innerRadius = Math.max(outerRadius - thickness, 44);
+      const innerRadius = getDonutInnerRadius(outerRadius, 44);
       return {
         width: diameter + 24,
         height: diameter + 24,
@@ -969,24 +963,18 @@ function getDonutChartMetrics(
       ? legendRows * 30 + Math.max(legendRows - 1, 0) * 8 + 12
       : 0;
     const chartHeight = availableHeight - legendBlockHeight - (showLegend ? 10 : 0);
-    const diameter = clamp(
-      Math.min(availableWidth * 0.64, chartHeight * 0.84),
-      108,
-      248,
-    );
-    const outerRadius = Math.floor(diameter / 2);
-    const thickness = getCompactDonutThickness({
-      compactWidthUnits,
-      compactHeightUnits,
-      compactPixelWidth,
-      compactPixelHeight,
-    });
-    const innerRadius = Math.max(outerRadius - thickness, 42);
-    return {
-      width: diameter + 24,
-      height: diameter + 24,
-      cx: (diameter + 24) / 2,
-      cy: (diameter + 24) / 2,
+      const diameter = clamp(
+        Math.min(availableWidth * 0.64, chartHeight * 0.84),
+        92,
+        248,
+      );
+      const outerRadius = Math.floor(diameter / 2);
+      const innerRadius = getDonutInnerRadius(outerRadius, 42);
+      return {
+        width: diameter + 24,
+        height: diameter + 24,
+        cx: (diameter + 24) / 2,
+        cy: (diameter + 24) / 2,
       outerRadius,
       innerRadius,
       showLegend,
@@ -994,7 +982,7 @@ function getDonutChartMetrics(
     };
   }
 
-  const canShowSideLegend = showLegend && widthUnits >= 6;
+  const canShowSideLegend = showLegend && widthUnits >= 9;
   const renderLegend = showLegend;
 
   if (canShowSideLegend) {
@@ -1004,14 +992,7 @@ function getDonutChartMetrics(
       cx: widthUnits >= 9 ? 190 : 176,
       cy: heightUnits >= 13 ? 178 : 162,
       outerRadius: widthUnits >= 9 ? 122 : 112,
-      innerRadius:
-        (widthUnits >= 9 ? 122 : 112) -
-        getCompactDonutThickness({
-          compactWidthUnits,
-          compactHeightUnits,
-          compactPixelWidth,
-          compactPixelHeight,
-        }),
+      innerRadius: getDonutInnerRadius(widthUnits >= 9 ? 122 : 112),
       showLegend: true,
       legendPlacement: "side" as const,
     };
@@ -1024,17 +1005,14 @@ function getDonutChartMetrics(
     cx: 240,
     cy: renderLegend ? (heightUnits >= 12 ? 138 : 132) : 168,
     outerRadius,
-    innerRadius:
-      outerRadius -
-      getCompactDonutThickness({
-        compactWidthUnits,
-        compactHeightUnits,
-        compactPixelWidth,
-        compactPixelHeight,
-      }),
+    innerRadius: getDonutInnerRadius(outerRadius),
     showLegend: renderLegend,
     legendPlacement: renderLegend ? ("below" as const) : ("hidden" as const),
   };
+}
+
+function getDonutInnerRadius(outerRadius: number, minInnerRadius = 0) {
+  return Math.max(Math.floor(outerRadius * 0.7), minInnerRadius);
 }
 
 function getCompactBarScale(
@@ -1053,32 +1031,6 @@ function getCompactBarScale(
   if (widthUnits <= 4) return 0.52;
   if (widthUnits <= 7) return 0.66;
   return 0.78;
-}
-
-function getCompactDonutThickness({
-  compactWidthUnits,
-  compactHeightUnits,
-  compactPixelWidth,
-  compactPixelHeight,
-}: {
-  compactWidthUnits: number | undefined;
-  compactHeightUnits: number | undefined;
-  compactPixelWidth: number | undefined;
-  compactPixelHeight: number | undefined;
-}) {
-  const pixelWidth = compactPixelWidth ?? 0;
-  const pixelHeight = compactPixelHeight ?? 0;
-
-  if (pixelWidth > 0 && pixelHeight > 0) {
-    const scale = Math.min(pixelWidth / 760, pixelHeight / 340);
-    return clamp(Math.round(44 * scale), 18, 30);
-  }
-
-  const widthUnits = compactWidthUnits ?? 0;
-  const heightUnits = compactHeightUnits ?? 0;
-  if (widthUnits <= 4) return heightUnits >= 12 ? 22 : 20;
-  if (widthUnits <= 7) return heightUnits >= 12 ? 26 : 24;
-  return heightUnits >= 12 ? 30 : 28;
 }
 
 function clamp(value: number, min: number, max: number) {

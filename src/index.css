@@ -3574,9 +3574,9 @@ pre {
 }
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-donut-layout:not(.db-chart-donut-layout--stacked) .db-chart-legend {
-  max-height: 100%;
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .db-chart-legend-row {
@@ -3631,6 +3631,7 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
 
 /* ─── Calendar view ─────────────────────────────────────── */
 .db-calendar-grid {

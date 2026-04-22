@@ -124,7 +124,7 @@ export function ProjectsView() {
 
   useQuery({
     queryKey: ["operational-workspace-sync"],
-    queryFn: syncOperationalWorkspaceDatabases,
+    queryFn: () => syncOperationalWorkspaceDatabases(),
     staleTime: 60_000,
   });
 

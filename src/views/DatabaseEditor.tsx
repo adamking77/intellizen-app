@@ -93,11 +93,6 @@ export function DatabaseEditorView() {
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { data: catalog = [] } = useQuery({
-    queryKey: ["workspace-database-catalog"],
-    queryFn: listWorkspaceDatabaseCatalog,
-  });
-
   const {
     data: bundle,
     isLoading,
@@ -109,6 +104,27 @@ export function DatabaseEditorView() {
   });
 
   const database = bundle?.model;
+  const { data: catalogData = [] } = useQuery({
+    queryKey: ["workspace-database-catalog"],
+    queryFn: listWorkspaceDatabaseCatalog,
+    enabled: Boolean(database),
+  });
+  const catalog = useMemo(
+    () =>
+      catalogData.length > 0
+        ? catalogData
+        : database
+          ? [{
+              id: database.id,
+              name: database.name,
+              schema: database.schema,
+              headerFieldIds: database.headerFieldIds ?? [],
+              records: database.records,
+              views: database.views,
+            }]
+          : [],
+    [catalogData, database],
+  );
   const isSystemDatabase = isOperationalSystemWorkspaceIcon(bundle?.database.icon);
 
   useEffect(() => {
