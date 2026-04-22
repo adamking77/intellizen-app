@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf, time::Duration};
+use std::{env, fs, path::PathBuf, sync::OnceLock, time::Duration};
 
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,8 @@ const EXA_API_BASE: &str = "https://api.exa.ai";
 const EXA_SEARCH_CONTENTS: &str = "/search";
 const EXA_RESEARCH_PATH: &str = "/research/v1";
 const COMPILED_EXA_API_KEY: Option<&str> = option_env!("INTELLIZEN_COMPILED_EXA_API_KEY");
+static EXA_API_KEY: OnceLock<Result<String, String>> = OnceLock::new();
+static EXA_CLIENT: OnceLock<Result<Client, String>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,13 +66,12 @@ struct DeepResearchPollPayload {
 
 #[tauri::command]
 async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, String> {
-    let api_key = resolve_exa_api_key()?;
-    let client = build_exa_client(&api_key)?;
+    let client = get_exa_client()?;
 
     match input.mode.as_str() {
         "web" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -92,7 +93,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "news" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -115,7 +116,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "research_papers" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -136,7 +137,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "company" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -156,7 +157,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "people" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -176,7 +177,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "financial_reports" => {
             let payload = post_exa(
-                &client,
+                client,
                 EXA_SEARCH_CONTENTS,
                 json!({
                     "query": input.query,
@@ -196,7 +197,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
         }
         "deep_research" => {
             let started = post_exa_raw(
-                &client,
+                client,
                 EXA_RESEARCH_PATH,
                 json!({
                     "instructions": input.query,
@@ -206,7 +207,7 @@ async fn run_exa_search(input: ExaSearchInput) -> Result<ExaSearchResponse, Stri
             .await?;
             let started: DeepResearchStartPayload =
                 serde_json::from_value(started).map_err(|err| err.to_string())?;
-            let content = poll_deep_research(&client, &started.id).await?;
+            let content = poll_deep_research(client, &started.id).await?;
 
             Ok(ExaSearchResponse::Deep(DeepResearchResult {
                 title: format!("Deep Research: {}", input.query),
@@ -363,6 +364,8 @@ fn summarize_text(value: &str, max: usize) -> Option<String> {
 fn build_exa_client(api_key: &str) -> Result<Client, String> {
     Client::builder()
         .user_agent("intellizen-desktop")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(45))
         .default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(
@@ -380,7 +383,24 @@ fn build_exa_client(api_key: &str) -> Result<Client, String> {
         .map_err(|err| format!("Failed to initialize Exa client: {err}"))
 }
 
-fn resolve_exa_api_key() -> Result<String, String> {
+fn get_exa_client() -> Result<&'static Client, String> {
+    match EXA_CLIENT.get_or_init(|| {
+        let api_key = resolve_exa_api_key()?;
+        build_exa_client(api_key)
+    }) {
+        Ok(client) => Ok(client),
+        Err(err) => Err(err.clone()),
+    }
+}
+
+fn resolve_exa_api_key() -> Result<&'static str, String> {
+    match EXA_API_KEY.get_or_init(resolve_exa_api_key_uncached) {
+        Ok(value) => Ok(value.as_str()),
+        Err(err) => Err(err.clone()),
+    }
+}
+
+fn resolve_exa_api_key_uncached() -> Result<String, String> {
     for key_name in ["EXA_API_KEY", "VITE_EXA_API_KEY"] {
         if let Ok(value) = env::var(key_name) {
             let trimmed = value.trim();
