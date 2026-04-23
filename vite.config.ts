@@ -7,11 +7,14 @@ import path from "node:path";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 const analyzeBundle = process.env.ANALYZE_BUNDLE === "1";
+const isTauriRuntime = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_DEV_HOST);
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
-    react(),
+    react({
+      fastRefresh: !isTauriRuntime,
+    }),
     tailwindcss(),
     ...(analyzeBundle
       ? [
@@ -115,13 +118,17 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host
-      ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
-      : undefined,
+    // WebKit in the Tauri dev shell can spin hard on the Vite/React refresh client.
+    // Disable HMR there and fall back to clean reloads from restarted `tauri dev`.
+    hmr: isTauriRuntime
+      ? false
+      : host
+        ? {
+            protocol: "ws",
+            host,
+            port: 1421,
+          }
+        : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],

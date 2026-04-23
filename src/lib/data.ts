@@ -253,7 +253,8 @@ export async function listProjects() {
   const { data, error } = await supabase
     .from("projects")
     .select("*")
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) throw error;
   const projects = (data ?? []) as Project[];
@@ -1800,9 +1801,10 @@ function buildOperationsWorkspaceSchema(projectsDatabaseId?: string): WorkspaceD
       id: OPERATIONS_DB_FIELDS.status,
       name: "Status",
       type: "select",
-      options: ["active", "archived"],
+      options: ["active", "on_hold", "archived"],
       optionColors: {
         active: "#10b981",
+        on_hold: "#89b4fa",
         archived: "#6b7280",
       },
     },
@@ -1849,9 +1851,10 @@ function buildProjectsWorkspaceSchema(operationsDatabaseId?: string): WorkspaceD
       id: PROJECTS_DB_FIELDS.status,
       name: "Status",
       type: "select",
-      options: ["active", "archived"],
+      options: ["active", "on_hold", "archived"],
       optionColors: {
         active: "#10b981",
+        on_hold: "#89b4fa",
         archived: "#6b7280",
       },
     },
@@ -2015,11 +2018,15 @@ async function getLegacyIdMapForWorkspaceRecords(recordIds: string[], legacyFiel
 }
 
 function sanitizeOperationStatus(value: WorkspaceDatabaseFieldValue) {
-  return value === "archived" ? "archived" : "active";
+  if (value === "archived") return "archived";
+  if (value === "on_hold" || value === "on hold") return "on_hold";
+  return "active";
 }
 
 function sanitizeProjectStatus(value: WorkspaceDatabaseFieldValue) {
-  return value === "archived" ? "archived" : "active";
+  if (value === "archived") return "archived";
+  if (value === "on_hold" || value === "on hold") return "on_hold";
+  return "active";
 }
 
 function sanitizeProjectType(value: WorkspaceDatabaseFieldValue): Project["type"] {

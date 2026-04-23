@@ -3096,11 +3096,7 @@ pre {
 }
 
 .db-dashboard-grid > .react-grid-item {
-  transition:
-    left 180ms ease,
-    top 180ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+  transition: box-shadow 140ms ease;
 }
 
 .db-dashboard-grid > .react-grid-item.react-draggable-dragging,

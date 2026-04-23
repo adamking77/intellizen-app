@@ -24,7 +24,7 @@ export const SEMANTIC_MAP: Record<string, SemanticRole> = {
   cancelled: "neutral",
   canceled: "neutral",
   "in progress": "info",
-  active: "info",
+  active: "success",
   doing: "info",
   "in review": "info",
   done: "success",
@@ -33,7 +33,8 @@ export const SEMANTIC_MAP: Record<string, SemanticRole> = {
   closed: "success",
   shipped: "success",
   blocked: "danger",
-  "on hold": "warning",
+  on_hold: "info",
+  "on hold": "info",
 };
 
 export const HASH_PALETTE = [

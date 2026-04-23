@@ -92,6 +92,7 @@ interface DatabaseTableViewProps {
   catalog: WorkspaceDatabaseCatalogEntry[];
   activeRecordId: string | null;
   embedded?: boolean;
+  schemaLocked?: boolean;
   onOpenRecord: (recordId: string) => void;
   onUpdateField: (recordId: string, fieldId: string, value: unknown) => Promise<void> | void;
   onUpdateView: (input: {
@@ -122,6 +123,7 @@ export function DatabaseTableView({
   catalog,
   activeRecordId: _activeRecordId,
   embedded = false,
+  schemaLocked = false,
   onOpenRecord,
   onUpdateField,
   onUpdateView,
@@ -190,6 +192,7 @@ export function DatabaseTableView({
     () => records.filter((r) => selectedRecordIds.has(r.id)).length,
     [records, selectedRecordIds],
   );
+  const canEditSchema = !embedded && !schemaLocked;
 
   const allVisibleSelected = records.length > 0 && selectedVisibleCount === records.length;
   const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < records.length;
@@ -262,6 +265,7 @@ export function DatabaseTableView({
   }, [closePropertyMenu]);
 
   function openPropertyMenu(field: WorkspaceDatabaseField, anchorEl?: HTMLElement) {
+    if (!canEditSchema) return;
     if (propertyFieldId === field.id) {
       closePropertyMenu();
       return;
@@ -310,6 +314,7 @@ export function DatabaseTableView({
   }
 
   function addField() {
+    if (!canEditSchema) return;
     const name = newFieldName.trim();
     if (!name) return;
     const newField: WorkspaceDatabaseField = {
@@ -561,19 +566,23 @@ export function DatabaseTableView({
                       {embedded ? (
                         <span className="db-th-label">{field.name}</span>
                       ) : (
-                        <button
-                          className="db-th-label db-th-label-action"
-                          title="Edit property"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openPropertyMenu(field, e.currentTarget);
-                          }}
-                        >
-                          {field.name}
-                        </button>
+                        canEditSchema ? (
+                          <button
+                            className="db-th-label db-th-label-action"
+                            title="Edit property"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPropertyMenu(field, e.currentTarget);
+                            }}
+                          >
+                            {field.name}
+                          </button>
+                        ) : (
+                          <span className="db-th-label">{field.name}</span>
+                        )
                       )}
                     </div>
-                    {!embedded ? (
+                    {canEditSchema ? (
                       <div
                         className="db-col-resize-handle"
                         onPointerDown={(e) => startColumnResize(e, field.id, (columnWidths[field.id] ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? DEFAULT_COLUMN_WIDTH)))}
@@ -582,7 +591,7 @@ export function DatabaseTableView({
                   </th>
                 );
               })}
-              {!embedded ? (
+              {canEditSchema ? (
                 <th className="db-th db-th-add-field">
                   <button
                     className="db-add-field-btn"
@@ -613,7 +622,7 @@ export function DatabaseTableView({
           </tbody>
         </table>
 
-        {!embedded && propertyField && propertyMenuAnchor && (
+        {canEditSchema && propertyField && propertyMenuAnchor && (
           <div
             ref={propertyPanelRef}
             className="db-dropdown-panel db-property-menu-panel fixed z-30"
@@ -717,7 +726,7 @@ export function DatabaseTableView({
           </div>
         )}
 
-        {!embedded && showAddField && (
+        {canEditSchema && showAddField && (
           <div
             ref={addPanelRef}
             className="db-dropdown-panel absolute right-2 top-9 z-30 min-w-[220px]"

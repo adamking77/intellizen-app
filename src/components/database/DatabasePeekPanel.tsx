@@ -30,6 +30,7 @@ interface DatabasePeekPanelProps {
   database: WorkspaceDatabaseModel;
   record: WorkspaceDatabaseModel["records"][number] | null;
   catalog: WorkspaceDatabaseCatalogEntry[];
+  headerFieldsLocked?: boolean;
   onClose: () => void;
   onDelete: (databaseId: string, recordId: string) => Promise<void> | void;
   onDuplicate: (databaseId: string, recordId: string) => Promise<void> | void;
@@ -63,6 +64,7 @@ export function DatabasePeekPanel({
   database,
   record,
   catalog,
+  headerFieldsLocked = false,
   onClose,
   onDelete,
   onDuplicate,
@@ -260,6 +262,7 @@ export function DatabasePeekPanel({
   }
 
   function persistHeaderFields(nextFieldIds: string[]) {
+    if (headerFieldsLocked) return;
     void onSaveHeaderFields(database.id, nextFieldIds);
   }
 
@@ -371,7 +374,11 @@ export function DatabasePeekPanel({
                 <div className="db-record-section-title">Summary</div>
                 <button
                   className="db-btn db-record-editor-btn db-record-key-config-btn text-[11px] opacity-65 hover:opacity-100"
-                  onClick={() => setShowHeaderPicker((v) => !v)}
+                  onClick={() => {
+                    if (headerFieldsLocked) return;
+                    setShowHeaderPicker((v) => !v);
+                  }}
+                  disabled={headerFieldsLocked}
                 >
                   Customize view
                 </button>
@@ -392,7 +399,7 @@ export function DatabasePeekPanel({
                 ))}
               </div>
 
-              {showHeaderPicker && (
+              {showHeaderPicker && !headerFieldsLocked && (
                 <div
                   ref={headerPickerRef}
                   className="db-dropdown-panel db-record-header-fields-panel absolute right-6 top-9 z-20 p-2 min-w-[240px]"

@@ -1,6 +1,6 @@
 import "react-grid-layout/css/styles.css";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import GridLayout, { type Layout, type LayoutItem } from "react-grid-layout";
 import {
@@ -479,6 +479,7 @@ function DashboardWidgetBody({
   catalog: WorkspaceDatabaseCatalogEntry[];
   onOpen: () => void;
 }) {
+  const [chartHostRef, chartHostSize] = useElementSize<HTMLDivElement>();
   const databaseModel: WorkspaceDatabaseModel = {
     id: widget.database.id,
     name: widget.database.name,
@@ -490,7 +491,7 @@ function DashboardWidgetBody({
 
   if (widget.view.type === "chart") {
     return (
-      <div className="h-full min-h-0 min-w-0 w-full overflow-hidden">
+      <div ref={chartHostRef} className="h-full min-h-0 min-w-0 w-full overflow-hidden">
         <DatabaseChartView
           compact
           database={databaseModel}
@@ -499,6 +500,8 @@ function DashboardWidgetBody({
           onCreateRecord={() => {}}
           compactWidthUnits={widget.pin.w}
           compactHeightUnits={widget.pin.h}
+          compactPixelWidth={chartHostSize.width}
+          compactPixelHeight={chartHostSize.height}
         />
       </div>
     );
@@ -541,34 +544,40 @@ function DashboardWidgetBody({
 }
 
 function useElementSize<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
+  const [node, setNode] = useState<T | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useCallback((nextNode: T | null) => {
+    setNode(nextNode);
+  }, []);
 
   useLayoutEffect(() => {
-    const node = ref.current;
     if (!node || typeof ResizeObserver === "undefined") return;
 
-    const update = () => {
-      setSize({
-        width: node.clientWidth,
-        height: node.clientHeight,
+    const update = (width: number, height: number) => {
+      const nextWidth = Math.round(width);
+      const nextHeight = Math.round(height);
+      setSize((current) => {
+        if (current.width === nextWidth && current.height === nextHeight) {
+          return current;
+        }
+        return {
+          width: nextWidth,
+          height: nextHeight,
+        };
       });
     };
 
-    update();
+    update(node.clientWidth, node.clientHeight);
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      setSize({
-        width: Math.round(entry.contentRect.width),
-        height: Math.round(entry.contentRect.height),
-      });
+      update(entry.contentRect.width, entry.contentRect.height);
     });
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [node]);
 
   return [ref, size] as const;
 }

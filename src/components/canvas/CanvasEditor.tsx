@@ -83,6 +83,86 @@ interface CanvasEditorProps {
   onChange?: (document: CanvasDocumentData) => void;
 }
 
+function viewportEquals(left?: Viewport, right?: Viewport): boolean {
+  if (!left && !right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.x === right.x && left.y === right.y && left.zoom === right.zoom;
+}
+
+function canvasMetaEquals(
+  left: CanvasDocumentData["sogo"] | undefined,
+  right: CanvasDocumentData["sogo"] | undefined,
+): boolean {
+  if (!left && !right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.background === right.background &&
+    left.snapToGrid === right.snapToGrid &&
+    viewportEquals(left.viewport, right.viewport)
+  );
+}
+
+function positionEquals(
+  left: { left: number; top: number } | null,
+  right: { left: number; top: number } | null,
+): boolean {
+  if (!left && !right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.left === right.left && left.top === right.top;
+}
+
+function sameAssetUris(
+  left: Record<string, string>,
+  right: Record<string, string>,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  for (const key of leftKeys) {
+    if (left[key] !== right[key]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function colorToRgb(color: string): [number, number, number] | null {
   const normalized = normalizeHexColor(color);
   if (!normalized) {
@@ -474,6 +554,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const reactFlowRef = useRef<FlowViewportApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const latestSerializedDocumentRef = useRef<CanvasDocumentData>(seedDocument);
   const pendingViewportInitRef = useRef<Viewport | "fit" | null>(
     seedDocument.sogo?.viewport ?? (seedDocument.nodes.length > 0 ? "fit" : null),
   );
@@ -492,7 +573,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   const edgeColorInputRef = useRef<HTMLInputElement>(null);
 
   const [flowReady, setFlowReady] = useState(false);
-  const [documentState, setDocumentState] = useState<CanvasDocumentData>(seedDocument);
+  const [canvasMeta, setCanvasMeta] = useState<CanvasDocumentData["sogo"]>(seedDocument.sogo);
   const [nodes, setNodes] = useState<Node[]>(() => seedDocument.nodes.map(canvasNodeToFlowNode));
   const [edges, setEdges] = useState<Edge[]>(() => seedDocument.edges.map(canvasEdgeToFlowEdge));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -571,16 +652,24 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     [nodes, assetUris, draftDetail, draftText, editingNodeId, selectedNodeId, selectedNodeIdSet],
   );
 
-  useEffect(() => {
-    const nextDocument = serializeCanvasDocument(flowToCanvasDocument(nodes, edges, documentState));
-    setDocumentState(nextDocument);
+  const serializedDocument = useMemo(
+    () =>
+      serializeCanvasDocument(
+        flowToCanvasDocument(nodes, edges, {
+          ...latestSerializedDocumentRef.current,
+          sogo: canvasMeta,
+        }),
+      ),
+    [canvasMeta, edges, nodes],
+  );
 
+  useEffect(() => {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
 
     saveTimerRef.current = window.setTimeout(() => {
-      onChange?.(nextDocument);
+      onChange?.(serializedDocument);
     }, 180);
 
     return () => {
@@ -588,7 +677,11 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         window.clearTimeout(saveTimerRef.current);
       }
     };
-  }, [documentState.sogo, edges, nodes, onChange]);
+  }, [onChange, serializedDocument]);
+
+  useEffect(() => {
+    latestSerializedDocumentRef.current = serializedDocument;
+  }, [serializedDocument]);
 
   useEffect(() => {
     const pending = pendingViewportInitRef.current;
@@ -616,7 +709,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       requestAnimationFrame(() => {
         const viewport = instance.getViewport();
         updateCanvasMeta({
-          ...documentState.sogo,
+          ...canvasMeta,
           viewport,
         });
         suppressViewportSaveRef.current = false;
@@ -624,7 +717,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     };
 
     void applyViewport();
-  }, [documentState.sogo, edges, flowReady, nodes]);
+  }, [canvasMeta, flowReady]);
 
   useEffect(() => {
     if (!selectedNodeId || !shellRef.current) {
@@ -637,15 +730,16 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       const selectedElement = document.querySelector(`.react-flow__node[data-id="${selectedNodeId}"]`) as HTMLElement | null;
 
       if (!shellRect || !selectedElement) {
-        setToolbarPosition(null);
+        setToolbarPosition((current) => (current === null ? current : null));
         return;
       }
 
       const rect = selectedElement.getBoundingClientRect();
-      setToolbarPosition({
+      const nextPosition = {
         left: rect.left - shellRect.left + rect.width / 2,
         top: rect.top - shellRect.top - 18,
-      });
+      };
+      setToolbarPosition((current) => (positionEquals(current, nextPosition) ? current : nextPosition));
     };
 
     const frame = requestAnimationFrame(updatePosition);
@@ -667,15 +761,18 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       const selectedPath = document.querySelector(`.react-flow__edge[data-id="${selectedEdgeId}"] .react-flow__edge-path`) as SVGPathElement | null;
 
       if (!shellRect || !selectedPath) {
-        setEdgeToolbarPosition(null);
+        setEdgeToolbarPosition((current) => (current === null ? current : null));
         return;
       }
 
       const rect = selectedPath.getBoundingClientRect();
-      setEdgeToolbarPosition({
+      const nextPosition = {
         left: rect.left - shellRect.left + rect.width / 2,
         top: rect.top - shellRect.top - 8,
-      });
+      };
+      setEdgeToolbarPosition((current) =>
+        positionEquals(current, nextPosition) ? current : nextPosition,
+      );
     };
 
     const frame = requestAnimationFrame(updatePosition);
@@ -693,7 +790,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       const uri = resolveInlineAsset(node.file);
       if (uri) nextAssetUris[node.file] = uri;
     }
-    setAssetUris(nextAssetUris);
+    setAssetUris((current) => (sameAssetUris(current, nextAssetUris) ? current : nextAssetUris));
   }, [nodes]);
 
   useEffect(() => {
@@ -725,11 +822,20 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [editingNodeId, selectedNode]);
 
+  function setSelectedNodeIdSafe(next: string | null): void {
+    setSelectedNodeId((current) => (current === next ? current : next));
+  }
+
+  function setSelectedEdgeIdSafe(next: string | null): void {
+    setSelectedEdgeId((current) => (current === next ? current : next));
+  }
+
+  function setSelectedNodeIdsSafe(next: string[]): void {
+    setSelectedNodeIds((current) => (sameStringArray(current, next) ? current : next));
+  }
+
   function updateCanvasMeta(next: CanvasDocumentData["sogo"]): void {
-    setDocumentState((current) => ({
-      ...current,
-      sogo: next,
-    }));
+    setCanvasMeta((current) => (canvasMetaEquals(current, next) ? current : next));
   }
 
   function patchNode(nodeId: string, updater: (node: CanvasNodeData) => CanvasNodeData): void {
@@ -829,7 +935,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     );
 
     if (selectedNodeId !== persisted.id) {
-      setSelectedNodeId(persisted.id);
+      setSelectedNodeIdSafe(persisted.id);
     }
 
     setEditingNodeId(null);
@@ -859,8 +965,8 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       groupId: selectedGroup?.id,
     });
     setNodes((current) => [...current, canvasNodeToFlowNode(node)]);
-    setSelectedNodeId(node.id);
-    setSelectedNodeIds([node.id]);
+    setSelectedNodeIdSafe(node.id);
+    setSelectedNodeIdsSafe([node.id]);
     setBottomPanel(null);
 
     if (canInlineEdit(type)) {
@@ -923,8 +1029,8 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         }),
       ];
     });
-    setSelectedNodeId(groupNode.id);
-    setSelectedNodeIds([groupNode.id]);
+    setSelectedNodeIdSafe(groupNode.id);
+    setSelectedNodeIdsSafe([groupNode.id]);
 
     requestAnimationFrame(() => {
       suppressSelectionChangeRef.current = false;
@@ -1004,7 +1110,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   function handleDeleteSelection(): void {
     if (selectedEdgeId) {
       setEdges((current) => current.filter((edge) => edge.id !== selectedEdgeId));
-      setSelectedEdgeId(null);
+      setSelectedEdgeIdSafe(null);
       return;
     }
 
@@ -1031,8 +1137,8 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         }),
     );
     setEdges((current) => current.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId));
-    setSelectedNodeId(null);
-    setSelectedNodeIds([]);
+    setSelectedNodeIdSafe(null);
+    setSelectedNodeIdsSafe([]);
   }
 
   function handleNodeDragStart(_: ReactMouseEvent, node: Node): void {
@@ -1120,7 +1226,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   return (
     <div
       ref={shellRef}
-      className={`intelizen-canvas background-${documentState.sogo?.background ?? "dots"}`}
+      className={`intelizen-canvas background-${canvasMeta?.background ?? "dots"}`}
     >
       <ReactFlow
         nodes={renderedNodes}
@@ -1135,7 +1241,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         minZoom={0.2}
         maxZoom={2.5}
         connectionMode={ConnectionMode.Loose}
-        snapToGrid={documentState.sogo?.snapToGrid ?? false}
+        snapToGrid={canvasMeta?.snapToGrid ?? false}
         snapGrid={[canvasGridSize, canvasGridSize]}
         selectionOnDrag
         selectionKeyCode={null}
@@ -1178,23 +1284,23 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           if (editingNodeId) {
             commitEdit();
           }
-          setSelectedNodeId(null);
-          setSelectedNodeIds([]);
-          setSelectedEdgeId(null);
+          setSelectedNodeIdSafe(null);
+          setSelectedNodeIdsSafe([]);
+          setSelectedEdgeIdSafe(null);
           setSelectionPanel(null);
           setEdgePanel(null);
           setBottomPanel(null);
         }}
         onNodeClick={(_, node) => {
-          setSelectedNodeId(node.id);
-          setSelectedNodeIds([node.id]);
-          setSelectedEdgeId(null);
+          setSelectedNodeIdSafe(node.id);
+          setSelectedNodeIdsSafe([node.id]);
+          setSelectedEdgeIdSafe(null);
           setEdgePanel(null);
         }}
         onEdgeClick={(_, edge) => {
-          setSelectedEdgeId(edge.id);
-          setSelectedNodeId(null);
-          setSelectedNodeIds([]);
+          setSelectedEdgeIdSafe(edge.id);
+          setSelectedNodeIdSafe(null);
+          setSelectedNodeIdsSafe([]);
           setSelectionPanel(null);
           setEdgePanel(null);
         }}
@@ -1216,15 +1322,15 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           }
 
           updateCanvasMeta({
-            ...documentState.sogo,
+            ...canvasMeta,
             viewport,
           });
         }}
         onSelectionStart={() => {
           isMarqueeSelectingRef.current = true;
           marqueeNodeIdsRef.current = [];
-          setSelectedNodeId(null);
-          setSelectedEdgeId(null);
+          setSelectedNodeIdSafe(null);
+          setSelectedEdgeIdSafe(null);
           setSelectionPanel(null);
           setEdgePanel(null);
         }}
@@ -1237,11 +1343,11 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           if (isMarqueeSelectingRef.current) {
             marqueeNodeIdsRef.current = ids;
           }
-          setSelectedNodeIds(ids);
+          setSelectedNodeIdsSafe(ids);
           if (ids.length <= 1) {
-            setSelectedNodeId(ids[0] ?? null);
+            setSelectedNodeIdSafe(ids[0] ?? null);
           } else {
-            setSelectedNodeId(null);
+            setSelectedNodeIdSafe(null);
           }
         }}
         onSelectionEnd={() => {
@@ -1570,11 +1676,11 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                   className={[
                     "tray-button",
                     "tray-button-compact",
-                    documentState.sogo?.background === mode ? "is-active" : "",
+                    canvasMeta?.background === mode ? "is-active" : "",
                   ].join(" ")}
                   onClick={() =>
                     updateCanvasMeta({
-                      ...documentState.sogo,
+                      ...canvasMeta,
                       background: mode,
                     })
                   }
@@ -1588,12 +1694,12 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                 className={[
                   "tray-button",
                   "tray-button-compact",
-                  documentState.sogo?.snapToGrid ? "is-active" : "",
+                  canvasMeta?.snapToGrid ? "is-active" : "",
                 ].join(" ")}
                 onClick={() =>
                   updateCanvasMeta({
-                    ...documentState.sogo,
-                    snapToGrid: !(documentState.sogo?.snapToGrid ?? false),
+                    ...canvasMeta,
+                    snapToGrid: !(canvasMeta?.snapToGrid ?? false),
                   })
                 }
                 title="Snap to grid"

@@ -10,10 +10,10 @@ export interface VaultDocument {
   updated_at: string;
 }
 
-export type OperationStatus = "active" | "archived";
+export type OperationStatus = "active" | "on_hold" | "archived";
 export type SignalStatus = "new" | "saved" | "dismissed";
 export type ProjectType = "report" | "scoping" | "research" | "client_case";
-export type ProjectStatus = "active" | "archived";
+export type ProjectStatus = "active" | "on_hold" | "archived";
 export type MonitorFrequency = "daily" | "weekly";
 export type MonitorStatus = "active" | "paused";
 export type SearchMode =

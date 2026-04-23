@@ -58,8 +58,10 @@ export function InvestigationCreateModal({
     enabled: open,
   });
 
-  const activeProjects = (projects ?? []).filter((p) => p.status === "active");
-  const linkedProject = activeProjects.find((p) => p.id === projectId) ?? null;
+  const selectableProjects = (projects ?? []).filter((project) => (
+    project.status === "active" || project.id === projectId
+  ));
+  const linkedProject = selectableProjects.find((project) => project.id === projectId) ?? null;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -213,7 +215,7 @@ export function InvestigationCreateModal({
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
               <option value="">No parent project — Exa collects from seed entities</option>
-              {activeProjects.map((project) => (
+              {selectableProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
                 </option>

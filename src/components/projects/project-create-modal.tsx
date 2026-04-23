@@ -28,7 +28,9 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
     enabled: open,
   });
 
-  const activeOperations = (operations ?? []).filter((o) => o.status === "active");
+  const selectableOperations = (operations ?? []).filter((operation) => (
+    operation.status === "active" || operation.id === operationId
+  ));
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -156,7 +158,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
             </label>
           </div>
 
-          {activeOperations.length > 0 && (
+          {selectableOperations.length > 0 && (
             <label className="grid gap-1.5">
               <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Operation{" "}
@@ -170,7 +172,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">No operation — standalone project</option>
-                {activeOperations.map((op) => (
+                {selectableOperations.map((op) => (
                   <option key={op.id} value={op.id}>
                     {op.name}
                   </option>

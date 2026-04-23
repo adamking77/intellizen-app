@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   Area,
@@ -119,6 +119,8 @@ const DONUT_SIDE_EXIT_MIN_HEIGHT = 208;
 const DONUT_SIDE_EXIT_MIN_RATIO = 1.27;
 const CARTESIAN_TIER_ENTER_WIDTHS = [180, 280, 420, 560] as const;
 const CARTESIAN_TIER_EXIT_WIDTHS = [168, 264, 396, 528] as const;
+const COMPACT_CHART_HORIZONTAL_PADDING = 24;
+const COMPACT_CHART_VERTICAL_PADDING = 22;
 const CHART_TOOLTIP_WRAPPER_STYLE = {
   zIndex: 3,
   outline: "none",
@@ -138,11 +140,16 @@ export function DatabaseChartView({
   compactPixelWidth = 0,
   compactPixelHeight = 0,
 }: DatabaseChartViewProps) {
-  const [frameRef, frameSize] = useMeasuredElementSize<HTMLDivElement>();
+  const shouldMeasureFrame = !compact || compactPixelWidth <= 0 || compactPixelHeight <= 0;
+  const [frameRef, frameSize] = useMeasuredElementSize<HTMLDivElement>(shouldMeasureFrame);
+  const resolvedCompactFrameSize = useMemo(
+    () => getCompactFrameSize(compact, compactPixelWidth, compactPixelHeight, frameSize.width, frameSize.height),
+    [compact, compactPixelHeight, compactPixelWidth, frameSize.height, frameSize.width],
+  );
   const cartesianWidthTier = useStableCartesianWidthTier(
     compact,
     compactWidthUnits,
-    frameSize.width || compactPixelWidth,
+    resolvedCompactFrameSize.width,
   );
   const chartType = view.chartType ?? "bar";
   const chartRange = view.chartRange ?? "90d";
@@ -250,8 +257,8 @@ export function DatabaseChartView({
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
-              compactPixelWidth={frameSize.width || compactPixelWidth}
-              compactPixelHeight={frameSize.height || compactPixelHeight}
+              compactPixelWidth={resolvedCompactFrameSize.width}
+              compactPixelHeight={resolvedCompactFrameSize.height}
             />
           ) : chartType === "line" ? (
             <LineChartCard
@@ -263,8 +270,8 @@ export function DatabaseChartView({
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
               compactWidthTier={cartesianWidthTier}
-              compactPixelWidth={frameSize.width || compactPixelWidth}
-              compactPixelHeight={frameSize.height || compactPixelHeight}
+              compactPixelWidth={resolvedCompactFrameSize.width}
+              compactPixelHeight={resolvedCompactFrameSize.height}
             />
           ) : (
             <BarChartCard
@@ -275,8 +282,8 @@ export function DatabaseChartView({
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
-              compactPixelWidth={frameSize.width || compactPixelWidth}
-              compactPixelHeight={frameSize.height || compactPixelHeight}
+              compactPixelWidth={resolvedCompactFrameSize.width}
+              compactPixelHeight={resolvedCompactFrameSize.height}
             />
           )}
         </div>
@@ -599,13 +606,15 @@ function ChartTooltipCard({
   );
 }
 
-function useMeasuredElementSize<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
+function useMeasuredElementSize<T extends HTMLElement>(enabled = true) {
+  const [node, setNode] = useState<T | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useCallback((nextNode: T | null) => {
+    setNode(nextNode);
+  }, []);
 
   useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node || typeof ResizeObserver === "undefined") return;
+    if (!enabled || !node || typeof ResizeObserver === "undefined") return;
     let frameId = 0;
 
     const update = (width: number, height: number) => {
@@ -640,9 +649,38 @@ function useMeasuredElementSize<T extends HTMLElement>() {
       }
       observer.disconnect();
     };
-  }, []);
+  }, [enabled, node]);
 
   return [ref, size] as const;
+}
+
+function getCompactFrameSize(
+  compact: boolean | undefined,
+  compactPixelWidth: number | undefined,
+  compactPixelHeight: number | undefined,
+  measuredWidth: number,
+  measuredHeight: number,
+) {
+  if (!compact) {
+    return {
+      width: measuredWidth || compactPixelWidth || 0,
+      height: measuredHeight || compactPixelHeight || 0,
+    };
+  }
+
+  const outerWidth = compactPixelWidth ?? 0;
+  const outerHeight = compactPixelHeight ?? 0;
+  if (outerWidth > 0 && outerHeight > 0) {
+    return {
+      width: snapChartFrameSize(Math.max(outerWidth - COMPACT_CHART_HORIZONTAL_PADDING, 0)),
+      height: snapChartFrameSize(Math.max(outerHeight - COMPACT_CHART_VERTICAL_PADDING, 0)),
+    };
+  }
+
+  return {
+    width: measuredWidth,
+    height: measuredHeight,
+  };
 }
 
 function useStableDonutLegendPlacement(
