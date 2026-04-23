@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { Bold, Italic, List, ListTodo } from "lucide-react";
-
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 
@@ -23,6 +22,7 @@ export function DatabaseRichTextEditor({
   const lastEmittedValueRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (lastEmittedValueRef.current === initialValue) return;
     if (lastLoadedValueRef.current === initialValue) return;
 
     lastLoadedValueRef.current = initialValue;

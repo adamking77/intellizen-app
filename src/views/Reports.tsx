@@ -1,4 +1,4 @@
-import { lazy, Suspense, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
@@ -74,6 +74,8 @@ export function ReportsView() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
   const { isCramped } = useWindowSize();
+  const latestFileContentRef = useRef<string | null>(null);
+  const hydratedSelectionKeyRef = useRef<string | null>(null);
 
   const [leftOpen, setLeftOpen] = useState(() => {
     try {
@@ -160,6 +162,12 @@ export function ReportsView() {
     [vaultFiles],
   );
   const isFileEditable = selectedFileSummary ? editableFileIds.has(selectedFileSummary.id) : false;
+  const activeEditorSelectionKey =
+    selection?.kind === "doc"
+      ? `doc:${selection.id}`
+      : selection?.kind === "file"
+        ? `file:${selection.id}`
+        : null;
 
   const filesByProject = useMemo(() => {
     const map = new Map<number, VaultFile[]>();
@@ -189,55 +197,63 @@ export function ReportsView() {
   );
 
   useEffect(() => {
-    if (selection?.kind === "doc") {
-      if (!selectedDoc) {
-        setFileContent(null);
-        setPersistedContent("");
-        setSaveStatus("idle");
-        return;
-      }
+    latestFileContentRef.current = fileContent;
+  }, [fileContent]);
 
-      const normalized = selectedDoc.content ?? "";
+  useEffect(() => {
+    if (!activeEditorSelectionKey) {
+      hydratedSelectionKeyRef.current = null;
+      setFileContent(null);
+      setPersistedContent("");
+      setSaveStatus("idle");
+      return;
+    }
+
+    const normalized =
+      selection?.kind === "doc"
+        ? selectedDoc?.content
+        : selection?.kind === "file"
+          ? selectedFile?.content
+          : null;
+
+    if (normalized === null || normalized === undefined) return;
+
+    const isSelectionChange = hydratedSelectionKeyRef.current !== activeEditorSelectionKey;
+    if (isSelectionChange) {
+      hydratedSelectionKeyRef.current = activeEditorSelectionKey;
       setFileContent(normalized);
       setPersistedContent(normalized);
       setSaveStatus("idle");
       return;
     }
 
-    if (selection?.kind === "file") {
-      if (!selectedFile) {
-        setFileContent(null);
-        setPersistedContent("");
-        setSaveStatus("idle");
-        return;
-      }
-
-      const normalized = selectedFile.content ?? "";
-      setFileContent(normalized);
-      setPersistedContent(normalized);
-      setSaveStatus("idle");
+    const hasUnsavedLocalChanges = fileContent !== null && fileContent !== persistedContent;
+    if (hasUnsavedLocalChanges) {
       return;
     }
 
-    setFileContent(null);
-    setPersistedContent("");
-    setSaveStatus("idle");
-  }, [selectedDoc, selectedFile, selection]);
+    if (normalized !== persistedContent) {
+      setFileContent(normalized);
+      setPersistedContent(normalized);
+      setSaveStatus("idle");
+    }
+  }, [activeEditorSelectionKey, fileContent, persistedContent, selectedDoc, selectedFile, selection]);
 
   useEffect(() => {
     if (fileContent === null || saveStatus !== "dirty" || fileContent === persistedContent) return;
 
     if (selection?.kind === "doc") {
+      const valueToSave = fileContent;
       const timer = window.setTimeout(async () => {
         try {
           setSaveStatus("saving");
-          const updated = await updateVaultDocumentContent(selection.id, fileContent);
+          const updated = await updateVaultDocumentContent(selection.id, valueToSave);
           queryClient.setQueryData(["vault-document", selection.id], updated);
           queryClient.setQueryData(["vault-documents"], (prev: VaultDocument[] | undefined) =>
             prev?.map((doc) => (doc.id === updated.id ? { ...doc, updated_at: updated.updated_at } : doc)) ?? prev,
           );
-          setPersistedContent(fileContent);
-          setSaveStatus("idle");
+          setPersistedContent(valueToSave);
+          setSaveStatus(latestFileContentRef.current !== valueToSave ? "dirty" : "idle");
         } catch {
           setSaveStatus("error");
         }
@@ -247,16 +263,17 @@ export function ReportsView() {
     }
 
     if (selection?.kind === "file" && isFileEditable) {
+      const valueToSave = fileContent;
       const timer = window.setTimeout(async () => {
         try {
           setSaveStatus("saving");
-          const updated = await updateVaultFileContent(selection.id, fileContent);
+          const updated = await updateVaultFileContent(selection.id, valueToSave);
           queryClient.setQueryData(["vault-file", selection.id], updated);
           queryClient.setQueryData(["vault-files-all"], (prev: VaultFile[] | undefined) =>
             prev?.map((file) => (file.id === updated.id ? updated : file)) ?? prev,
           );
-          setPersistedContent(fileContent);
-          setSaveStatus("idle");
+          setPersistedContent(valueToSave);
+          setSaveStatus(latestFileContentRef.current !== valueToSave ? "dirty" : "idle");
         } catch {
           setSaveStatus("error");
         }
@@ -532,20 +549,13 @@ export function ReportsView() {
         <div className="flex-1 overflow-y-auto">
           {selection?.kind === "doc" && selectedDoc ? (
             <div className="px-[10%] py-10">
-              <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
-                {selectedDoc.document_type} · {selectedDoc.domain}
-              </p>
-              <h2 className="mt-1 text-[20px] font-semibold text-[var(--text)]">{selectedDoc.title}</h2>
-              <p className="mt-1 font-mono text-[10px] text-[var(--overlay-1)]">{selectedDoc.source_path}</p>
-              <div className="mt-4">
-                <Suspense fallback={<EditorLoadingFallback />}>
-                  <InlineMarkdownEditor
-                    key={`doc-${selection.id}`}
-                    initialValue={fileContent ?? ""}
-                    onChange={handleEditorChange}
-                  />
-                </Suspense>
-              </div>
+              <Suspense fallback={<EditorLoadingFallback />}>
+                <InlineMarkdownEditor
+                  key={`doc-${selection.id}`}
+                  initialValue={fileContent ?? ""}
+                  onChange={handleEditorChange}
+                />
+              </Suspense>
             </div>
           ) : selection?.kind === "doc" ? (
             <div className="flex h-full items-center justify-center">
@@ -554,20 +564,13 @@ export function ReportsView() {
           ) : selection?.kind === "file" && selectedFile ? (
             isFileEditable ? (
               <div className="px-[10%] py-10">
-                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
-                  {selectedFile.file_type.replace(/_/g, " ")}
-                </p>
-                <h2 className="mt-1 text-[20px] font-semibold text-[var(--text)]">{selectedFile.file_name}</h2>
-                <p className="mt-1 font-mono text-[10px] text-[var(--overlay-1)]">{selectedFile.file_path}</p>
-                <div className="mt-4">
-                  <Suspense fallback={<EditorLoadingFallback />}>
-                    <InlineMarkdownEditor
-                      key={`file-${selection.id}`}
-                      initialValue={fileContent ?? ""}
-                      onChange={handleEditorChange}
-                    />
-                  </Suspense>
-                </div>
+                <Suspense fallback={<EditorLoadingFallback />}>
+                  <InlineMarkdownEditor
+                    key={`file-${selection.id}`}
+                    initialValue={fileContent ?? ""}
+                    onChange={handleEditorChange}
+                  />
+                </Suspense>
               </div>
             ) : (
               <div className="px-[10%] py-10">

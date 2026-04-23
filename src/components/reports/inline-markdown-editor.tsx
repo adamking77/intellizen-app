@@ -1,8 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { filterSuggestionItems } from "@blocknote/core/extensions";
+import { isStyledTextInlineContent } from "@blocknote/core";
 import {
   BlockTypeSelect,
   FormattingToolbar,
   FormattingToolbarController,
+  SuggestionMenuController,
+  getDefaultReactSlashMenuItems,
   useCreateBlockNote,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -23,6 +27,7 @@ export function InlineMarkdownEditor({ initialValue, onChange }: InlineMarkdownE
   const lastEmittedValueRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (lastEmittedValueRef.current === initialValue) return;
     if (lastLoadedValueRef.current === initialValue) return;
 
     lastLoadedValueRef.current = initialValue;
@@ -52,9 +57,50 @@ export function InlineMarkdownEditor({ initialValue, onChange }: InlineMarkdownE
     });
   }, [editor, onChange]);
 
+  const slashMenuItems = useMemo(
+    () =>
+      getDefaultReactSlashMenuItems(editor).map((item) => ({
+        ...item,
+        onItemClick: () => {
+          const currentBlock = editor.getTextCursorPosition().block;
+          const blockContent = currentBlock.content;
+
+          if (Array.isArray(blockContent)) {
+            let blockText = "";
+            let isPlainSlashQuery = blockContent.length > 0;
+
+            for (const inlineContent of blockContent) {
+              if (!isStyledTextInlineContent(inlineContent) || inlineContent.type !== "text") {
+                isPlainSlashQuery = false;
+                break;
+              }
+
+              blockText += inlineContent.text;
+            }
+
+            if (isPlainSlashQuery && /^\s*\/\S*$/.test(blockText)) {
+              const normalizedBlock = editor.updateBlock(currentBlock, {
+                content: [{ type: "text", text: "/", styles: {} }],
+              });
+
+              editor.setTextCursorPosition(normalizedBlock);
+            }
+          }
+
+          item.onItemClick();
+        },
+      })),
+    [editor],
+  );
+
   return (
     <div className="intelizen-live-markdown">
-      <BlockNoteView editor={editor} theme="dark" formattingToolbar={false}>
+      <BlockNoteView editor={editor} theme="dark" formattingToolbar={false} slashMenu={false} autoFocus>
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={async (query) => filterSuggestionItems(slashMenuItems, query)}
+          shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
+        />
         <FormattingToolbarController
           formattingToolbar={() => (
             <FormattingToolbar>

@@ -232,7 +232,7 @@ pre {
   --bn-colors-disabled-background: var(--surface-0);
   --bn-colors-shadow: rgba(0, 0, 0, 0.45);
   --bn-colors-border: var(--border);
-  --bn-colors-side-menu: var(--overlay-1);
+  --bn-colors-side-menu: var(--accent);
 }
 
 .intelizen-live-markdown .bn-editor {
@@ -277,22 +277,31 @@ pre {
   caret-color: var(--accent);
 }
 
-.intelizen-live-markdown .bn-editor:focus-within {
-  outline: none;
+.intelizen-live-markdown .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after,
+.intelizen-live-markdown .bn-inline-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  color: var(--subtext-0) !important;
 }
 
-.intelizen-live-markdown .bn-editor h1,
-.intelizen-live-markdown .bn-editor h2,
-.intelizen-live-markdown .bn-editor h3,
-.intelizen-live-markdown .bn-editor h4,
-.intelizen-live-markdown .bn-editor h5,
-.intelizen-live-markdown .bn-editor h6,
-.intelizen-live-markdown .bn-editor p,
-.intelizen-live-markdown .bn-editor li,
-.intelizen-live-markdown .bn-editor blockquote,
-.intelizen-live-markdown .bn-editor td,
-.intelizen-live-markdown .bn-editor th {
-  color: var(--text);
+.intelizen-live-markdown .bn-side-menu,
+.intelizen-live-markdown .bn-side-menu * {
+  color: var(--accent);
+}
+
+.intelizen-live-markdown .bn-side-menu .bn-button:hover,
+.intelizen-live-markdown .bn-side-menu button:hover,
+.intelizen-live-markdown .bn-toggle-add-block-button:hover,
+.intelizen-live-markdown .bn-toggle-button:hover {
+  color: var(--accent-hover);
+}
+
+.intelizen-live-markdown .bn-side-menu svg,
+.intelizen-live-markdown .bn-toggle-button svg {
+  color: inherit;
+  fill: currentColor;
+}
+
+.intelizen-live-markdown .bn-editor:focus-within {
+  outline: none;
 }
 
 .intelizen-live-markdown .bn-editor p,
@@ -304,13 +313,21 @@ pre {
   line-height: var(--doc-body-leading);
 }
 
+.intelizen-live-markdown .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type="heading"]),
+.intelizen-live-markdown
+  .bn-block-outer:has(
+    > .bn-block > div[data-type="modification"] > div[data-type="modification"] > .bn-block-content[data-content-type="heading"]
+  ) {
+  margin-top: 1.5rem;
+  margin-bottom: 0.45rem;
+}
+
 .intelizen-live-markdown .bn-editor .bn-block-content[data-content-type="heading"] {
   font-weight: var(--doc-heading-weight) !important;
   font-variation-settings: "wght" var(--doc-heading-weight) !important;
   font-synthesis: none;
-  color: var(--text);
-  margin-top: 1.5rem;
-  margin-bottom: 0.45rem;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .intelizen-live-markdown .bn-block-outer[data-prev-type="heading"] > .bn-block > .bn-block-content {
@@ -577,6 +594,139 @@ pre {
 
 .bn-mt-suggestion-menu-item-subtitle {
   opacity: 0.72;
+}
+
+.bn-suggestion-menu {
+  padding: 8px !important;
+}
+
+.bn-suggestion-menu .bn-suggestion-menu-label {
+  padding: 6px 10px 4px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--overlay-1) !important;
+}
+
+.bn-suggestion-menu .bn-suggestion-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 9px 10px !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section {
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  min-width: 18px;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  justify-content: center !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] svg {
+  width: 17px !important;
+  height: 17px !important;
+  color: currentColor !important;
+  fill: currentColor !important;
+  opacity: 0.92;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-body {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-title {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  color: var(--text) !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-subtitle {
+  margin-top: 2px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  color: var(--overlay-1) !important;
+  opacity: 1 !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] {
+  color: var(--overlay-1) !important;
+}
+
+.bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] .mantine-Badge-root {
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  color: var(--overlay-1) !important;
+}
+
+.bn-root .bn-suggestion-menu,
+.bn-root .bn-grid-suggestion-menu,
+.bn-root .bn-menu-dropdown,
+.bn-root .mantine-Menu-dropdown,
+.bn-root .bn-toolbar,
+.bn-root .bn-form-popover,
+.bn-root .bn-panel-popover,
+.bn-root .bn-emoji-picker-popover {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--base) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38) !important;
+  color: var(--text) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.bn-root .bn-suggestion-menu,
+.bn-root .bn-grid-suggestion-menu,
+.bn-root .bn-menu-dropdown,
+.bn-root .mantine-Menu-dropdown {
+  padding: 6px !important;
+}
+
+.bn-root .bn-suggestion-menu-item,
+.bn-root .bn-grid-suggestion-menu-item,
+.bn-root .mantine-Menu-item,
+.bn-root .bn-toolbar .mantine-Button-root,
+.bn-root .bn-toolbar .mantine-ActionIcon-root {
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text) !important;
+}
+
+.bn-root .bn-suggestion-menu-item[aria-selected="true"],
+.bn-root .bn-suggestion-menu-item:hover,
+.bn-root .bn-grid-suggestion-menu-item[aria-selected="true"],
+.bn-root .bn-grid-suggestion-menu-item:hover,
+.bn-root .mantine-Menu-item[data-hovered],
+.bn-root .mantine-Menu-item:hover,
+.bn-root .bn-toolbar .mantine-Button-root:hover,
+.bn-root .bn-toolbar .mantine-ActionIcon-root:hover,
+.bn-root .bn-toolbar .mantine-Button-root[data-selected],
+.bn-root .bn-toolbar .mantine-ActionIcon-root[data-selected] {
+  background: var(--accent-soft) !important;
+  color: var(--text) !important;
+}
+
+.bn-root .bn-suggestion-menu-label,
+.bn-root .bn-mt-suggestion-menu-item-title,
+.bn-root .bn-mt-suggestion-menu-item-subtitle,
+.bn-root .bn-toolbar .mantine-Button-label {
+  color: var(--text) !important;
+}
+
+.bn-side-menu[data-block-type="heading"][data-level="1"] {
+  height: 43px !important;
+}
+
+.bn-side-menu[data-block-type="heading"][data-level="2"] {
+  height: 36px !important;
 }
 
 /* ============================================================
