@@ -49,7 +49,7 @@ The bridge between unstructured analysis and structured rendering. An LLM step (
 type ReportDocument = {
   meta: {
     id: string                    // case_id
-    type: ReportType              // 'threat-analysis' | 'lea' | 'sit-rep' | 'briefing'
+    type: ReportType              // 'threat-analysis' | 'lea' | 'sit-rep' | 'briefing' | 'article' | 'spec-proposal'
     title: string
     subtitle?: string
     client: { display_name: string; reference_code?: string }
@@ -123,7 +123,54 @@ This schema is the contract. Both renderers consume it. The Intelligence Analysi
 
 ### Type-specific extensions
 
-Each report type adds its own optional fields. Example for LEA (Legacy Ecosystem Analysis):
+Each report type adds its own optional fields.
+
+**Article** — public-facing thought leadership derived from a case (anonymized). No client fields, no classification banner, no evidence appendix. Structured for a GenZen site deploy, not a client handover.
+
+```typescript
+type ArticleReport = ReportDocument & {
+  meta: { type: 'article' }
+  slug: string                          // URL slug for genzen-deliverables deploy
+  publish_status: 'draft' | 'ready' | 'published'
+  anonymization_review: boolean         // analyst confirms no identifiable client detail
+  tags: string[]                        // topic tags for site navigation
+  seo: {
+    meta_description: string
+    og_title?: string
+    og_description?: string
+  }
+}
+```
+
+Key differences from client reports:
+- `classification` always `'internal'` (rendered label suppressed in output)
+- `client` field omitted from rendered output
+- `evidence` appendix omitted — public articles cite sources, not EV-IDs
+- No token-gated web URL — deploys to a public genzen-deliverables route
+- `anonymization_review` gate: analyst must confirm before publish status can move to `ready`
+
+**Spec Proposal** — pre-engagement scope document sent to a prospective client or introducer. No investigation findings (there may be no investigation yet). Structured for PDF delivery only — no web version.
+
+```typescript
+type SpecProposal = ReportDocument & {
+  meta: { type: 'spec-proposal' }
+  engagement_type: 'scoping-only' | 'lea' | 'sit-rep' | 'war-room' | 'legacy-ops'
+  proposed_scope: string                // plain-language scope description
+  proposed_timeline: string
+  proposed_investment?: string          // optional; omit if not ready to quote
+  next_step: string                     // single clear CTA
+  intake_id?: string                    // references intake record if derived from one
+}
+```
+
+Key differences from client reports:
+- May be created before an investigation exists (intake → spec proposal path)
+- PDF only — no Vercel web deployment
+- No evidence, findings, or recommendations sections (those don't exist yet)
+- `executive_summary` repurposed as situation framing + proposed approach
+- `findings` array repurposed as capability/approach description blocks
+
+**Example for LEA (Legacy Ecosystem Analysis):**
 
 ```typescript
 type LEAReport = ReportDocument & {
@@ -168,6 +215,17 @@ Shared React components, two stylesheets (`print.css` + `screen.css`). Component
 
 ## Layer 4 — Rendering pipelines
 
+### Output matrix by type
+
+| Type | PDF | Web (token-gated) | Web (public) | Notes |
+|---|---|---|---|---|
+| `threat-analysis` | Yes | Yes | No | Standard client report |
+| `lea` | Yes | Yes | No | Standard client report |
+| `sit-rep` | Yes | Yes | No | Standard client report |
+| `briefing` | Yes | Yes | No | Standard client report |
+| `article` | No | No | Yes | genzen-deliverables public route |
+| `spec-proposal` | Yes | No | No | PDF only; no web version |
+
 ### PDF pipeline
 
 ```
@@ -195,7 +253,7 @@ Print-specific concerns handled in this template:
 
 Recommended: **Vercel function for v1**, evaluate local sidecar if offline rendering becomes a requirement.
 
-### Web pipeline
+### Web pipeline — token-gated (client reports)
 
 ```
 Report JSON
@@ -209,6 +267,22 @@ Vercel deployment to private URL
 URL stored in vault_files → shareable from Reports screen
 ```
 
+### Web pipeline — public (articles)
+
+```
+Report JSON (article type)
+   ↓
+Article template (React, editorial-styled, no classification/client fields)
+   ↓
+Static export → genzen-deliverables public route
+   ↓
+URL: genzen.solutions/intelligence/<slug> or similar
+   ↓
+URL stored in vault_files; publish_status updated to 'published'
+```
+
+Article deploy is gated on `anonymization_review: true` and `publish_status: 'ready'`. The Reports screen surfaces a "Publish" action that only activates when both conditions pass. A separate `draft` view lets the analyst preview the article before setting it ready.
+
 Web-specific concerns:
 - Responsive layout (desktop primary, mobile graceful)
 - Interactive evidence references (click to expand inline, not navigate away)
@@ -220,8 +294,9 @@ Web-specific concerns:
 
 ## Layer 5 — Generation orchestration
 
-The flow from Investigation output to deliverables:
+Three entry paths, one schema output.
 
+**Client report path** (threat-analysis, lea, sit-rep, briefing):
 ```
 1. Analyst marks Investigation as "ready for delivery" in Reports screen
    ↓
@@ -244,7 +319,42 @@ The flow from Investigation output to deliverables:
 7. Reports screen shows: download PDF, copy web URL, view inline
 ```
 
-Re-rendering is cheap and non-destructive. Edit the JSON, re-render both. Versions are tracked.
+**Article path:**
+```
+1. Analyst triggers "Generate Public Article" workflow button in Claude Code Panel
+   ↓
+2. Claude reads case themes from vault; strips/anonymizes client-identifying detail
+   ↓
+3. intelligence-research + copywriting-department skill stack
+   ↓
+4. LLM step: themes → Article JSON (slug, tags, body blocks, SEO fields)
+   ↓
+5. Anonymization review gate — analyst confirms no identifiable client detail
+   ↓
+6. Render trigger: article template → genzen-deliverables public route
+   ↓
+7. vault_files row with publish_status = 'published'
+```
+
+**Spec proposal path:**
+```
+1. Analyst triggers "Generate Spec Proposal" workflow button
+   (may be triggered from intake, before any investigation exists)
+   ↓
+2. Claude reads intake summary from vault (or active investigation brief if one exists)
+   ↓
+3. copywriting-department skill stack
+   ↓
+4. LLM step: intake/brief → SpecProposal JSON (scope, timeline, investment, next step)
+   ↓
+5. Human review in Reports screen — edit scope, investment, CTA
+   ↓
+6. PDF render only (Puppeteer) → vault_files row
+   ↓
+7. Reports screen shows: download PDF
+```
+
+Re-rendering is cheap and non-destructive for all three paths. Edit the JSON, re-render both. Versions are tracked.
 
 ## Layer 6 — Distribution and security
 
@@ -310,6 +420,8 @@ Resolve before build commit:
 6. **Multi-tenancy.** Is `genzen-deliverables` ever going to host non-GenZen reports? Decision now affects URL structure and token design. Default: GenZen-only, single-tenant.
 7. **Localization.** Are any reports going out in non-English? If yes, schema needs locale field and templates need RTL handling. Decision: English-only v1.
 8. **Branding split.** Some reports may need to be unbranded / white-labeled (when an introducer wants the work attributed to them). Decision: defer, schema can support `branding: 'genzen' | 'unbranded' | 'white-label'` later.
+9. **Article anonymization enforcement.** Is the `anonymization_review` flag sufficient, or should a secondary LLM pass scan the Article JSON for identifiable details before enabling publish? Lean: LLM pass added to Phase 4 — the stakes of accidental client identification in public content are too high for a checkbox alone.
+10. **Spec proposal before intake.** Can a spec proposal be generated with no intake and no investigation (just a conversation)? Lean: yes — the spec path accepts a free-text context field as fallback when no intake-id is provided. This handles the case where a prospective client contacts via email and the analyst wants to turn the conversation into a proposal without formally opening an intake.
 
 ## Phased build plan
 
@@ -338,6 +450,8 @@ Resolve before build commit:
 
 ### Phase 4 — Schema expansion (rolling)
 - Add LEA, Sit Rep, Briefing schemas + templates
+- Add Article schema + editorial template (public Vercel route, no client fields)
+- Add Spec Proposal schema + proposal template (PDF only, may precede investigation)
 - Each new report type adds a schema extension and a template variant; no infra changes
 
 ### Phase 5 (optional) — Bespoke per-report layouts
