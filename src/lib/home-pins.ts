@@ -85,6 +85,17 @@ export function removeHomePin(
   };
 }
 
+export function removeHomePinsForDatabase(
+  pins: HomePin[],
+  databaseId: string,
+) {
+  const nextPins = pins.filter((pin) => pin.databaseId !== databaseId);
+  return {
+    pins: nextPins,
+    removed: nextPins.length !== pins.length,
+  };
+}
+
 function migrateHomePins(values: unknown[]): HomePin[] {
   const migrated = values
     .map((value, index) => {

@@ -2524,6 +2524,31 @@ export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: 
   return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
 }
 
+export async function deleteWorkspaceDatabase(id: string) {
+  const database = await getWorkspaceDatabaseSummaryById(id);
+  if (isOperationalSystemWorkspaceIcon(database.icon)) {
+    throw new Error("System databases cannot be deleted.");
+  }
+
+  const { error: recordError } = await supabase
+    .from("workspace_records")
+    .delete()
+    .eq("database_id", id);
+  if (recordError) throw recordError;
+
+  const { error: viewError } = await supabase
+    .from("workspace_views")
+    .delete()
+    .eq("database_id", id);
+  if (viewError) throw viewError;
+
+  const { error: databaseError } = await supabase
+    .from("workspace_databases")
+    .delete()
+    .eq("id", id);
+  if (databaseError) throw databaseError;
+}
+
 export async function createWorkspaceView(input: {
   databaseId: string;
   name: string;

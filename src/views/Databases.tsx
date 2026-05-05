@@ -5,12 +5,20 @@ import {
   ChevronRight,
   Loader2,
   Plus,
+  Trash2,
 } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
-import { createWorkspaceDatabase, listWorkspaceDatabases } from "@/lib/data";
+import { loadHomePins, removeHomePinsForDatabase, saveHomePins } from "@/lib/home-pins";
+import {
+  createWorkspaceDatabase,
+  deleteWorkspaceDatabase,
+  isOperationalSystemWorkspaceIcon,
+  listWorkspaceDatabases,
+} from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +28,8 @@ const DATABASE_RAIL_WIDTH_EXPANDED = 280;
 export function DatabasesView() {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [currentDatabaseId, setCurrentDatabaseId] = useState<string | null>(() => loadCurrentDatabaseId());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -75,6 +85,7 @@ export function DatabasesView() {
     () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? safeDatabases[0] ?? null,
     [currentDatabaseId, safeDatabases],
   );
+  const canDeleteCurrentDatabase = Boolean(currentDatabase && !isOperationalSystemWorkspaceIcon(currentDatabase.icon));
 
   async function handleCreateDatabase() {
     if (isCreating) return;
@@ -95,6 +106,35 @@ export function DatabasesView() {
     }
   }
 
+  async function handleDeleteCurrentDatabase() {
+    if (!currentDatabase || !canDeleteCurrentDatabase || isDeleting) return;
+
+    const nextDatabaseId = safeDatabases.find((database) => database.id !== currentDatabase.id)?.id ?? null;
+
+    try {
+      setIsDeleting(true);
+      await deleteWorkspaceDatabase(currentDatabase.id);
+
+      const pinResult = removeHomePinsForDatabase(loadHomePins(), currentDatabase.id);
+      if (pinResult.removed) {
+        saveHomePins(pinResult.pins);
+      }
+
+      setCurrentDatabaseId(nextDatabaseId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", currentDatabase.id] }),
+      ]);
+      setDeleteConfirmOpen(false);
+      toast.success("Database deleted");
+    } catch (deleteError) {
+      toastError("Database deletion failed", deleteError);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
@@ -112,10 +152,24 @@ export function DatabasesView() {
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <span className="text-label">Databases</span>
-        <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
-          {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-          New database
-        </Button>
+        <div className="flex items-center gap-2">
+          {canDeleteCurrentDatabase ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={isDeleting}
+              className="gap-1.5 text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)]"
+            >
+              <Trash2 className="h-3 w-3" />
+              {isDeleting ? "Deleting…" : "Delete database"}
+            </Button>
+          ) : null}
+          <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
+            {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+            New database
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 bg-[var(--base)]">
@@ -145,7 +199,7 @@ export function DatabasesView() {
               </button>
             ) : (
               <>
-                <div className="text-label">Databases</div>
+                <div />
                 <button
                   type="button"
                   onClick={() => setRailCollapsed(true)}
@@ -263,6 +317,23 @@ export function DatabasesView() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen && !!currentDatabase}
+        title="Delete database"
+        message={
+          currentDatabase
+            ? `Delete "${currentDatabase.name}" and all of its views and records? This action cannot be undone.`
+            : "This action cannot be undone."
+        }
+        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+        danger
+        onConfirm={() => void handleDeleteCurrentDatabase()}
+        onCancel={() => {
+          if (isDeleting) return;
+          setDeleteConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }
