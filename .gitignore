@@ -29,3 +29,6 @@ dashboard-design.txt
 
 # Local scheduler/hook state (not shipped)
 .claude/
+
+# Local Codex state (not shipped)
+.codex/
