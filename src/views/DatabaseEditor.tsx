@@ -14,6 +14,7 @@ import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { ViewTabBar } from "@/components/database/ViewTabBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { saveCurrentDatabaseId } from "@/lib/current-database";
 import {
   exportDatabaseCsv,
   findDefaultChartGroupField,
@@ -23,7 +24,9 @@ import {
   prepareCsvImport,
 } from "@/lib/database-core";
 import {
+  findDatabaseDashboardPin,
   loadDatabaseDashboardPins,
+  removeDatabaseDashboardPin,
   saveDatabaseDashboardPins,
   supportsPinnedDashboardView,
   upsertDatabaseDashboardPin,
@@ -80,17 +83,24 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
   };
 }
 
-export function DatabaseEditorView() {
+export function DatabaseEditorView({
+  databaseIdOverride,
+  embedded = false,
+}: {
+  databaseIdOverride?: string;
+  embedded?: boolean;
+} = {}) {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const databaseId = params.id ?? "";
+  const databaseId = databaseIdOverride ?? params.id ?? "";
 
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [activePeek, setActivePeek] = useState<{ databaseId: string; recordId: string } | null>(null);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [dashboardPins, setDashboardPins] = useState(() => loadDatabaseDashboardPins());
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -128,6 +138,11 @@ export function DatabaseEditorView() {
   const isSystemDatabase = isOperationalSystemWorkspaceIcon(bundle?.database.icon);
 
   useEffect(() => {
+    if (!databaseId) return;
+    saveCurrentDatabaseId(databaseId);
+  }, [databaseId]);
+
+  useEffect(() => {
     if (!database?.views.length) {
       setActiveViewId(null);
       return;
@@ -155,6 +170,10 @@ export function DatabaseEditorView() {
   const activeView = useMemo(
     () => database?.views.find((v) => v.id === activeViewId) ?? database?.views[0] ?? null,
     [activeViewId, database],
+  );
+  const canPinActiveViewToHome = Boolean(activeView && supportsPinnedDashboardView(activeView.type));
+  const isActiveViewPinnedToHome = Boolean(
+    database && activeView && findDatabaseDashboardPin(dashboardPins, { databaseId: database.id, viewId: activeView.id }),
   );
 
   const catalogDatabaseMap = useMemo(() => {
@@ -588,21 +607,37 @@ export function DatabaseEditorView() {
     }
   }
 
-  function handlePinActiveViewToDashboard() {
+  function handleToggleActiveViewHomePin() {
     if (!database || !activeView) return;
-    if (!supportsPinnedDashboardView(activeView.type)) {
-      toast.error("Dashboard currently supports pinned chart, table, and list views.");
+    if (!supportsPinnedDashboardView(activeView.type)) return;
+
+    if (findDatabaseDashboardPin(dashboardPins, { databaseId: database.id, viewId: activeView.id })) {
+      const result = removeDatabaseDashboardPin(dashboardPins, {
+        databaseId: database.id,
+        viewId: activeView.id,
+      });
+      setDashboardPins(result.pins);
+      saveDatabaseDashboardPins(result.pins);
+      if (result.removed) {
+        toast.success("View removed from Home");
+      }
       return;
     }
-    const result = upsertDatabaseDashboardPin(loadDatabaseDashboardPins(), {
+
+    const result = upsertDatabaseDashboardPin(dashboardPins, {
       databaseId: database.id,
       viewId: activeView.id,
     });
+    setDashboardPins(result.pins);
     saveDatabaseDashboardPins(result.pins);
     if (result.added) {
-      toast.success("View pinned to dashboard");
+      toast.success("View pinned to Home", {
+        action: { label: "Open Home", onClick: () => navigate("/home") },
+      });
     } else {
-      toast.info("View is already pinned to dashboard");
+      toast.info("View is already pinned to Home", {
+        action: { label: "Open Home", onClick: () => navigate("/home") },
+      });
     }
   }
 
@@ -945,18 +980,19 @@ export function DatabaseEditorView() {
 
       {/* Database header */}
       <div className="shrink-0 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,black_6%)] px-6 pb-4 pt-5">
-        {/* Breadcrumb */}
-        <div className="mb-3 flex items-center gap-1.5">
-          <Link
-            to="/databases"
-            className="flex items-center gap-0.5 text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
-          >
-            <ChevronLeft className="h-3 w-3" />
-            Databases
-          </Link>
-          <ChevronRight className="h-3 w-3 text-[var(--overlay-0)]" />
-          <span className="text-[11px] text-[var(--subtext-0)]">{bundle.database.name}</span>
-        </div>
+        {!embedded ? (
+          <div className="mb-3 flex items-center gap-1.5">
+            <Link
+              to="/databases"
+              className="flex items-center gap-0.5 text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+            >
+              <ChevronLeft className="h-3 w-3" />
+              Databases
+            </Link>
+            <ChevronRight className="h-3 w-3 text-[var(--overlay-0)]" />
+            <span className="text-[11px] text-[var(--subtext-0)]">{bundle.database.name}</span>
+          </div>
+        ) : null}
 
         {/* Title */}
         <Input
@@ -985,7 +1021,10 @@ export function DatabaseEditorView() {
           onOpenSchema={isSystemDatabase ? () => {} : handleOpenSchema}
           onImportCsv={isSystemDatabase ? () => {} : () => csvInputRef.current?.click()}
           onExportCsv={handleCsvExport}
-          onPinToDashboard={handlePinActiveViewToDashboard}
+          canPinToHome={canPinActiveViewToHome}
+          isPinnedToHome={isActiveViewPinnedToHome}
+          onTogglePinToHome={handleToggleActiveViewHomePin}
+          onOpenHome={() => navigate("/home")}
           isImportingCsv={isImportingCsv}
         />
       </div>

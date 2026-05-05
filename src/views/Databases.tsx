@@ -1,52 +1,27 @@
-import "react-grid-layout/css/styles.css";
-
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import GridLayout, { type Layout, type LayoutItem } from "react-grid-layout";
 import {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
-  GripVertical,
   Loader2,
   Plus,
-  X,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
 
-import { DatabaseChartView } from "@/components/database/DatabaseChartView";
-import { DatabaseListView } from "@/components/database/DatabaseListView";
-import { DatabaseTableView } from "@/components/database/DatabaseTableView";
+import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
-import {
-  loadDatabaseDashboardPins,
-  saveDatabaseDashboardPins,
-  supportsPinnedDashboardView,
-  type DatabaseDashboardPin,
-} from "@/lib/database-dashboard";
+import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
 import { createWorkspaceDatabase, listWorkspaceDatabaseCatalog, listWorkspaceDatabases } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 
-const GRID_COLS = 12;
-const GRID_ROW_HEIGHT = 28;
 const DATABASE_RAIL_STORAGE_KEY = "intelizen:databases-rail-collapsed";
 const DATABASE_RAIL_WIDTH_EXPANDED = 280;
 
-interface PinnedWidgetModel {
-  pin: DatabaseDashboardPin;
-  database: WorkspaceDatabaseCatalogEntry;
-  view: WorkspaceDatabaseModel["views"][number];
-}
-
 export function DatabasesView() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [gridShellRef, gridShellSize] = useElementSize<HTMLDivElement>();
   const [isCreating, setIsCreating] = useState(false);
-  const [pins, setPins] = useState<DatabaseDashboardPin[]>(() => loadDatabaseDashboardPins());
+  const [currentDatabaseId, setCurrentDatabaseId] = useState<string | null>(() => loadCurrentDatabaseId());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(DATABASE_RAIL_STORAGE_KEY) === "1";
@@ -60,22 +35,19 @@ export function DatabasesView() {
     queryKey: ["workspace-databases"],
     queryFn: listWorkspaceDatabases,
   });
-  const {
-    data: catalog = [],
-    isLoading: catalogLoading,
-  } = useQuery({
+  const { data: catalog = [] } = useQuery({
     queryKey: ["workspace-database-catalog"],
     queryFn: listWorkspaceDatabaseCatalog,
   });
 
   useEffect(() => {
-    saveDatabaseDashboardPins(pins);
-  }, [pins]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(DATABASE_RAIL_STORAGE_KEY, railCollapsed ? "1" : "0");
   }, [railCollapsed]);
+
+  useEffect(() => {
+    saveCurrentDatabaseId(currentDatabaseId);
+  }, [currentDatabaseId]);
 
   const safeDatabases = useMemo(() => {
     const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
@@ -97,37 +69,23 @@ export function DatabasesView() {
     );
   }, [catalog, databases]);
 
-  const pinnedWidgets = useMemo(() => {
-    const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
-    return pins
-      .map((pin) => {
-        const database = catalogById.get(pin.databaseId);
-        const view = database?.views.find((candidate) => candidate.id === pin.viewId);
-        if (!database || !view || !supportsPinnedDashboardView(view.type)) return null;
-        return { pin, database, view } satisfies PinnedWidgetModel;
-      })
-      .filter((widget): widget is PinnedWidgetModel => Boolean(widget));
-  }, [catalog, pins]);
-
   useEffect(() => {
-    if (catalogLoading) return;
-    if (pinnedWidgets.length === pins.length) return;
-    const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
-    setPins((current) => current.filter((pin) => validIds.has(pin.id)));
-  }, [catalogLoading, pins.length, pinnedWidgets]);
+    if (safeDatabases.length === 0) {
+      setCurrentDatabaseId(null);
+      return;
+    }
 
-  const gridLayout = useMemo<Layout>(
-    () =>
-      pinnedWidgets.map((widget) => ({
-        i: widget.pin.id,
-        x: widget.pin.x,
-        y: widget.pin.y,
-        w: widget.pin.w,
-        h: widget.pin.h,
-        minW: 4,
-        minH: 8,
-      })),
-    [pinnedWidgets],
+    const currentExists = currentDatabaseId
+      ? safeDatabases.some((database) => database.id === currentDatabaseId)
+      : false;
+
+    if (currentExists) return;
+    setCurrentDatabaseId(safeDatabases[0]?.id ?? null);
+  }, [currentDatabaseId, safeDatabases]);
+
+  const currentDatabase = useMemo(
+    () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? safeDatabases[0] ?? null,
+    [currentDatabaseId, safeDatabases],
   );
 
   async function handleCreateDatabase() {
@@ -140,31 +98,13 @@ export function DatabasesView() {
         queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
       ]);
+      setCurrentDatabaseId(created.database.id);
       toast.success("Database created");
-      navigate(`/databases/${created.database.id}`);
     } catch (createError) {
       toastError("Database creation failed", createError);
     } finally {
       setIsCreating(false);
     }
-  }
-
-  function handleRemovePin(pinId: string) {
-    setPins((current) => current.filter((pin) => pin.id !== pinId));
-  }
-
-  function commitGridLayout(layout: Layout) {
-    setPins((current) => current.map((pin) => {
-      const item = layout.find((entry: LayoutItem) => entry.i === pin.id);
-      if (!item) return pin;
-      return {
-        ...pin,
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      };
-    }));
   }
 
   if (error) {
@@ -181,12 +121,12 @@ export function DatabasesView() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-2">
           <span className="text-label">Databases</span>
           <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-            Overview widgets on the right, database launcher in the left rail.
+            Use the left rail to open a database. Home now owns pinned views and dashboard layout.
           </p>
         </div>
 
@@ -228,7 +168,7 @@ export function DatabasesView() {
                   <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--overlay-1)]">
                     <span>{safeDatabases.length}</span>
                     <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                    <span>launcher</span>
+                    <span>active menu</span>
                   </div>
                 </div>
                 <button
@@ -273,28 +213,39 @@ export function DatabasesView() {
 
                   if (railCollapsed) {
                     return (
-                      <Link
+                      <button
                         key={database.id}
-                        to={`/databases/${database.id}`}
+                        type="button"
                         title={database.name}
-                        className="group flex h-14 items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]"
+                        onClick={() => setCurrentDatabaseId(database.id)}
+                        className={cn(
+                          "group flex h-14 w-full items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
+                          currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                        )}
                       >
                         <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
                           {database.name.slice(0, 1)}
                         </span>
-                      </Link>
+                      </button>
                     );
                   }
 
                   return (
-                    <Link
+                    <button
                       key={database.id}
-                      to={`/databases/${database.id}`}
-                      className="group relative flex w-full items-start gap-3 px-4 py-3 transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]"
+                      type="button"
+                      onClick={() => setCurrentDatabaseId(database.id)}
+                      className={cn(
+                        "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
+                        currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                      )}
                     >
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100"
+                        className={cn(
+                          "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                        )}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -321,7 +272,7 @@ export function DatabasesView() {
                           Updated {formatDateTime(database.updated_at)}
                         </div>
                       </div>
-                    </Link>
+                    </button>
                   );
                 })}
               </div>
@@ -342,242 +293,28 @@ export function DatabasesView() {
             </button>
           ) : null}
 
-          <div className={cn("h-full overflow-y-auto", railCollapsed && "pl-14")}>
-          {pinnedWidgets.length > 0 ? (
-            <section className="px-6 py-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-ui text-[14px] font-semibold text-[var(--text)]">Pinned views</h2>
-                  <p className="mt-1 text-[12px] text-[var(--overlay-1)]">
-                    Drag modules into place and resize from any edge.
+          <div className={cn("h-full overflow-hidden", railCollapsed && "pl-14")}>
+            <div className="h-full">
+              {safeDatabases.length > 0 ? (
+                currentDatabase ? (
+                  <DatabaseEditorView databaseIdOverride={currentDatabase.id} embedded />
+                ) : null
+              ) : (
+                <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                  <p className="text-label">No databases yet</p>
+                  <p className="max-w-xl font-ui text-[12px] text-[var(--overlay-1)]">
+                    Create your first database here, then use saved views inside it to pin the important ones back to Home.
                   </p>
+                  <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
+                    {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    New database
+                  </Button>
                 </div>
-                <span className="rounded-md border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
-                  {pinnedWidgets.length}
-                </span>
-              </div>
-
-              <div ref={gridShellRef} className="db-dashboard-grid-shell">
-                {pinnedWidgets.length > 0 && gridShellSize.width > 0 ? (
-                  <GridLayout
-                    width={gridShellSize.width}
-                    className="db-dashboard-grid"
-                    layout={gridLayout}
-                    gridConfig={{
-                      cols: GRID_COLS,
-                      rowHeight: GRID_ROW_HEIGHT,
-                      margin: [16, 16],
-                      containerPadding: [0, 0],
-                    }}
-                    dragConfig={{
-                      enabled: true,
-                      handle: ".db-dashboard-widget-grip",
-                      cancel: "button, a, input, textarea, select",
-                      threshold: 8,
-                    }}
-                    resizeConfig={{
-                      enabled: true,
-                      handles: ["n", "s", "e", "w"],
-                    }}
-                    onDragStop={(layout) => commitGridLayout(layout)}
-                    onResizeStop={(layout) => commitGridLayout(layout)}
-                  >
-                    {pinnedWidgets.map((widget) => (
-                      <div key={widget.pin.id} className="min-h-0">
-                        <PinnedWidgetCard
-                          widget={widget}
-                          catalog={catalog}
-                          onOpen={() => navigate(`/databases/${widget.database.id}?view=${widget.view.id}`)}
-                          onRemove={() => handleRemovePin(widget.pin.id)}
-                        />
-                      </div>
-                    ))}
-                  </GridLayout>
-                ) : null}
-              </div>
-            </section>
-          ) : (
-            <div className="flex flex-col items-center gap-3 p-16 text-center">
-              <p className="text-label">No pinned views yet</p>
-              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-                Open a database view and pin a chart, table, or list here for quick oversight.
-              </p>
+              )}
             </div>
-          )}
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-function PinnedWidgetCard({
-  widget,
-  catalog,
-  onOpen,
-  onRemove,
-}: {
-  widget: PinnedWidgetModel;
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  onOpen: () => void;
-  onRemove: () => void;
-}) {
-  const widthClass = widget.pin.w <= 4 ? "db-dashboard-widget--narrow" : widget.pin.w <= 8 ? "db-dashboard-widget--medium" : "db-dashboard-widget--wide";
-  const heightClass = widget.pin.h <= 10 ? "db-dashboard-widget--short" : widget.pin.h <= 14 ? "db-dashboard-widget--medium-height" : "db-dashboard-widget--tall";
-
-  return (
-    <div
-      className={cn(
-        "db-dashboard-widget flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)]",
-        widthClass,
-        heightClass,
-      )}
-      data-view-type={widget.view.type}
-    >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2.5">
-        <div className="db-dashboard-widget-grip inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
-          <GripVertical className="h-3.5 w-3.5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">
-            {widget.view.name}
-          </div>
-          <div className="truncate text-[11px] text-[var(--overlay-1)]">
-            {widget.database.name}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          onClick={onOpen}
-          aria-label="Open source view"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          onClick={onRemove}
-          aria-label="Remove widget"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="min-h-0 min-w-0 flex-1">
-        <DashboardWidgetBody widget={widget} catalog={catalog} onOpen={onOpen} />
-      </div>
-    </div>
-  );
-}
-
-function DashboardWidgetBody({
-  widget,
-  catalog,
-  onOpen,
-}: {
-  widget: PinnedWidgetModel;
-  catalog: WorkspaceDatabaseCatalogEntry[];
-  onOpen: () => void;
-}) {
-  const [chartHostRef, chartHostSize] = useElementSize<HTMLDivElement>();
-  const databaseModel: WorkspaceDatabaseModel = {
-    id: widget.database.id,
-    name: widget.database.name,
-    schema: widget.database.schema,
-    headerFieldIds: widget.database.headerFieldIds,
-    views: widget.database.views,
-    records: widget.database.records,
-  };
-
-  if (widget.view.type === "chart") {
-    return (
-      <div ref={chartHostRef} className="h-full min-h-0 min-w-0 w-full overflow-hidden">
-        <DatabaseChartView
-          compact
-          database={databaseModel}
-          view={widget.view}
-          catalog={catalog}
-          onCreateRecord={() => {}}
-          compactWidthUnits={widget.pin.w}
-          compactHeightUnits={widget.pin.h}
-          compactPixelWidth={chartHostSize.width}
-          compactPixelHeight={chartHostSize.height}
-        />
-      </div>
-    );
-  }
-
-  if (widget.view.type === "table") {
-    return (
-      <DatabaseTableView
-        embedded
-        database={databaseModel}
-        view={widget.view}
-        catalog={catalog}
-        activeRecordId={null}
-        onOpenRecord={onOpen}
-        onUpdateField={() => {}}
-        onUpdateView={() => {}}
-        onSaveSchema={() => {}}
-        onOpenSchema={() => {}}
-        onCreateRecord={() => {}}
-        onDuplicateRecord={() => {}}
-        onDeleteRecord={() => {}}
-        onDeleteRecords={() => {}}
-        onDuplicateRecords={() => {}}
-      />
-    );
-  }
-
-  return (
-    <DatabaseListView
-      embedded
-      database={databaseModel}
-      view={widget.view}
-      catalog={catalog}
-      activeRecordId={null}
-      onOpenRecord={onOpen}
-      onCreateRecord={() => {}}
-      onUpdateView={() => {}}
-    />
-  );
-}
-
-function useElementSize<T extends HTMLElement>() {
-  const [node, setNode] = useState<T | null>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const ref = useCallback((nextNode: T | null) => {
-    setNode(nextNode);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!node || typeof ResizeObserver === "undefined") return;
-
-    const update = (width: number, height: number) => {
-      const nextWidth = Math.round(width);
-      const nextHeight = Math.round(height);
-      setSize((current) => {
-        if (current.width === nextWidth && current.height === nextHeight) {
-          return current;
-        }
-        return {
-          width: nextWidth,
-          height: nextHeight,
-        };
-      });
-    };
-
-    update(node.clientWidth, node.clientHeight);
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      update(entry.contentRect.width, entry.contentRect.height);
-    });
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [node]);
-
-  return [ref, size] as const;
 }

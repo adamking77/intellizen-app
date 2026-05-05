@@ -1,0 +1,159 @@
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { Layout } from "react-grid-layout";
+import { Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import { PinnedViewGrid, type PinnedDatabaseWidgetModel } from "@/components/home/pinned-view-grid";
+import {
+  loadDatabaseDashboardPins,
+  saveDatabaseDashboardPins,
+  supportsPinnedDashboardView,
+  type DatabaseDashboardPin,
+} from "@/lib/database-dashboard";
+import {
+  loadHomeDashboardLayout,
+  mergeHomeDashboardLayout,
+  saveHomeDashboardLayout,
+  type HomeDashboardLayoutItem,
+} from "@/lib/home-dashboard";
+import { listWorkspaceDatabaseCatalog } from "@/lib/data";
+import { currentRotation, type RotationWeek } from "@/lib/rotation";
+
+const ROTATION_ACCENTS: Record<RotationWeek, string> = {
+  Build: "var(--teal)",
+  Marketing: "var(--peach)",
+  Ops: "var(--yellow)",
+  Slack: "var(--lavender)",
+};
+
+export function HomeView() {
+  const navigate = useNavigate();
+  const [pins, setPins] = useState<DatabaseDashboardPin[]>(() => loadDatabaseDashboardPins());
+  const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
+  const rotation = currentRotation();
+  const {
+    data: catalog = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["workspace-database-catalog"],
+    queryFn: listWorkspaceDatabaseCatalog,
+    refetchInterval: 60_000,
+  });
+
+  useEffect(() => {
+    saveDatabaseDashboardPins(pins);
+  }, [pins]);
+
+  useEffect(() => {
+    saveHomeDashboardLayout(layout);
+  }, [layout]);
+
+  const pinnedWidgets = useMemo(() => {
+    const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
+    return pins
+      .map((pin) => {
+        const database = catalogById.get(pin.databaseId);
+        const view = database?.views.find((candidate) => candidate.id === pin.viewId);
+        if (!database || !view || !supportsPinnedDashboardView(view.type)) return null;
+        return { pin, database, view } satisfies PinnedDatabaseWidgetModel;
+      })
+      .filter((widget): widget is PinnedDatabaseWidgetModel => Boolean(widget));
+  }, [catalog, pins]);
+
+  useEffect(() => {
+    const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
+
+    if (validIds.size !== pins.length) {
+      setPins((current) => current.filter((pin) => validIds.has(pin.id)));
+    }
+
+    if (layout.some((item) => !validIds.has(item.id))) {
+      setLayout((current) => current.filter((item) => validIds.has(item.id)));
+    }
+  }, [layout, pins.length, pinnedWidgets]);
+
+  const gridLayout = useMemo<Layout>(
+    () =>
+      mergeHomeDashboardLayout(
+        pinnedWidgets.map((widget) => widget.pin),
+        layout,
+      ).map((item) => ({
+        i: item.id,
+        x: item.x,
+        y: item.y,
+        w: item.w,
+        h: item.h,
+        minW: 4,
+        minH: 8,
+      })),
+    [layout, pinnedWidgets],
+  );
+
+  function commitGridLayout(nextLayout: Layout) {
+    setLayout(
+      nextLayout.map((item) => ({
+        id: item.i,
+        x: item.x,
+        y: item.y,
+        w: item.w,
+        h: item.h,
+      })),
+    );
+  }
+
+  function handleRemovePin(pinId: string) {
+    setPins((current) => current.filter((pin) => pin.id !== pinId));
+    setLayout((current) => current.filter((item) => item.id !== pinId));
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+          <span className="text-label">Home unavailable</span>
+          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
+            {error instanceof Error ? error.message : "The dashboard could not be loaded."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <div className="flex flex-col gap-2">
+          <span className="text-label">Home</span>
+          <p
+            className="font-ui text-[12px]"
+            style={{ color: ROTATION_ACCENTS[rotation.week] }}
+          >
+            {rotation.week} week · {rotation.daysRemaining} days remaining
+          </p>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <section className="mx-auto flex w-full max-w-[1600px] flex-col">
+          {isLoading ? (
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading pinned views...</span>
+            </div>
+          ) : pinnedWidgets.length > 0 ? (
+            <PinnedViewGrid
+              widgets={pinnedWidgets}
+              catalog={catalog}
+              layout={gridLayout}
+              onLayoutChange={commitGridLayout}
+              onOpenWidget={(widget) => navigate(`/databases/${widget.database.id}?view=${widget.view.id}`)}
+              onRemoveWidget={(widget) => handleRemovePin(widget.pin.id)}
+            />
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}

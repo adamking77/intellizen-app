@@ -37,6 +37,13 @@ export function supportsPinnedDashboardView(type: WorkspaceDatabaseModel["views"
   return type === "chart" || type === "table" || type === "list";
 }
 
+export function findDatabaseDashboardPin(
+  pins: DatabaseDashboardPin[],
+  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+) {
+  return pins.find((pin) => pin.databaseId === input.databaseId && pin.viewId === input.viewId) ?? null;
+}
+
 export function upsertDatabaseDashboardPin(
   pins: DatabaseDashboardPin[],
   input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
@@ -59,6 +66,19 @@ export function upsertDatabaseDashboardPin(
     pins: [...pins, pin],
     added: true,
     pin,
+  };
+}
+
+export function removeDatabaseDashboardPin(
+  pins: DatabaseDashboardPin[],
+  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+) {
+  const nextPins = pins.filter(
+    (pin) => !(pin.databaseId === input.databaseId && pin.viewId === input.viewId),
+  );
+  return {
+    pins: nextPins,
+    removed: nextPins.length !== pins.length,
   };
 }
 

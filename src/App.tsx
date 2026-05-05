@@ -14,6 +14,7 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 const InboxView = lazyNamed(() => import("@/views/Inbox"), "InboxView");
+const HomeView = lazyNamed(() => import("@/views/Home"), "HomeView");
 const SearchView = lazyNamed(() => import("@/views/Search"), "SearchView");
 const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView");
 const MonitorsView = lazyNamed(() => import("@/views/Monitors"), "MonitorsView");
@@ -40,7 +41,15 @@ function App() {
     <Router>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path="/" element={<Navigate to="/inbox" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route
+            path="/home"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <HomeView />
+              </Suspense>
+            }
+          />
           <Route
             path="/inbox"
             element={
