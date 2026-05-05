@@ -3272,29 +3272,19 @@ pre {
 
 .db-dashboard-widget {
   position: relative;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-wash) 28%, var(--mantle) 72%), var(--mantle));
   transition:
     border-color 140ms ease,
     background-color 160ms ease;
 }
 
 .db-dashboard-widget:hover {
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+  border-color: var(--border-strong);
 }
 
 .db-dashboard-widget[data-view-type="chart"] .db-chart-root--compact {
   height: 100%;
   width: 100%;
   min-width: 0;
-}
-
-.db-dashboard-widget[data-view-type="chart"] {
-  background: var(--base);
-}
-
-.db-dashboard-widget[data-view-type="list"] {
-  background: var(--base);
 }
 
 .db-dashboard-widget[data-view-type="list"] .db-list-root {
@@ -3306,7 +3296,7 @@ pre {
   height: 100%;
   width: 100%;
   min-width: 0;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   align-items: center;
   overflow: hidden;
 }
@@ -3331,6 +3321,7 @@ pre {
 
 .db-dashboard-widget-grip {
   cursor: grab;
+  opacity: 0.7;
 }
 
 .db-dashboard-widget-grip:active {

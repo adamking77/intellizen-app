@@ -5,6 +5,7 @@ import {
   Database,
   FileText,
   FolderOpen,
+  House,
   Inbox,
   LayoutGrid,
   Network,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
 const NAV_ITEMS: NavItem[] = [
+  { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Inbox", to: "/inbox", key: "inbox", icon: Inbox },
   { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },

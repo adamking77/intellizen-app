@@ -99,7 +99,10 @@ interface ViewTabBarProps {
   onOpenSchema: () => void;
   onImportCsv: () => void;
   onExportCsv: () => void;
-  onPinToDashboard: () => void;
+  canPinToHome: boolean;
+  isPinnedToHome: boolean;
+  onTogglePinToHome: () => void;
+  onOpenHome: () => void;
   isImportingCsv: boolean;
 }
 
@@ -117,7 +120,10 @@ export function ViewTabBar({
   onOpenSchema,
   onImportCsv,
   onExportCsv,
-  onPinToDashboard,
+  canPinToHome,
+  isPinnedToHome,
+  onTogglePinToHome,
+  onOpenHome,
   isImportingCsv,
 }: ViewTabBarProps) {
   const [addViewOpen, setAddViewOpen] = useState(false);
@@ -343,11 +349,24 @@ export function ViewTabBar({
                   className="db-context-menu-item"
                   onClick={() => {
                     closePanels();
-                    onPinToDashboard();
+                    onTogglePinToHome();
                   }}
+                  disabled={!canPinToHome}
                 >
-                  Pin to dashboard
+                  {isPinnedToHome ? "Unpin from Home" : "Pin to Home"}
                 </button>
+                {isPinnedToHome ? (
+                  <button
+                    type="button"
+                    className="db-context-menu-item"
+                    onClick={() => {
+                      closePanels();
+                      onOpenHome();
+                    }}
+                  >
+                    Open Home
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="db-context-menu-item"
