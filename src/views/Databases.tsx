@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -11,9 +10,9 @@ import {
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
-import { createWorkspaceDatabase, listWorkspaceDatabaseCatalog, listWorkspaceDatabases } from "@/lib/data";
+import { createWorkspaceDatabase, listWorkspaceDatabases } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const DATABASE_RAIL_STORAGE_KEY = "intelizen:databases-rail-collapsed";
 const DATABASE_RAIL_WIDTH_EXPANDED = 280;
@@ -35,10 +34,6 @@ export function DatabasesView() {
     queryKey: ["workspace-databases"],
     queryFn: listWorkspaceDatabases,
   });
-  const { data: catalog = [] } = useQuery({
-    queryKey: ["workspace-database-catalog"],
-    queryFn: listWorkspaceDatabaseCatalog,
-  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -50,24 +45,17 @@ export function DatabasesView() {
   }, [currentDatabaseId]);
 
   const safeDatabases = useMemo(() => {
-    const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
-    const normalized = databases.map((database) => {
-      const linked = catalogById.get(database.id);
-      const schema = Array.isArray(database?.schema) ? database.schema : [];
-      return {
-        ...database,
-        name: database?.name?.trim() || "Untitled database",
-        schema,
-        updated_at: database?.updated_at ?? null,
-        recordCount: linked?.records.length ?? 0,
-        relationCount: schema.filter((field) => field.type === "relation").length,
-      };
-    });
+    const normalized = databases.map((database) => ({
+      ...database,
+      name: database?.name?.trim() || "Untitled database",
+      schema: Array.isArray(database?.schema) ? database.schema : [],
+      updated_at: database?.updated_at ?? null,
+    }));
 
     return normalized.sort(
       (left, right) => new Date(right.updated_at ?? 0).getTime() - new Date(left.updated_at ?? 0).getTime(),
     );
-  }, [catalog, databases]);
+  }, [databases]);
 
   useEffect(() => {
     if (safeDatabases.length === 0) {
@@ -123,13 +111,7 @@ export function DatabasesView() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-        <div className="flex flex-col gap-2">
-          <span className="text-label">Databases</span>
-          <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-            Use the left rail to open a database. Home now owns pinned views and dashboard layout.
-          </p>
-        </div>
-
+        <span className="text-label">Databases</span>
         <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
           {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
           New database
@@ -163,14 +145,7 @@ export function DatabasesView() {
               </button>
             ) : (
               <>
-                <div className="min-w-0">
-                  <div className="text-label">Databases</div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--overlay-1)]">
-                    <span>{safeDatabases.length}</span>
-                    <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                    <span>active menu</span>
-                  </div>
-                </div>
+                <div className="text-label">Databases</div>
                 <button
                   type="button"
                   onClick={() => setRailCollapsed(true)}
@@ -200,17 +175,12 @@ export function DatabasesView() {
               ) : (
                 <div className="p-4">
                   <p className="font-ui text-[13px] font-medium text-[var(--text)]">No databases yet</p>
-                  <p className="mt-1 text-[12px] text-[var(--overlay-1)]">
-                    Create your first database to start building structured views.
-                  </p>
+                  <p className="mt-1 text-[12px] text-[var(--overlay-1)]">Create your first database to get started.</p>
                 </div>
               )
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
                 {safeDatabases.map((database) => {
-                  const fieldPreview = database.schema.slice(0, 3).map((field) => field.name).join(" · ");
-                  const extraFieldCount = Math.max(database.schema.length - 3, 0);
-
                   if (railCollapsed) {
                     return (
                       <button
@@ -247,31 +217,9 @@ export function DatabasesView() {
                           currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                         )}
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
-                            {database.name}
-                          </p>
-                          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)] transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:text-[var(--accent)]" />
-                        </div>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--subtext-0)]">
-                          <span>{database.recordCount} rec</span>
-                          <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                          <span>{database.schema.length} fields</span>
-                          <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                          <span>{database.relationCount} rel</span>
-                        </div>
-
-                        <div className="mt-1 truncate text-[11px] text-[var(--overlay-1)]">
-                          {fieldPreview}
-                          {extraFieldCount > 0 ? ` · +${extraFieldCount}` : ""}
-                        </div>
-
-                        <div className="mt-1 text-[10px] text-[var(--overlay-1)]">
-                          Updated {formatDateTime(database.updated_at)}
-                        </div>
-                      </div>
+                      <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
+                        {database.name}
+                      </p>
                     </button>
                   );
                 })}
@@ -303,7 +251,7 @@ export function DatabasesView() {
                 <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                   <p className="text-label">No databases yet</p>
                   <p className="max-w-xl font-ui text-[12px] text-[var(--overlay-1)]">
-                    Create your first database here, then use saved views inside it to pin the important ones back to Home.
+                    Create your first database to get started.
                   </p>
                   <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
                     {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}

@@ -6,11 +6,11 @@ import { useNavigate } from "react-router-dom";
 
 import { PinnedViewGrid, type PinnedDatabaseWidgetModel } from "@/components/home/pinned-view-grid";
 import {
-  loadDatabaseDashboardPins,
-  saveDatabaseDashboardPins,
-  supportsPinnedDashboardView,
-  type DatabaseDashboardPin,
-} from "@/lib/database-dashboard";
+  loadHomePins,
+  saveHomePins,
+  supportsPinnedHomeView,
+  type HomePin,
+} from "@/lib/home-pins";
 import {
   loadHomeDashboardLayout,
   mergeHomeDashboardLayout,
@@ -29,7 +29,7 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 
 export function HomeView() {
   const navigate = useNavigate();
-  const [pins, setPins] = useState<DatabaseDashboardPin[]>(() => loadDatabaseDashboardPins());
+  const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
   const rotation = currentRotation();
   const {
@@ -43,7 +43,7 @@ export function HomeView() {
   });
 
   useEffect(() => {
-    saveDatabaseDashboardPins(pins);
+    saveHomePins(pins);
   }, [pins]);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function HomeView() {
       .map((pin) => {
         const database = catalogById.get(pin.databaseId);
         const view = database?.views.find((candidate) => candidate.id === pin.viewId);
-        if (!database || !view || !supportsPinnedDashboardView(view.type)) return null;
+        if (!database || !view || !supportsPinnedHomeView(view.type)) return null;
         return { pin, database, view } satisfies PinnedDatabaseWidgetModel;
       })
       .filter((widget): widget is PinnedDatabaseWidgetModel => Boolean(widget));

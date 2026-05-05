@@ -1,6 +1,6 @@
 import type { WorkspaceDatabaseModel } from "@/lib/types";
 
-export interface DatabaseDashboardPin {
+export interface HomePin {
   id: string;
   databaseId: string;
   viewId: string;
@@ -13,47 +13,50 @@ export interface DatabaseDashboardPin {
 const GRID_COLS = 12;
 const DEFAULT_PIN_W = 4;
 const DEFAULT_PIN_H = 11;
-const STORAGE_KEY = "intelizen:database-dashboard-pins";
+const STORAGE_KEY = "intelizen:home-pins";
+const LEGACY_STORAGE_KEY = "intelizen:database-dashboard-pins";
 
-export function loadDatabaseDashboardPins(): DatabaseDashboardPin[] {
+export function loadHomePins(): HomePin[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return migrateDashboardPins(parsed);
+    return migrateHomePins(parsed);
   } catch {
     return [];
   }
 }
 
-export function saveDatabaseDashboardPins(pins: DatabaseDashboardPin[]) {
+export function saveHomePins(pins: HomePin[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
 }
 
-export function supportsPinnedDashboardView(type: WorkspaceDatabaseModel["views"][number]["type"]) {
+export function supportsPinnedHomeView(type: WorkspaceDatabaseModel["views"][number]["type"]) {
   return type === "chart" || type === "table" || type === "list";
 }
 
-export function findDatabaseDashboardPin(
-  pins: DatabaseDashboardPin[],
-  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+export function findHomePin(
+  pins: HomePin[],
+  input: Pick<HomePin, "databaseId" | "viewId">,
 ) {
   return pins.find((pin) => pin.databaseId === input.databaseId && pin.viewId === input.viewId) ?? null;
 }
 
-export function upsertDatabaseDashboardPin(
-  pins: DatabaseDashboardPin[],
-  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+export function upsertHomePin(
+  pins: HomePin[],
+  input: Pick<HomePin, "databaseId" | "viewId">,
 ) {
   const existing = pins.find((pin) => pin.viewId === input.viewId);
   if (existing) {
     return { pins, added: false, pin: existing };
   }
 
-  const pin: DatabaseDashboardPin = {
+  const pin: HomePin = {
     id: crypto.randomUUID(),
     databaseId: input.databaseId,
     viewId: input.viewId,
@@ -69,9 +72,9 @@ export function upsertDatabaseDashboardPin(
   };
 }
 
-export function removeDatabaseDashboardPin(
-  pins: DatabaseDashboardPin[],
-  input: Pick<DatabaseDashboardPin, "databaseId" | "viewId">,
+export function removeHomePin(
+  pins: HomePin[],
+  input: Pick<HomePin, "databaseId" | "viewId">,
 ) {
   const nextPins = pins.filter(
     (pin) => !(pin.databaseId === input.databaseId && pin.viewId === input.viewId),
@@ -82,10 +85,10 @@ export function removeDatabaseDashboardPin(
   };
 }
 
-function migrateDashboardPins(values: unknown[]): DatabaseDashboardPin[] {
+function migrateHomePins(values: unknown[]): HomePin[] {
   const migrated = values
     .map((value, index) => {
-      if (isDashboardPin(value)) return value;
+      if (isHomePin(value)) return value;
       if (!value || typeof value !== "object") return null;
       const candidate = value as {
         id?: string;
@@ -109,11 +112,11 @@ function migrateDashboardPins(values: unknown[]): DatabaseDashboardPin[] {
         y: index * DEFAULT_PIN_H,
         w: legacyWidthToGrid(candidate.width),
         h: legacyHeightToGrid(candidate.height),
-      } satisfies DatabaseDashboardPin;
+      } satisfies HomePin;
     })
-    .filter((pin): pin is DatabaseDashboardPin => Boolean(pin));
+    .filter((pin): pin is HomePin => Boolean(pin));
 
-  return needsGridNormalization(migrated) ? normalizeDashboardPins(migrated) : migrated;
+  return needsGridNormalization(migrated) ? normalizeHomePins(migrated) : migrated;
 }
 
 function legacyWidthToGrid(width: "narrow" | "medium" | "wide" | undefined) {
@@ -128,9 +131,9 @@ function legacyHeightToGrid(height: "short" | "medium" | "tall" | undefined) {
   return DEFAULT_PIN_H;
 }
 
-function isDashboardPin(value: unknown): value is DatabaseDashboardPin {
+function isHomePin(value: unknown): value is HomePin {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<DatabaseDashboardPin>;
+  const candidate = value as Partial<HomePin>;
   return (
     typeof candidate.id === "string" &&
     typeof candidate.databaseId === "string" &&
@@ -142,14 +145,14 @@ function isDashboardPin(value: unknown): value is DatabaseDashboardPin {
   );
 }
 
-function needsGridNormalization(pins: DatabaseDashboardPin[]) {
+function needsGridNormalization(pins: HomePin[]) {
   if (pins.length <= 1) return false;
   if (pins.some((pin) => pin.x < 0 || pin.w <= 0 || pin.x + pin.w > GRID_COLS)) return true;
   if (pins.every((pin) => pin.x === 0)) return true;
   return hasOverlaps(pins);
 }
 
-function normalizeDashboardPins(pins: DatabaseDashboardPin[]) {
+function normalizeHomePins(pins: HomePin[]) {
   let cursorX = 0;
   let cursorY = 0;
   let rowHeight = 0;
@@ -178,8 +181,8 @@ function normalizeDashboardPins(pins: DatabaseDashboardPin[]) {
   });
 }
 
-function getNextPinPlacement(pins: DatabaseDashboardPin[], width: number) {
-  const normalized = normalizeDashboardPins(pins);
+function getNextPinPlacement(pins: HomePin[], width: number) {
+  const normalized = normalizeHomePins(pins);
   let cursorX = 0;
   let cursorY = 0;
   let rowHeight = 0;
@@ -208,7 +211,7 @@ function getNextPinPlacement(pins: DatabaseDashboardPin[], width: number) {
   return { x: cursorX, y: cursorY };
 }
 
-function hasOverlaps(pins: DatabaseDashboardPin[]) {
+function hasOverlaps(pins: HomePin[]) {
   for (let i = 0; i < pins.length; i += 1) {
     for (let j = i + 1; j < pins.length; j += 1) {
       if (rectsOverlap(pins[i], pins[j])) return true;
@@ -217,7 +220,7 @@ function hasOverlaps(pins: DatabaseDashboardPin[]) {
   return false;
 }
 
-function rectsOverlap(left: DatabaseDashboardPin, right: DatabaseDashboardPin) {
+function rectsOverlap(left: HomePin, right: HomePin) {
   return !(
     left.x + left.w <= right.x ||
     right.x + right.w <= left.x ||

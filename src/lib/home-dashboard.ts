@@ -1,4 +1,4 @@
-import type { DatabaseDashboardPin } from "@/lib/database-dashboard";
+import type { HomePin } from "@/lib/home-pins";
 
 export interface HomeDashboardLayoutItem {
   id: string;
@@ -30,7 +30,7 @@ export function saveHomeDashboardLayout(layout: HomeDashboardLayoutItem[]) {
 }
 
 export function mergeHomeDashboardLayout(
-  pins: DatabaseDashboardPin[],
+  pins: HomePin[],
   layout: HomeDashboardLayoutItem[],
 ): HomeDashboardLayoutItem[] {
   const layoutById = new Map(layout.map((item) => [item.id, item]));

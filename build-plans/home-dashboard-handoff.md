@@ -62,7 +62,7 @@ Good candidates:
 - `due_date` schema additions for `operations`, `projects`, `investigations`
 - `dashboard_messages` table
 - MCP write tools for dashboard messages
-- Renaming `src/lib/database-dashboard.ts` to match the Home-only meaning
+- Rename the Home pin store away from `database-dashboard` naming
 
 ## Build status
 

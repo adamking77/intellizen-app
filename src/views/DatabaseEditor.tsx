@@ -24,13 +24,13 @@ import {
   prepareCsvImport,
 } from "@/lib/database-core";
 import {
-  findDatabaseDashboardPin,
-  loadDatabaseDashboardPins,
-  removeDatabaseDashboardPin,
-  saveDatabaseDashboardPins,
-  supportsPinnedDashboardView,
-  upsertDatabaseDashboardPin,
-} from "@/lib/database-dashboard";
+  findHomePin,
+  loadHomePins,
+  removeHomePin,
+  saveHomePins,
+  supportsPinnedHomeView,
+  upsertHomePin,
+} from "@/lib/home-pins";
 import { getVaultAbsolutePath, writeVaultFile } from "@/lib/vault";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { dirname } from "@tauri-apps/api/path";
@@ -100,7 +100,7 @@ export function DatabaseEditorView({
   const [activePeek, setActivePeek] = useState<{ databaseId: string; recordId: string } | null>(null);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
-  const [dashboardPins, setDashboardPins] = useState(() => loadDatabaseDashboardPins());
+  const [homePins, setHomePins] = useState(() => loadHomePins());
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -171,9 +171,9 @@ export function DatabaseEditorView({
     () => database?.views.find((v) => v.id === activeViewId) ?? database?.views[0] ?? null,
     [activeViewId, database],
   );
-  const canPinActiveViewToHome = Boolean(activeView && supportsPinnedDashboardView(activeView.type));
+  const canPinActiveViewToHome = Boolean(activeView && supportsPinnedHomeView(activeView.type));
   const isActiveViewPinnedToHome = Boolean(
-    database && activeView && findDatabaseDashboardPin(dashboardPins, { databaseId: database.id, viewId: activeView.id }),
+    database && activeView && findHomePin(homePins, { databaseId: database.id, viewId: activeView.id }),
   );
 
   const catalogDatabaseMap = useMemo(() => {
@@ -609,27 +609,27 @@ export function DatabaseEditorView({
 
   function handleToggleActiveViewHomePin() {
     if (!database || !activeView) return;
-    if (!supportsPinnedDashboardView(activeView.type)) return;
+    if (!supportsPinnedHomeView(activeView.type)) return;
 
-    if (findDatabaseDashboardPin(dashboardPins, { databaseId: database.id, viewId: activeView.id })) {
-      const result = removeDatabaseDashboardPin(dashboardPins, {
+    if (findHomePin(homePins, { databaseId: database.id, viewId: activeView.id })) {
+      const result = removeHomePin(homePins, {
         databaseId: database.id,
         viewId: activeView.id,
       });
-      setDashboardPins(result.pins);
-      saveDatabaseDashboardPins(result.pins);
+      setHomePins(result.pins);
+      saveHomePins(result.pins);
       if (result.removed) {
         toast.success("View removed from Home");
       }
       return;
     }
 
-    const result = upsertDatabaseDashboardPin(dashboardPins, {
+    const result = upsertHomePin(homePins, {
       databaseId: database.id,
       viewId: activeView.id,
     });
-    setDashboardPins(result.pins);
-    saveDatabaseDashboardPins(result.pins);
+    setHomePins(result.pins);
+    saveHomePins(result.pins);
     if (result.added) {
       toast.success("View pinned to Home", {
         action: { label: "Open Home", onClick: () => navigate("/home") },

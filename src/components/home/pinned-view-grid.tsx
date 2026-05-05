@@ -7,7 +7,7 @@ import { ExternalLink, GripVertical, X } from "lucide-react";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
-import type { DatabaseDashboardPin } from "@/lib/database-dashboard";
+import type { HomePin } from "@/lib/home-pins";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ const GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 28;
 
 export interface PinnedDatabaseWidgetModel {
-  pin: DatabaseDashboardPin;
+  pin: HomePin;
   database: WorkspaceDatabaseCatalogEntry;
   view: WorkspaceDatabaseModel["views"][number];
 }
