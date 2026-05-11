@@ -37,7 +37,7 @@ export function saveHomePins(pins: HomePin[]) {
 }
 
 export function supportsPinnedHomeView(type: WorkspaceDatabaseModel["views"][number]["type"]) {
-  return type === "chart" || type === "table" || type === "list";
+  return type === "chart" || type === "table" || type === "list" || type === "timeline";
 }
 
 export function findHomePin(

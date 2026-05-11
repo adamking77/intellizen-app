@@ -1592,6 +1592,21 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
       candidate.chartRange === "all"
         ? candidate.chartRange
         : undefined,
+    timelineStartField:
+      typeof candidate.timelineStartField === "string" ? candidate.timelineStartField : undefined,
+    timelineEndField:
+      typeof candidate.timelineEndField === "string" ? candidate.timelineEndField : undefined,
+    timelineProgressField:
+      typeof candidate.timelineProgressField === "string" ? candidate.timelineProgressField : undefined,
+    timelineLabelField:
+      typeof candidate.timelineLabelField === "string" ? candidate.timelineLabelField : undefined,
+    timelineViewMode:
+      candidate.timelineViewMode === "Day" ||
+      candidate.timelineViewMode === "Week" ||
+      candidate.timelineViewMode === "Month" ||
+      candidate.timelineViewMode === "Year"
+        ? candidate.timelineViewMode
+        : undefined,
   };
 }
 
@@ -1642,6 +1657,11 @@ function hydrateWorkspaceDatabaseViewModel(view: WorkspaceDatabaseView): Workspa
     chartShowGrid: view.config.chartShowGrid,
     chartPalette: view.config.chartPalette,
     chartRange: view.config.chartRange,
+    timelineStartField: view.config.timelineStartField,
+    timelineEndField: view.config.timelineEndField,
+    timelineProgressField: view.config.timelineProgressField,
+    timelineLabelField: view.config.timelineLabelField,
+    timelineViewMode: view.config.timelineViewMode,
   };
 }
 

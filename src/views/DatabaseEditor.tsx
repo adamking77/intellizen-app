@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { DatabaseCalendarView } from "@/components/database/DatabaseCalendarView";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
+import { DatabaseTimelineView } from "@/components/database/DatabaseTimelineView";
 import { DatabaseGalleryView } from "@/components/database/DatabaseGalleryView";
 import { DatabaseKanbanView } from "@/components/database/DatabaseKanbanView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
@@ -80,6 +81,11 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
     chartShowGrid: view.chartShowGrid,
     chartPalette: view.chartPalette,
     chartRange: view.chartRange,
+    timelineStartField: view.timelineStartField,
+    timelineEndField: view.timelineEndField,
+    timelineProgressField: view.timelineProgressField,
+    timelineLabelField: view.timelineLabelField,
+    timelineViewMode: view.timelineViewMode,
   };
 }
 
@@ -1081,6 +1087,13 @@ export function DatabaseEditorView({
                 catalog={catalog}
                 onCreateRecord={() => void handleCreateRecord()}
               />
+            ) : activeView.type === "timeline" ? (
+              <DatabaseTimelineView
+                database={database}
+                view={activeView}
+                onOpenRecord={(recordId) => handleOpenRecord(recordId)}
+                onUpdateField={handleUpdateRecordField}
+              />
             ) : (
               <DatabaseTableView
                 database={database}
@@ -1143,4 +1156,5 @@ const VIEW_LABELS: Record<WorkspaceDatabaseViewType, string> = {
   gallery: "Gallery",
   calendar: "Calendar",
   chart: "Chart",
+  timeline: "Timeline",
 };

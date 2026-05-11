@@ -271,7 +271,8 @@ export type WorkspaceDatabaseViewType =
   | "list"
   | "gallery"
   | "calendar"
-  | "chart";
+  | "chart"
+  | "timeline";
 
 export type WorkspaceDatabaseChartType = "bar" | "line" | "donut";
 export type WorkspaceDatabaseChartAggregation = "count" | "sum" | "avg" | "min" | "max";
@@ -329,6 +330,11 @@ export interface WorkspaceDatabaseViewConfig {
   chartShowGrid?: boolean;
   chartPalette?: WorkspaceDatabaseChartPalette;
   chartRange?: WorkspaceDatabaseChartRange;
+  timelineStartField?: string;
+  timelineEndField?: string;
+  timelineProgressField?: string;
+  timelineLabelField?: string;
+  timelineViewMode?: "Day" | "Week" | "Month" | "Year";
 }
 
 export interface WorkspaceDatabaseSchemaSaveOptions {
@@ -400,6 +406,11 @@ export interface WorkspaceDatabaseModel {
     chartShowGrid?: boolean;
     chartPalette?: WorkspaceDatabaseChartPalette;
     chartRange?: WorkspaceDatabaseChartRange;
+    timelineStartField?: string;
+    timelineEndField?: string;
+    timelineProgressField?: string;
+    timelineLabelField?: string;
+    timelineViewMode?: "Day" | "Week" | "Month" | "Year";
   }>;
   records: WorkspaceDatabaseRecordModel[];
   headerFieldIds?: string[];

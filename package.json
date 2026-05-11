@@ -35,6 +35,7 @@
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
     "exa-js": "^2.11.0",
+    "frappe-gantt": "^1.2.2",
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.8.0",
     "react": "^18.3.1",

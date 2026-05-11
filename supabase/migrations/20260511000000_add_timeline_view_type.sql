@@ -1,0 +1,7 @@
+-- Allow 'timeline' as a valid view type in workspace_views
+alter table workspace_views
+  drop constraint if exists workspace_views_type_check;
+
+alter table workspace_views
+  add constraint workspace_views_type_check
+  check (type in ('table', 'kanban', 'list', 'gallery', 'calendar', 'chart', 'timeline'));

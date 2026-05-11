@@ -20,6 +20,7 @@ import {
   Columns3,
   Download,
   Funnel,
+  GanttChart,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -48,6 +49,7 @@ const VIEW_ICONS: Record<WorkspaceDatabaseViewType, ReactNode> = {
   gallery: <LayoutGrid className="h-3.5 w-3.5" />,
   calendar: <CalendarDays className="h-3.5 w-3.5" />,
   chart: <BarChart3 className="h-3.5 w-3.5" />,
+  timeline: <GanttChart className="h-3.5 w-3.5" />,
 };
 
 const VIEW_DEFAULT_NAMES: Record<WorkspaceDatabaseViewType, string> = {
@@ -57,6 +59,7 @@ const VIEW_DEFAULT_NAMES: Record<WorkspaceDatabaseViewType, string> = {
   gallery: "Gallery",
   calendar: "Calendar",
   chart: "Chart",
+  timeline: "Timeline",
 };
 
 function getViewTabLabel(view: WorkspaceDatabaseModel["views"][number]): string {
@@ -67,6 +70,7 @@ function getViewTabLabel(view: WorkspaceDatabaseModel["views"][number]): string 
     gallery: ["Gallery"],
     calendar: ["Calendar"],
     chart: ["Chart"],
+    timeline: ["Timeline", "Gantt"],
   } satisfies Record<WorkspaceDatabaseViewType, string[]>;
 
   const matchedAlias = aliases[view.type].find((alias) => view.name.match(new RegExp(`^${alias} \\d+$`)));
@@ -213,7 +217,9 @@ export function ViewTabBar({
     Boolean(activeView.chartType) ||
     Boolean(activeView.chartAggregation && activeView.chartAggregation !== "count") ||
     activeView.chartShowLegend === false ||
-    activeView.chartShowGrid === false;
+    activeView.chartShowGrid === false ||
+    Boolean(activeView.timelineStartField) ||
+    Boolean(activeView.timelineEndField);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -267,7 +273,7 @@ export function ViewTabBar({
             </Button>
             {addViewOpen ? (
               <div className="db-dropdown-panel absolute left-0 top-full z-50 mt-2 min-w-[180px]">
-                {(["table", "kanban", "list", "gallery", "calendar", "chart"] as WorkspaceDatabaseViewType[]).map((viewType) => (
+                {(["table", "kanban", "list", "gallery", "calendar", "chart", "timeline"] as WorkspaceDatabaseViewType[]).map((viewType) => (
                   <button
                     key={viewType}
                     type="button"
@@ -774,7 +780,12 @@ function ViewSettingsModal({
     });
   const isGallery = activeView.type === "gallery";
   const isChart = activeView.type === "chart";
+  const isTimeline = activeView.type === "timeline";
   const supportsCardFields = activeView.type === "gallery" || activeView.type === "kanban";
+  const dateFields = database.schema.filter((f) => f.type === "date");
+  const numberFields = database.schema.filter(
+    (f) => f.type === "number" || f.type === "rollup" || f.type === "formula",
+  );
   const visibleFieldCount = database.schema.length - activeView.hiddenFields.length;
   const cardFieldCount = Math.min(selectedFieldIds.length, 3);
 
@@ -1006,10 +1017,84 @@ function ViewSettingsModal({
                     </div>
                   </>
                 ) : null}
+
+                {isTimeline ? (
+                  <>
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Start date field
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineStartField ?? ""}
+                        onChange={(e) => onUpdateViewConfig({ timelineStartField: e.target.value || undefined })}
+                      >
+                        <option value="">Select field…</option>
+                        {dateFields.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        End date field
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineEndField ?? ""}
+                        onChange={(e) => onUpdateViewConfig({ timelineEndField: e.target.value || undefined })}
+                      >
+                        <option value="">Select field…</option>
+                        {dateFields.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Progress field (optional)
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineProgressField ?? ""}
+                        onChange={(e) =>
+                          onUpdateViewConfig({ timelineProgressField: e.target.value || undefined })
+                        }
+                      >
+                        <option value="">None</option>
+                        {numberFields.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Zoom level
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineViewMode ?? "Week"}
+                        onChange={(e) =>
+                          onUpdateViewConfig({
+                            timelineViewMode: e.target.value as "Day" | "Week" | "Month" | "Year",
+                          })
+                        }
+                      >
+                        <option value="Day">Day</option>
+                        <option value="Week">Week</option>
+                        <option value="Month">Month</option>
+                        <option value="Year">Year</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
               </div>
             </section>
 
-            {!isChart ? (
+            {!isChart && !isTimeline ? (
               <section className="space-y-3 border-t border-[var(--border)] pt-4">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-[13px] font-semibold text-[var(--text)]">Visible fields</h4>

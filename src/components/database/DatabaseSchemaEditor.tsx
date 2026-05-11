@@ -94,6 +94,37 @@ export function DatabaseSchemaEditor({
     [catalog],
   );
 
+  const selfRelationField = useMemo(
+    () =>
+      schema.find(
+        (f) =>
+          f.type === "relation" &&
+          (!f.relation?.targetDatabaseId || f.relation.targetDatabaseId === database.id),
+      ),
+    [schema, database.id],
+  );
+
+  function enableSubRecords() {
+    if (selfRelationField) return;
+    const subItemsId = crypto.randomUUID();
+    const parentId = crypto.randomUUID();
+    setSchema((prev) => [
+      ...prev,
+      {
+        id: subItemsId,
+        name: "Sub-records",
+        type: "relation",
+        relation: { targetRelationFieldId: parentId },
+      },
+      {
+        id: parentId,
+        name: "Parent",
+        type: "relation",
+        relation: { targetRelationFieldId: subItemsId },
+      },
+    ]);
+  }
+
   const inputStyle: React.CSSProperties = {
     backgroundColor: "var(--base)",
     color: "var(--text)",
@@ -491,6 +522,25 @@ export function DatabaseSchemaEditor({
               </select>
               <button className="db-btn" onClick={addField}>
                 Add
+              </button>
+            </div>
+          </div>
+
+          <div className="db-schema-add" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            <div className="db-schema-add-title">Quick setup</div>
+            <div className="db-schema-add-row" style={{ alignItems: "center" }}>
+              <span style={{ flex: 1, fontSize: 12, color: "var(--overlay-1)" }}>
+                {selfRelationField
+                  ? `Sub-records enabled via "${selfRelationField.name}" field`
+                  : "Add Parent / Sub-records relation pair to this database"}
+              </span>
+              <button
+                className="db-btn"
+                onClick={enableSubRecords}
+                disabled={!!selfRelationField}
+                style={selfRelationField ? { opacity: 0.5, cursor: "default" } : {}}
+              >
+                {selfRelationField ? "Enabled" : "Enable sub-records"}
               </button>
             </div>
           </div>
