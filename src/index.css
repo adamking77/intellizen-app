@@ -1397,6 +1397,75 @@ pre {
   border-bottom: none;
 }
 
+.db-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--overlay-1);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 3px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.db-expand-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.db-row-sub {
+  background: color-mix(in srgb, var(--mantle) 60%, var(--base));
+}
+
+.db-row-sub:hover {
+  background: color-mix(in srgb, var(--surface-wash) 70%, var(--mantle));
+}
+
+/* Tree connector rendered in the primary cell of sub-rows */
+.db-sub-connector {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 28px;
+  height: 22px;
+  margin-right: 2px;
+  vertical-align: middle;
+  position: relative;
+}
+
+.db-sub-connector::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: -8px;
+  bottom: 50%;
+  width: 1px;
+  background: var(--border);
+}
+
+.db-sub-connector::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: var(--border);
+}
+
+.db-sub-add-row td {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.db-sub-add-btn {
+  padding-left: 52px;
+}
+
 .db-add-record-btn {
   background: transparent;
   border: none;

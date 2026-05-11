@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, type CSSProperties } from "react";
+import { useEffect, useRef, useMemo, useCallback, type CSSProperties } from "react";
 import Gantt, { type GanttTask } from "frappe-gantt";
 import "@/frappe-gantt.css";
 
@@ -33,23 +33,23 @@ function fromGanttDate(dateObj: Date): string {
 const GANTT_VARS: CSSProperties = {
   "--g-bar-color": "var(--accent)",
   "--g-bar-border": "var(--accent-border, var(--accent))",
-  "--g-tick-color-thick": "var(--border)",
-  "--g-tick-color": "var(--border-subtle, var(--border))",
-  "--g-border-color": "var(--border)",
+  "--g-tick-color-thick": "color-mix(in srgb, var(--border) 50%, transparent)",
+  "--g-tick-color": "color-mix(in srgb, var(--border) 25%, transparent)",
+  "--g-border-color": "color-mix(in srgb, var(--border) 40%, transparent)",
   "--g-text-muted": "var(--overlay-1)",
   "--g-text-light": "var(--base)",
   "--g-text-dark": "var(--text)",
-  "--g-progress-color": "color-mix(in srgb, var(--accent) 55%, transparent)",
+  "--g-progress-color": "color-mix(in srgb, var(--accent) 45%, transparent)",
   "--g-handle-color": "var(--text)",
   "--g-header-background": "var(--mantle)",
   "--g-row-color": "var(--base)",
-  "--g-row-border-color": "var(--border-subtle, var(--border))",
+  "--g-row-border-color": "color-mix(in srgb, var(--border) 30%, transparent)",
   "--g-today-highlight": "var(--accent)",
   "--g-actions-background": "var(--surface-wash)",
-  "--g-weekend-highlight-color": "var(--surface-wash)",
-  "--g-weekend-label-color": "var(--border)",
+  "--g-weekend-highlight-color": "var(--base)",
+  "--g-weekend-label-color": "transparent",
   "--g-arrow-color": "var(--overlay-1)",
-  "--g-expected-progress": "color-mix(in srgb, var(--accent) 30%, transparent)",
+  "--g-expected-progress": "color-mix(in srgb, var(--accent) 20%, transparent)",
   "--g-popup-actions": "var(--surface-wash)",
 } as CSSProperties;
 
@@ -61,6 +61,42 @@ export function DatabaseTimelineView({
 }: DatabaseTimelineViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ganttRef = useRef<Gantt | null>(null);
+
+  const onOpenRecordRef = useRef(onOpenRecord);
+  const onUpdateFieldRef = useRef(onUpdateField);
+  onOpenRecordRef.current = onOpenRecord;
+  onUpdateFieldRef.current = onUpdateField;
+
+  // Per-(record,field) debounce: waits 500ms after the last drag snap before
+  // writing to the database. Prevents mid-drag Gantt rebuilds that would abort the drag.
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Tracks whether a drag is in progress or just ended. on_date_change fires on every
+  // mousemove during drag; we use it to suppress on_click (which the browser fires after
+  // mouseup even after a drag in WKWebView SVG elements).
+  const recentDragRef = useRef(false);
+  const recentDragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stableOnOpenRecord = useCallback((recordId: string) => {
+    if (recentDragRef.current) return;
+    onOpenRecordRef.current?.(recordId);
+  }, []);
+
+  const stableOnUpdateField = useCallback(
+    (recordId: string, fieldId: string, value: WorkspaceDatabaseFieldValue) => {
+      const key = `${recordId}:${fieldId}`;
+      const existing = debounceTimers.current.get(key);
+      if (existing) clearTimeout(existing);
+      debounceTimers.current.set(
+        key,
+        setTimeout(() => {
+          debounceTimers.current.delete(key);
+          onUpdateFieldRef.current?.(recordId, fieldId, value);
+        }, 500),
+      );
+    },
+    [],
+  );
 
   const startFieldId = view.timelineStartField;
   const endFieldId = view.timelineEndField;
@@ -78,16 +114,13 @@ export function DatabaseTimelineView({
 
   const tasks = useMemo<GanttTask[]>(() => {
     if (!startFieldId || !endFieldId) return [];
-
     const result: GanttTask[] = [];
-
     for (const record of database.records) {
       const startRaw = getFieldValue(record, { id: startFieldId, type: "date", name: "" }, database);
       const endRaw = getFieldValue(record, { id: endFieldId, type: "date", name: "" }, database);
       const start = toGanttDate(startRaw as WorkspaceDatabaseFieldValue);
       const end = toGanttDate(endRaw as WorkspaceDatabaseFieldValue);
       if (!start || !end) continue;
-
       let progress: number | undefined;
       if (progressFieldId) {
         const rawProgress = getFieldValue(
@@ -99,28 +132,28 @@ export function DatabaseTimelineView({
           progress = Math.max(0, Math.min(100, rawProgress));
         }
       }
-
-      result.push({
-        id: record.id,
-        name: getRecordTitle(record, database),
-        start,
-        end,
-        progress,
-      });
+      result.push({ id: record.id, name: getRecordTitle(record, database), start, end, progress });
     }
-
     return result;
   }, [database, startFieldId, endFieldId, progressFieldId]);
 
+  const lastSyncedTasksRef = useRef<GanttTask[]>([]);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
+  // Effect 1: Build Gantt when config (viewMode, field mappings) changes.
+  // Reads tasks from tasksRef so task-data changes don't cause a full rebuild.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     el.innerHTML = "";
+    ganttRef.current = null;
 
-    if (tasks.length === 0) return;
+    const currentTasks = tasksRef.current;
+    if (currentTasks.length === 0) return;
 
-    const gantt = new Gantt(el, tasks, {
+    const gantt = new Gantt(el, currentTasks, {
       view_mode: viewMode as "Day" | "Week" | "Month" | "Year",
       date_format: "YYYY-MM-DD",
       view_mode_select: false,
@@ -131,26 +164,80 @@ export function DatabaseTimelineView({
       padding: 16,
       readonly_progress: !progressFieldId,
       on_click: (task: GanttTask) => {
-        onOpenRecord?.(task.id);
+        stableOnOpenRecord(task.id);
       },
       on_date_change: (task: GanttTask, start: Date, end: Date) => {
-        if (!onUpdateField) return;
-        if (startFieldId) onUpdateField(task.id, startFieldId, fromGanttDate(start));
-        if (endFieldId) onUpdateField(task.id, endFieldId, fromGanttDate(end));
+        // Mark drag in progress to suppress on_click for 300ms after last movement.
+        recentDragRef.current = true;
+        if (recentDragTimerRef.current) clearTimeout(recentDragTimerRef.current);
+        recentDragTimerRef.current = setTimeout(() => {
+          recentDragRef.current = false;
+        }, 300);
+
+        if (startFieldId) stableOnUpdateField(task.id, startFieldId, fromGanttDate(start));
+        if (endFieldId) stableOnUpdateField(task.id, endFieldId, fromGanttDate(end));
       },
       on_progress_change: (task: GanttTask, progress: number) => {
-        if (!onUpdateField || !progressFieldId) return;
-        onUpdateField(task.id, progressFieldId, Math.round(progress));
+        if (!progressFieldId) return;
+        stableOnUpdateField(task.id, progressFieldId, Math.round(progress));
       },
     });
 
     ganttRef.current = gantt;
+    lastSyncedTasksRef.current = currentTasks;
 
     return () => {
       if (el) el.innerHTML = "";
       ganttRef.current = null;
+      if (recentDragTimerRef.current) clearTimeout(recentDragTimerRef.current);
+      recentDragRef.current = false;
+      for (const t of debounceTimers.current.values()) clearTimeout(t);
+      debounceTimers.current.clear();
     };
-  }, [tasks, viewMode, startFieldId, endFieldId, progressFieldId, onOpenRecord, onUpdateField]);
+  }, [viewMode, startFieldId, endFieldId, progressFieldId, stableOnOpenRecord, stableOnUpdateField]);
+
+  // Effect 2: Sync task data changes without rebuilding the chart.
+  // Calls each render step individually and intentionally skips set_scroll_position().
+  // In WKWebView, scrollTo({behavior:'smooth'}) runs asynchronously and cannot be cancelled
+  // by synchronous scrollLeft assignment. Skipping it entirely prevents the scroll-to-today jump
+  // that occurred on every data update (drag snap, field edit, etc.).
+  // setup_dates(true) preserves gantt_start/end so savedScroll maps to the same visual date.
+  useEffect(() => {
+    if (tasks === lastSyncedTasksRef.current) return;
+
+    const gantt = ganttRef.current;
+    if (!gantt || tasks.length === 0) {
+      lastSyncedTasksRef.current = tasks;
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = gantt as unknown as Record<string, any>;
+    const container = g.$container as HTMLElement | undefined;
+    if (!container) {
+      lastSyncedTasksRef.current = tasks;
+      return;
+    }
+
+    const savedScroll = container.scrollLeft;
+
+    g.setup_tasks(tasks);
+    g.setup_dates(true);
+    g.clear();
+    g.setup_layers();
+    g.make_grid();
+    g.make_dates();
+    g.make_grid_extras();
+    g.make_bars();
+    g.make_arrows();
+    g.map_arrows_on_bars();
+    g.set_dimensions();
+    // Intentionally skip g.set_scroll_position() — see comment above.
+
+    container.scrollLeft = savedScroll;
+
+    lastSyncedTasksRef.current = tasks;
+  }, [tasks]);
 
   const isUnconfigured = !startFieldId || !endFieldId;
   const dateFields = database.schema.filter((f) => f.type === "date");

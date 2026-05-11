@@ -166,7 +166,7 @@ export function TaskRelationsSection({
           </label>
           <Button size="sm" variant="secondary" onClick={() => setShowCreate((current) => !current)}>
             <Plus className="h-4 w-4" />
-            Add task
+            New record
           </Button>
           <Button
             ref={linkButtonRef}
@@ -185,7 +185,7 @@ export function TaskRelationsSection({
           <Input
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
-            placeholder="New task title"
+            placeholder="Record name…"
             className="bg-transparent"
             onKeyDown={(event) => {
               if (event.key === "Enter") {

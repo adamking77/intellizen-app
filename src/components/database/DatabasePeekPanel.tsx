@@ -474,6 +474,39 @@ export function DatabasePeekPanel({
             </div>
           )}
 
+          {database.schema
+            .filter((field) => {
+              if (field.type !== "relation") return false;
+              const tid = field.relation?.targetDatabaseId;
+              return !tid || tid === database.id;
+            })
+            .map((field) => {
+              const targetDatabase = resolveTargetDatabase(database, field, catalog);
+              if (!targetDatabase) return null;
+              return (
+                <TaskRelationsSection
+                  key={field.id}
+                  sourceDatabaseId={database.id}
+                  sourceRecordId={record.id}
+                  fieldId={field.id}
+                  fieldName={field.name}
+                  targetDatabase={targetDatabase}
+                  relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
+                  catalog={catalog}
+                  onOpenRecord={onOpenRecord}
+                  onCreateRecord={onCreateRecord}
+                  onUpdateField={onUpdateField}
+                  onUpdateRelation={onUpdateRelation}
+                  onUpdateViewConfig={onUpdateViewConfig}
+                  onSaveSchema={onSaveSchema}
+                  onDeleteRecord={onDelete}
+                  onDeleteRecords={onDeleteRecords}
+                  onDuplicateRecord={onDuplicate}
+                  onDuplicateRecords={onDuplicateRecords}
+                />
+              );
+            })}
+
           <div className="db-record-section px-6 py-3">
             <details
               className="db-record-properties-details"
@@ -539,7 +572,11 @@ export function DatabasePeekPanel({
           </div>
 
           {database.schema
-            .filter((field) => field.type === "relation")
+            .filter((field) => {
+              if (field.type !== "relation") return false;
+              const tid = field.relation?.targetDatabaseId;
+              return tid !== undefined && tid !== database.id;
+            })
             .map((field) => {
               const targetDatabase = resolveTargetDatabase(database, field, catalog);
               if (!targetDatabase) return null;

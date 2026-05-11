@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Copy, Trash2 } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Copy, Trash2 } from "lucide-react";
 
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
@@ -113,6 +113,8 @@ interface DatabaseTableViewProps {
   onDeleteRecord: (recordId: string) => void;
   onDeleteRecords: (recordIds: string[]) => void;
   onDuplicateRecords: (recordIds: string[]) => void;
+  subRecordsConfig?: { subItemsFieldId: string; parentFieldId: string };
+  onCreateSubRecord?: (parentRecordId: string) => Promise<void>;
 }
 
 type EditingCell = { recordId: string; fieldId: string } | null;
@@ -134,6 +136,8 @@ export function DatabaseTableView({
   onDeleteRecord,
   onDeleteRecords,
   onDuplicateRecords,
+  subRecordsConfig,
+  onCreateSubRecord,
 }: DatabaseTableViewProps) {
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
@@ -155,6 +159,31 @@ export function DatabaseTableView({
 
   const [confirmDeleteRecordId, setConfirmDeleteRecordId] = useState<string | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Collapse expanded rows whose sub-records are all gone (deleted records leave
+  // stale IDs in the parent's relation field that never get cleaned up otherwise).
+  useEffect(() => {
+    if (!subRecordsConfig) return;
+    setExpandedRows((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      let changed = false;
+      for (const parentId of prev) {
+        const parent = database.records.find((r) => r.id === parentId);
+        if (!parent) { next.delete(parentId); changed = true; continue; }
+        const subIds = parent[subRecordsConfig.subItemsFieldId];
+        if (!Array.isArray(subIds) || subIds.length === 0) {
+          next.delete(parentId); changed = true; continue;
+        }
+        const hasLiveChild = (subIds as string[]).some((id) =>
+          database.records.some((r) => r.id === id),
+        );
+        if (!hasLiveChild) { next.delete(parentId); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [database.records, subRecordsConfig]);
 
   const visibleFields = useMemo(
     () => getVisibleFields(database.schema, view),
@@ -186,20 +215,42 @@ export function DatabaseTableView({
   }, [database.records]);
 
   const filtered = applyFilters(database.records, view.filter, database.schema, catalog);
-  const records = applySorts(filtered, view.sort, database.schema);
+  const sorted = applySorts(filtered, view.sort, database.schema);
+  const records = subRecordsConfig
+    ? sorted.filter((r) => {
+        const parentVal = r[subRecordsConfig.parentFieldId];
+        return !Array.isArray(parentVal) || parentVal.length === 0;
+      })
+    : sorted;
+
+  // All records currently visible in the table: top-level + any sub-records
+  // whose parent row is expanded. Used for selection state so sub-record
+  // checkboxes contribute to the bulk-action count.
+  const allVisibleRecords = useMemo(() => {
+    if (!subRecordsConfig) return records;
+    const result = [...records];
+    for (const parent of records) {
+      if (!expandedRows.has(parent.id)) continue;
+      const subIds = Array.isArray(parent[subRecordsConfig.subItemsFieldId])
+        ? (parent[subRecordsConfig.subItemsFieldId] as string[])
+        : [];
+      result.push(...database.records.filter((r) => subIds.includes(r.id)));
+    }
+    return result;
+  }, [records, expandedRows, subRecordsConfig, database.records]);
 
   const selectedVisibleCount = useMemo(
-    () => records.filter((r) => selectedRecordIds.has(r.id)).length,
-    [records, selectedRecordIds],
+    () => allVisibleRecords.filter((r) => selectedRecordIds.has(r.id)).length,
+    [allVisibleRecords, selectedRecordIds],
   );
   const canEditSchema = !embedded && !schemaLocked;
 
-  const allVisibleSelected = records.length > 0 && selectedVisibleCount === records.length;
-  const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < records.length;
+  const allVisibleSelected = allVisibleRecords.length > 0 && selectedVisibleCount === allVisibleRecords.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < allVisibleRecords.length;
 
   function toggleSelectAll(checked: boolean) {
     if (checked) {
-      setSelectedRecordIds(new Set(records.map((r) => r.id)));
+      setSelectedRecordIds(new Set(allVisibleRecords.map((r) => r.id)));
       return;
     }
     setSelectedRecordIds(new Set());
@@ -215,13 +266,13 @@ export function DatabaseTableView({
   }
 
   function runBulkDuplicate() {
-    const ids = records.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
+    const ids = allVisibleRecords.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
     onDuplicateRecords(ids);
     setSelectedRecordIds(new Set());
   }
 
   function runBulkDelete() {
-    const ids = records.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
+    const ids = allVisibleRecords.filter((r) => selectedRecordIds.has(r.id)).map((r) => r.id);
     onDeleteRecords(ids);
     setSelectedRecordIds(new Set());
     setConfirmBulkDelete(false);
@@ -371,16 +422,17 @@ export function DatabaseTableView({
     window.addEventListener("pointerup", onUp, { once: true });
   }
 
-  function renderRow(record: WorkspaceDatabaseModel["records"][number]) {
+  function renderRow(record: WorkspaceDatabaseModel["records"][number], isSubRow = false) {
     const isEditableField = (field: WorkspaceDatabaseField) =>
       field.type !== "createdAt"
       && field.type !== "lastEditedAt"
       && field.type !== "formula"
       && field.type !== "rollup";
     const firstVisibleFieldId = visibleFields[0]?.id;
+    const isExpanded = subRecordsConfig ? expandedRows.has(record.id) : false;
 
     return (
-      <tr key={record.id} className="db-row">
+      <tr key={record.id} className={`db-row${isSubRow ? " db-row-sub" : ""}`}>
         {!embedded ? (
           <td
             className="db-td db-td-check"
@@ -430,6 +482,28 @@ export function DatabaseTableView({
                 />
               ) : (
                 <>
+                  {field.id === firstVisibleFieldId && isSubRow && (
+                    <span className="db-sub-connector" aria-hidden />
+                  )}
+                  {field.id === firstVisibleFieldId && subRecordsConfig && !isSubRow && (
+                    <button
+                      type="button"
+                      className="db-expand-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedRows((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(record.id)) next.delete(record.id);
+                          else next.add(record.id);
+                          return next;
+                        });
+                      }}
+                    >
+                      <ChevronRight
+                        className={`h-3 w-3 transition-transform duration-150${isExpanded ? " rotate-90" : ""}`}
+                      />
+                    </button>
+                  )}
                   <div
                     className="db-td-content"
                     onClick={(e) => {
@@ -511,6 +585,38 @@ export function DatabaseTableView({
           );
         })}
       </tr>
+    );
+  }
+
+  function renderRowGroup(record: WorkspaceDatabaseModel["records"][number]) {
+    if (!subRecordsConfig) return renderRow(record);
+    const isExpanded = expandedRows.has(record.id);
+    const subIds = isExpanded
+      ? (Array.isArray(record[subRecordsConfig.subItemsFieldId]) ? (record[subRecordsConfig.subItemsFieldId] as string[]) : [])
+      : [];
+    const subRecords = database.records.filter((r) => subIds.includes(r.id));
+    const totalCols = visibleFields.length + 2;
+    return (
+      <Fragment key={record.id}>
+        {renderRow(record)}
+        {subRecords.map((sub) => renderRow(sub, true))}
+        {isExpanded && (
+          <tr className="db-sub-add-row">
+            <td colSpan={totalCols}>
+              <button
+                type="button"
+                className="db-add-record-btn db-sub-add-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onCreateSubRecord?.(record.id);
+                }}
+              >
+                + New sub-record
+              </button>
+            </td>
+          </tr>
+        )}
+      </Fragment>
     );
   }
 
@@ -609,7 +715,7 @@ export function DatabaseTableView({
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => renderRow(record))}
+            {records.map((record) => renderRowGroup(record))}
             {!embedded ? (
               <tr className="db-add-row">
                 <td colSpan={visibleFields.length + 2}>
@@ -769,7 +875,23 @@ export function DatabaseTableView({
         confirmLabel="Delete"
         danger
         onConfirm={() => {
-          if (confirmDeleteRecordId) onDeleteRecord(confirmDeleteRecordId);
+          if (confirmDeleteRecordId) {
+            // Auto-collapse parent when its last sub-record is deleted.
+            if (subRecordsConfig) {
+              const parent = database.records.find((r) => {
+                const subIds = r[subRecordsConfig.subItemsFieldId];
+                return Array.isArray(subIds) && (subIds as string[]).includes(confirmDeleteRecordId);
+              });
+              if (parent && (parent[subRecordsConfig.subItemsFieldId] as string[]).length <= 1) {
+                setExpandedRows((prev) => {
+                  const next = new Set(prev);
+                  next.delete(parent.id);
+                  return next;
+                });
+              }
+            }
+            onDeleteRecord(confirmDeleteRecordId);
+          }
           setConfirmDeleteRecordId(null);
         }}
         onCancel={() => setConfirmDeleteRecordId(null)}

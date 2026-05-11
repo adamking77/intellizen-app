@@ -56,6 +56,7 @@ import type {
   WorkspaceDatabaseCatalogEntry,
   WorkspaceDatabaseFieldValue,
   WorkspaceDatabaseModel,
+  WorkspaceDatabaseRecordModel,
   WorkspaceDatabaseSchemaSaveOptions,
   WorkspaceDatabaseSummary,
   WorkspaceDatabaseViewConfig,
@@ -182,6 +183,20 @@ export function DatabaseEditorView({
     database && activeView && findHomePin(homePins, { databaseId: database.id, viewId: activeView.id }),
   );
 
+  const subRecordsConfig = useMemo(() => {
+    if (!database) return undefined;
+    const selfRelFields = database.schema.filter(
+      (f) => f.type === "relation" && (!f.relation?.targetDatabaseId || f.relation.targetDatabaseId === database.id),
+    );
+    const subItemsField = selfRelFields.find(
+      (f) => !f.name.toLowerCase().includes("parent") && f.relation?.targetRelationFieldId,
+    );
+    if (!subItemsField) return undefined;
+    const parentField = database.schema.find((f) => f.id === subItemsField.relation?.targetRelationFieldId);
+    if (!parentField) return undefined;
+    return { subItemsFieldId: subItemsField.id, parentFieldId: parentField.id };
+  }, [database]);
+
   const catalogDatabaseMap = useMemo(() => {
     const entries = new Map<string, WorkspaceDatabaseModel>();
     for (const entry of catalog) {
@@ -214,11 +229,114 @@ export function DatabaseEditorView({
     }
   }, [activePeek, catalogDatabaseMap]);
 
+  // One-shot cleanup: repair parent records whose subItemsFieldId still references
+  // deleted sub-records (left over from deletions that didn't clean up the relation field).
+  useEffect(() => {
+    if (!database || !subRecordsConfig) return;
+    const { subItemsFieldId } = subRecordsConfig;
+    const liveIds = new Set(database.records.map((r) => r.id));
+    const parentsToFix = database.records.filter((r) => {
+      const subIds = r[subItemsFieldId];
+      if (!Array.isArray(subIds) || subIds.length === 0) return false;
+      return (subIds as string[]).some((id) => !liveIds.has(id));
+    });
+    if (parentsToFix.length === 0) return;
+    for (const parent of parentsToFix) {
+      const cleaned = (parent[subItemsFieldId] as string[]).filter((id) => liveIds.has(id));
+      void updateWorkspaceRecord(parent.id, { fieldId: subItemsFieldId, value: cleaned });
+    }
+  // Only run when the database id changes (initial load) to avoid repeated writes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [database?.id, subRecordsConfig]);
+
   async function refreshDatabase() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
       queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
     ]);
+  }
+
+  async function handleCreateSubRecord(parentRecordId: string) {
+    if (!database || !subRecordsConfig) return;
+    const { subItemsFieldId, parentFieldId } = subRecordsConfig;
+    const snapshot = { bundle: getBundleSnapshot(), catalog: getCatalogSnapshot() };
+    try {
+      const titleField = database.schema.find((f) => f.type === "text");
+      const statusField = database.schema.find((f) => f.type === "status");
+      const fields: Record<string, WorkspaceDatabaseFieldValue> = {
+        ...(titleField ? { [titleField.id]: "Untitled" } : {}),
+        ...(statusField?.options?.[0] ? { [statusField.id]: statusField.options[0] } : {}),
+        [parentFieldId]: [parentRecordId],
+      };
+
+      // Create the child record with its parent backlink already set.
+      const newRecord = await createWorkspaceRecord({ databaseId: database.id, fields });
+
+      // Compute new child list and immediately patch the cache so the row appears.
+      const parentRecord = database.records.find((r) => r.id === parentRecordId);
+      const existingChildIds = Array.isArray(parentRecord?.[subItemsFieldId])
+        ? (parentRecord[subItemsFieldId] as string[])
+        : [];
+      const newChildIds = [...existingChildIds, newRecord.id];
+
+      const newModelRecord: WorkspaceDatabaseRecordModel = {
+        id: newRecord.id,
+        _body: newRecord.body ?? undefined,
+        _createdAt: newRecord.created_at,
+        _updatedAt: newRecord.updated_at,
+        ...newRecord.fields,
+      };
+
+      patchBundle((current) => ({
+        ...current,
+        records: [
+          ...current.records.map((r) =>
+            r.id === parentRecordId
+              ? { ...r, fields: { ...r.fields, [subItemsFieldId]: newChildIds } }
+              : r,
+          ),
+          {
+            id: newRecord.id,
+            database_id: database.id,
+            fields: newRecord.fields,
+            body: newRecord.body,
+            created_at: newRecord.created_at,
+            updated_at: newRecord.updated_at,
+          },
+        ],
+        model: {
+          ...current.model,
+          records: [
+            ...current.model.records.map((r) =>
+              r.id === parentRecordId ? { ...r, [subItemsFieldId]: newChildIds } : r,
+            ),
+            newModelRecord,
+          ],
+        },
+      }));
+      patchCatalog((entries) =>
+        entries.map((entry) =>
+          entry.id === database.id
+            ? {
+                ...entry,
+                records: [
+                  ...entry.records.map((r) =>
+                    r.id === parentRecordId ? { ...r, [subItemsFieldId]: newChildIds } : r,
+                  ),
+                  newModelRecord,
+                ],
+              }
+            : entry,
+        ),
+      );
+
+      // Write the parent's updated child list directly — no bundle re-fetch needed.
+      await updateWorkspaceRecord(parentRecordId, { fieldId: subItemsFieldId, value: newChildIds });
+      await refreshDatabase();
+    } catch (err) {
+      restoreSnapshots(snapshot);
+      toastError("Failed to create sub-record", err);
+    }
   }
 
   function getBundleSnapshot() {
@@ -463,14 +581,68 @@ export function DatabaseEditorView({
   }
 
   async function handleDeleteRecord(targetDatabaseId: string, recordId: string) {
+    const snapshot = { bundle: getBundleSnapshot(), catalog: getCatalogSnapshot() };
+
+    // If this is a sub-record, capture the parent info before patching so we can
+    // clean up the parent's relation field both optimistically and in the DB.
+    const parentInfo = subRecordsConfig
+      ? (() => {
+          const parent = database?.records.find((r) => {
+            const subIds = r[subRecordsConfig.subItemsFieldId];
+            return Array.isArray(subIds) && (subIds as string[]).includes(recordId);
+          });
+          if (!parent) return null;
+          const currentIds = parent[subRecordsConfig.subItemsFieldId] as string[];
+          return { parentId: parent.id, newSubIds: currentIds.filter((id) => id !== recordId) };
+        })()
+      : null;
+
+    // Optimistically remove the record and clean up any parent relation field.
+    patchBundle((current) => ({
+      ...current,
+      records: current.records.filter((r) => r.id !== recordId),
+      model: {
+        ...current.model,
+        records: current.model.records
+          .filter((r) => r.id !== recordId)
+          .map((r) => {
+            if (!parentInfo || r.id !== parentInfo.parentId) return r;
+            return { ...r, [subRecordsConfig!.subItemsFieldId]: parentInfo.newSubIds };
+          }),
+      },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) =>
+        entry.id === targetDatabaseId
+          ? {
+              ...entry,
+              records: entry.records
+                .filter((r) => r.id !== recordId)
+                .map((r) => {
+                  if (!parentInfo || r.id !== parentInfo.parentId) return r;
+                  return { ...r, [subRecordsConfig!.subItemsFieldId]: parentInfo.newSubIds };
+                }),
+            }
+          : entry,
+      ),
+    );
+    setActivePeek((current) =>
+      current && current.databaseId === targetDatabaseId && current.recordId === recordId ? null : current,
+    );
+
     try {
       await deleteWorkspaceRecord(recordId);
-      setActivePeek((current) =>
-        current && current.databaseId === targetDatabaseId && current.recordId === recordId ? null : current,
-      );
+      // Keep the parent's relation field in sync in the DB.
+      if (parentInfo) {
+        await updateWorkspaceRecord(parentInfo.parentId, {
+          fieldId: subRecordsConfig!.subItemsFieldId,
+          value: parentInfo.newSubIds,
+        });
+      }
       await refreshDatabase();
       toast.success("Record deleted");
     } catch (err) {
+      restoreSnapshots(snapshot);
       toastError("Record deletion failed", err);
     }
   }
@@ -1110,6 +1282,8 @@ export function DatabaseEditorView({
                 onDeleteRecord={(recordId) => void handleDeleteRecord(database.id, recordId)}
                 onDeleteRecords={(recordIds) => void handleDeleteRecords(recordIds)}
                 onDuplicateRecords={(recordIds) => void handleDuplicateRecords(database.id, recordIds)}
+                subRecordsConfig={subRecordsConfig}
+                onCreateSubRecord={handleCreateSubRecord}
               />
             )}
           </div>
