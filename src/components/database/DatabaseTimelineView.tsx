@@ -198,12 +198,30 @@ export function DatabaseTimelineView({
 
   // Effect 2: Sync task data changes without rebuilding the chart.
   // Calls each render step individually and intentionally skips set_scroll_position().
-  // In WKWebView, scrollTo({behavior:'smooth'}) runs asynchronously and cannot be cancelled
-  // by synchronous scrollLeft assignment. Skipping it entirely prevents the scroll-to-today jump
-  // that occurred on every data update (drag snap, field edit, etc.).
-  // setup_dates(true) preserves gantt_start/end so savedScroll maps to the same visual date.
+  // The frappe-gantt dist is patched (patches/frappe-gantt.patch) to use behavior:'instant'
+  // and clientX instead of offsetX, but we still skip set_scroll_position() here as belt-and-suspenders.
   useEffect(() => {
     if (tasks === lastSyncedTasksRef.current) return;
+
+    // Deep-compare content to skip re-renders when React produces a new array reference
+    // with identical data (e.g. after a DB refresh that didn't change task fields).
+    // Without this, spurious Effect 2 fires capture savedScroll=0 (before the initial
+    // scroll-to-today animation completes) and lock the chart at position 0.
+    const prev = lastSyncedTasksRef.current;
+    const sameContent =
+      tasks.length === prev.length &&
+      tasks.every(
+        (t, i) =>
+          t.id === prev[i]?.id &&
+          t.start === prev[i]?.start &&
+          t.end === prev[i]?.end &&
+          t.name === prev[i]?.name &&
+          t.progress === prev[i]?.progress,
+      );
+    if (sameContent) {
+      lastSyncedTasksRef.current = tasks;
+      return;
+    }
 
     const gantt = ganttRef.current;
     if (!gantt || tasks.length === 0) {
@@ -222,7 +240,6 @@ export function DatabaseTimelineView({
     const savedScroll = container.scrollLeft;
 
     g.setup_tasks(tasks);
-    g.setup_dates(true);
     g.clear();
     g.setup_layers();
     g.make_grid();
