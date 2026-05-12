@@ -828,133 +828,12 @@ pre {
   color: var(--overlay-1);
 }
 
-/* ---------- Legacy class shims — flattened ----------
-   .card-intel / .panel-hud / .btn-accent etc. still exist across screens.
-   Here they keep their API but drop all glow/gradient chrome. */
-
-.card-intel {
-  background: var(--base);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  transition: border-color var(--t-base) var(--ease-out);
-}
-
-.card-intel:hover {
-  border-color: var(--border-strong);
-}
-
-.panel-hud {
-  background: var(--mantle);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-accent {
-  background: var(--accent);
-  color: var(--crust);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 13px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background-color var(--t-base) var(--ease-out);
-}
-
-.btn-accent:hover {
-  background: var(--accent-hover);
-}
-
-.btn-accent:active {
-  transform: scale(0.98);
-}
-
-.btn-secondary {
-  background: var(--mantle);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 13px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background-color var(--t-base) var(--ease-out),
-              border-color var(--t-base) var(--ease-out);
-}
-
-.btn-secondary:hover {
-  border-color: var(--border-strong);
-  background: var(--base);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--subtext-0);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 13px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: color var(--t-base) var(--ease-out),
-              background-color var(--t-base) var(--ease-out);
-}
-
-.btn-ghost:hover {
-  color: var(--text);
-  background: var(--surface-wash);
-}
-
-/* Status dot — flat, no glow */
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status-dot.active { background: var(--success); }
-.status-dot.warning { background: var(--warning); }
-.status-dot.danger { background: var(--danger); }
-
-/* Input shim */
-.input-intel {
-  background: var(--mantle);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: var(--font-ui);
-  transition: border-color var(--t-base) var(--ease-out),
-              box-shadow var(--t-base) var(--ease-out);
-}
-
-.input-intel:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-border);
-}
-
-.input-intel::placeholder {
-  color: var(--overlay-0);
-}
 
 /* Graph canvas — pure crust, no gradients, no dot grid */
 .graph-canvas {
   background: var(--crust);
   border: 1px solid var(--border);
   border-radius: 12px;
-}
-
-.dot-grid {
-  background-image: radial-gradient(circle, rgba(127, 132, 156, 0.15) 1px, transparent 1px);
-  background-size: 24px 24px;
 }
 
 /* Screen header pattern */
@@ -969,51 +848,7 @@ pre {
   flex-shrink: 0;
 }
 
-/* Legacy filter tab */
-.filter-tab {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  transition: color var(--t-base) var(--ease-out),
-              background-color var(--t-base) var(--ease-out);
-  cursor: pointer;
-  border: 1px solid transparent;
-  color: var(--subtext-0);
-}
 
-.filter-tab:hover {
-  color: var(--text);
-  background: var(--surface-wash);
-}
-
-.filter-tab.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent-border);
-}
-
-/* Legacy intel row */
-.intel-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  border-left: 2px solid transparent;
-  cursor: pointer;
-  transition: background-color var(--t-base) var(--ease-out),
-              border-left-color var(--t-base) var(--ease-out);
-}
-
-.intel-row:hover {
-  background: var(--surface-wash);
-}
-
-.intel-row.active {
-  background: var(--accent-soft);
-  border-left-color: var(--accent);
-}
 
 /* Scrollbar */
 ::-webkit-scrollbar {

@@ -1,21 +1,14 @@
 import { cn } from "@/lib/utils";
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "glass" | "hud" | "elevated";
   interactive?: boolean;
 }
 
-/**
- * Flat, glow-free card. 1px border, 12px radius, Surface0 bg.
- * Variant kept for API compatibility; all variants now render identically.
- */
 export function Card({
   className,
-  variant = "default",
   interactive = false,
   ...props
 }: CardProps) {
-  void variant;
   return (
     <div
       className={cn(

@@ -418,6 +418,8 @@ export function InboxView() {
           <button
             type="button"
             onClick={() => setFilterOpen((o) => !o)}
+            aria-expanded={filterOpen}
+            aria-haspopup="listbox"
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
               "font-ui text-[12px] font-medium",

@@ -471,7 +471,7 @@ function DeleteMonitorModal({
         role="dialog"
         aria-modal="true"
         aria-label="Delete monitor"
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         <div className="border-b border-[var(--border)] px-5 py-4">
           <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">Delete monitor</p>
@@ -584,7 +584,7 @@ function MonitorFormModal({
       aria-labelledby="monitor-modal-title"
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--base)] shadow-[0_24px_64px_rgba(0,0,0,0.45)]"
+        className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--base)] shadow-[var(--shadow-elevated)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -267,6 +267,7 @@ export function ViewTabBar({
               size="icon"
               onClick={() => togglePanel("add")}
               aria-label="Add view"
+              aria-expanded={addViewOpen}
               className="h-8 w-8"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -295,9 +296,10 @@ export function ViewTabBar({
         <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
           <div ref={filterRef} className="relative">
             <Button
-              variant={filterCount > 0 ? "glow" : "ghost"}
+              variant={filterCount > 0 ? "accent-soft" : "ghost"}
               size="sm"
               onClick={() => togglePanel("filter")}
+              aria-expanded={filterOpen}
             >
               <Funnel className="h-3.5 w-3.5" />
               {filterCount > 0 ? `Filter (${filterCount})` : "Filter"}
@@ -314,9 +316,10 @@ export function ViewTabBar({
 
           <div ref={sortRef} className="relative">
             <Button
-              variant={sortCount > 0 ? "glow" : "ghost"}
+              variant={sortCount > 0 ? "accent-soft" : "ghost"}
               size="sm"
               onClick={() => togglePanel("sort")}
+              aria-expanded={sortOpen}
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
               {sortCount > 0 ? `Sort (${sortCount})` : "Sort"}
@@ -333,7 +336,7 @@ export function ViewTabBar({
           </div>
 
           <Button
-            variant={hasDisplaySettings ? "glow" : "ghost"}
+            variant={hasDisplaySettings ? "accent-soft" : "ghost"}
             size="sm"
             onClick={() => {
               closePanels();
@@ -345,7 +348,7 @@ export function ViewTabBar({
           </Button>
 
           <div ref={moreRef} className="relative">
-            <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} aria-label="More options" aria-expanded={moreOpen} className="h-8 w-8">
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
             {moreOpen ? (
@@ -683,14 +686,14 @@ function SortPanel({
             <div key={field.id} className="flex items-center gap-2 rounded-xl bg-[var(--base)] px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">{field.name}</span>
               <Button
-                variant={activeSort?.direction === "asc" ? "glow" : "ghost"}
+                variant={activeSort?.direction === "asc" ? "accent-soft" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "asc")}
               >
                 Asc
               </Button>
               <Button
-                variant={activeSort?.direction === "desc" ? "glow" : "ghost"}
+                variant={activeSort?.direction === "desc" ? "accent-soft" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "desc")}
               >
@@ -800,7 +803,7 @@ function ViewSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-label="View settings"
-        className="flex max-h-[min(720px,90vh)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+        className="flex max-h-[min(720px,90vh)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">

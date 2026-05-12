@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium font-ui select-none " +
-    "transition-[background-color,border-color,color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+    "transition-[background-color,border-color,color,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
     "active:scale-[0.98] " +
     "disabled:pointer-events-none disabled:opacity-50 " +
     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
@@ -12,8 +12,6 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
-        default:
           "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
         secondary:
           "bg-[var(--mantle)] text-[var(--text)] border border-[var(--border)] " +
@@ -25,13 +23,13 @@ const buttonVariants = cva(
           "bg-transparent text-[var(--subtext-0)] border border-transparent " +
           "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
         destructive:
-          "bg-[var(--danger)] text-white hover:bg-[#f56060]",
-        glow:
+          "bg-[var(--danger)] text-[var(--crust)] hover:opacity-90",
+        "accent-soft":
           "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
           "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
         "accent-outline":
           "bg-transparent text-[var(--accent)] border border-[var(--accent-border)] " +
-          "hover:bg-[rgba(137,180,250,0.08)] hover:border-[var(--accent)]",
+          "hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
       },
       size: {
         default: "h-9 px-3.5 text-[13px]",

@@ -223,6 +223,11 @@ function CommandPalette() {
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={groups.length > 0}
+          aria-controls="cp-listbox"
+          aria-activedescendant={flatResults[activeIndex] ? `cp-${flatResults[activeIndex].id}` : undefined}
+          aria-autocomplete="list"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -238,7 +243,7 @@ function CommandPalette() {
           )}
         />
 
-        <div className="max-h-[50vh] overflow-y-auto py-2">
+        <div id="cp-listbox" role="listbox" aria-label="Commands" className="max-h-[50vh] overflow-y-auto py-2">
           {groups.length === 0 && (
             <div className="px-4 py-6 text-center font-ui text-[13px] text-[var(--overlay-1)]">
               No results
@@ -258,7 +263,10 @@ function CommandPalette() {
                   return (
                     <button
                       key={cmd.id}
+                      id={`cp-${cmd.id}`}
                       type="button"
+                      role="option"
+                      aria-selected={isActive}
                       onMouseEnter={() => setActiveIndex(flatIdx)}
                       onClick={() => execute(cmd)}
                       className={cn(

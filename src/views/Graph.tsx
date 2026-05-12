@@ -102,40 +102,42 @@ const ENTITY_STYLES: Record<
   }
 > = {
   person: {
-    chip: "rgba(46, 205, 184, 0.15)",
+    chip: "color-mix(in srgb, var(--entity-person) 15%, transparent)",
     fill: "var(--base)",
-    border: "#2ecdb8",
+    border: "var(--entity-person)",
     text: "var(--text)",
-    accent: "#2ecdb8",
+    accent: "var(--entity-person)",
   },
   organisation: {
-    chip: "rgba(48, 184, 232, 0.15)",
+    chip: "color-mix(in srgb, var(--entity-org) 15%, transparent)",
     fill: "var(--base)",
-    border: "#30b8e8",
+    border: "var(--entity-org)",
     text: "var(--text)",
-    accent: "#30b8e8",
+    accent: "var(--entity-org)",
   },
   location: {
-    chip: "rgba(255, 138, 80, 0.15)",
+    chip: "color-mix(in srgb, var(--entity-location) 15%, transparent)",
     fill: "var(--base)",
-    border: "#ff8a50",
+    border: "var(--entity-location)",
     text: "var(--text)",
-    accent: "#ff8a50",
+    accent: "var(--entity-location)",
   },
   event: {
-    chip: "rgba(240, 82, 122, 0.15)",
+    chip: "color-mix(in srgb, var(--entity-event) 15%, transparent)",
     fill: "var(--base)",
-    border: "#f0527a",
+    border: "var(--entity-event)",
     text: "var(--text)",
-    accent: "#f0527a",
+    accent: "var(--entity-event)",
   },
 };
 
+// Hex values aligned with CSS token definitions in index.css.
+// Canvas API requires resolved color strings; CSS vars can't be used directly here.
 const INSIGHT_NODE_COLORS: Record<GraphEntityType, string> = {
-  person: "#2ecdb8",
-  organisation: "#30b8e8",
-  location: "#ff8a50",
-  event: "#f0527a",
+  person: "#94e2d5",     // --entity-person
+  organisation: "#89dceb", // --entity-org
+  location: "#fab387",   // --entity-location
+  event: "#f38ba8",      // --entity-event
 };
 
 const ENTITY_ICON: Record<GraphEntityType, typeof User> = {
@@ -2387,7 +2389,7 @@ export function GraphView() {
                           isSelected
                             ? "var(--accent)"
                             : isOnRoute
-                              ? "#b4befe"
+                              ? "var(--lavender)"
                               : "var(--overlay-0)"
                         }
                         strokeWidth={isSelected ? 2 : isOnRoute ? 1.5 : 1}
@@ -2417,13 +2419,13 @@ export function GraphView() {
                             width={112}
                             height={24}
                             rx={4}
-                            fill="#181825"
-                            stroke="rgba(69, 71, 90, 0.6)"
+                            fill="var(--mantle)"
+                            stroke="var(--border)"
                           />
                           <text
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            fill="#cdd6f4"
+                            fill="var(--text)"
                             fontSize="11"
                             fontWeight="500"
                           >
@@ -2437,7 +2439,7 @@ export function GraphView() {
                         >
                           <circle
                             r={9}
-                            fill="#f03f3f"
+                            fill="var(--danger)"
                             style={{ cursor: "pointer" }}
                             data-graph-interactive="true"
                             onPointerDown={(event) => {
@@ -2449,7 +2451,7 @@ export function GraphView() {
                           <text
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            fill="#11111b"
+                            fill="var(--crust)"
                             fontSize="12"
                             fontWeight="700"
                             style={{ pointerEvents: "none" }}
@@ -2533,7 +2535,7 @@ export function GraphView() {
                         isConnectSource || isEdgeDragSource
                           ? "var(--accent)"
                           : isEgoCenter
-                            ? "#b4befe"
+                            ? "var(--lavender)"
                             : isSelected
                               ? "var(--accent)"
                               : style.border,
@@ -2543,7 +2545,7 @@ export function GraphView() {
                         isSelected || isConnectSource || isEdgeDragSource
                           ? "0 0 0 1px var(--accent-border)"
                           : isOnRoute
-                            ? "0 0 0 1px rgba(180, 190, 254, 0.45)"
+                            ? "0 0 0 1px color-mix(in srgb, var(--lavender) 45%, transparent)"
                             : "none",
                     }}
                   >
@@ -2621,7 +2623,7 @@ export function GraphView() {
                             ...getNodeConnectorHandleStyle(anchorSide),
                             zIndex: 10,
                             background: isConnectorTarget
-                              ? "#b4befe"
+                              ? "var(--lavender)"
                               : isConnectSource || isEdgeDragSource
                                 ? "var(--accent)"
                                 : "var(--accent)",
@@ -2727,7 +2729,7 @@ export function GraphView() {
                         node.node_id === selectedNodeId
                           ? "var(--accent)"
                           : shortestPathNodeIdSet.has(node.node_id)
-                            ? "#b4befe"
+                            ? "var(--lavender)"
                             : "var(--overlay-1)",
                     }}
                   />
@@ -3436,7 +3438,7 @@ export function GraphView() {
             role="dialog"
             aria-modal="true"
             aria-label="Clear graph"
-            className="flex w-full max-w-[380px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+            className="flex w-full max-w-[380px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
           >
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
               <div className="min-w-0">
@@ -3498,7 +3500,7 @@ export function GraphView() {
             role="dialog"
             aria-modal="true"
             aria-label="Export graph as PNG"
-            className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+            className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">

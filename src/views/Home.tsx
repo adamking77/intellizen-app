@@ -151,7 +151,23 @@ export function HomeView() {
               onOpenWidget={(widget) => navigate(`/databases/${widget.database.id}?view=${widget.view.id}`)}
               onRemoveWidget={(widget) => handleRemovePin(widget.pin.id)}
             />
-          ) : null}
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
+              <p className="font-ui text-[14px] font-medium text-[var(--subtext-0)]">
+                No pinned views
+              </p>
+              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                Open a database view and pin it to see it here.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/databases")}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-1.5 font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+              >
+                Open Databases
+              </button>
+            </div>
+          )}
         </section>
       </div>
     </div>

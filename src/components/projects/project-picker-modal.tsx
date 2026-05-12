@@ -92,7 +92,7 @@ export function ProjectPickerModal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[min(640px,90vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
+        className="flex max-h-[min(640px,90vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">

@@ -14,8 +14,6 @@ const badgeVariants = cva(
           "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
         accent:
           "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
-        glow:
-          "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
         secondary:
           "bg-[var(--mantle)] text-[var(--subtext-0)]",
         neutral:

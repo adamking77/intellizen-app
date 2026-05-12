@@ -27,7 +27,7 @@ export function AttachInvestigationDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-[520px] rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+      <div className="w-full max-w-[520px] rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-[var(--shadow-elevated)]">
         <p className="text-sm font-semibold text-[var(--foreground)]">
           Attach Signal to Investigation
         </p>

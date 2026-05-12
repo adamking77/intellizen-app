@@ -151,7 +151,7 @@ export function Sidebar() {
                     ? "h-9 justify-center px-0"
                     : "justify-between px-4 py-2 text-[13px]",
                   isActive
-                    ? "bg-[var(--accent-soft)] text-[var(--text)]"
+                    ? "text-[var(--text)]"
                     : "text-[var(--subtext-0)] hover:text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
                 )
               }
