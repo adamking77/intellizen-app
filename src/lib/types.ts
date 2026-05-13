@@ -334,6 +334,7 @@ export interface WorkspaceDatabaseViewConfig {
   timelineEndField?: string;
   timelineProgressField?: string;
   timelineLabelField?: string;
+  timelineColorField?: string;
   timelineViewMode?: "Day" | "Week" | "Month" | "Year";
 }
 
@@ -410,6 +411,7 @@ export interface WorkspaceDatabaseModel {
     timelineEndField?: string;
     timelineProgressField?: string;
     timelineLabelField?: string;
+    timelineColorField?: string;
     timelineViewMode?: "Day" | "Week" | "Month" | "Year";
   }>;
   records: WorkspaceDatabaseRecordModel[];

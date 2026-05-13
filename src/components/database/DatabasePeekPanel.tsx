@@ -477,6 +477,7 @@ export function DatabasePeekPanel({
           {database.schema
             .filter((field) => {
               if (field.type !== "relation") return false;
+              if (isStructuralHierarchyRelationField(field, database)) return false;
               const tid = field.relation?.targetDatabaseId;
               return !tid || tid === database.id;
             })
@@ -719,4 +720,26 @@ function resolveTargetDatabase(
     views: entry.views,
     headerFieldIds: entry.headerFieldIds,
   } satisfies WorkspaceDatabaseModel;
+}
+
+function isStructuralHierarchyRelationField(
+  field: WorkspaceDatabaseField,
+  database: WorkspaceDatabaseModel,
+) {
+  if (field.type !== "relation") return false;
+  const targetDatabaseId = field.relation?.targetDatabaseId;
+  if (targetDatabaseId && targetDatabaseId !== database.id) return false;
+  if (!field.relation?.targetRelationFieldId) return false;
+
+  const ownName = field.name.trim().toLowerCase();
+  const reciprocalName =
+    database.schema.find((candidate) => candidate.id === field.relation?.targetRelationFieldId)?.name
+      .trim()
+      .toLowerCase() ?? "";
+
+  return isHierarchyRelationName(ownName) || isHierarchyRelationName(reciprocalName);
+}
+
+function isHierarchyRelationName(name: string) {
+  return /^parent$/.test(name) || /^sub[-\s]?records?$/.test(name) || /^sub[-\s]?items?$/.test(name);
 }

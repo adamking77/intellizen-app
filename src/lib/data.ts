@@ -1600,6 +1600,8 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
       typeof candidate.timelineProgressField === "string" ? candidate.timelineProgressField : undefined,
     timelineLabelField:
       typeof candidate.timelineLabelField === "string" ? candidate.timelineLabelField : undefined,
+    timelineColorField:
+      typeof candidate.timelineColorField === "string" ? candidate.timelineColorField : undefined,
     timelineViewMode:
       candidate.timelineViewMode === "Day" ||
       candidate.timelineViewMode === "Week" ||
@@ -1661,6 +1663,7 @@ function hydrateWorkspaceDatabaseViewModel(view: WorkspaceDatabaseView): Workspa
     timelineEndField: view.config.timelineEndField,
     timelineProgressField: view.config.timelineProgressField,
     timelineLabelField: view.config.timelineLabelField,
+    timelineColorField: view.config.timelineColorField,
     timelineViewMode: view.config.timelineViewMode,
   };
 }

@@ -219,7 +219,11 @@ export function ViewTabBar({
     activeView.chartShowLegend === false ||
     activeView.chartShowGrid === false ||
     Boolean(activeView.timelineStartField) ||
-    Boolean(activeView.timelineEndField);
+    Boolean(activeView.timelineEndField) ||
+    Boolean(activeView.timelineProgressField) ||
+    Boolean(activeView.timelineLabelField) ||
+    Boolean(activeView.timelineColorField) ||
+    Boolean(activeView.timelineViewMode && activeView.timelineViewMode !== "Week");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -786,6 +790,16 @@ function ViewSettingsModal({
   const isTimeline = activeView.type === "timeline";
   const supportsCardFields = activeView.type === "gallery" || activeView.type === "kanban";
   const dateFields = database.schema.filter((f) => f.type === "date");
+  const timelineLabelFields = database.schema.filter(
+    (field) => field.type !== "createdAt" && field.type !== "lastEditedAt",
+  );
+  const timelineColorFields = database.schema.filter(
+    (field) =>
+      field.type === "status" ||
+      field.type === "select" ||
+      field.type === "multiselect" ||
+      field.type === "relation",
+  );
   const numberFields = database.schema.filter(
     (f) => f.type === "number" || f.type === "rollup" || f.type === "formula",
   );
@@ -1069,6 +1083,42 @@ function ViewSettingsModal({
                         <option value="">None</option>
                         {numberFields.map((f) => (
                           <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Bar label
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineLabelField ?? ""}
+                        onChange={(e) =>
+                          onUpdateViewConfig({ timelineLabelField: e.target.value || undefined })
+                        }
+                      >
+                        <option value="">Record title</option>
+                        {timelineLabelFields.map((field) => (
+                          <option key={field.id} value={field.id}>{field.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        Color by
+                      </span>
+                      <select
+                        className="db-select"
+                        value={activeView.timelineColorField ?? ""}
+                        onChange={(e) =>
+                          onUpdateViewConfig({ timelineColorField: e.target.value || undefined })
+                        }
+                      >
+                        <option value="">Single timeline color</option>
+                        {timelineColorFields.map((field) => (
+                          <option key={field.id} value={field.id}>{field.name}</option>
                         ))}
                       </select>
                     </label>

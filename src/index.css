@@ -3633,6 +3633,271 @@ pre {
 }
 
 
+/* ─── Timeline view ─────────────────────────────────────── */
+.db-timeline-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--mantle);
+}
+
+.db-timeline-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--base) 84%, var(--mantle) 16%) 0%, var(--base) 100%);
+}
+
+.db-timeline-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-0) 46%, transparent);
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--subtext-0);
+}
+
+.db-timeline-notice-action {
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 8px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  transition:
+    border-color var(--t-base) var(--ease-out),
+    background-color var(--t-base) var(--ease-out);
+}
+
+.db-timeline-notice-action:hover {
+  border-color: var(--border);
+  background: var(--surface-wash);
+}
+
+.db-timeline-canvas {
+  position: relative;
+  min-height: 100%;
+  padding-bottom: 16px;
+}
+
+.db-timeline-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--mantle) 92%, var(--base) 8%);
+  backdrop-filter: blur(8px);
+}
+
+.db-timeline-major-row {
+  position: relative;
+  height: 28px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.db-timeline-major-segment,
+.db-timeline-minor-segment {
+  position: absolute;
+  inset-block: 0;
+  padding-inline: 10px;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+}
+
+.db-timeline-major-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--overlay-1);
+}
+
+.db-timeline-minor-row {
+  position: relative;
+}
+
+.db-timeline-minor-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--subtext-0);
+}
+
+.db-timeline-grid-line {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.db-timeline-today {
+  position: absolute;
+  inset-block: 0;
+  z-index: 10;
+  width: 1px;
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.db-timeline-row {
+  position: absolute;
+  inset-inline: 0;
+}
+
+.db-timeline-row-border {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.db-timeline-bar {
+  position: absolute;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    background-color var(--t-base) var(--ease-out),
+    opacity var(--t-base) var(--ease-out);
+}
+
+.db-timeline-bar:active,
+.db-timeline-bar--dragging {
+  cursor: grabbing;
+}
+
+.db-timeline-bar-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  min-width: 2px;
+  border-radius: 0 0 8px 8px;
+  background: color-mix(in srgb, var(--crust) 30%, transparent);
+  opacity: 0.55;
+}
+
+.db-timeline-bar-handle {
+  position: absolute;
+  inset-block: 0;
+  width: 16px;
+  z-index: 5;
+  cursor: ew-resize;
+  opacity: 0.001;
+  transition:
+    opacity var(--t-base) var(--ease-out),
+    background-color var(--t-base) var(--ease-out);
+}
+
+.db-timeline-bar-handle::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 34%, transparent);
+}
+
+.db-timeline-bar-handle--start {
+  left: 0;
+}
+
+.db-timeline-bar-handle--start::after {
+  left: 6px;
+}
+
+.db-timeline-bar-handle--end {
+  right: 0;
+}
+
+.db-timeline-bar-handle--end::after {
+  right: 6px;
+}
+
+.db-timeline-bar:hover .db-timeline-bar-handle {
+  opacity: 0.42;
+  background: color-mix(in srgb, var(--crust) 10%, transparent);
+}
+
+.db-timeline-bar .db-timeline-bar-handle:hover,
+.db-timeline-bar--dragging .db-timeline-bar-handle {
+  opacity: 0.68;
+}
+
+.db-timeline-bar--dragging .db-timeline-bar-handle::after {
+  background: color-mix(in srgb, var(--text) 46%, transparent);
+}
+
+.db-timeline-bar:focus-visible .db-timeline-bar-handle {
+  opacity: 1;
+}
+
+.db-timeline-bar-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.db-timeline-bar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.db-timeline-bar-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--subtext-0);
+}
+
+.db-timeline-bar-external-label {
+  position: absolute;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+
+
 /* ─── Calendar view ─────────────────────────────────────── */
 .db-calendar-grid {
   display: grid;

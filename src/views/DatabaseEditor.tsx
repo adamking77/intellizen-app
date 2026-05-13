@@ -24,6 +24,7 @@ import {
   findDefaultKanbanField,
   prepareCsvImport,
 } from "@/lib/database-core";
+import { createTimelineDateField, getTimelineFieldDefaults } from "@/lib/database-timeline";
 import {
   findHomePin,
   loadHomePins,
@@ -86,6 +87,7 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
     timelineEndField: view.timelineEndField,
     timelineProgressField: view.timelineProgressField,
     timelineLabelField: view.timelineLabelField,
+    timelineColorField: view.timelineColorField,
     timelineViewMode: view.timelineViewMode,
   };
 }
@@ -228,6 +230,15 @@ export function DatabaseEditorView({
       setActivePeek(null);
     }
   }, [activePeek, catalogDatabaseMap]);
+
+  useEffect(() => {
+    if (!database || !activeView || activeView.type !== "timeline") return;
+    if (!activeView.timelineStartField || !activeView.timelineEndField) return;
+    if (activeView.timelineStartField !== activeView.timelineEndField) return;
+    void ensureTimelineHasRangeFields();
+  // Only run when the active timeline's date field pairing changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [database?.id, activeView?.id, activeView?.timelineStartField, activeView?.timelineEndField]);
 
   // One-shot cleanup: repair parent records whose subItemsFieldId still references
   // deleted sub-records (left over from deletions that didn't clean up the relation field).
@@ -750,6 +761,22 @@ export function DatabaseEditorView({
     const defaultChartType = activeView.type === "chart" ? activeView.chartType ?? "bar" : "bar";
     const defaultChartGroupField = findDefaultChartGroupField(database, defaultChartType);
     const defaultChartValueField = findDefaultChartValueField(database);
+    let timelineSchema = database.schema;
+    if (type === "timeline") {
+      const dateFields = database.schema.filter((field) => field.type === "date");
+      if (dateFields.length < 2) {
+        timelineSchema = [
+          ...database.schema,
+          createTimelineDateField(dateFields.length === 0 ? "Start" : "End"),
+          ...(dateFields.length === 0 ? [createTimelineDateField("End")] : []),
+        ];
+        await handleSaveSchema(timelineSchema, undefined, { silent: true });
+      }
+    }
+    const defaultTimelineFields = getTimelineFieldDefaults({
+      schema: timelineSchema,
+      headerFieldIds: database.headerFieldIds,
+    });
     const nextName = `${VIEW_LABELS[type]} ${(bundle?.views.length ?? 0) + 1}`;
     try {
       const created = await createWorkspaceView({
@@ -775,6 +802,18 @@ export function DatabaseEditorView({
           chartShowGrid: type === "chart" ? activeView.chartShowGrid ?? true : activeView.chartShowGrid,
           chartPalette: type === "chart" ? activeView.chartPalette ?? "blue" : activeView.chartPalette,
           chartRange: type === "chart" ? activeView.chartRange ?? "90d" : activeView.chartRange,
+          timelineStartField:
+            type === "timeline" ? activeView.timelineStartField ?? defaultTimelineFields.timelineStartField : activeView.timelineStartField,
+          timelineEndField:
+            type === "timeline" ? activeView.timelineEndField ?? defaultTimelineFields.timelineEndField : activeView.timelineEndField,
+          timelineProgressField:
+            type === "timeline" ? activeView.timelineProgressField ?? defaultTimelineFields.timelineProgressField : activeView.timelineProgressField,
+          timelineLabelField:
+            type === "timeline" ? activeView.timelineLabelField ?? defaultTimelineFields.timelineLabelField : activeView.timelineLabelField,
+          timelineColorField:
+            type === "timeline" ? activeView.timelineColorField : activeView.timelineColorField,
+          timelineViewMode:
+            type === "timeline" ? activeView.timelineViewMode ?? defaultTimelineFields.timelineViewMode : activeView.timelineViewMode,
         },
       });
       setActiveViewId(created.id);
@@ -925,6 +964,61 @@ export function DatabaseEditorView({
       restoreSnapshots(snapshot);
       toastError("View update failed", err);
     }
+  }
+
+  async function handleConfigureTimelineFields() {
+    if (!database || !activeView || activeView.type !== "timeline") return;
+
+    const dateFields = database.schema.filter((field) => field.type === "date");
+    let nextSchema = database.schema;
+    if (dateFields.length < 2) {
+      nextSchema = [
+        ...database.schema,
+        createTimelineDateField(dateFields.length === 0 ? "Start" : "End"),
+        ...(dateFields.length === 0 ? [createTimelineDateField("End")] : []),
+      ];
+      await handleSaveSchema(nextSchema, undefined, { silent: true });
+    }
+
+    const defaults = getTimelineFieldDefaults({
+      schema: nextSchema,
+      headerFieldIds: database.headerFieldIds,
+    });
+
+    await handleUpdateViewConfig({
+      timelineStartField: defaults.timelineStartField,
+      timelineEndField: defaults.timelineEndField,
+      timelineProgressField: activeView.timelineProgressField ?? defaults.timelineProgressField,
+      timelineLabelField: activeView.timelineLabelField ?? defaults.timelineLabelField,
+      timelineViewMode: activeView.timelineViewMode ?? defaults.timelineViewMode,
+    });
+  }
+
+  async function ensureTimelineHasRangeFields() {
+    if (!database || !activeView || activeView.type !== "timeline") return;
+    const startFieldId = activeView.timelineStartField;
+    if (!startFieldId || activeView.timelineEndField !== startFieldId) return;
+
+    const existingEndField = database.schema.find(
+      (field) => field.type === "date" && field.id !== startFieldId && /(^|\b)(end|due|deadline|finish|target)(\b|$)/i.test(field.name),
+    );
+
+    if (existingEndField) {
+      await handleUpdateViewConfig({ timelineEndField: existingEndField.id });
+      return;
+    }
+
+    const endField = createTimelineDateField("End");
+    const nextSchema = [...database.schema, endField];
+    const nextRecords = database.records.map((record) => {
+      const startValue = record[startFieldId];
+      return typeof startValue === "string" && startValue.trim() !== ""
+        ? { ...record, [endField.id]: startValue }
+        : record;
+    });
+
+    await handleSaveSchema(nextSchema, nextRecords, { silent: true });
+    await handleUpdateViewConfig({ timelineEndField: endField.id });
   }
 
   async function handleUpdateViewConfigForDatabase(
@@ -1263,8 +1357,11 @@ export function DatabaseEditorView({
               <DatabaseTimelineView
                 database={database}
                 view={activeView}
+                catalog={catalog}
                 onOpenRecord={(recordId) => handleOpenRecord(recordId)}
                 onUpdateField={handleUpdateRecordField}
+                onCreateRecord={(seed) => void handleCreateRecord(database.id, seed)}
+                onConfigureTimelineFields={() => void handleConfigureTimelineFields()}
               />
             ) : (
               <DatabaseTableView

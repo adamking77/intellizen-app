@@ -111,9 +111,39 @@ export function TaskRelationsSection({
     [availableViews, fallbackView, selectedViewId],
   );
 
+  const subRecordsConfig = useMemo(() => {
+    const selfRelFields = targetDatabase.schema.filter(
+      (field) =>
+        field.type === "relation" &&
+        (!field.relation?.targetDatabaseId || field.relation.targetDatabaseId === targetDatabase.id),
+    );
+    const subItemsField = selfRelFields.find(
+      (field) => !field.name.toLowerCase().includes("parent") && field.relation?.targetRelationFieldId,
+    );
+    if (!subItemsField) return undefined;
+    const parentField = targetDatabase.schema.find(
+      (field) => field.id === subItemsField.relation?.targetRelationFieldId,
+    );
+    if (!parentField) return undefined;
+    return { subItemsFieldId: subItemsField.id, parentFieldId: parentField.id };
+  }, [targetDatabase.id, targetDatabase.schema]);
+
   const linkedRecords = useMemo(
-    () => targetDatabase.records.filter((record) => relatedRecordIds.includes(record.id)),
-    [relatedRecordIds, targetDatabase.records],
+    () => {
+      const includedIds = new Set(relatedRecordIds);
+      if (subRecordsConfig) {
+        for (const record of targetDatabase.records) {
+          if (!relatedRecordIds.includes(record.id)) continue;
+          const subIds = record[subRecordsConfig.subItemsFieldId];
+          if (!Array.isArray(subIds)) continue;
+          for (const subId of subIds) {
+            includedIds.add(subId);
+          }
+        }
+      }
+      return targetDatabase.records.filter((record) => includedIds.has(record.id));
+    },
+    [relatedRecordIds, subRecordsConfig, targetDatabase.records],
   );
 
   const linkedDatabase = useMemo<WorkspaceDatabaseModel>(
@@ -134,6 +164,23 @@ export function TaskRelationsSection({
     await onUpdateRelation(sourceDatabaseId, sourceRecordId, fieldId, [...relatedRecordIds, createdId]);
     setDraftTitle("");
     setShowCreate(false);
+  }
+
+  async function handleCreateSubRecord(parentRecordId: string) {
+    if (!subRecordsConfig) return;
+    const titleField = targetDatabase.schema.find((field) => field.type === "text");
+    const statusField = targetDatabase.schema.find((field) => field.type === "status");
+    const createdId = await onCreateRecord(targetDatabase.id, {
+      ...(titleField ? { [titleField.id]: "Untitled" } : {}),
+      ...(statusField?.options?.[0] ? { [statusField.id]: statusField.options[0] } : {}),
+      [subRecordsConfig.parentFieldId]: [parentRecordId],
+    });
+    if (!createdId) return;
+    const parentRecord = targetDatabase.records.find((record) => record.id === parentRecordId);
+    const currentSubIds = Array.isArray(parentRecord?.[subRecordsConfig.subItemsFieldId])
+      ? (parentRecord[subRecordsConfig.subItemsFieldId] as string[])
+      : [];
+    await onUpdateField(parentRecordId, subRecordsConfig.subItemsFieldId, [...currentSubIds, createdId]);
   }
 
   const candidateOptions = targetDatabase.records.map((record) => ({
@@ -233,6 +280,8 @@ export function TaskRelationsSection({
           onDeleteRecord={(recordId) => void onDeleteRecord(targetDatabase.id, recordId)}
           onDeleteRecords={(recordIds) => void onDeleteRecords(recordIds)}
           onDuplicateRecords={(recordIds) => void onDuplicateRecords(targetDatabase.id, recordIds)}
+          subRecordsConfig={subRecordsConfig}
+          onCreateSubRecord={handleCreateSubRecord}
         />
       </div>
 
