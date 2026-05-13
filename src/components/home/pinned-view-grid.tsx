@@ -7,6 +7,7 @@ import { ExternalLink, GripVertical, X } from "lucide-react";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
+import { DatabaseTimelineView } from "@/components/database/DatabaseTimelineView";
 import type { HomePin } from "@/lib/home-pins";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -197,6 +198,17 @@ function PinnedWidgetBody({
         onDeleteRecord={() => {}}
         onDeleteRecords={() => {}}
         onDuplicateRecords={() => {}}
+      />
+    );
+  }
+
+  if (widget.view.type === "timeline") {
+    return (
+      <DatabaseTimelineView
+        database={databaseModel}
+        view={widget.view}
+        catalog={catalog}
+        onOpenRecord={onOpen}
       />
     );
   }
