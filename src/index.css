@@ -1957,7 +1957,6 @@ pre {
 .db-record-panel {
   background: var(--mantle);
   border-left: 1px solid var(--border);
-  box-shadow: -16px 0 32px rgba(0,0,0,0.16);
 }
 
 .db-record-panel--fullpage {
@@ -3030,41 +3029,46 @@ pre {
 }
 
 .db-kanban-card {
-  border-radius: 12px;
-  padding: 10px 10px 11px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 10px;
   cursor: grab;
   flex-shrink: 0;
   background: var(--base);
-  border: 1px solid var(--border);
-  transition: border-color var(--t-base) var(--ease-out),
-              background-color var(--t-base) var(--ease-out),
-              transform 150ms ease;
+  transition: background-color var(--t-base) var(--ease-out),
+              transform 100ms var(--ease-out);
   position: relative;
-  overflow: hidden;
+  user-select: none;
 }
 
 .db-kanban-card:hover {
-  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--base) 70%, var(--surface-0) 30%);
 }
 
 .db-kanban-card:active {
   cursor: grabbing;
+  transform: scale(0.99);
 }
 
-.db-kanban-card-status-strip {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
+.db-kanban-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+
+.db-kanban-card-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
 .db-kanban-card-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -3075,24 +3079,16 @@ pre {
 .db-kanban-card-fields {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .db-kanban-card-field {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0;
   min-width: 0;
   font-size: 11px;
   color: var(--subtext-0);
-}
-
-.db-kanban-card-field-label {
-  flex-shrink: 0;
-  color: var(--overlay-1);
-  font-size: 11px;
-  line-height: 1.2;
 }
 
 .db-kanban-card-field-value {
@@ -3757,7 +3753,6 @@ pre {
   z-index: 10;
   width: 1px;
   background: color-mix(in srgb, var(--accent) 72%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .db-timeline-row {

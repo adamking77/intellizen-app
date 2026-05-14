@@ -239,6 +239,7 @@ export function DatabaseKanbanView({
             database={database}
             catalog={catalog}
             cardFieldIds={cardFieldIds}
+            groupFieldId={resolvedGroupField.id}
             active={false}
             dragging
             onOpenRecord={onOpenRecord}
@@ -302,6 +303,7 @@ function KanbanColumn({
             database={database}
             catalog={catalog}
             cardFieldIds={cardFieldIds}
+            groupFieldId={groupFieldId}
             active={activeRecordId === record.id}
             onOpenRecord={onOpenRecord}
             onDuplicateRecord={onDuplicateRecord}
@@ -325,6 +327,7 @@ function KanbanCard({
   database,
   catalog,
   cardFieldIds,
+  groupFieldId,
   active,
   dragging,
   onOpenRecord,
@@ -335,6 +338,7 @@ function KanbanCard({
   database: WorkspaceDatabaseModel;
   catalog: WorkspaceDatabaseCatalogEntry[];
   cardFieldIds: string[];
+  groupFieldId: string;
   active: boolean;
   dragging?: boolean;
   onOpenRecord: (recordId: string) => void;
@@ -345,13 +349,15 @@ function KanbanCard({
     id: record.id,
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const statusField = database.schema.find((field) => field.type === "status" || field.type === "select");
-  const statusValue = statusField ? String(getFieldValue(record, statusField, database, catalog) ?? "") : "";
-  const borderColor = statusField
-    ? statusField.type === "status"
-      ? resolveStatusColor(statusValue, statusField)
-      : resolveFieldOptionColor(statusField, statusValue || "No value")
-    : "var(--surface-1)";
+  const dotField = database.schema.find(
+    (field) => (field.type === "status" || field.type === "select") && field.id !== groupFieldId,
+  );
+  const dotValue = dotField ? String(getFieldValue(record, dotField, database, catalog) ?? "") : "";
+  const dotColor = dotField && dotValue
+    ? dotField.type === "status"
+      ? resolveStatusColor(dotValue, dotField)
+      : resolveFieldOptionColor(dotField, dotValue || "No value")
+    : null;
   const cardFields = cardFieldIds
     .map((fieldId) => database.schema.find((candidate) => candidate.id === fieldId))
     .filter((field): field is WorkspaceDatabaseField => Boolean(field));
@@ -445,10 +451,9 @@ function KanbanCard({
         className="db-kanban-card"
         style={{
           transform: CSS.Translate.toString(transform),
-          opacity: dragging || isDragging ? 0.5 : 1,
-          borderLeftWidth: 3,
-          borderLeftColor: borderColor,
-          backgroundColor: active ? "var(--surface-wash)" : undefined,
+          opacity: isDragging ? 0.4 : 1,
+          boxShadow: dragging ? "0 8px 24px rgba(0, 0, 0, 0.4)" : undefined,
+          backgroundColor: active ? "var(--accent-soft)" : undefined,
         }}
         {...attributes}
         {...listeners}
@@ -479,7 +484,10 @@ function KanbanCard({
           </button>
         </div>
 
-        <div className="db-kanban-card-title">{getRecordTitle(record, database)}</div>
+        <div className="db-kanban-card-header">
+          {dotColor ? <span className="db-kanban-card-dot" style={{ backgroundColor: dotColor }} /> : null}
+          <div className="db-kanban-card-title">{getRecordTitle(record, database)}</div>
+        </div>
 
         {propertyRows.length > 0 ? (
           <div className="db-kanban-card-fields">
