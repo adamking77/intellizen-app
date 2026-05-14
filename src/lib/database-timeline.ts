@@ -39,7 +39,7 @@ export const DAY_MS = 86_400_000;
 
 export const PX_PER_DAY: Record<TimelineViewMode, number> = {
   Day: 52,
-  Week: 24,
+  Week: 48,
   Month: 10,
   Year: 4,
 };
@@ -152,18 +152,14 @@ export function getTimelineMinorSegments(
   }
 
   if (viewMode === "Week") {
-    let day = getTimelineStartOfWeek(rangeStartDay);
-    while (day <= rangeEndDay) {
-      const startDay = Math.max(day, rangeStartDay);
-      const endDay = Math.min(day + 6, rangeEndDay);
+    for (let day = rangeStartDay; day <= rangeEndDay; day += 1) {
       const date = fromTimelineDayNumber(day);
       segments.push({
-        key: `w-${day}`,
-        label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        startDay,
-        endDay,
+        key: `d-${day}`,
+        label: String(date.getDate()),
+        startDay: day,
+        endDay: day,
       });
-      day += 7;
     }
     return segments;
   }

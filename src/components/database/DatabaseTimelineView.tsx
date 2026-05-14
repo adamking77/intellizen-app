@@ -379,10 +379,11 @@ export function DatabaseTimelineView({
               {majorSegments.map((segment) => {
                 const left = (segment.startDay - bounds!.startDay) * pxPerDay;
                 const width = (segment.endDay - segment.startDay + 1) * pxPerDay;
+                const isCurrentPeriod = todayDay >= segment.startDay && todayDay <= segment.endDay;
                 return (
                   <div
                     key={segment.key}
-                    className="db-timeline-major-segment"
+                    className={`db-timeline-major-segment${isCurrentPeriod ? " db-timeline-major-segment--current" : ""}`}
                     style={{ left, width }}
                   >
                     <span className="db-timeline-major-label">{segment.label}</span>
@@ -395,10 +396,11 @@ export function DatabaseTimelineView({
               {minorSegments.map((segment) => {
                 const left = (segment.startDay - bounds!.startDay) * pxPerDay;
                 const width = (segment.endDay - segment.startDay + 1) * pxPerDay;
+                const isToday = todayDay >= segment.startDay && todayDay <= segment.endDay;
                 return (
                   <div
                     key={segment.key}
-                    className="db-timeline-minor-segment"
+                    className={`db-timeline-minor-segment${isToday ? " db-timeline-minor-segment--today" : ""}`}
                     style={{ left, width }}
                   >
                     <span className="db-timeline-minor-label">{segment.label}</span>

@@ -3634,8 +3634,7 @@ pre {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: 100%;
+  flex: 1;
   min-height: 360px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -3645,6 +3644,7 @@ pre {
 
 .db-timeline-scroll {
   min-height: 0;
+  min-width: 0;
   flex: 1;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
@@ -3706,14 +3706,23 @@ pre {
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.db-timeline-major-segment,
-.db-timeline-minor-segment {
+.db-timeline-major-segment {
   position: absolute;
   inset-block: 0;
   padding-inline: 10px;
   border-right: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
+}
+
+.db-timeline-minor-segment {
+  position: absolute;
+  inset-block: 0;
+  padding-inline: 2px;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .db-timeline-major-label {
@@ -3738,6 +3747,23 @@ pre {
   white-space: nowrap;
   font-size: 11px;
   color: var(--subtext-0);
+}
+
+.db-timeline-minor-segment--today {
+  background: var(--accent);
+}
+
+.db-timeline-minor-segment--today .db-timeline-minor-label {
+  color: var(--base);
+  font-weight: 700;
+}
+
+.db-timeline-major-segment--current {
+  background: var(--accent);
+}
+
+.db-timeline-major-segment--current .db-timeline-major-label {
+  color: var(--base);
 }
 
 .db-timeline-grid-line {
