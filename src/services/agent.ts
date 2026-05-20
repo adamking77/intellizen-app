@@ -82,7 +82,7 @@ async function submitHermesWebhook(input: AgentWorkflowInput) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (hermesWebhookSecret) headers["X-Webhook-Secret"] = hermesWebhookSecret;
+  if (hermesWebhookSecret) headers["X-Gitlab-Token"] = hermesWebhookSecret;
 
   const res = await fetch(
     `${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`,
