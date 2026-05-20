@@ -156,7 +156,10 @@ export function ProjectsView() {
 
   useQuery({
     queryKey: ["operational-workspace-sync"],
-    queryFn: () => syncOperationalWorkspaceDatabases(),
+    queryFn: async () => {
+      await syncOperationalWorkspaceDatabases();
+      return true;
+    },
     staleTime: 60_000,
   });
 

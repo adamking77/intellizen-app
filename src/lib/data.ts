@@ -217,7 +217,12 @@ export async function listOperations() {
 
   if (error) throw error;
   const operations = (data ?? []) as Operation[];
-  const recordMap = await getOperationalWorkspaceRecordMap("operations");
+  let recordMap = new Map<number, { recordId: string }>();
+  try {
+    recordMap = await getOperationalWorkspaceRecordMap("operations");
+  } catch (recordError) {
+    console.warn("Operations workspace record map unavailable", recordError);
+  }
   return operations.map((operation) => ({
     ...operation,
     record_id: recordMap.get(operation.id)?.recordId ?? null,
@@ -279,8 +284,14 @@ export async function listProjects() {
 
   if (error) throw error;
   const projects = (data ?? []) as Project[];
-  const projectRecordMap = await getOperationalWorkspaceRecordMap("projects");
-  const operationRecordMap = await getOperationalWorkspaceRecordMap("operations");
+  let projectRecordMap = new Map<number, { recordId: string }>();
+  let operationRecordMap = new Map<number, { recordId: string }>();
+  try {
+    projectRecordMap = await getOperationalWorkspaceRecordMap("projects");
+    operationRecordMap = await getOperationalWorkspaceRecordMap("operations");
+  } catch (recordError) {
+    console.warn("Operational workspace record maps unavailable", recordError);
+  }
   return projects.map((project) => ({
     ...project,
     record_id: projectRecordMap.get(project.id)?.recordId ?? null,
