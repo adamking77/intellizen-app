@@ -1,6 +1,6 @@
 [package]
 name = "intellizen"
-version = "0.1.0"
+version = "0.1.1"
 description = "IntelliZen desktop intelligence platform"
 authors = ["Adam King"]
 edition = "2021"

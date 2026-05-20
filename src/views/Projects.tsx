@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -149,7 +149,7 @@ export function ProjectsView() {
     document.body.style.userSelect = "none";
   };
 
-  const { data: operations } = useQuery({
+  const { data: operations, error: operationsError, isLoading: operationsLoading } = useQuery({
     queryKey: ["operations"],
     queryFn: listOperations,
   });
@@ -163,7 +163,7 @@ export function ProjectsView() {
     staleTime: 60_000,
   });
 
-  const { data: projects, error } = useQuery({
+  const { data: projects, error: projectsError, isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: listProjects,
   });
@@ -270,14 +270,14 @@ export function ProjectsView() {
   );
 
   const stats = useMemo(() => {
-    const list = projects ?? [];
-    const active = list.filter((p) => p.status === "active").length;
-    const onHold = list.filter((p) => p.status === "on_hold").length;
-    const archived = list.filter((p) => p.status === "archived").length;
-    const lastUpdated = list.map((p) => p.updated_at).filter(Boolean).sort().pop();
-    const totalSignals = Object.values(signalCounts ?? {}).reduce((a, b) => a + b, 0);
-    return { active, onHold, archived, lastUpdated, totalSignals, total: list.length };
-  }, [projects, signalCounts]);
+    const ops = operations ?? [];
+    const projectList = projects ?? [];
+    const active = ops.filter((op) => op.status === "active").length;
+    const onHold = ops.filter((op) => op.status === "on_hold").length;
+    const archived = ops.filter((op) => op.status === "archived").length;
+    const lastUpdated = ops.map((op) => op.updated_at).filter(Boolean).sort().pop();
+    return { active, onHold, archived, lastUpdated, projectTotal: projectList.length, total: ops.length };
+  }, [operations, projects]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -474,19 +474,23 @@ export function ProjectsView() {
   // ── Indicators ─────────────────────────────────────────────────────────────
 
   const indicators: IndicatorItem[] = [
-    { label: "Total", value: stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
+    { label: "Operations", value: stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
     { label: "Active", value: stats.active, status: stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
     { label: "On Hold", value: stats.onHold, status: stats.onHold > 0 ? "accent" : "neutral", onClick: () => setStatusFilter("on_hold"), active: statusFilter === "on_hold" },
     { label: "Archived", value: stats.archived, status: stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
+    { label: "Projects", value: stats.projectTotal },
     { label: "Last touch", value: formatElapsed(stats.lastUpdated) },
   ];
 
-  if (error) {
+  const loadError = operationsError ?? projectsError;
+  const loadingOperationalData = operationsLoading || projectsLoading;
+
+  if (loadError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-          <span className="text-label">Projects unavailable</span>
-          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{error.message}</p>
+          <span className="text-label">Operations unavailable</span>
+          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{loadError.message}</p>
         </div>
       </div>
     );
@@ -591,7 +595,12 @@ export function ProjectsView() {
           className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)]"
         >
           <div className="flex-1 overflow-y-auto">
-            {operationGroups.length === 0 && unassigned.length === 0 ? (
+            {loadingOperationalData ? (
+              <div className="flex flex-col items-center gap-2 p-10 text-center">
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+                <p className="text-label">Loading operations</p>
+              </div>
+            ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
                 <p className="text-label">No projects</p>
                 <p className="font-ui text-[12px] text-[var(--overlay-1)]">
