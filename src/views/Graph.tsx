@@ -35,7 +35,6 @@ import {
   buildEdgePath,
   buildEdgePreviewPath,
   buildMinimapViewportRect,
-  canonicalEdgePair,
   clamp,
   clampNodePosition,
   clientToWorldPoint,
@@ -82,7 +81,7 @@ import {
   writeVaultBinaryFile,
 } from "@/lib/vault";
 import { buildGraphExtractionPrompt } from "@/lib/shell";
-import { anthropic } from "@/lib/anthropic";
+import { AgentWorkflowQueuedError, queueGraphExtraction } from "@/services/agent";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
@@ -1810,7 +1809,7 @@ export function GraphView() {
     }
   }
 
-  // Auto-generate graph from project signals using Claude entity + relationship extraction
+  // Auto-generate graph from project signals using Fiona entity + relationship extraction
   async function handleAutoGenerateFromProject() {
     if (graphMode !== "project" || !graphProjectId) return;
 
@@ -1823,7 +1822,7 @@ export function GraphView() {
     try {
       setIsAutoGenerating(true);
       setErrorMessage(null);
-      setStatusMessage("Extracting entities and relationships via Claude…");
+      setStatusMessage("Sending graph extraction to Fiona…");
 
       const signalInputs = projectSignals
         .slice(0, 30)
@@ -1834,126 +1833,20 @@ export function GraphView() {
         }))
         .filter((s) => s.title);
 
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        messages: [{ role: "user", content: buildGraphExtractionPrompt(signalInputs) }],
+      await queueGraphExtraction({
+        projectId: graphProjectId,
+        prompt: buildGraphExtractionPrompt(signalInputs),
+        signalCount: signalInputs.length,
       });
-
-      const textBlock = message.content.find((b) => b.type === "text");
-      if (!textBlock || textBlock.type !== "text") {
-        setErrorMessage("Claude extraction returned no text.");
-        return;
-      }
-
-      // Strip markdown fences if Claude wrapped the JSON
-      const raw = textBlock.text.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
-
-      let parsed: {
-        entities: Array<{ label: string; type: GraphEntityType }>;
-        relationships: Array<{ source: string; target: string; relation: string }>;
-      };
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        setErrorMessage("Could not parse Claude's extraction output.");
-        return;
-      }
-
-      if (!parsed.entities?.length) {
-        setStatusMessage("No entities found in signals.");
-        return;
-      }
-
-      recordHistory();
-
-      // Build label → node_id map from existing nodes
-      const labelToNodeId = new Map(nodes.map((n) => [n.label.toLowerCase(), n.node_id]));
-
-      // Create nodes for entities not already on the canvas
-      const newEntities = parsed.entities.filter(
-        (e) => !labelToNodeId.has(e.label.toLowerCase()),
-      );
-      const positions = calculateAutoLayoutPositions(newEntities.length, visualNodes.length);
-
-      const nodeCreations = newEntities.map((entity, i) => {
-        const nodeId = crypto.randomUUID();
-        labelToNodeId.set(entity.label.toLowerCase(), nodeId);
-        return createGraphNode({
-          projectId: graphProjectId,
-          nodeId,
-          label: entity.label,
-          entityType: entity.type,
-          position: positions[i],
-        });
-      });
-      await Promise.all(nodeCreations);
-
-      // Create edges — only between entities whose labels Claude matched
-      const allEdges = await listGraphEdges(graphProjectId);
-      const seenPairs = new Set(
-        allEdges.map((e) => canonicalEdgePair(e.source_node_id, e.target_node_id)),
-      );
-
-      const edgeCreations: Promise<unknown>[] = [];
-      for (const rel of parsed.relationships ?? []) {
-        const sourceId = labelToNodeId.get(rel.source.toLowerCase());
-        const targetId = labelToNodeId.get(rel.target.toLowerCase());
-        if (!sourceId || !targetId || sourceId === targetId) continue;
-
-        const pair = canonicalEdgePair(sourceId, targetId);
-        if (seenPairs.has(pair)) continue;
-        seenPairs.add(pair);
-
-        edgeCreations.push(
-          createGraphEdge({
-            projectId: graphProjectId,
-            edgeId: crypto.randomUUID(),
-            sourceNodeId: sourceId,
-            targetNodeId: targetId,
-            label: rel.relation,
-          }),
-        );
-      }
-      await Promise.all(edgeCreations);
-      const edgesCreated = edgeCreations.length;
-
-      await nodesQuery.refetch();
-      await edgesQuery.refetch();
-
-      setStatusMessage(
-        `Generated ${newEntities.length} entities and ${edgesCreated} relationships.`,
-      );
-      if (newEntities.length > 0) {
-        setViewport(
-          computeFitViewToNodes(
-            [...visualNodes, ...newEntities.map((_, i) => ({ position: positions[i] }))],
-            viewportRef.current,
-          ),
-        );
-      }
     } catch (error) {
+      if (error instanceof AgentWorkflowQueuedError) {
+        setStatusMessage("Fiona accepted graph extraction. Refresh the graph after the workflow writes back.");
+        return;
+      }
       setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
     } finally {
       setIsAutoGenerating(false);
     }
-  }
-
-  // Calculate positions for auto-layout
-  function calculateAutoLayoutPositions(count: number, existingCount: number): Point[] {
-    const positions: Point[] = [];
-    const startX = 100 + (existingCount % 5) * 240;
-    const startY = 100 + Math.floor(existingCount / 5) * 156;
-
-    for (let i = 0; i < count; i++) {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      positions.push({
-        x: clamp(startX + col * 240, WORLD_MARGIN, WORLD_WIDTH - NODE_WIDTH - WORLD_MARGIN),
-        y: clamp(startY + row * 156, WORLD_MARGIN, WORLD_HEIGHT - NODE_HEIGHT - WORLD_MARGIN),
-      });
-    }
-    return positions;
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<HTMLDivElement>) {

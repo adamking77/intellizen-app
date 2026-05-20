@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* https://jicrdrwtwubveyvzyyrh.supabase.co wss://jicrdrwtwubveyvzyyrh.supabase.co https://hermes-agent-production-c98b.up.railway.app https://api.exa.ai; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {
