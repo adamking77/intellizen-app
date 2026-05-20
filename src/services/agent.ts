@@ -43,7 +43,7 @@ export class AgentWorkflowQueuedError extends Error {
 const hermesGatewayUrl =
   import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") ||
   "https://hermes-agent-production-c98b.up.railway.app";
-const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intelizen";
+const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
 const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
 
 function workflowPayload(input: AgentWorkflowInput) {
@@ -82,7 +82,7 @@ async function submitHermesWebhook(input: AgentWorkflowInput) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (hermesWebhookSecret) headers["X-Hermes-Signature"] = hermesWebhookSecret;
+  if (hermesWebhookSecret) headers["X-Webhook-Secret"] = hermesWebhookSecret;
 
   const res = await fetch(
     `${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`,
