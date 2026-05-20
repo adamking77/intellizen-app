@@ -78,6 +78,15 @@ const PHASE_GATE_KEYS = [
   "analysis_complete",
 ] as const;
 
+type PendingAnalysisWriteback = {
+  caseId: string;
+  startedAt: number;
+  initialFileIds: number[];
+};
+
+const FIONA_ANALYSIS_POLL_INTERVAL_MS = 4_000;
+const FIONA_ANALYSIS_POLL_TIMEOUT_MS = 3 * 60_000;
+
 function getPhaseGateKey(phase: number) {
   return PHASE_GATE_KEYS[Math.max(0, Math.min(PHASE_GATE_KEYS.length - 1, phase - 1))];
 }
@@ -134,6 +143,7 @@ export function InvestigationView() {
   // Phase 3 — Fiona run state
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [analysisOutput, setAnalysisOutput] = useState<string | null>(null);
+  const [pendingAnalysisWriteback, setPendingAnalysisWriteback] = useState<PendingAnalysisWriteback | null>(null);
   const [outputOpen, setOutputOpen] = useState(false);
 
   // Phase 2 — Exa collection state
@@ -220,6 +230,53 @@ export function InvestigationView() {
     queryFn: () => listProjectSignals(selectedInvestigation!.project_id as number),
     enabled: !!selectedInvestigation?.project_id,
   });
+
+  useEffect(() => {
+    if (!pendingAnalysisWriteback) return;
+    let cancelled = false;
+    const pending = pendingAnalysisWriteback;
+
+    async function pollAnalysisWriteback() {
+      try {
+        const files = await queryClient.fetchQuery({
+          queryKey: ["vault-files", pending.caseId],
+          queryFn: () => listVaultFiles(pending.caseId),
+          staleTime: 0,
+        });
+
+        if (cancelled) return;
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["vault-files", pending.caseId] }),
+          queryClient.invalidateQueries({ queryKey: ["vault-files-all"] }),
+          queryClient.invalidateQueries({ queryKey: ["investigations"] }),
+          queryClient.invalidateQueries({ queryKey: ["investigation", pending.caseId] }),
+        ]);
+
+        const hasWriteback = files.some((file) => !pending.initialFileIds.includes(file.id));
+        if (hasWriteback) {
+          setPendingAnalysisWriteback(null);
+          setAnalysisOutput("Fiona finished the analysis. The new file is available in Reports.");
+          toast.success("Fiona analysis complete");
+        } else if (Date.now() - pending.startedAt >= FIONA_ANALYSIS_POLL_TIMEOUT_MS) {
+          setPendingAnalysisWriteback(null);
+          setAnalysisOutput("Fiona may still be working. Reports will show the file when writeback completes.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPendingAnalysisWriteback(null);
+          const msg = error instanceof Error ? error.message : "Failed to check Fiona writeback.";
+          setAnalysisOutput(`Error: ${msg}`);
+        }
+      }
+    }
+
+    void pollAnalysisWriteback();
+    const intervalId = window.setInterval(() => void pollAnalysisWriteback(), FIONA_ANALYSIS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingAnalysisWriteback, queryClient]);
 
   // ─── Derived state ─────────────────────────────────────────────────────────
 
@@ -501,8 +558,13 @@ export function InvestigationView() {
     } catch (err) {
       if (err instanceof AgentWorkflowQueuedError) {
         const output =
-          "Fiona accepted this analysis request. Results will be written back to Reports when the workflow completes.";
+          "Fiona accepted this analysis request. Watching Reports for writeback…";
         setAnalysisOutput(output);
+        setPendingAnalysisWriteback({
+          caseId: selectedInvestigation.case_id,
+          startedAt: Date.now(),
+          initialFileIds: (vaultFiles ?? []).map((file) => file.id),
+        });
         await queryClient.invalidateQueries({ queryKey: ["fiona-inbox-pending-count"] });
         await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
         await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NodePicker } from "@/components/graph/node-picker";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
@@ -89,6 +89,15 @@ import type {
 
 type GraphMode = "project" | "standalone";
 type GraphInteractionMode = "insight" | "construct";
+type PendingGraphExtraction = {
+  projectId: number;
+  startedAt: number;
+  initialNodeCount: number;
+  initialEdgeCount: number;
+};
+
+const FIONA_GRAPH_POLL_INTERVAL_MS = 4_000;
+const FIONA_GRAPH_POLL_TIMEOUT_MS = 3 * 60_000;
 
 const ENTITY_STYLES: Record<
   GraphEntityType,
@@ -239,6 +248,7 @@ function extractGraphSignalContent(rawPayload: unknown): string | null {
 }
 
 export function GraphView() {
+  const queryClient = useQueryClient();
   const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
@@ -277,6 +287,7 @@ export function GraphView() {
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEW);
   const [edgeDragState, setEdgeDragState] = useState<EdgeDragState>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [pendingGraphExtraction, setPendingGraphExtraction] = useState<PendingGraphExtraction | null>(null);
   const [historyStats, setHistoryStats] = useState({ undoCount: 0, redoCount: 0 });
   const [insightAutoLayout, setInsightAutoLayout] = useState(true);
   const [insightRepulsion, setInsightRepulsion] = useState(2.4);
@@ -453,6 +464,58 @@ export function GraphView() {
     graphProjectIdRef.current = graphProjectId;
     effectiveProjectIdRef.current = effectiveProjectId;
   }, [visualNodes, edges, connectLabel, graphMode, graphProjectId, effectiveProjectId]);
+
+  useEffect(() => {
+    if (!pendingGraphExtraction) return;
+    let cancelled = false;
+    const pending = pendingGraphExtraction;
+
+    async function pollGraphWriteback() {
+      try {
+        const [nextNodes, nextEdges] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ["graph-nodes", pending.projectId],
+            queryFn: () => listGraphNodes(pending.projectId),
+            staleTime: 0,
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["graph-edges", pending.projectId],
+            queryFn: () => listGraphEdges(pending.projectId),
+            staleTime: 0,
+          }),
+        ]);
+
+        if (cancelled) return;
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["graph-nodes", pending.projectId] }),
+          queryClient.invalidateQueries({ queryKey: ["graph-edges", pending.projectId] }),
+        ]);
+
+        const hasWriteback =
+          nextNodes.length > pending.initialNodeCount ||
+          nextEdges.length > pending.initialEdgeCount;
+        if (hasWriteback) {
+          setPendingGraphExtraction(null);
+          setStatusMessage("Fiona finished graph extraction. Graph updated.");
+        } else if (Date.now() - pending.startedAt >= FIONA_GRAPH_POLL_TIMEOUT_MS) {
+          setPendingGraphExtraction(null);
+          setStatusMessage("Fiona may still be working. Use Refresh if the graph has not updated yet.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPendingGraphExtraction(null);
+          setErrorMessage(error instanceof Error ? error.message : "Failed to check Fiona graph writeback.");
+        }
+      }
+    }
+
+    void pollGraphWriteback();
+    const intervalId = window.setInterval(() => void pollGraphWriteback(), FIONA_GRAPH_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingGraphExtraction, queryClient]);
 
   // Auto-fit viewport to nodes on initial Construct mode load (once per graph)
   useEffect(() => {
@@ -1840,7 +1903,13 @@ export function GraphView() {
       });
     } catch (error) {
       if (error instanceof AgentWorkflowQueuedError) {
-        setStatusMessage("Fiona accepted graph extraction. Refresh the graph after the workflow writes back.");
+        setPendingGraphExtraction({
+          projectId: graphProjectId,
+          startedAt: Date.now(),
+          initialNodeCount: nodes.length,
+          initialEdgeCount: edges.length,
+        });
+        setStatusMessage("Fiona accepted graph extraction. Watching for graph writeback…");
         return;
       }
       setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
