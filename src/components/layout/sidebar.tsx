@@ -27,7 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Inbox", to: "/inbox", key: "inbox", icon: Inbox },
   { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },
-  { label: "Ops", to: "/projects", key: "projects", icon: FolderOpen },
+  { label: "Operations", to: "/projects", key: "projects", icon: FolderOpen },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
