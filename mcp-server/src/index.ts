@@ -11,17 +11,55 @@ const Exa = (ExaModule as any).Exa ?? ExaModule.default ?? ExaModule;
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
+
+function loadEnvFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+
+  return Object.fromEntries(
+    readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        if (separator === -1) return [line, ""];
+        const key = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
+        return [key, value];
+      }),
+  );
+}
+
+const localEnv = loadEnvFile(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env.local"),
+);
 
 const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ??
   process.env.SUPABASE_URL ??
+  localEnv.VITE_SUPABASE_URL ??
+  localEnv.SUPABASE_URL ??
   "https://jicrdrwtwubveyvzyyrh.supabase.co";
-const SUPABASE_ANON_KEY =
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.VITE_SUPABASE_ANON_KEY ??
   process.env.SUPABASE_ANON_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppY3Jkcnd0d3VidmV5dnp5eXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NTI2MjgsImV4cCI6MjA4NzIyODYyOH0.tvPbYnbvHFhBp2u44h9P-O4DFFj9pd6mepuA0Yk9cvc";
+  localEnv.SUPABASE_SERVICE_ROLE_KEY ??
+  localEnv.VITE_SUPABASE_ANON_KEY ??
+  localEnv.SUPABASE_ANON_KEY;
 const EXA_API_KEY =
-  process.env.EXA_API_KEY ?? "ca04e163-e55b-49ca-9b40-3454d11a35d6";
+  process.env.VITE_EXA_API_KEY ??
+  process.env.EXA_API_KEY ??
+  localEnv.VITE_EXA_API_KEY ??
+  localEnv.EXA_API_KEY ??
+  "ca04e163-e55b-49ca-9b40-3454d11a35d6";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!SUPABASE_KEY) {
+  throw new Error("Missing Supabase key. Set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY.");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const exa = new Exa(EXA_API_KEY);
 const VAULT_BASE = join(homedir(), "vault", "intelligence");
 

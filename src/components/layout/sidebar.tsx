@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { getUnreadSignalCount } from "@/lib/data";
+import { getPendingFionaInboxCount, getUnreadSignalCount } from "@/lib/data";
 import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -52,6 +52,11 @@ export function Sidebar() {
   const { data: unreadCount } = useQuery({
     queryKey: ["signals", "unread-count"],
     queryFn: getUnreadSignalCount,
+    staleTime: 30_000,
+  });
+  const { data: fionaPendingCount } = useQuery({
+    queryKey: ["fiona-inbox", "pending-count"],
+    queryFn: getPendingFionaInboxCount,
     staleTime: 30_000,
   });
   const { data: databases = [] } = useQuery({
@@ -134,7 +139,11 @@ export function Sidebar() {
       >
         {NAV_ITEMS.map((item) => {
           const showCount =
-            item.key === "inbox" ? unreadCount : item.key === "databases" ? databases.length : 0;
+            item.key === "inbox"
+              ? (unreadCount ?? 0) + (fionaPendingCount ?? 0)
+              : item.key === "databases"
+                ? databases.length
+                : 0;
           const Icon = item.icon;
           return (
             <NavLink

@@ -9,6 +9,7 @@ import type {
   CanvasDocumentData,
   CanvasDocumentSummary,
   DeepResearchResult,
+  FionaInboxItem,
   GraphEntityType,
   GraphEdgeRecord,
   GraphNodeRecord,
@@ -179,6 +180,26 @@ export async function getUnreadSignalCount() {
     .from("intel_signals")
     .select("*", { count: "exact", head: true })
     .eq("status", "new");
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function listFionaInboxItems() {
+  const { data, error } = await supabase
+    .from("fiona_inbox")
+    .select("id, from_agent, task, context, priority, status, result, created_at, updated_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as FionaInboxItem[];
+}
+
+export async function getPendingFionaInboxCount() {
+  const { count, error } = await supabase
+    .from("fiona_inbox")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending");
 
   if (error) throw error;
   return count ?? 0;

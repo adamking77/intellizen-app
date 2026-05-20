@@ -42,6 +42,21 @@ export interface IntelSignal {
   updated_at: string;
 }
 
+export type FionaInboxStatus = "pending" | "in_progress" | "completed" | "failed" | "archived" | string;
+export type FionaInboxPriority = "low" | "normal" | "high" | "urgent" | string;
+
+export interface FionaInboxItem {
+  id: string;
+  from_agent: string;
+  task: string;
+  context: Record<string, unknown> | null;
+  priority: FionaInboxPriority;
+  status: FionaInboxStatus;
+  result: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Operation {
   id: number;
   record_id?: string | null;
