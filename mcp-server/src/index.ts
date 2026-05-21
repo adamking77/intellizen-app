@@ -11,17 +11,55 @@ const Exa = (ExaModule as any).Exa ?? ExaModule.default ?? ExaModule;
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
+
+function loadEnvFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+
+  return Object.fromEntries(
+    readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        if (separator === -1) return [line, ""];
+        const key = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
+        return [key, value];
+      }),
+  );
+}
+
+const localEnv = loadEnvFile(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env.local"),
+);
 
 const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ??
   process.env.SUPABASE_URL ??
+  localEnv.VITE_SUPABASE_URL ??
+  localEnv.SUPABASE_URL ??
   "https://jicrdrwtwubveyvzyyrh.supabase.co";
-const SUPABASE_ANON_KEY =
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.VITE_SUPABASE_ANON_KEY ??
   process.env.SUPABASE_ANON_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppY3Jkcnd0d3VidmV5dnp5eXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NTI2MjgsImV4cCI6MjA4NzIyODYyOH0.tvPbYnbvHFhBp2u44h9P-O4DFFj9pd6mepuA0Yk9cvc";
+  localEnv.SUPABASE_SERVICE_ROLE_KEY ??
+  localEnv.VITE_SUPABASE_ANON_KEY ??
+  localEnv.SUPABASE_ANON_KEY;
 const EXA_API_KEY =
-  process.env.EXA_API_KEY ?? "ca04e163-e55b-49ca-9b40-3454d11a35d6";
+  process.env.VITE_EXA_API_KEY ??
+  process.env.EXA_API_KEY ??
+  localEnv.VITE_EXA_API_KEY ??
+  localEnv.EXA_API_KEY ??
+  "ca04e163-e55b-49ca-9b40-3454d11a35d6";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!SUPABASE_KEY) {
+  throw new Error("Missing Supabase key. Set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY.");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const exa = new Exa(EXA_API_KEY);
 const VAULT_BASE = join(homedir(), "vault", "intelligence");
 
@@ -51,6 +89,142 @@ function snippetFromResult(r: {
   if (r.highlights?.length) return r.highlights[0];
   if (r.text) return r.text.slice(0, 400);
   return "";
+}
+
+type ExaSearchCategory = "web" | "news" | "research paper" | "company" | "personal site";
+
+interface ExaSearchInput {
+  query: string;
+  category?: ExaSearchCategory;
+  num_results?: number;
+  start_published_date?: string;
+  project_id?: number;
+  monitor_id?: number;
+  watch_domain?: string;
+}
+
+interface UpsertedSearchResult {
+  query: string;
+  total_results: number;
+  signal_ids: number[];
+  titles: string[];
+}
+
+function definedFields<T extends Record<string, unknown>>(fields: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
+async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearchResult> {
+  const {
+    query,
+    category = "web",
+    num_results = 10,
+    start_published_date,
+    project_id,
+    monitor_id,
+    watch_domain,
+  } = input;
+
+  const searchOptions: Record<string, unknown> = {
+    type: "auto",
+    useAutoprompt: true,
+    numResults: Math.min(num_results, 25),
+    highlights: { numSentences: 3, highlightsPerUrl: 1 },
+  };
+
+  if (category !== "web") {
+    searchOptions.category = category;
+  }
+  if (start_published_date) {
+    searchOptions.startPublishedDate = start_published_date;
+  }
+
+  const res = await exa.searchAndContents(query, searchOptions);
+  const upserted: number[] = [];
+
+  for (const r of res.results as Array<{
+    title?: string;
+    url: string;
+    publishedDate?: string;
+    score?: number;
+    highlights?: string[];
+    text?: string;
+  }>) {
+    const source = domainFromUrl(r.url);
+    const snippet = snippetFromResult(r);
+
+    const { data, error } = await supabase
+      .from("intel_signals")
+      .upsert(
+        {
+          monitor_id: monitor_id ?? null,
+          title: r.title ?? r.url,
+          url: r.url,
+          source,
+          published_at: r.publishedDate ?? null,
+          snippet,
+          exa_score: r.score ?? null,
+          watch_domain: watch_domain ?? query.slice(0, 100),
+          raw_payload: r,
+          status: "new",
+        },
+        { onConflict: "url", ignoreDuplicates: true },
+      )
+      .select("id")
+      .single();
+
+    if (!error && data) {
+      upserted.push(data.id);
+    } else if (error?.code === "23505" || error?.code === "PGRST116") {
+      const { data: existing } = await supabase
+        .from("intel_signals")
+        .select("id")
+        .eq("url", r.url)
+        .single();
+      if (existing) upserted.push(existing.id);
+    }
+  }
+
+  if (project_id && upserted.length > 0) {
+    const rows = upserted.map((signal_id) => ({ project_id, signal_id }));
+    await supabase
+      .from("project_signals")
+      .upsert(rows, { onConflict: "project_id,signal_id", ignoreDuplicates: true });
+  }
+
+  return {
+    query,
+    total_results: res.results.length,
+    signal_ids: upserted,
+    titles: (res.results as Array<{ title?: string; url: string }>).map((r) => r.title ?? r.url),
+  };
+}
+
+async function runMonitor(monitor: {
+  id: number;
+  query: string;
+  watch_domain: string;
+}): Promise<UpsertedSearchResult> {
+  const result = await runSearchAndUpsert({
+    query: monitor.query,
+    category: "web",
+    num_results: 10,
+    monitor_id: monitor.id,
+    watch_domain: monitor.watch_domain,
+  });
+
+  const { error } = await supabase
+    .from("monitors")
+    .update({
+      last_run: new Date().toISOString(),
+      signal_count: result.signal_ids.length,
+    })
+    .eq("id", monitor.id);
+
+  if (error) throw new Error(error.message);
+  return result;
 }
 
 async function generateCaseId(): Promise<string> {
@@ -104,6 +278,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: "List all InteliZen projects.",
       inputSchema: { type: "object", properties: {} },
     },
+    // ── Operations ──────────────────────────────────────────────────────────
+    {
+      name: "list_operations",
+      description: "List GenZen operations.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["active", "archived"],
+            description: "Filter by operation status. Omit to return all.",
+          },
+        },
+      },
+    },
+    {
+      name: "create_operation",
+      description: "Create a new operation.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "update_operation",
+      description: "Update an operation's name, description, or status.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          operation_id: { type: "number" },
+          name: { type: "string" },
+          description: { type: "string" },
+          status: { type: "string", enum: ["active", "archived"] },
+        },
+        required: ["operation_id"],
+      },
+    },
+    {
+      name: "delete_operation",
+      description: "Delete an operation. Linked projects and investigations are preserved with operation_id cleared by database constraints.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          operation_id: { type: "number" },
+        },
+        required: ["operation_id"],
+      },
+    },
+    // ── Projects ────────────────────────────────────────────────────────────
     {
       name: "create_project",
       description: "Create a new project.",
@@ -117,8 +344,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           watch_domain: { type: "string" },
           notes: { type: "string" },
+          operation_id: { type: "number" },
         },
         required: ["name", "type"],
+      },
+    },
+    {
+      name: "update_project",
+      description: "Update a project's metadata, status, or operation link.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "number" },
+          name: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["report", "scoping", "research", "client_case"],
+          },
+          watch_domain: { type: "string" },
+          status: { type: "string", enum: ["active", "archived", "on_hold"] },
+          notes: { type: "string" },
+          operation_id: { type: "number" },
+        },
+        required: ["project_id"],
+      },
+    },
+    {
+      name: "delete_project",
+      description: "Delete a project and its project-signal links.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "number" },
+        },
+        required: ["project_id"],
       },
     },
     {
@@ -143,6 +402,106 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           project_id: { type: "number" },
         },
         required: ["project_id"],
+      },
+    },
+    // ── Monitors / Inbox ───────────────────────────────────────────────────
+    {
+      name: "list_monitors",
+      description: "List inbox monitors.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["active", "paused"],
+            description: "Filter by monitor status. Omit to return all.",
+          },
+        },
+      },
+    },
+    {
+      name: "create_monitor",
+      description: "Create a monitor used by Inbox refresh.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          query: { type: "string" },
+          watch_domain: { type: "string" },
+          frequency: { type: "string", enum: ["daily", "weekly"] },
+          status: { type: "string", enum: ["active", "paused"] },
+        },
+        required: ["name", "query", "watch_domain"],
+      },
+    },
+    {
+      name: "update_monitor",
+      description: "Update a monitor.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          monitor_id: { type: "number" },
+          name: { type: "string" },
+          query: { type: "string" },
+          watch_domain: { type: "string" },
+          frequency: { type: "string", enum: ["daily", "weekly"] },
+          status: { type: "string", enum: ["active", "paused"] },
+        },
+        required: ["monitor_id"],
+      },
+    },
+    {
+      name: "delete_monitor",
+      description: "Delete a monitor.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          monitor_id: { type: "number" },
+        },
+        required: ["monitor_id"],
+      },
+    },
+    {
+      name: "run_monitor",
+      description: "Run one monitor now, upsert signals, and update last_run/signal_count.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          monitor_id: { type: "number" },
+        },
+        required: ["monitor_id"],
+      },
+    },
+    {
+      name: "refresh_inbox",
+      description: "Run all active monitors and return aggregate upserted signal IDs.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "list_signals",
+      description: "List inbox signals with optional status/watch_domain filters.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["new", "saved", "dismissed"],
+          },
+          watch_domain: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: "update_signal_status",
+      description: "Update one signal's status.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          signal_id: { type: "number" },
+          status: { type: "string", enum: ["new", "saved", "dismissed"] },
+        },
+        required: ["signal_id", "status"],
       },
     },
     // ── Investigations ───────────────────────────────────────────────────────
@@ -370,99 +729,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   // ── run_exa_search ─────────────────────────────────────────────────────────
   if (name === "run_exa_search") {
-    const {
-      query,
-      category = "web",
-      num_results = 10,
-      start_published_date,
-      project_id,
-    } = args as {
+    const input = args as {
       query: string;
-      category?: string;
+      category?: ExaSearchCategory;
       num_results?: number;
       start_published_date?: string;
       project_id?: number;
     };
-
-    const searchOptions: Record<string, unknown> = {
-      type: "auto",
-      useAutoprompt: true,
-      numResults: Math.min(num_results, 25),
-      highlights: { numSentences: 3, highlightsPerUrl: 1 },
-    };
-
-    if (category !== "web") {
-      searchOptions.category = category;
-    }
-    if (start_published_date) {
-      searchOptions.startPublishedDate = start_published_date;
-    }
-
-    const res = await exa.searchAndContents(query, searchOptions);
-
-    const upserted: number[] = [];
-
-    for (const r of res.results as Array<{
-      title?: string;
-      url: string;
-      publishedDate?: string;
-      score?: number;
-      highlights?: string[];
-      text?: string;
-    }>) {
-      const source = domainFromUrl(r.url);
-      const snippet = snippetFromResult(r);
-
-      const { data, error } = await supabase
-        .from("intel_signals")
-        .upsert(
-          {
-            title: r.title ?? r.url,
-            url: r.url,
-            source,
-            published_at: (r as { publishedDate?: string }).publishedDate ?? null,
-            snippet,
-            exa_score: r.score ?? null,
-            watch_domain: query.slice(0, 100),
-            raw_payload: r,
-            status: "new",
-          },
-          { onConflict: "url", ignoreDuplicates: true }
-        )
-        .select("id")
-        .single();
-
-      if (!error && data) {
-        upserted.push(data.id);
-      } else if (error?.code === "23505" || error?.code === "PGRST116") {
-        // Already exists — fetch the id
-        const { data: existing } = await supabase
-          .from("intel_signals")
-          .select("id")
-          .eq("url", r.url)
-          .single();
-        if (existing) upserted.push(existing.id);
-      }
-    }
-
-    // Optionally attach to project
-    if (project_id && upserted.length > 0) {
-      const rows = upserted.map((signal_id) => ({ project_id, signal_id }));
-      await supabase
-        .from("project_signals")
-        .upsert(rows, { onConflict: "project_id,signal_id", ignoreDuplicates: true });
-    }
+    const result = await runSearchAndUpsert(input);
 
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({
-            query,
-            total_results: res.results.length,
-            signal_ids: upserted,
-            titles: (res.results as Array<{ title?: string; url: string }>).map((r) => r.title ?? r.url),
-          }, null, 2),
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };
@@ -478,21 +758,106 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   }
 
-  // ── create_project ─────────────────────────────────────────────────────────
-  if (name === "create_project") {
-    const { name: pname, type, watch_domain, notes } = args as {
+  // ── list_operations ───────────────────────────────────────────────────────
+  if (name === "list_operations") {
+    let query = supabase
+      .from("operations")
+      .select("*, projects:projects(count), investigations:investigations(count)")
+      .order("created_at", { ascending: false });
+    if (args?.status) query = query.eq("status", args.status as string);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── create_operation ──────────────────────────────────────────────────────
+  if (name === "create_operation") {
+    const { name: operationName, description } = args as {
       name: string;
-      type: string;
-      watch_domain?: string;
-      notes?: string;
+      description?: string;
     };
     const { data, error } = await supabase
-      .from("projects")
-      .insert({ name: pname, type, watch_domain, notes })
+      .from("operations")
+      .insert({ name: operationName, description: description ?? null })
       .select()
       .single();
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── update_operation ──────────────────────────────────────────────────────
+  if (name === "update_operation") {
+    const { operation_id, ...fields } = args as {
+      operation_id: number;
+      name?: string;
+      description?: string | null;
+      status?: string;
+    };
+    const updates = definedFields(fields);
+    const { data, error } = await supabase
+      .from("operations")
+      .update(updates)
+      .eq("id", operation_id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── delete_operation ──────────────────────────────────────────────────────
+  if (name === "delete_operation") {
+    const { operation_id } = args as { operation_id: number };
+    const { error } = await supabase.from("operations").delete().eq("id", operation_id);
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: `Operation ${operation_id} deleted.` }] };
+  }
+
+  // ── create_project ─────────────────────────────────────────────────────────
+  if (name === "create_project") {
+    const { name: pname, type, watch_domain, notes, operation_id } = args as {
+      name: string;
+      type: string;
+      watch_domain?: string;
+      notes?: string;
+      operation_id?: number;
+    };
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({ name: pname, type, watch_domain, notes, operation_id: operation_id ?? null })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── update_project ────────────────────────────────────────────────────────
+  if (name === "update_project") {
+    const { project_id, ...fields } = args as {
+      project_id: number;
+      name?: string;
+      type?: string;
+      watch_domain?: string | null;
+      status?: string;
+      notes?: string | null;
+      operation_id?: number | null;
+    };
+    const updates = definedFields(fields);
+    const { data, error } = await supabase
+      .from("projects")
+      .update(updates)
+      .eq("id", project_id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── delete_project ────────────────────────────────────────────────────────
+  if (name === "delete_project") {
+    const { project_id } = args as { project_id: number };
+    const { error } = await supabase.from("projects").delete().eq("id", project_id);
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: `Project ${project_id} deleted.` }] };
   }
 
   // ── add_signal_to_project ──────────────────────────────────────────────────
@@ -518,6 +883,152 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       .eq("project_id", project_id);
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: JSON.stringify(data?.map((r) => r.signal), null, 2) }] };
+  }
+
+  // ── list_monitors ─────────────────────────────────────────────────────────
+  if (name === "list_monitors") {
+    let query = supabase
+      .from("monitors")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (args?.status) query = query.eq("status", args.status as string);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── create_monitor ────────────────────────────────────────────────────────
+  if (name === "create_monitor") {
+    const { name: monitorName, query, watch_domain, frequency, status } = args as {
+      name: string;
+      query: string;
+      watch_domain: string;
+      frequency?: string;
+      status?: string;
+    };
+    const { data, error } = await supabase
+      .from("monitors")
+      .insert({
+        name: monitorName,
+        query,
+        watch_domain,
+        frequency: frequency ?? "daily",
+        status: status ?? "active",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── update_monitor ────────────────────────────────────────────────────────
+  if (name === "update_monitor") {
+    const { monitor_id, ...fields } = args as {
+      monitor_id: number;
+      name?: string;
+      query?: string;
+      watch_domain?: string;
+      frequency?: string;
+      status?: string;
+    };
+    const updates = definedFields(fields);
+    const { data, error } = await supabase
+      .from("monitors")
+      .update(updates)
+      .eq("id", monitor_id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── delete_monitor ────────────────────────────────────────────────────────
+  if (name === "delete_monitor") {
+    const { monitor_id } = args as { monitor_id: number };
+    const { error } = await supabase.from("monitors").delete().eq("id", monitor_id);
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: `Monitor ${monitor_id} deleted.` }] };
+  }
+
+  // ── run_monitor ───────────────────────────────────────────────────────────
+  if (name === "run_monitor") {
+    const { monitor_id } = args as { monitor_id: number };
+    const { data: monitor, error } = await supabase
+      .from("monitors")
+      .select("id, query, watch_domain")
+      .eq("id", monitor_id)
+      .single();
+    if (error) throw new Error(error.message);
+    const result = await runMonitor(monitor as { id: number; query: string; watch_domain: string });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── refresh_inbox ─────────────────────────────────────────────────────────
+  if (name === "refresh_inbox") {
+    const { data: monitors, error } = await supabase
+      .from("monitors")
+      .select("id, query, watch_domain")
+      .eq("status", "active")
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    const results = [];
+    for (const monitor of monitors ?? []) {
+      results.push(await runMonitor(monitor as { id: number; query: string; watch_domain: string }));
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              monitor_count: monitors?.length ?? 0,
+              signal_ids: results.flatMap((result) => result.signal_ids),
+              results,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  }
+
+  // ── list_signals ──────────────────────────────────────────────────────────
+  if (name === "list_signals") {
+    const { status, watch_domain, limit = 50 } = args as {
+      status?: string;
+      watch_domain?: string;
+      limit?: number;
+    };
+    let query = supabase
+      .from("intel_signals")
+      .select("id, monitor_id, title, url, source, published_at, snippet, watch_domain, exa_score, status, created_at, updated_at")
+      .order("created_at", { ascending: false })
+      .limit(Math.min(limit, 200));
+    if (status) query = query.eq("status", status);
+    if (watch_domain) query = query.eq("watch_domain", watch_domain);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+
+  // ── update_signal_status ──────────────────────────────────────────────────
+  if (name === "update_signal_status") {
+    const { signal_id, status } = args as {
+      signal_id: number;
+      status: string;
+    };
+    const { data, error } = await supabase
+      .from("intel_signals")
+      .update({ status })
+      .eq("id", signal_id)
+      .select("id, title, status, updated_at")
+      .single();
+    if (error) throw new Error(error.message);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   }
 
   // ── list_investigations ────────────────────────────────────────────────────

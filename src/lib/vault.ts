@@ -32,10 +32,23 @@ async function getVaultBasePath(root: VaultRoot = "intelligence"): Promise<strin
   return vaultBasePathPromises[root]!;
 }
 
+function assertSafeVaultSubpath(subpath: string): void {
+  if (!subpath) return;
+  if (subpath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(subpath)) {
+    throw new Error("Vault paths must be relative.");
+  }
+
+  const segments = subpath.split(/[\\/]+/).filter(Boolean);
+  if (segments.some((segment) => segment === "..")) {
+    throw new Error("Vault paths cannot traverse outside the vault.");
+  }
+}
+
 async function resolveVaultPath(
   subpath = "",
   root: VaultRoot = "intelligence",
 ): Promise<string> {
+  assertSafeVaultSubpath(subpath);
   const base = await getVaultBasePath(root);
   return subpath ? join(base, subpath) : base;
 }

@@ -29,7 +29,6 @@ import {
   addSignalToInvestigation,
   bulkAddSignalsToInvestigation,
   collectSignalsForInvestigation,
-  createVaultFile,
   deleteInvestigation,
   getInvestigation,
   listInvestigations,
@@ -43,8 +42,8 @@ import {
   updateInvestigation,
   updateInvestigationPhase,
 } from "@/lib/data";
-import { anthropic } from "@/lib/anthropic";
 import { buildAnalysisPrompt } from "@/lib/shell";
+import { AgentWorkflowQueuedError, queueInvestigationAnalysis } from "@/services/agent";
 import type { Investigation, InvestigationUseCase } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -63,7 +62,7 @@ const PHASES = [
   {
     id: 3,
     name: "Analyse",
-    hint: "Claude analyses all collected signals and produces the intelligence output.",
+    hint: "Fiona analyses all collected signals and writes the intelligence output back to Reports.",
   },
 ] as const;
 
@@ -79,11 +78,14 @@ const PHASE_GATE_KEYS = [
   "analysis_complete",
 ] as const;
 
-const ANALYSIS_FILE_NAME: Record<InvestigationUseCase, string> = {
-  scoping: "scoping-brief.md",
-  post: "post-draft.md",
-  sit_rep: "legacy-threat-analysis.md",
+type PendingAnalysisWriteback = {
+  caseId: string;
+  startedAt: number;
+  initialFileIds: number[];
 };
+
+const FIONA_ANALYSIS_POLL_INTERVAL_MS = 4_000;
+const FIONA_ANALYSIS_POLL_TIMEOUT_MS = 3 * 60_000;
 
 function getPhaseGateKey(phase: number) {
   return PHASE_GATE_KEYS[Math.max(0, Math.min(PHASE_GATE_KEYS.length - 1, phase - 1))];
@@ -138,9 +140,10 @@ export function InvestigationView() {
     necessity: false,
   });
 
-  // Phase 3 — Claude run state
+  // Phase 3 — Fiona run state
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [analysisOutput, setAnalysisOutput] = useState<string | null>(null);
+  const [pendingAnalysisWriteback, setPendingAnalysisWriteback] = useState<PendingAnalysisWriteback | null>(null);
   const [outputOpen, setOutputOpen] = useState(false);
 
   // Phase 2 — Exa collection state
@@ -227,6 +230,53 @@ export function InvestigationView() {
     queryFn: () => listProjectSignals(selectedInvestigation!.project_id as number),
     enabled: !!selectedInvestigation?.project_id,
   });
+
+  useEffect(() => {
+    if (!pendingAnalysisWriteback) return;
+    let cancelled = false;
+    const pending = pendingAnalysisWriteback;
+
+    async function pollAnalysisWriteback() {
+      try {
+        const files = await queryClient.fetchQuery({
+          queryKey: ["vault-files", pending.caseId],
+          queryFn: () => listVaultFiles(pending.caseId),
+          staleTime: 0,
+        });
+
+        if (cancelled) return;
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["vault-files", pending.caseId] }),
+          queryClient.invalidateQueries({ queryKey: ["vault-files-all"] }),
+          queryClient.invalidateQueries({ queryKey: ["investigations"] }),
+          queryClient.invalidateQueries({ queryKey: ["investigation", pending.caseId] }),
+        ]);
+
+        const hasWriteback = files.some((file) => !pending.initialFileIds.includes(file.id));
+        if (hasWriteback) {
+          setPendingAnalysisWriteback(null);
+          setAnalysisOutput("Fiona finished the analysis. The new file is available in Reports.");
+          toast.success("Fiona analysis complete");
+        } else if (Date.now() - pending.startedAt >= FIONA_ANALYSIS_POLL_TIMEOUT_MS) {
+          setPendingAnalysisWriteback(null);
+          setAnalysisOutput("Fiona may still be working. Reports will show the file when writeback completes.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPendingAnalysisWriteback(null);
+          const msg = error instanceof Error ? error.message : "Failed to check Fiona writeback.";
+          setAnalysisOutput(`Error: ${msg}`);
+        }
+      }
+    }
+
+    void pollAnalysisWriteback();
+    const intervalId = window.setInterval(() => void pollAnalysisWriteback(), FIONA_ANALYSIS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingAnalysisWriteback, queryClient]);
 
   // ─── Derived state ─────────────────────────────────────────────────────────
 
@@ -498,42 +548,29 @@ export function InvestigationView() {
         humintInput: selectedInvestigation.humint_input,
       });
 
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8096,
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const textBlock = message.content.find((b) => b.type === "text");
-      if (!textBlock || textBlock.type !== "text") {
-        throw new Error("Claude returned no text");
-      }
-
-      const output = textBlock.text.trim();
-      const fileName = ANALYSIS_FILE_NAME[useCase];
-      const filePath = `investigations/${selectedInvestigation.case_id}/${fileName}`;
-      const content = `# ${USE_CASE_LABELS[useCase]} — ${selectedInvestigation.name}\n\nGenerated: ${new Date().toISOString()}\n\n---\n\n${output}\n`;
-
-      await createVaultFile({
+      await queueInvestigationAnalysis({
+        useCase,
         caseId: selectedInvestigation.case_id,
-        projectId: selectedInvestigation.project_id,
-        projectRecordId: selectedInvestigation.project_record_id ?? null,
-        phase: 3,
-        fileType: "analysis",
-        filePath,
-        fileName,
-        content,
+        investigationId: selectedInvestigation.id,
+        subject: selectedInvestigation.subject_definition ?? selectedInvestigation.name,
+        prompt,
       });
-
-      const nextGates = { ...selectedPhaseGates, [getPhaseGateKey(3)]: true };
-      await advancePhaseMutation.mutateAsync({ phase: 3, gateData: nextGates });
-      await queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
-      await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
-      await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });
-
-      setAnalysisOutput(output);
-      toast.success("Analysis complete — saved to Reports");
     } catch (err) {
+      if (err instanceof AgentWorkflowQueuedError) {
+        const output =
+          "Fiona accepted this analysis request. Watching Reports for writeback…";
+        setAnalysisOutput(output);
+        setPendingAnalysisWriteback({
+          caseId: selectedInvestigation.case_id,
+          startedAt: Date.now(),
+          initialFileIds: (vaultFiles ?? []).map((file) => file.id),
+        });
+        await queryClient.invalidateQueries({ queryKey: ["fiona-inbox-pending-count"] });
+        await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
+        await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });
+        toast.success("Analysis queued with Fiona");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Unknown error";
       setAnalysisOutput(`Error: ${msg}`);
       toastError("Analysis failed", err instanceof Error ? err : new Error(msg));
@@ -852,7 +889,7 @@ export function InvestigationView() {
                             rows={6}
                             value={briefForm.humintInput}
                             onChange={(e) => setBriefForm({ ...briefForm, humintInput: e.target.value })}
-                            placeholder="Paste the contractor's HUMINT report. Claude will synthesise this with the OSINT signals in the analysis."
+                            placeholder="Paste the contractor's HUMINT report. Fiona will synthesise this with the OSINT signals in the analysis."
                           />
                         </div>
                       )}
@@ -1064,7 +1101,7 @@ export function InvestigationView() {
                           </span>
                         </div>
                         <p className="mt-1 text-meta text-[var(--subtext-0)]">
-                          Claude will analyse all attached signals and produce a{" "}
+                          Fiona will analyse all attached signals and produce a{" "}
                           <span className="font-medium text-[var(--text)]">{USE_CASE_LABELS[useCase]}</span> output.
                           {needsHumint && selectedInvestigation.humint_input && (
                             <span className="text-[var(--accent)]"> HUMINT input will be included.</span>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -29,47 +29,15 @@ import {
   updateProject,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import type { Operation, OperationStatus, Project, ProjectSignal, ProjectStatus, VaultFile } from "@/lib/types";
+import type { Operation, Project, ProjectSignal, VaultFile } from "@/lib/types";
 import { useAppStore } from "@/store";
 
-type StatusFilter = "all" | "active" | "on_hold" | "archived";
-type OperationalStatus = OperationStatus | ProjectStatus;
+type StatusFilter = "all" | "active" | "archived";
 
 type Selection =
   | { kind: "project"; id: number }
   | { kind: "operation"; id: number }
   | null;
-
-const OPERATIONAL_STATUS_OPTIONS: Array<{ value: OperationalStatus; label: string }> = [
-  { value: "active", label: "Active" },
-  { value: "on_hold", label: "On Hold" },
-  { value: "archived", label: "Archived" },
-];
-
-function formatOperationalStatus(status: OperationalStatus): string {
-  switch (status) {
-    case "active":
-      return "Active";
-    case "on_hold":
-      return "On Hold";
-    case "archived":
-      return "Archived";
-    default:
-      return status;
-  }
-}
-
-function getOperationalStatusPillVariant(status: OperationalStatus) {
-  if (status === "active") return "active" as const;
-  if (status === "on_hold") return "new" as const;
-  return "paused" as const;
-}
-
-function getOperationalStatusDot(status: OperationalStatus) {
-  if (status === "active") return "var(--success)";
-  if (status === "on_hold") return "var(--accent)";
-  return "var(--overlay-1)";
-}
 
 function formatElapsed(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -149,18 +117,21 @@ export function ProjectsView() {
     document.body.style.userSelect = "none";
   };
 
-  const { data: operations } = useQuery({
+  const { data: operations, error: operationsError, isLoading: operationsLoading } = useQuery({
     queryKey: ["operations"],
     queryFn: listOperations,
   });
 
   useQuery({
     queryKey: ["operational-workspace-sync"],
-    queryFn: () => syncOperationalWorkspaceDatabases(),
+    queryFn: async () => {
+      await syncOperationalWorkspaceDatabases();
+      return true;
+    },
     staleTime: 60_000,
   });
 
-  const { data: projects, error } = useQuery({
+  const { data: projects, error: projectsError, isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: listProjects,
   });
@@ -269,11 +240,10 @@ export function ProjectsView() {
   const stats = useMemo(() => {
     const list = projects ?? [];
     const active = list.filter((p) => p.status === "active").length;
-    const onHold = list.filter((p) => p.status === "on_hold").length;
     const archived = list.filter((p) => p.status === "archived").length;
     const lastUpdated = list.map((p) => p.updated_at).filter(Boolean).sort().pop();
     const totalSignals = Object.values(signalCounts ?? {}).reduce((a, b) => a + b, 0);
-    return { active, onHold, archived, lastUpdated, totalSignals, total: list.length };
+    return { active, archived, lastUpdated, totalSignals, total: list.length };
   }, [projects, signalCounts]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -322,55 +292,29 @@ export function ProjectsView() {
     return () => window.clearTimeout(handle);
   }, [operationDescStatus]);
 
-  const projectStatusMutation = useMutation({
-    mutationFn: (nextStatus: ProjectStatus) =>
-      updateProject(selectedProjectId as number, { status: nextStatus }),
-    onMutate: async (nextStatus) => {
-      if (!selectedProjectId || !selectedProject) return;
+  const toggleStatusMutation = useMutation({
+    mutationFn: () =>
+      updateProject(selectedProjectId as number, {
+        status: selectedProject?.status === "active" ? "archived" : "active",
+      }),
+    onMutate: async () => {
+      if (!selectedProjectId) return;
       await queryClient.cancelQueries({ queryKey: ["projects"] });
       const previous = queryClient.getQueryData<Project[]>(["projects"]);
+      const nextStatus = selectedProject?.status === "active" ? "archived" : "active";
       queryClient.setQueryData<Project[]>(["projects"], (old) =>
         (old ?? []).map((p) => p.id === selectedProjectId ? { ...p, status: nextStatus } : p),
       );
-      return { previous, nextStatus, previousStatus: selectedProject.status };
+      return { previous, nextStatus };
     },
     onError: (err, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["projects"], context.previous);
       toastError("Couldn't update project", err);
     },
     onSuccess: (_, __, context) => {
-      if (!context) return;
-      toast.success(`Project set to ${formatOperationalStatus(context.nextStatus).toLowerCase()}`);
+      toast.success(context?.nextStatus === "archived" ? "Project archived" : "Project reactivated");
     },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["projects"] }); },
-  });
-
-  const operationStatusMutation = useMutation({
-    mutationFn: (nextStatus: OperationStatus) =>
-      updateOperation(selectedOperationId as number, { status: nextStatus }),
-    onMutate: async (nextStatus) => {
-      if (!selectedOperationId || !selectedOperation) return;
-      await queryClient.cancelQueries({ queryKey: ["operations"] });
-      const previous = queryClient.getQueryData<Operation[]>(["operations"]);
-      queryClient.setQueryData<Operation[]>(["operations"], (old) =>
-        (old ?? []).map((operation) =>
-          operation.id === selectedOperationId ? { ...operation, status: nextStatus } : operation,
-        ),
-      );
-      return { previous, nextStatus, previousStatus: selectedOperation.status };
-    },
-    onError: (err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(["operations"], context.previous);
-      toastError("Couldn't update operation", err);
-    },
-    onSuccess: (_, __, context) => {
-      if (!context) return;
-      toast.success(`Operation set to ${formatOperationalStatus(context.nextStatus).toLowerCase()}`);
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["operations"] });
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
   });
 
   const renameMutation = useMutation<void, Error, string>({
@@ -473,17 +417,19 @@ export function ProjectsView() {
   const indicators: IndicatorItem[] = [
     { label: "Total", value: stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
     { label: "Active", value: stats.active, status: stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
-    { label: "On Hold", value: stats.onHold, status: stats.onHold > 0 ? "accent" : "neutral", onClick: () => setStatusFilter("on_hold"), active: statusFilter === "on_hold" },
     { label: "Archived", value: stats.archived, status: stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
     { label: "Last touch", value: formatElapsed(stats.lastUpdated) },
   ];
 
-  if (error) {
+  const loadError = operationsError ?? projectsError;
+  const loadingOperationalData = operationsLoading || projectsLoading;
+
+  if (loadError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-          <span className="text-label">Projects unavailable</span>
-          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{error.message}</p>
+          <span className="text-label">Operations unavailable</span>
+          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{loadError.message}</p>
         </div>
       </div>
     );
@@ -495,7 +441,7 @@ export function ProjectsView() {
     const isSelected = selection?.kind === "project" && selection.id === project.id;
     const count = signalCounts?.[project.id] ?? 0;
     const domain = project.watch_domain;
-    const dot = getOperationalStatusDot(project.status);
+    const dot = project.status === "active" ? "var(--success)" : "var(--overlay-1)";
     return (
       <button
         key={project.id}
@@ -537,15 +483,10 @@ export function ProjectsView() {
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
               {project.type.replace("_", " ")}
             </span>
-            {project.status !== "active" && (
+            {project.status === "archived" && (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className={cn(
-                  "font-ui text-[10px] uppercase tracking-[0.08em]",
-                  project.status === "on_hold" ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
-                )}>
-                  {formatOperationalStatus(project.status)}
-                </span>
+                <span className="font-ui text-[10px] uppercase tracking-[0.08em] text-[var(--warning)]">Archived</span>
               </>
             )}
             {domain && (
@@ -588,7 +529,12 @@ export function ProjectsView() {
           className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)]"
         >
           <div className="flex-1 overflow-y-auto">
-            {operationGroups.length === 0 && unassigned.length === 0 ? (
+            {loadingOperationalData ? (
+              <div className="flex flex-col items-center gap-2 p-10 text-center">
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+                <p className="text-label">Loading operations</p>
+              </div>
+            ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
                 <p className="text-label">No projects</p>
                 <p className="font-ui text-[12px] text-[var(--overlay-1)]">
@@ -723,7 +669,7 @@ export function ProjectsView() {
               onCancelRename={() => { setEditingName(false); setNameDraft(selectedProject.name); }}
               onAddFromSearch={() => { setSearchTargetProjectId(selectedProject.id); navigate("/search"); }}
               onOpenInvestigation={() => setInvestigationModalOpen(true)}
-              onStatusChange={(status) => projectStatusMutation.mutate(status)}
+              onToggleStatus={() => toggleStatusMutation.mutate()}
               onDeleteClick={() => setDeleteConfirmOpen(true)}
               onSignalRemove={(id) => removeSignalMutation.mutate(id)}
               onVaultFileDeleted={() => void queryClient.invalidateQueries({ queryKey: ["project-vault-files", selectedProject.id] })}
@@ -745,7 +691,6 @@ export function ProjectsView() {
               onNameDraftChange={setNameDraft}
               onCommitRename={commitRename}
               onCancelRename={() => { setEditingName(false); setNameDraft(selectedOperation.name); }}
-              onStatusChange={(status) => operationStatusMutation.mutate(status)}
               onNewProject={() => setCreateProjectOpen(true)}
               onNewInvestigation={() => setInvestigationModalOpen(true)}
               onDeleteClick={() => setDeleteOperationConfirmOpen(true)}
@@ -844,7 +789,7 @@ function ProjectDetailPane({
   onCancelRename,
   onAddFromSearch,
   onOpenInvestigation,
-  onStatusChange,
+  onToggleStatus,
   onDeleteClick,
   onSignalRemove,
   onVaultFileDeleted,
@@ -868,16 +813,12 @@ function ProjectDetailPane({
   onCancelRename: () => void;
   onAddFromSearch: () => void;
   onOpenInvestigation: () => void;
-  onStatusChange: (status: ProjectStatus) => void;
+  onToggleStatus: () => void;
   onDeleteClick: () => void;
   onSignalRemove: (id: number) => void;
   onVaultFileDeleted: () => void;
   onAssignOperation: (operationId: number | null) => void;
 }) {
-  const selectableOperations = operations.filter((operation) => (
-    operation.status === "active" || operation.id === project.operation_id
-  ));
-
   return (
     <>
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)]">
@@ -886,8 +827,8 @@ function ProjectDetailPane({
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
             {project.type.replace("_", " ")}
           </span>
-          <StatusPill variant={getOperationalStatusPillVariant(project.status)}>
-            {formatOperationalStatus(project.status).toUpperCase()}
+          <StatusPill variant={project.status === "active" ? "active" : "paused"}>
+            {project.status.toUpperCase()}
           </StatusPill>
         </div>
 
@@ -929,6 +870,10 @@ function ProjectDetailPane({
               <FileSearch className="h-3 w-3" />
               Run Investigation
             </Button>
+            <Button size="sm" variant="ghost" className="gap-1.5" onClick={onToggleStatus}>
+              <Archive className="h-3 w-3" />
+              {project.status === "active" ? "Archive" : "Reactivate"}
+            </Button>
             <Button
               size="sm" variant="ghost" disabled={deletePending}
               onClick={onDeleteClick}
@@ -942,23 +887,6 @@ function ProjectDetailPane({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-5 py-2.5">
-          <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-            Status
-          </span>
-          <select
-            className="h-7 min-w-0 flex-1 rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-            value={project.status}
-            onChange={(e) => onStatusChange(e.target.value as ProjectStatus)}
-          >
-            {OPERATIONAL_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Operation assignment */}
         {operations.length > 0 && (
           <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-5 py-2.5">
@@ -971,7 +899,7 @@ function ProjectDetailPane({
               onChange={(e) => onAssignOperation(e.target.value ? Number(e.target.value) : null)}
             >
               <option value="">Unassigned</option>
-              {selectableOperations.map((op) => (
+              {operations.filter((o) => o.status === "active").map((op) => (
                 <option key={op.id} value={op.id}>{op.name}</option>
               ))}
             </select>
@@ -1065,7 +993,6 @@ function OperationDetailPane({
   onNameDraftChange,
   onCommitRename,
   onCancelRename,
-  onStatusChange,
   onNewProject,
   onNewInvestigation,
   onDeleteClick,
@@ -1087,7 +1014,6 @@ function OperationDetailPane({
   onNameDraftChange: (v: string) => void;
   onCommitRename: () => void;
   onCancelRename: () => void;
-  onStatusChange: (status: OperationStatus) => void;
   onNewProject: () => void;
   onNewInvestigation: () => void;
   onDeleteClick: () => void;
@@ -1109,8 +1035,8 @@ function OperationDetailPane({
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
             Operation
           </span>
-          <StatusPill variant={getOperationalStatusPillVariant(operation.status)}>
-            {formatOperationalStatus(operation.status).toUpperCase()}
+          <StatusPill variant={operation.status === "active" ? "active" : "paused"}>
+            {operation.status.toUpperCase()}
           </StatusPill>
         </div>
 
@@ -1165,23 +1091,6 @@ function OperationDetailPane({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-5 py-2.5">
-          <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-            Status
-          </span>
-          <select
-            className="h-7 min-w-0 flex-1 rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-            value={operation.status}
-            onChange={(e) => onStatusChange(e.target.value as OperationStatus)}
-          >
-            {OPERATIONAL_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Description */}
         <div className="border-b border-[var(--border-subtle)] px-5 py-4">
           <div className="mb-2 flex items-center justify-between">
@@ -1270,7 +1179,7 @@ function DeleteConfirmModal({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
       >
         <div className="border-b border-[var(--border)] px-5 py-4">
           <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">{label}</p>

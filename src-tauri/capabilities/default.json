@@ -28,38 +28,6 @@
         { "path": "$HOME/vault/intelligence" },
         { "path": "$HOME/vault/intelligence/**/*" }
       ]
-    },
-    "shell:default",
-    "shell:allow-execute",
-    "shell:allow-spawn",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "claude",
-          "cmd": "claude",
-          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
-          "sidecar": false
-        },
-        {
-          "name": "claude-home-local",
-          "cmd": "$HOME/.local/bin/claude",
-          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
-          "sidecar": false
-        },
-        {
-          "name": "claude-homebrew",
-          "cmd": "/opt/homebrew/bin/claude",
-          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
-          "sidecar": false
-        },
-        {
-          "name": "claude-usr-local",
-          "cmd": "/usr/local/bin/claude",
-          "args": ["-p", { "validator": "(?s)^.*$", "raw": true }, "--allowedTools", { "validator": ".*" }],
-          "sidecar": false
-        }
-      ]
     }
   ]
 }
