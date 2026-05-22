@@ -47,7 +47,7 @@ function formatSaveStatus(status: SaveStatus) {
 
 function canvasDocumentFingerprint(document: CanvasDocumentData) {
   const normalized = serializeCanvasDocument(document);
-  return JSON.stringify({
+  return JSON.stringify(stableCanvasValue({
     nodes: normalized.nodes.map((node) => ({
       ...node,
       x: roundCanvasNumber(node.x),
@@ -60,11 +60,28 @@ function canvasDocumentFingerprint(document: CanvasDocumentData) {
       background: normalized.sogo?.background ?? "dots",
       snapToGrid: normalized.sogo?.snapToGrid ?? false,
     },
-  });
+  }));
 }
 
 function roundCanvasNumber(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function stableCanvasValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stableCanvasValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, stableCanvasValue(entryValue)]),
+    );
+  }
+
+  return value;
 }
 
 export function CanvasView() {

@@ -76,6 +76,7 @@ interface CanvasNodeViewData extends CanvasNodeData {
   onDraftDetailChange?: (value: string) => void;
   onCommitEdit?: () => void;
   onCancelEdit?: () => void;
+  onResizeEnd?: () => void;
 }
 
 interface CanvasEditorProps {
@@ -358,6 +359,7 @@ function CanvasNodeComponent({ data, selected }: NodeProps) {
         minHeight={nodeData.type === "image" ? 120 : nodeData.type === "file" ? 80 : 44}
         lineClassName="node-resizer-line"
         handleClassName="node-resizer-handle"
+        onResizeEnd={() => nodeData.onResizeEnd?.()}
       />
       <Handle id="top" className="node-handle node-handle-top" type="source" position={Position.Top} isConnectable isConnectableStart isConnectableEnd />
       <Handle id="right" className="node-handle node-handle-right" type="source" position={Position.Right} isConnectable isConnectableStart isConnectableEnd />
@@ -555,7 +557,6 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   const reactFlowRef = useRef<FlowViewportApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const latestSerializedDocumentRef = useRef<CanvasDocumentData>(seedDocument);
-  const suppressNextAutoSaveRef = useRef(false);
   const pendingViewportInitRef = useRef<Viewport | "fit" | null>(
     seedDocument.sogo?.viewport ?? (seedDocument.nodes.length > 0 ? "fit" : null),
   );
@@ -577,6 +578,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   const [canvasMeta, setCanvasMeta] = useState<CanvasDocumentData["sogo"]>(seedDocument.sogo);
   const [nodes, setNodes] = useState<Node[]>(() => seedDocument.nodes.map(canvasNodeToFlowNode));
   const [edges, setEdges] = useState<Edge[]>(() => seedDocument.edges.map(canvasEdgeToFlowEdge));
+  const [documentChangeVersion, setDocumentChangeVersion] = useState(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -641,6 +643,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           onDraftDetailChange: setDraftDetail,
           onCommitEdit: commitEdit,
           onCancelEdit: cancelEdit,
+          onResizeEnd: markDocumentDirty,
         };
 
         return {
@@ -665,25 +668,28 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   );
 
   useEffect(() => {
+    if (documentChangeVersion === 0) {
+      return;
+    }
+
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
 
-    if (suppressNextAutoSaveRef.current) {
-      suppressNextAutoSaveRef.current = false;
-      return;
-    }
-
+    const documentToEmit = serializedDocument;
     saveTimerRef.current = window.setTimeout(() => {
-      onChange?.(serializedDocument);
+      onChange?.(documentToEmit);
     }, 180);
+  }, [documentChangeVersion, onChange]);
 
-    return () => {
+  useEffect(
+    () => () => {
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
       }
-    };
-  }, [onChange, serializedDocument]);
+    },
+    [],
+  );
 
   useEffect(() => {
     latestSerializedDocumentRef.current = serializedDocument;
@@ -717,7 +723,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         updateCanvasMeta({
           ...canvasMeta,
           viewport,
-        });
+        }, { persist: false });
         suppressViewportSaveRef.current = false;
       });
     };
@@ -840,11 +846,26 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     setSelectedNodeIds((current) => (sameStringArray(current, next) ? current : next));
   }
 
-  function updateCanvasMeta(next: CanvasDocumentData["sogo"]): void {
-    setCanvasMeta((current) => (canvasMetaEquals(current, next) ? current : next));
+  function markDocumentDirty(): void {
+    setDocumentChangeVersion((current) => current + 1);
+  }
+
+  function updateCanvasMeta(next: CanvasDocumentData["sogo"], options?: { persist?: boolean }): void {
+    setCanvasMeta((current) => {
+      if (canvasMetaEquals(current, next)) {
+        return current;
+      }
+
+      if (options?.persist !== false) {
+        markDocumentDirty();
+      }
+
+      return next;
+    });
   }
 
   function patchNode(nodeId: string, updater: (node: CanvasNodeData) => CanvasNodeData): void {
+    markDocumentDirty();
     setNodes((current) =>
       current.map((node) =>
         node.id === nodeId
@@ -870,6 +891,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       return;
     }
 
+    markDocumentDirty();
     setEdges((current) =>
       current.map((edge) => {
         if (edge.id !== selectedEdgeId) {
@@ -932,12 +954,28 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     }
 
     const persisted = persistCanvasNodeData(node.data);
+    const nextText = draftText;
+    const nextDetail = draftDetail;
+    const hasChanges =
+      persisted.type === "text"
+        ? (persisted.text ?? "") !== nextText
+        : persisted.type === "image"
+          ? (persisted.label ?? "") !== nextText || (persisted.text ?? "") !== nextDetail
+          : (persisted.label ?? "") !== nextText;
+
+    if (!hasChanges) {
+      setEditingNodeId(null);
+      setDraftText("");
+      setDraftDetail("");
+      return;
+    }
+
     patchNode(editingNodeId, (current) =>
       current.type === "text"
-        ? { ...current, text: draftText }
+        ? { ...current, text: nextText }
         : current.type === "image"
-          ? { ...current, label: draftText, text: draftDetail }
-          : { ...current, label: draftText },
+          ? { ...current, label: nextText, text: nextDetail }
+          : { ...current, label: nextText },
     );
 
     if (selectedNodeId !== persisted.id) {
@@ -970,6 +1008,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       ...partial,
       groupId: selectedGroup?.id,
     });
+    markDocumentDirty();
     setNodes((current) => [...current, canvasNodeToFlowNode(node)]);
     setSelectedNodeIdSafe(node.id);
     setSelectedNodeIdsSafe([node.id]);
@@ -1008,6 +1047,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     const groupNode = createCanvasNode("group", { x: bounds.x, y: bounds.y }, bounds);
 
     suppressSelectionChangeRef.current = true;
+    markDocumentDirty();
     setNodes((current) => {
       const selectedIdSet = new Set(nodeIds);
       return [
@@ -1092,6 +1132,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     };
     const presentation = edgePresentation(edgeData);
 
+    markDocumentDirty();
     setEdges((current) =>
       addEdge(
         {
@@ -1115,6 +1156,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
 
   function handleDeleteSelection(): void {
     if (selectedEdgeId) {
+      markDocumentDirty();
       setEdges((current) => current.filter((edge) => edge.id !== selectedEdgeId));
       setSelectedEdgeIdSafe(null);
       return;
@@ -1124,6 +1166,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       return;
     }
 
+    markDocumentDirty();
     setNodes((current) =>
       current
         .filter((node) => node.id !== selectedNodeId)
@@ -1158,6 +1201,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
       .map(flowNodeToCanvasData)
       .filter((item) => item.id !== persisted.id && item.type !== "group" && groupContainsNode(item, persisted));
 
+    markDocumentDirty();
     groupDragRef.current = {
       groupId: persisted.id,
       startX: node.position.x,
@@ -1204,6 +1248,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
     const moved = flowNodeToCanvasData(node);
 
     if (moved.type !== "group") {
+      markDocumentDirty();
       setNodes((current) => {
         const next = current.map((item) => (item.id === node.id ? { ...item, position: node.position } : item));
         const canvasNodes = next.map(flowNodeToCanvasData);
@@ -1320,12 +1365,23 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
         onNodesChange={(changes) => {
-          if (changes.every((change) => change.type === "dimensions" || change.type === "select")) {
-            suppressNextAutoSaveRef.current = true;
+          if (
+            changes.some(
+              (change) =>
+                change.type === "position" ||
+                change.type === "remove",
+            )
+          ) {
+            markDocumentDirty();
           }
           setNodes((current) => applyNodeChanges(changes, current));
         }}
-        onEdgesChange={(changes) => setEdges((current) => applyEdgeChanges(changes, current))}
+        onEdgesChange={(changes) => {
+          if (changes.some((change) => change.type !== "select")) {
+            markDocumentDirty();
+          }
+          setEdges((current) => applyEdgeChanges(changes, current));
+        }}
         onConnect={handleConnect}
         onMoveEnd={(_, viewport) => {
           if (suppressViewportSaveRef.current) {
@@ -1335,7 +1391,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           updateCanvasMeta({
             ...canvasMeta,
             viewport,
-          });
+          }, { persist: false });
         }}
         onSelectionStart={() => {
           isMarqueeSelectingRef.current = true;
