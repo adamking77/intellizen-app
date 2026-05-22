@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, FilePlus2, Loader2, Trash2 } from "lucide-react";
 
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
-import { createEmptyCanvasDocument } from "@/components/canvas/CanvasSerializer";
+import { createEmptyCanvasDocument, serializeCanvasDocument } from "@/components/canvas/CanvasSerializer";
 import {
   createCanvasDocument,
   deleteCanvasDocument,
@@ -45,8 +45,16 @@ function formatSaveStatus(status: SaveStatus) {
   }
 }
 
+function canvasDocumentFingerprint(document: CanvasDocumentData) {
+  return JSON.stringify(serializeCanvasDocument(document));
+}
+
 export function CanvasView() {
   const queryClient = useQueryClient();
+  const loadedCanvasIdRef = useRef<number | null>(null);
+  const draftFingerprintRef = useRef<string | null>(null);
+  const lastPersistedFingerprintRef = useRef<string | null>(null);
+  const lastPersistedTitleRef = useRef<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draftDocument, setDraftDocument] = useState<CanvasDocumentData | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
@@ -80,15 +88,46 @@ export function CanvasView() {
 
   useEffect(() => {
     if (!selectedCanvas) {
+      loadedCanvasIdRef.current = null;
+      draftFingerprintRef.current = null;
+      lastPersistedFingerprintRef.current = null;
+      lastPersistedTitleRef.current = null;
       setDraftDocument(null);
       setTitleDraft("");
       setSaveStatus("idle");
       return;
     }
 
-    setDraftDocument(selectedCanvas.content_json ?? createEmptyCanvasDocument());
-    setTitleDraft(selectedCanvas.name);
-    setSaveStatus("idle");
+    const nextDocument = selectedCanvas.content_json ?? createEmptyCanvasDocument();
+    const nextFingerprint = canvasDocumentFingerprint(nextDocument);
+    const previousPersistedFingerprint = lastPersistedFingerprintRef.current;
+    const previousPersistedTitle = lastPersistedTitleRef.current;
+    const isNewSelection = loadedCanvasIdRef.current !== selectedCanvas.id;
+    const hasLocalDocumentChanges =
+      !isNewSelection &&
+      draftFingerprintRef.current != null &&
+      previousPersistedFingerprint != null &&
+      draftFingerprintRef.current !== previousPersistedFingerprint;
+
+    loadedCanvasIdRef.current = selectedCanvas.id;
+    lastPersistedFingerprintRef.current = nextFingerprint;
+    lastPersistedTitleRef.current = selectedCanvas.name;
+
+    if (isNewSelection || !hasLocalDocumentChanges) {
+      draftFingerprintRef.current = nextFingerprint;
+      setDraftDocument(nextDocument);
+      setSaveStatus("idle");
+    } else {
+      setSaveStatus(draftFingerprintRef.current === nextFingerprint ? "idle" : "dirty");
+    }
+
+    setTitleDraft((current) => {
+      if (isNewSelection || current === previousPersistedTitle || current.trim() === selectedCanvas.name) {
+        return selectedCanvas.name;
+      }
+
+      return current;
+    });
   }, [selectedCanvas]);
 
   useEffect(() => {
@@ -100,13 +139,15 @@ export function CanvasView() {
       try {
         setSaveStatus("saving");
         const updated = await updateCanvasDocumentContent(selectedId, draftDocument);
+        const updatedFingerprint = canvasDocumentFingerprint(updated.content_json);
+        lastPersistedFingerprintRef.current = updatedFingerprint;
         queryClient.setQueryData(["canvas-document", selectedId], updated);
         queryClient.setQueryData(["canvas-documents"], (prev: CanvasDocumentSummary[] | undefined) =>
           prev?.map((item) =>
             item.id === updated.id ? { ...item, updated_at: updated.updated_at, name: updated.name } : item,
           ) ?? prev,
         );
-        setSaveStatus("idle");
+        setSaveStatus(draftFingerprintRef.current === updatedFingerprint ? "idle" : "dirty");
       } catch (error) {
         setSaveStatus("error");
         toastError("Canvas save failed", error);
@@ -164,6 +205,8 @@ export function CanvasView() {
     try {
       setIsRenaming(true);
       const updated = await updateCanvasDocument(selectedCanvas.id, { name: nextName });
+      lastPersistedTitleRef.current = updated.name;
+      setTitleDraft(updated.name);
       queryClient.setQueryData(["canvas-document", selectedCanvas.id], updated);
       queryClient.setQueryData(["canvas-documents"], (prev: CanvasDocumentSummary[] | undefined) =>
         prev?.map((item) =>
@@ -202,10 +245,16 @@ export function CanvasView() {
     }
   }
 
-  function handleDocumentChange(next: CanvasDocumentData) {
+  const handleDocumentChange = useCallback((next: CanvasDocumentData) => {
+    const nextFingerprint = canvasDocumentFingerprint(next);
+    if (nextFingerprint === draftFingerprintRef.current) {
+      return;
+    }
+
+    draftFingerprintRef.current = nextFingerprint;
     setDraftDocument(next);
-    setSaveStatus("dirty");
-  }
+    setSaveStatus(nextFingerprint === lastPersistedFingerprintRef.current ? "idle" : "dirty");
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 bg-[var(--base)]">
