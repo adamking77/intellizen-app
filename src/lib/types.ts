@@ -1,7 +1,7 @@
 export interface VaultDocument {
   id: number;
   title: string;
-  source_path: string;
+  source_path: string | null;
   document_type: string;
   domain: string;
   content?: string | null;

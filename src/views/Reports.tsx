@@ -1118,7 +1118,8 @@ function buildPathTree(docs: VaultDocument[], folders: WorkspaceNodeSummary[]): 
   }
 
   for (const doc of docs) {
-    const parts = doc.source_path.split("/");
+    const sourcePath = vaultDocumentPath(doc);
+    const parts = sourcePath.split("/");
     let nodes = root;
 
     for (let index = 0; index < parts.length - 1; index += 1) {
@@ -1138,11 +1139,21 @@ function buildPathTree(docs: VaultDocument[], folders: WorkspaceNodeSummary[]): 
     }
 
     const fileName = parts[parts.length - 1];
-    nodes.push({ kind: "doc", name: fileName, fullPath: doc.source_path, docId: doc.id });
+    nodes.push({ kind: "doc", name: fileName, fullPath: sourcePath, docId: doc.id });
   }
 
   sortPathTree(root);
   return root;
+}
+
+function vaultDocumentPath(doc: VaultDocument): string {
+  const sourcePath = doc.source_path?.trim();
+  if (sourcePath) {
+    return sourcePath;
+  }
+
+  const fallbackName = ensureMarkdownExtension(slugFromTitle(doc.title || `document-${doc.id}`));
+  return `Unfiled/${fallbackName}`;
 }
 
 function sortPathTree(nodes: PathTreeNode[]) {
@@ -1194,6 +1205,16 @@ function dirname(path: string | null) {
 
 function ensureMarkdownExtension(name: string) {
   return /\.md$/i.test(name) ? name : `${name}.md`;
+}
+
+function slugFromTitle(title: string) {
+  return (
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "untitled"
+  );
 }
 
 function titleFromFileName(name: string) {

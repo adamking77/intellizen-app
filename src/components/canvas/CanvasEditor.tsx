@@ -555,6 +555,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   const reactFlowRef = useRef<FlowViewportApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const latestSerializedDocumentRef = useRef<CanvasDocumentData>(seedDocument);
+  const suppressNextAutoSaveRef = useRef(false);
   const pendingViewportInitRef = useRef<Viewport | "fit" | null>(
     seedDocument.sogo?.viewport ?? (seedDocument.nodes.length > 0 ? "fit" : null),
   );
@@ -666,6 +667,11 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
   useEffect(() => {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
+    }
+
+    if (suppressNextAutoSaveRef.current) {
+      suppressNextAutoSaveRef.current = false;
+      return;
     }
 
     saveTimerRef.current = window.setTimeout(() => {
@@ -1313,7 +1319,12 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
-        onNodesChange={(changes) => setNodes((current) => applyNodeChanges(changes, current))}
+        onNodesChange={(changes) => {
+          if (changes.every((change) => change.type === "dimensions" || change.type === "select")) {
+            suppressNextAutoSaveRef.current = true;
+          }
+          setNodes((current) => applyNodeChanges(changes, current));
+        }}
         onEdgesChange={(changes) => setEdges((current) => applyEdgeChanges(changes, current))}
         onConnect={handleConnect}
         onMoveEnd={(_, viewport) => {

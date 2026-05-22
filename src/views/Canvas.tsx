@@ -46,7 +46,25 @@ function formatSaveStatus(status: SaveStatus) {
 }
 
 function canvasDocumentFingerprint(document: CanvasDocumentData) {
-  return JSON.stringify(serializeCanvasDocument(document));
+  const normalized = serializeCanvasDocument(document);
+  return JSON.stringify({
+    nodes: normalized.nodes.map((node) => ({
+      ...node,
+      x: roundCanvasNumber(node.x),
+      y: roundCanvasNumber(node.y),
+      width: roundCanvasNumber(node.width),
+      height: roundCanvasNumber(node.height),
+    })),
+    edges: normalized.edges,
+    sogo: {
+      background: normalized.sogo?.background ?? "dots",
+      snapToGrid: normalized.sogo?.snapToGrid ?? false,
+    },
+  });
+}
+
+function roundCanvasNumber(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export function CanvasView() {
