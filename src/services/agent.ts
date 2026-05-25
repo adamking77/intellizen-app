@@ -61,7 +61,7 @@ function workflowPayload(input: AgentWorkflowInput) {
 async function enqueueFionaWorkflow(input: AgentWorkflowInput) {
   const payload = workflowPayload(input);
   const { data, error } = await supabase
-    .from("fiona_inbox")
+    .schema("comms").from("fiona_inbox")
     .insert([
       {
         from_agent: "intelizen",

@@ -92,7 +92,7 @@ function shouldSyncOperationalWorkspaceDatabases(force = false) {
 
 export async function listMonitors() {
   const { data, error } = await supabase
-    .from("monitors")
+    .schema("intel").from("monitors")
     .select("*")
     .order("created_at", { ascending: true })
     .order("id", { ascending: true });
@@ -103,7 +103,7 @@ export async function listMonitors() {
 
 export async function createMonitor(input: MonitorInsert) {
   const { data, error } = await supabase
-    .from("monitors")
+    .schema("intel").from("monitors")
     .insert([{ ...input, status: input.status ?? "active" }])
     .select("*")
     .single();
@@ -117,7 +117,7 @@ export async function updateMonitor(
   input: Partial<Pick<Monitor, "name" | "query" | "watch_domain" | "frequency" | "status">>,
 ) {
   const { data, error } = await supabase
-    .from("monitors")
+    .schema("intel").from("monitors")
     .update(input)
     .eq("id", id)
     .select("*")
@@ -128,12 +128,12 @@ export async function updateMonitor(
 }
 
 export async function deleteMonitor(id: number) {
-  const { error } = await supabase.from("monitors").delete().eq("id", id);
+  const { error } = await supabase.schema("intel").from("monitors").delete().eq("id", id);
   if (error) throw error;
 }
 
 export async function seedDefaultMonitors() {
-  const { data, error } = await supabase.from("monitors").select("watch_domain");
+  const { data, error } = await supabase.schema("intel").from("monitors").select("watch_domain");
   if (error) throw error;
 
   const existing = new Set((data ?? []).map((row) => row.watch_domain as string));
@@ -143,7 +143,7 @@ export async function seedDefaultMonitors() {
 
   if (missing.length === 0) return 0;
 
-  const { error: insertError } = await supabase.from("monitors").insert(missing);
+  const { error: insertError } = await supabase.schema("intel").from("monitors").insert(missing);
   if (insertError) throw insertError;
 
   return missing.length;
@@ -151,8 +151,8 @@ export async function seedDefaultMonitors() {
 
 export async function listSignals() {
   const [{ data: pSigs }, { data: iSigs }] = await Promise.all([
-    supabase.from("project_signals").select("signal_id"),
-    supabase.from("investigation_signals").select("signal_id"),
+    supabase.schema("intel").from("project_signals").select("signal_id"),
+    supabase.schema("intel").from("investigation_signals").select("signal_id"),
   ]);
 
   const protectedIds = [
@@ -161,7 +161,7 @@ export async function listSignals() {
   ];
 
   let query = supabase
-    .from("intel_signals")
+    .schema("intel").from("signals")
     .select("*")
     .in("status", ["new", "saved"])
     .order("created_at", { ascending: false });
@@ -177,7 +177,7 @@ export async function listSignals() {
 
 export async function getUnreadSignalCount() {
   const { count, error } = await supabase
-    .from("intel_signals")
+    .schema("intel").from("signals")
     .select("*", { count: "exact", head: true })
     .eq("status", "new");
 
@@ -187,7 +187,7 @@ export async function getUnreadSignalCount() {
 
 export async function listFionaInboxItems() {
   const { data, error } = await supabase
-    .from("fiona_inbox")
+    .schema("comms").from("fiona_inbox")
     .select("id, from_agent, task, context, priority, status, result, created_at, updated_at")
     .order("created_at", { ascending: false });
 
@@ -197,7 +197,7 @@ export async function listFionaInboxItems() {
 
 export async function getPendingFionaInboxCount() {
   const { count, error } = await supabase
-    .from("fiona_inbox")
+    .schema("comms").from("fiona_inbox")
     .select("*", { count: "exact", head: true })
     .eq("status", "pending");
 
@@ -211,7 +211,7 @@ export async function getPendingFionaInboxCount() {
 
 export async function listOperations() {
   const { data, error } = await supabase
-    .from("operations")
+    .schema("anchors").from("operations")
     .select("*")
     .order("created_at", { ascending: true });
 
@@ -234,7 +234,7 @@ export async function createOperation(input: {
   description?: string | null;
 }) {
   const { data, error } = await supabase
-    .from("operations")
+    .schema("anchors").from("operations")
     .insert([{ name: input.name, description: input.description ?? null }])
     .select("*")
     .single();
@@ -252,7 +252,7 @@ export async function updateOperation(
   input: Partial<Pick<Operation, "name" | "description" | "status">>,
 ) {
   const { data, error } = await supabase
-    .from("operations")
+    .schema("anchors").from("operations")
     .update(input)
     .eq("id", id)
     .select("*")
@@ -267,7 +267,7 @@ export async function updateOperation(
 }
 
 export async function deleteOperation(id: number) {
-  const { error } = await supabase.from("operations").delete().eq("id", id);
+  const { error } = await supabase.schema("anchors").from("operations").delete().eq("id", id);
   if (error) throw error;
   markOperationalWorkspaceSyncDirty();
   void syncOperationalWorkspaceDatabases().catch((syncError) => {
@@ -277,7 +277,7 @@ export async function deleteOperation(id: number) {
 
 export async function listProjects() {
   const { data, error } = await supabase
-    .from("projects")
+    .schema("anchors").from("projects")
     .select("*")
     .order("created_at", { ascending: true })
     .order("id", { ascending: true });
@@ -308,7 +308,7 @@ export async function createProject(input: {
   operation_id?: number | null;
 }) {
   const { data, error } = await supabase
-    .from("projects")
+    .schema("anchors").from("projects")
     .insert([
       {
         name: input.name,
@@ -333,7 +333,7 @@ export async function updateProject(
   input: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id">>,
 ) {
   const { data, error } = await supabase
-    .from("projects")
+    .schema("anchors").from("projects")
     .update(input)
     .eq("id", id)
     .select("*")
@@ -349,7 +349,7 @@ export async function updateProject(
 
 export async function deleteProject(id: number) {
   const { error } = await supabase
-    .from("projects")
+    .schema("anchors").from("projects")
     .delete()
     .eq("id", id);
 
@@ -362,7 +362,7 @@ export async function deleteProject(id: number) {
 
 export async function listProjectSignalCounts(): Promise<Record<number, number>> {
   const { data, error } = await supabase
-    .from("project_signals")
+    .schema("intel").from("project_signals")
     .select("project_id");
 
   if (error) throw error;
@@ -375,8 +375,8 @@ export async function listProjectSignalCounts(): Promise<Record<number, number>>
 
 export async function listProjectSignals(projectId: number) {
   const { data, error } = await supabase
-    .from("project_signals")
-    .select("id, project_id, signal_id, notes, added_at, intel_signals(*)")
+    .schema("intel").from("project_signals")
+    .select("id, project_id, signal_id, notes, added_at, signals(*)")
     .eq("project_id", projectId)
     .order("added_at", { ascending: false });
 
@@ -386,7 +386,7 @@ export async function listProjectSignals(projectId: number) {
 
 export async function removeSignalFromProject(projectSignalId: number) {
   const { error } = await supabase
-    .from("project_signals")
+    .schema("intel").from("project_signals")
     .delete()
     .eq("id", projectSignalId);
 
@@ -395,12 +395,12 @@ export async function removeSignalFromProject(projectSignalId: number) {
 
 export async function dismissSignal(signalId: number) {
   const [{ count: pCount }, { count: iCount }] = await Promise.all([
-    supabase.from("project_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
-    supabase.from("investigation_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
+    supabase.schema("intel").from("project_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
+    supabase.schema("intel").from("investigation_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
   ]);
   if ((pCount ?? 0) > 0 || (iCount ?? 0) > 0) return;
 
-  const { error } = await supabase.from("intel_signals").delete().eq("id", signalId);
+  const { error } = await supabase.schema("intel").from("signals").delete().eq("id", signalId);
   if (error) throw error;
 }
 
@@ -408,8 +408,8 @@ export async function bulkDismissSignals(ids: number[]) {
   if (ids.length === 0) return { total: 0, cleared: 0 };
 
   const [{ data: pSigs }, { data: iSigs }] = await Promise.all([
-    supabase.from("project_signals").select("signal_id").in("signal_id", ids),
-    supabase.from("investigation_signals").select("signal_id").in("signal_id", ids),
+    supabase.schema("intel").from("project_signals").select("signal_id").in("signal_id", ids),
+    supabase.schema("intel").from("investigation_signals").select("signal_id").in("signal_id", ids),
   ]);
 
   const protectedIds = new Set([
@@ -420,7 +420,7 @@ export async function bulkDismissSignals(ids: number[]) {
   const toDelete = ids.filter((id) => !protectedIds.has(id));
   if (toDelete.length === 0) return { total: ids.length, cleared: 0 };
 
-  const { error } = await supabase.from("intel_signals").delete().in("id", toDelete);
+  const { error } = await supabase.schema("intel").from("signals").delete().in("id", toDelete);
   if (error) throw error;
 
   return { total: ids.length, cleared: toDelete.length };
@@ -430,7 +430,7 @@ export async function saveSignalToProject(input: {
   projectId: number;
   signalId: number;
 }) {
-  const { error: linkError } = await supabase.from("project_signals").upsert(
+  const { error: linkError } = await supabase.schema("intel").from("project_signals").upsert(
     [{ project_id: input.projectId, signal_id: input.signalId }],
     { onConflict: "project_id,signal_id", ignoreDuplicates: true },
   );
@@ -438,7 +438,7 @@ export async function saveSignalToProject(input: {
   if (linkError) throw linkError;
 
   const { error: signalError } = await supabase
-    .from("intel_signals")
+    .schema("intel").from("signals")
     .update({ status: "saved" })
     .eq("id", input.signalId);
 
@@ -476,7 +476,7 @@ export async function saveSearchResultToProject(input: {
 
 async function findSignalByUrl(url: string) {
   const { data, error } = await supabase
-    .from("intel_signals")
+    .schema("intel").from("signals")
     .select("*")
     .eq("url", url)
     .maybeSingle();
@@ -487,7 +487,7 @@ async function findSignalByUrl(url: string) {
 
 async function insertSignal(input: SignalDraft) {
   const { data, error } = await supabase
-    .from("intel_signals")
+    .schema("intel").from("signals")
     .upsert([
       {
         ...input,
@@ -536,7 +536,7 @@ export async function runMonitorNow(monitor: Monitor) {
 
   if (drafts.length > 0) {
     const { data: insertedRows, error: insertError } = await supabase
-      .from("intel_signals")
+      .schema("intel").from("signals")
       .upsert(
         drafts.map((draft) => ({
           ...draft,
@@ -555,7 +555,7 @@ export async function runMonitorNow(monitor: Monitor) {
   }
 
   const { error: updateError } = await supabase
-    .from("monitors")
+    .schema("intel").from("monitors")
     .update({
       last_run: new Date().toISOString(),
       signal_count: monitor.signal_count + insertedCount,
@@ -580,7 +580,7 @@ export async function refreshInbox() {
 
 export async function listGraphNodes(projectId: number | null) {
   let query = supabase
-    .from("graph_nodes")
+    .schema("intel").from("graph_nodes")
     .select("*")
     .order("created_at", { ascending: true });
   
@@ -597,7 +597,7 @@ export async function listGraphNodes(projectId: number | null) {
 
 export async function listGraphEdges(projectId: number | null) {
   let query = supabase
-    .from("graph_edges")
+    .schema("intel").from("graph_edges")
     .select("*")
     .order("created_at", { ascending: true });
   
@@ -620,7 +620,7 @@ export async function createGraphNode(input: {
   position: { x: number; y: number };
 }) {
   const { data, error } = await supabase
-    .from("graph_nodes")
+    .schema("intel").from("graph_nodes")
     .insert([
       {
         project_id: input.projectId,
@@ -644,7 +644,7 @@ export async function updateGraphNodePosition(input: {
   position: { x: number; y: number };
 }) {
   let query = supabase
-    .from("graph_nodes")
+    .schema("intel").from("graph_nodes")
     .update({
       position_x: input.position.x,
       position_y: input.position.y,
@@ -668,7 +668,7 @@ export async function updateGraphNode(input: {
   entityType: GraphEntityType;
 }) {
   let query = supabase
-    .from("graph_nodes")
+    .schema("intel").from("graph_nodes")
     .update({
       label: input.label,
       entity_type: input.entityType,
@@ -693,7 +693,7 @@ export async function deleteGraphNodes(input: {
   if (input.nodeIds.length === 0) return;
 
   let query = supabase
-    .from("graph_nodes")
+    .schema("intel").from("graph_nodes")
     .delete()
     .in("node_id", input.nodeIds);
   
@@ -715,7 +715,7 @@ export async function createGraphEdge(input: {
   label: string | null;
 }) {
   const { data, error } = await supabase
-    .from("graph_edges")
+    .schema("intel").from("graph_edges")
     .insert([
       {
         project_id: input.projectId,
@@ -738,7 +738,7 @@ export async function updateGraphEdge(input: {
   label: string | null;
 }) {
   let query = supabase
-    .from("graph_edges")
+    .schema("intel").from("graph_edges")
     .update({
       label: input.label,
     })
@@ -762,7 +762,7 @@ export async function deleteGraphEdges(input: {
   if (input.edgeIds.length === 0) return;
 
   let query = supabase
-    .from("graph_edges")
+    .schema("intel").from("graph_edges")
     .delete()
     .in("edge_id", input.edgeIds);
   
@@ -782,7 +782,7 @@ export async function deleteGraphEdges(input: {
 
 export async function listInvestigations() {
   const { data, error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -801,7 +801,7 @@ export async function listInvestigations() {
 
 export async function getInvestigation(caseId: string) {
   const { data, error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .select("*")
     .eq("case_id", caseId)
     .single();
@@ -834,7 +834,7 @@ export async function createInvestigation(input: {
     const projectRecordId = input.projectRecordId ?? await getOperationalWorkspaceRecordIdByLegacyId("projects", projectId);
     const operationRecordId = input.operationRecordId ?? await getOperationalWorkspaceRecordIdByLegacyId("operations", operationId);
     const { data, error } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .insert([
         {
           case_id: caseId,
@@ -864,7 +864,7 @@ export async function createInvestigation(input: {
 
 export async function deleteInvestigation(caseId: string) {
   const { error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .delete()
     .eq("case_id", caseId);
 
@@ -925,7 +925,7 @@ export async function updateInvestigation(
     ...(operationRecordId !== undefined ? { operation_record_id: operationRecordId } : {}),
   };
   const { data, error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .update(nextInput)
     .eq("case_id", caseId)
     .select("*")
@@ -941,7 +941,7 @@ export async function updateInvestigationPhase(
   gateData?: Record<string, boolean>
 ) {
   const { data, error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .update({
       current_phase: phase,
       ...(gateData ? { phase_gates: gateData } : {}),
@@ -1008,7 +1008,7 @@ export async function saveInvestigationBrief(
   }
 ) {
   const { data, error } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .update({
       subject_definition: brief.subjectDefinition,
       scope_notes: brief.scopeNotes,
@@ -1046,7 +1046,7 @@ export async function collectSignalsForInvestigation(
           const draft = signalDraftFromSearchResult(result, "investigation");
 
           const { data: signal } = await supabase
-            .from("intel_signals")
+            .schema("intel").from("signals")
             .upsert([{ ...draft, status: "saved" }], { onConflict: "url" })
             .select("id")
             .single();
@@ -1054,7 +1054,7 @@ export async function collectSignalsForInvestigation(
           if (!signal) continue;
 
           await supabase
-            .from("investigation_signals")
+            .schema("intel").from("investigation_signals")
             .upsert(
               [{ investigation_id: investigationId, signal_id: signal.id }],
               { onConflict: "investigation_id,signal_id", ignoreDuplicates: true },
@@ -1074,8 +1074,8 @@ export async function collectSignalsForInvestigation(
 // Investigation Signals (Phase 2: Collect)
 export async function listInvestigationSignals(investigationId: number) {
   const { data, error } = await supabase
-    .from("investigation_signals")
-    .select("*, intel_signals(*)")
+    .schema("intel").from("investigation_signals")
+    .select("*, signals(*)")
     .eq("investigation_id", investigationId)
     .order("added_at", { ascending: false });
 
@@ -1089,7 +1089,7 @@ export async function addSignalToInvestigation(input: {
   notes?: string;
 }) {
   const { error } = await supabase
-    .from("investigation_signals")
+    .schema("intel").from("investigation_signals")
     .upsert(
       [
         {
@@ -1110,7 +1110,7 @@ export async function bulkAddSignalsToInvestigation(
 ) {
   if (signalIds.length === 0) return;
   const { error } = await supabase
-    .from("investigation_signals")
+    .schema("intel").from("investigation_signals")
     .upsert(
       signalIds.map((signal_id) => ({ investigation_id: investigationId, signal_id, notes: null })),
       { onConflict: "investigation_id,signal_id", ignoreDuplicates: true },
@@ -1120,7 +1120,7 @@ export async function bulkAddSignalsToInvestigation(
 
 export async function removeSignalFromInvestigation(id: number) {
   const { error } = await supabase
-    .from("investigation_signals")
+    .schema("intel").from("investigation_signals")
     .delete()
     .eq("id", id);
 
@@ -1135,13 +1135,13 @@ export async function updateInvestigationSignal(
   },
 ) {
   const { data, error } = await supabase
-    .from("investigation_signals")
+    .schema("intel").from("investigation_signals")
     .update({
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       ...(input.phaseAdded !== undefined ? { phase_added: input.phaseAdded } : {}),
     })
     .eq("id", id)
-    .select("*, intel_signals(*)")
+    .select("*, signals(*)")
     .single();
 
   if (error) throw error;
@@ -1151,7 +1151,7 @@ export async function updateInvestigationSignal(
 // Vault Files (Reports)
 export async function listVaultFiles(caseId: string) {
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .select("*")
     .eq("case_id", caseId)
     .order("created_at", { ascending: false });
@@ -1176,7 +1176,7 @@ export async function createVaultFile(input: {
     projectRecordId: input.projectRecordId,
   });
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .insert([
       {
         case_id: input.caseId ?? null,
@@ -1199,7 +1199,7 @@ export async function createVaultFile(input: {
 
 export async function getVaultFile(id: number) {
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .select("*")
     .eq("id", id)
     .single();
@@ -1210,7 +1210,7 @@ export async function getVaultFile(id: number) {
 
 export async function updateVaultFileContent(id: number, content: string) {
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .update({ content })
     .eq("id", id)
     .select("*")
@@ -1221,7 +1221,7 @@ export async function updateVaultFileContent(id: number, content: string) {
 }
 
 export async function deleteVaultFile(id: number) {
-  const { error } = await supabase.from("vault_files").delete().eq("id", id);
+  const { error } = await supabase.schema("ingest").from("vault_files").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -1232,7 +1232,7 @@ export async function listProjectVaultFiles(projectId: number) {
     projectFilters.push(`project_record_id.eq.${projectRecordId}`);
   }
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .select("*")
     .or(projectFilters.join(","))
     .order("created_at", { ascending: false });
@@ -1243,7 +1243,7 @@ export async function listProjectVaultFiles(projectId: number) {
 
 export async function listAllVaultFiles() {
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -1263,7 +1263,7 @@ export async function createGraphExportVaultFile(input: {
     projectRecordId: input.projectRecordId,
   });
   const { data, error } = await supabase
-    .from("vault_files")
+    .schema("ingest").from("vault_files")
     .insert([
       {
         case_id: input.caseId ?? null,
@@ -1294,7 +1294,7 @@ async function getWorkspaceParentContext(parentId: number | null) {
   }
 
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .select("id, kind, path, case_id, project_id, project_record_id")
     .eq("id", parentId)
     .single();
@@ -1316,7 +1316,7 @@ async function getWorkspaceParentContext(parentId: number | null) {
 
 export async function listWorkspaceNodes() {
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
     .order("path", { ascending: true });
 
@@ -1354,7 +1354,7 @@ export async function ensureWorkspaceSystemNodes() {
     });
 
     const { data, error } = await supabase
-      .from("workspace_nodes")
+      .schema("workspace").from("nodes")
       .insert([
         {
           parent_id: input.parentId,
@@ -1423,7 +1423,7 @@ export async function ensureWorkspaceSystemNodes() {
 
 export async function getWorkspaceNode(id: number) {
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .select("*")
     .eq("id", id)
     .single();
@@ -1448,7 +1448,7 @@ export async function createWorkspaceFolder(input: {
   });
 
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .insert([
       {
         parent_id: input.parentId ?? null,
@@ -1485,7 +1485,7 @@ export async function createWorkspaceFile(input: {
   });
 
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .insert([
       {
         parent_id: input.parentId ?? null,
@@ -1507,7 +1507,7 @@ export async function createWorkspaceFile(input: {
 
 export async function updateWorkspaceFileContent(id: number, content: string) {
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .update({ content })
     .eq("id", id)
     .select("*")
@@ -1830,7 +1830,7 @@ async function updateWorkspaceRecordFields(
   }
 
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .update(update)
     .eq("id", id)
     .select("id, database_id, fields, body, created_at, updated_at")
@@ -1970,7 +1970,7 @@ function getOperationalSystemKindFromIcon(icon: string | null | undefined): Oper
 
 async function getWorkspaceDatabaseSummaryById(id: string) {
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
     .eq("id", id)
     .single();
@@ -1990,7 +1990,7 @@ async function findWorkspaceRecordByLegacyId(
   legacyId: number,
 ) {
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, database_id, fields, body, created_at, updated_at")
     .eq("database_id", databaseId);
 
@@ -2020,7 +2020,7 @@ async function getOperationalLegacyIdByRecordId(
   if (!recordId) return null;
   const legacyFieldId = kind === "operations" ? OPERATIONS_DB_FIELDS.legacyId : PROJECTS_DB_FIELDS.legacyId;
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, fields")
     .eq("id", recordId)
     .maybeSingle();
@@ -2036,7 +2036,7 @@ async function getOperationalWorkspaceRecordMap(kind: OperationalSystemKind) {
   const legacyFieldId = kind === "operations" ? OPERATIONS_DB_FIELDS.legacyId : PROJECTS_DB_FIELDS.legacyId;
   const relationFieldId = kind === "projects" ? PROJECTS_DB_FIELDS.operation : undefined;
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, fields")
     .eq("database_id", databaseId);
 
@@ -2057,7 +2057,7 @@ async function getOperationalWorkspaceRecordMap(kind: OperationalSystemKind) {
 async function getLegacyIdMapForWorkspaceRecords(recordIds: string[], legacyFieldId: string) {
   if (recordIds.length === 0) return new Map<string, number>();
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, fields")
     .in("id", recordIds);
 
@@ -2090,7 +2090,7 @@ function sanitizeProjectType(value: WorkspaceDatabaseFieldValue): Project["type"
 
 async function ensureOperationalWorkspaceDatabases() {
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
     .in("icon", [SYSTEM_WORKSPACE_DATABASE_ICONS.operations, SYSTEM_WORKSPACE_DATABASE_ICONS.projects]);
 
@@ -2189,14 +2189,14 @@ async function syncOperationalWorkspaceDatabasesInner() {
     { data: operationRecordRows, error: operationRecordsError },
     { data: projectRecordRows, error: projectRecordsError },
   ] = await Promise.all([
-    supabase.from("operations").select("*").order("id", { ascending: true }),
-    supabase.from("projects").select("*").order("id", { ascending: true }),
+    supabase.schema("anchors").from("operations").select("*").order("id", { ascending: true }),
+    supabase.schema("anchors").from("projects").select("*").order("id", { ascending: true }),
     supabase
-      .from("workspace_records")
+      .schema("workspace").from("records")
       .select("id, database_id, fields, body, created_at, updated_at")
       .eq("database_id", operationsDatabase.id),
     supabase
-      .from("workspace_records")
+      .schema("workspace").from("records")
       .select("id, database_id, fields, body, created_at, updated_at")
       .eq("database_id", projectsDatabase.id),
   ]);
@@ -2347,7 +2347,7 @@ export async function syncOperationalWorkspaceDatabases(options?: { force?: bool
 export async function listWorkspaceDatabases() {
   await syncOperationalWorkspaceDatabases();
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
     .order("updated_at", { ascending: false })
     .order("name", { ascending: true });
@@ -2365,16 +2365,16 @@ export async function listWorkspaceDatabaseCatalog() {
   ] =
     await Promise.all([
       supabase
-        .from("workspace_databases")
+        .schema("workspace").from("databases")
         .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
         .order("name", { ascending: true }),
       supabase
-        .from("workspace_records")
+        .schema("workspace").from("records")
         .select("id, database_id, fields, body, created_at, updated_at")
         .order("created_at", { ascending: true })
         .order("id", { ascending: true }),
       supabase
-        .from("workspace_views")
+        .schema("workspace").from("views")
         .select("id, database_id, name, type, config, position, created_at, updated_at")
         .order("database_id", { ascending: true })
         .order("position", { ascending: true }),
@@ -2420,18 +2420,18 @@ async function fetchWorkspaceDatabaseBundleRows(id: string) {
     { data: recordRows, error: recordError },
   ] = await Promise.all([
     supabase
-      .from("workspace_databases")
+      .schema("workspace").from("databases")
       .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
       .eq("id", id)
       .single(),
     supabase
-      .from("workspace_views")
+      .schema("workspace").from("views")
       .select("id, database_id, name, type, config, position, created_at, updated_at")
       .eq("database_id", id)
       .order("position", { ascending: true })
       .order("created_at", { ascending: true }),
     supabase
-      .from("workspace_records")
+      .schema("workspace").from("records")
       .select("id, database_id, fields, body, created_at, updated_at")
       .eq("database_id", id)
       .order("created_at", { ascending: true })
@@ -2488,7 +2488,7 @@ export async function createWorkspaceDatabase(input?: {
 }) {
   const schema = input?.schema ?? defaultWorkspaceSchema(input?.name);
   const { data: databaseRow, error: databaseError } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .insert([
       {
         name: input?.name?.trim() || "Untitled database",
@@ -2504,7 +2504,7 @@ export async function createWorkspaceDatabase(input?: {
 
   const database = toWorkspaceDatabase(databaseRow as WorkspaceDatabaseRow);
   const { data: viewRow, error: viewError } = await supabase
-    .from("workspace_views")
+    .schema("workspace").from("views")
     .insert([
       {
         database_id: database.id,
@@ -2537,7 +2537,7 @@ export async function updateWorkspaceDatabase(
     throw new Error("System databases cannot be renamed or reconfigured.");
   }
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .update(input)
     .eq("id", id)
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
@@ -2553,7 +2553,7 @@ export async function updateWorkspaceDatabaseSchema(id: string, schema: Workspac
     throw new Error("System database schemas are managed automatically.");
   }
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .update({ schema })
     .eq("id", id)
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
@@ -2569,7 +2569,7 @@ export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: 
     throw new Error("System database header fields are managed automatically.");
   }
   const { data, error } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .update({ header_field_ids: fieldIds })
     .eq("id", id)
     .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
@@ -2586,19 +2586,19 @@ export async function deleteWorkspaceDatabase(id: string) {
   }
 
   const { error: recordError } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .delete()
     .eq("database_id", id);
   if (recordError) throw recordError;
 
   const { error: viewError } = await supabase
-    .from("workspace_views")
+    .schema("workspace").from("views")
     .delete()
     .eq("database_id", id);
   if (viewError) throw viewError;
 
   const { error: databaseError } = await supabase
-    .from("workspace_databases")
+    .schema("workspace").from("databases")
     .delete()
     .eq("id", id);
   if (databaseError) throw databaseError;
@@ -2611,7 +2611,7 @@ export async function createWorkspaceView(input: {
   config?: WorkspaceDatabaseViewConfig;
 }) {
   const { data: existing, error: existingError } = await supabase
-    .from("workspace_views")
+    .schema("workspace").from("views")
     .select("position")
     .eq("database_id", input.databaseId)
     .order("position", { ascending: false })
@@ -2620,7 +2620,7 @@ export async function createWorkspaceView(input: {
   if (existingError) throw existingError;
 
   const { data, error } = await supabase
-    .from("workspace_views")
+    .schema("workspace").from("views")
     .insert([
       {
         database_id: input.databaseId,
@@ -2650,7 +2650,7 @@ export async function updateWorkspaceView(
   if (input.config !== undefined) update.config = input.config;
 
   const { data, error } = await supabase
-    .from("workspace_views")
+    .schema("workspace").from("views")
     .update(update)
     .eq("id", id)
     .select("id, database_id, name, type, config, position, created_at, updated_at")
@@ -2661,7 +2661,7 @@ export async function updateWorkspaceView(
 }
 
 export async function deleteWorkspaceView(id: string) {
-  const { error } = await supabase.from("workspace_views").delete().eq("id", id);
+  const { error } = await supabase.schema("workspace").from("views").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -2675,7 +2675,7 @@ export async function createWorkspaceRecord(input: {
     const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
     if (input.databaseId === operationsDatabase.id) {
       const { data, error } = await supabase
-        .from("operations")
+        .schema("anchors").from("operations")
         .insert([
           {
             name: String(input.fields?.[OPERATIONS_DB_FIELDS.name] ?? "Untitled operation").trim() || "Untitled operation",
@@ -2699,7 +2699,7 @@ export async function createWorkspaceRecord(input: {
         const projectIdMap = await getLegacyIdMapForWorkspaceRecords(linkedProjectIds, PROJECTS_DB_FIELDS.legacyId);
         for (const projectId of projectIdMap.values()) {
           const { error: linkError } = await supabase
-            .from("projects")
+            .schema("anchors").from("projects")
             .update({ operation_id: operation.id })
             .eq("id", projectId);
           if (linkError) throw linkError;
@@ -2723,7 +2723,7 @@ export async function createWorkspaceRecord(input: {
       const operationId = linkedOperationIds[0] ? (operationIdMap.get(linkedOperationIds[0]) ?? null) : null;
 
       const { data, error } = await supabase
-        .from("projects")
+        .schema("anchors").from("projects")
         .insert([
           {
             name: String(input.fields?.[PROJECTS_DB_FIELDS.name] ?? "Untitled project").trim() || "Untitled project",
@@ -2757,7 +2757,7 @@ export async function createWorkspaceRecord(input: {
   }
 
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .insert([
       {
         database_id: input.databaseId,
@@ -2782,7 +2782,7 @@ export async function createWorkspaceRecords(
   if (input.length === 0) return [] as WorkspaceDatabaseRecord[];
 
   const { data, error } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .insert(
       input.map((record) => ({
         database_id: record.databaseId,
@@ -2806,7 +2806,7 @@ export async function updateWorkspaceRecord(
   skipSystemSync = false,
 ) {
   const { data: existing, error: existingError } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, database_id, fields, body, created_at, updated_at")
     .eq("id", id)
     .single();
@@ -2833,7 +2833,7 @@ export async function updateWorkspaceRecord(
               : null,
           status: sanitizeOperationStatus(nextFields[OPERATIONS_DB_FIELDS.status]),
         };
-        const { error } = await supabase.from("operations").update(updatePayload).eq("id", legacyId);
+        const { error } = await supabase.schema("anchors").from("operations").update(updatePayload).eq("id", legacyId);
         if (error) throw error;
 
         if (Array.isArray(nextFields[OPERATIONS_DB_FIELDS.projects])) {
@@ -2843,21 +2843,21 @@ export async function updateWorkspaceRecord(
           );
           const desiredProjectIds = new Set(desiredProjectMap.values());
           const { data: currentProjects, error: currentProjectsError } = await supabase
-            .from("projects")
+            .schema("anchors").from("projects")
             .select("id")
             .eq("operation_id", legacyId);
           if (currentProjectsError) throw currentProjectsError;
           const currentProjectIds = new Set(((currentProjects ?? []) as Array<{ id: number }>).map((project) => project.id));
           for (const projectId of Array.from(currentProjectIds).filter((candidate) => !desiredProjectIds.has(candidate))) {
             const { error: unlinkError } = await supabase
-              .from("projects")
+              .schema("anchors").from("projects")
               .update({ operation_id: null })
               .eq("id", projectId);
             if (unlinkError) throw unlinkError;
           }
           for (const projectId of Array.from(desiredProjectIds).filter((candidate) => !currentProjectIds.has(candidate))) {
             const { error: linkError } = await supabase
-              .from("projects")
+              .schema("anchors").from("projects")
               .update({ operation_id: legacyId })
               .eq("id", projectId);
             if (linkError) throw linkError;
@@ -2897,7 +2897,7 @@ export async function updateWorkspaceRecord(
               : null,
           operation_id: nextOperationId,
         };
-        const { error } = await supabase.from("projects").update(updatePayload).eq("id", legacyId);
+        const { error } = await supabase.schema("anchors").from("projects").update(updatePayload).eq("id", legacyId);
         if (error) throw error;
 
         await syncOperationalWorkspaceDatabases();
@@ -2918,7 +2918,7 @@ export async function updateWorkspaceRecord(
 export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {
   if (!skipSystemSync) {
     const { data: existing, error: existingError } = await supabase
-      .from("workspace_records")
+      .schema("workspace").from("records")
       .select("id, database_id, fields, body, created_at, updated_at")
       .eq("id", id)
       .single();
@@ -2930,7 +2930,7 @@ export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) 
     if (systemKind === "operations") {
       const legacyId = current.fields[OPERATIONS_DB_FIELDS.legacyId];
       if (typeof legacyId === "number") {
-        const { error } = await supabase.from("operations").delete().eq("id", legacyId);
+        const { error } = await supabase.schema("anchors").from("operations").delete().eq("id", legacyId);
         if (error) throw error;
         await syncOperationalWorkspaceDatabases();
         return;
@@ -2940,7 +2940,7 @@ export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) 
     if (systemKind === "projects") {
       const legacyId = current.fields[PROJECTS_DB_FIELDS.legacyId];
       if (typeof legacyId === "number") {
-        const { error } = await supabase.from("projects").delete().eq("id", legacyId);
+        const { error } = await supabase.schema("anchors").from("projects").delete().eq("id", legacyId);
         if (error) throw error;
         await syncOperationalWorkspaceDatabases();
         return;
@@ -2948,7 +2948,7 @@ export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) 
     }
   }
 
-  const { error } = await supabase.from("workspace_records").delete().eq("id", id);
+  const { error } = await supabase.schema("workspace").from("records").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -3002,7 +3002,7 @@ export async function updateWorkspaceRelationLinks(input: {
   }
 
   const { data: targetRows, error: targetError } = await supabase
-    .from("workspace_records")
+    .schema("workspace").from("records")
     .select("id, database_id, fields, body, created_at, updated_at")
     .eq("database_id", targetDatabaseId)
     .in("id", affectedIds);
@@ -3040,7 +3040,7 @@ export async function updateWorkspaceRelationLinks(input: {
 
 export async function listCanvasDocuments() {
   const { data, error } = await supabase
-    .from("canvas_documents")
+    .schema("workspace").from("canvases")
     .select("id, name, project_id, project_record_id, case_id, created_at, updated_at")
     .order("updated_at", { ascending: false })
     .order("id", { ascending: false });
@@ -3051,7 +3051,7 @@ export async function listCanvasDocuments() {
 
 export async function getCanvasDocument(id: number) {
   const { data, error } = await supabase
-    .from("canvas_documents")
+    .schema("workspace").from("canvases")
     .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
     .eq("id", id)
     .single();
@@ -3072,7 +3072,7 @@ export async function createCanvasDocument(input?: {
     projectRecordId: input?.projectRecordId,
   });
   const { data, error } = await supabase
-    .from("canvas_documents")
+    .schema("workspace").from("canvases")
     .insert([
       {
         name: input?.name?.trim() || "Untitled canvas",
@@ -3122,7 +3122,7 @@ export async function updateCanvasDocument(
   if (input.contentJson !== undefined) update.content_json = input.contentJson;
 
   const { data, error } = await supabase
-    .from("canvas_documents")
+    .schema("workspace").from("canvases")
     .update(update)
     .eq("id", id)
     .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
@@ -3134,7 +3134,7 @@ export async function updateCanvasDocument(
 
 export async function updateCanvasDocumentContent(id: number, contentJson: CanvasDocumentData) {
   const { data, error } = await supabase
-    .from("canvas_documents")
+    .schema("workspace").from("canvases")
     .update({ content_json: contentJson })
     .eq("id", id)
     .select("id, name, project_id, project_record_id, case_id, content_json, created_at, updated_at")
@@ -3145,7 +3145,7 @@ export async function updateCanvasDocumentContent(id: number, contentJson: Canva
 }
 
 export async function deleteCanvasDocument(id: number) {
-  const { error } = await supabase.from("canvas_documents").delete().eq("id", id);
+  const { error } = await supabase.schema("workspace").from("canvases").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -3153,7 +3153,7 @@ export async function deleteCanvasDocument(id: number) {
 
 export async function listStrategyFolders() {
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .select("id, parent_id, case_id, project_id, project_record_id, kind, name, path, created_at, updated_at")
     .eq("kind", "folder")
     .is("case_id", null)
@@ -3178,7 +3178,7 @@ export async function createStrategyFolder(input: {
 
   if (parentPath) {
     const { data: parent, error: parentError } = await supabase
-      .from("workspace_nodes")
+      .schema("workspace").from("nodes")
       .select("id")
       .eq("path", parentPath)
       .eq("kind", "folder")
@@ -3189,7 +3189,7 @@ export async function createStrategyFolder(input: {
   }
 
   const { data, error } = await supabase
-    .from("workspace_nodes")
+    .schema("workspace").from("nodes")
     .insert([
       {
         parent_id: parentId,
@@ -3211,7 +3211,7 @@ export async function createStrategyFolder(input: {
 
 export async function listVaultDocuments() {
   const { data, error } = await supabase
-    .from("documents")
+    .schema("knowledge").from("documents")
     .select("id, title, source_path, document_type, domain, created_at, updated_at")
     .order("source_path");
 
@@ -3221,7 +3221,7 @@ export async function listVaultDocuments() {
 
 export async function getVaultDocument(id: number) {
   const { data, error } = await supabase
-    .from("documents")
+    .schema("knowledge").from("documents")
     .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
     .eq("id", id)
     .single();
@@ -3239,7 +3239,7 @@ export async function createVaultDocument(input: {
   metadata?: Record<string, unknown>;
 }) {
   const { data, error } = await supabase
-    .from("documents")
+    .schema("knowledge").from("documents")
     .insert([
       {
         title: input.title,
@@ -3259,7 +3259,7 @@ export async function createVaultDocument(input: {
 
 export async function updateVaultDocumentContent(id: number, content: string) {
   const { data, error } = await supabase
-    .from("documents")
+    .schema("knowledge").from("documents")
     .update({ content })
     .eq("id", id)
     .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
@@ -3270,6 +3270,6 @@ export async function updateVaultDocumentContent(id: number, content: string) {
 }
 
 export async function deleteVaultDocument(id: number) {
-  const { error } = await supabase.from("documents").delete().eq("id", id);
+  const { error } = await supabase.schema("knowledge").from("documents").delete().eq("id", id);
   if (error) throw error;
 }

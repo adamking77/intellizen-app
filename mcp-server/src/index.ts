@@ -156,7 +156,7 @@ async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearch
     const snippet = snippetFromResult(r);
 
     const { data, error } = await supabase
-      .from("intel_signals")
+      .schema("intel").from("signals")
       .upsert(
         {
           monitor_id: monitor_id ?? null,
@@ -179,7 +179,7 @@ async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearch
       upserted.push(data.id);
     } else if (error?.code === "23505" || error?.code === "PGRST116") {
       const { data: existing } = await supabase
-        .from("intel_signals")
+        .schema("intel").from("signals")
         .select("id")
         .eq("url", r.url)
         .single();
@@ -190,7 +190,7 @@ async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearch
   if (project_id && upserted.length > 0) {
     const rows = upserted.map((signal_id) => ({ project_id, signal_id }));
     await supabase
-      .from("project_signals")
+      .schema("intel").from("project_signals")
       .upsert(rows, { onConflict: "project_id,signal_id", ignoreDuplicates: true });
   }
 
@@ -216,7 +216,7 @@ async function runMonitor(monitor: {
   });
 
   const { error } = await supabase
-    .from("monitors")
+    .schema("intel").from("monitors")
     .update({
       last_run: new Date().toISOString(),
       signal_count: result.signal_ids.length,
@@ -229,7 +229,7 @@ async function runMonitor(monitor: {
 
 async function generateCaseId(): Promise<string> {
   const { count } = await supabase
-    .from("investigations")
+    .schema("intel").from("investigations")
     .select("*", { count: "exact", head: true });
   const seq = String((count ?? 0) + 1).padStart(3, "0");
   return `case-${new Date().getFullYear()}-${seq}`;
@@ -751,7 +751,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── list_projects ──────────────────────────────────────────────────────────
   if (name === "list_projects") {
     const { data, error } = await supabase
-      .from("projects")
+      .schema("anchors").from("projects")
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -761,7 +761,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── list_operations ───────────────────────────────────────────────────────
   if (name === "list_operations") {
     let query = supabase
-      .from("operations")
+      .schema("anchors").from("operations")
       .select("*, projects:projects(count), investigations:investigations(count)")
       .order("created_at", { ascending: false });
     if (args?.status) query = query.eq("status", args.status as string);
@@ -777,7 +777,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       description?: string;
     };
     const { data, error } = await supabase
-      .from("operations")
+      .schema("anchors").from("operations")
       .insert({ name: operationName, description: description ?? null })
       .select()
       .single();
@@ -795,7 +795,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
     const updates = definedFields(fields);
     const { data, error } = await supabase
-      .from("operations")
+      .schema("anchors").from("operations")
       .update(updates)
       .eq("id", operation_id)
       .select()
@@ -807,7 +807,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── delete_operation ──────────────────────────────────────────────────────
   if (name === "delete_operation") {
     const { operation_id } = args as { operation_id: number };
-    const { error } = await supabase.from("operations").delete().eq("id", operation_id);
+    const { error } = await supabase.schema("anchors").from("operations").delete().eq("id", operation_id);
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: `Operation ${operation_id} deleted.` }] };
   }
@@ -822,7 +822,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       operation_id?: number;
     };
     const { data, error } = await supabase
-      .from("projects")
+      .schema("anchors").from("projects")
       .insert({ name: pname, type, watch_domain, notes, operation_id: operation_id ?? null })
       .select()
       .single();
@@ -843,7 +843,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
     const updates = definedFields(fields);
     const { data, error } = await supabase
-      .from("projects")
+      .schema("anchors").from("projects")
       .update(updates)
       .eq("id", project_id)
       .select()
@@ -855,7 +855,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── delete_project ────────────────────────────────────────────────────────
   if (name === "delete_project") {
     const { project_id } = args as { project_id: number };
-    const { error } = await supabase.from("projects").delete().eq("id", project_id);
+    const { error } = await supabase.schema("anchors").from("projects").delete().eq("id", project_id);
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: `Project ${project_id} deleted.` }] };
   }
@@ -868,7 +868,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       notes?: string;
     };
     const { error } = await supabase
-      .from("project_signals")
+      .schema("intel").from("project_signals")
       .upsert({ project_id, signal_id, notes }, { onConflict: "project_id,signal_id", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: `Signal ${signal_id} added to project ${project_id}.` }] };
@@ -878,8 +878,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "list_project_signals") {
     const { project_id } = args as { project_id: number };
     const { data, error } = await supabase
-      .from("project_signals")
-      .select(`signal:intel_signals(id, title, url, source, published_at, snippet, exa_score, status)`)
+      .schema("intel").from("project_signals")
+      .select(`signal:signals(id, title, url, source, published_at, snippet, exa_score, status)`)
       .eq("project_id", project_id);
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: JSON.stringify(data?.map((r) => r.signal), null, 2) }] };
@@ -888,7 +888,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── list_monitors ─────────────────────────────────────────────────────────
   if (name === "list_monitors") {
     let query = supabase
-      .from("monitors")
+      .schema("intel").from("monitors")
       .select("*")
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
@@ -908,7 +908,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       status?: string;
     };
     const { data, error } = await supabase
-      .from("monitors")
+      .schema("intel").from("monitors")
       .insert({
         name: monitorName,
         query,
@@ -934,7 +934,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
     const updates = definedFields(fields);
     const { data, error } = await supabase
-      .from("monitors")
+      .schema("intel").from("monitors")
       .update(updates)
       .eq("id", monitor_id)
       .select()
@@ -946,7 +946,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── delete_monitor ────────────────────────────────────────────────────────
   if (name === "delete_monitor") {
     const { monitor_id } = args as { monitor_id: number };
-    const { error } = await supabase.from("monitors").delete().eq("id", monitor_id);
+    const { error } = await supabase.schema("intel").from("monitors").delete().eq("id", monitor_id);
     if (error) throw new Error(error.message);
     return { content: [{ type: "text", text: `Monitor ${monitor_id} deleted.` }] };
   }
@@ -955,7 +955,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "run_monitor") {
     const { monitor_id } = args as { monitor_id: number };
     const { data: monitor, error } = await supabase
-      .from("monitors")
+      .schema("intel").from("monitors")
       .select("id, query, watch_domain")
       .eq("id", monitor_id)
       .single();
@@ -967,7 +967,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── refresh_inbox ─────────────────────────────────────────────────────────
   if (name === "refresh_inbox") {
     const { data: monitors, error } = await supabase
-      .from("monitors")
+      .schema("intel").from("monitors")
       .select("id, query, watch_domain")
       .eq("status", "active")
       .order("created_at", { ascending: true });
@@ -1004,7 +1004,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       limit?: number;
     };
     let query = supabase
-      .from("intel_signals")
+      .schema("intel").from("signals")
       .select("id, monitor_id, title, url, source, published_at, snippet, watch_domain, exa_score, status, created_at, updated_at")
       .order("created_at", { ascending: false })
       .limit(Math.min(limit, 200));
@@ -1022,7 +1022,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       status: string;
     };
     const { data, error } = await supabase
-      .from("intel_signals")
+      .schema("intel").from("signals")
       .update({ status })
       .eq("id", signal_id)
       .select("id, title, status, updated_at")
@@ -1034,7 +1034,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── list_investigations ────────────────────────────────────────────────────
   if (name === "list_investigations") {
     let query = supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .select(
         `id, case_id, name, status, use_case, current_phase,
          scope_notes, seed_entities, created_at, updated_at,
@@ -1052,7 +1052,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "get_investigation") {
     const { case_id } = args as { case_id: string };
     const { data: investigation, error: invError } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .select(`*, project:projects(id, name, type, watch_domain, notes)`)
       .eq("case_id", case_id)
       .single();
@@ -1060,10 +1060,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (!investigation) throw new Error(`Not found: ${case_id}`);
 
     const { data: signalRows, error: sigError } = await supabase
-      .from("investigation_signals")
+      .schema("intel").from("investigation_signals")
       .select(
         `notes, phase_added, added_at,
-         signal:intel_signals(id, title, url, source, published_at, snippet, exa_score, status)`
+         signal:signals(id, title, url, source, published_at, snippet, exa_score, status)`
       )
       .eq("investigation_id", investigation.id)
       .order("added_at", { ascending: true });
@@ -1098,7 +1098,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const case_id = await generateCaseId();
 
     const { data, error } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .insert({
         case_id,
         name: invName,
@@ -1132,7 +1132,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       Object.entries(fields).filter(([, v]) => v !== undefined)
     );
     const { data, error } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .update(updates)
       .eq("case_id", case_id)
       .select()
@@ -1149,14 +1149,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       notes?: string;
     };
     const { data: inv } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .select("id")
       .eq("case_id", case_id)
       .single();
     if (!inv) throw new Error(`Investigation not found: ${case_id}`);
 
     const { error } = await supabase
-      .from("investigation_signals")
+      .schema("intel").from("investigation_signals")
       .upsert(
         { investigation_id: inv.id, signal_id, notes: notes ?? null, phase_added: 2 },
         { onConflict: "investigation_id,signal_id", ignoreDuplicates: true }
@@ -1172,14 +1172,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       project_id: number;
     };
     const { data: inv } = await supabase
-      .from("investigations")
+      .schema("intel").from("investigations")
       .select("id")
       .eq("case_id", case_id)
       .single();
     if (!inv) throw new Error(`Investigation not found: ${case_id}`);
 
     const { data: projectSignals, error: psError } = await supabase
-      .from("project_signals")
+      .schema("intel").from("project_signals")
       .select("signal_id")
       .eq("project_id", project_id);
     if (psError) throw new Error(psError.message);
@@ -1194,7 +1194,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }));
 
     const { error } = await supabase
-      .from("investigation_signals")
+      .schema("intel").from("investigation_signals")
       .upsert(rows, { onConflict: "investigation_id,signal_id", ignoreDuplicates: true });
     if (error) throw new Error(error.message);
 
@@ -1219,7 +1219,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const filePath = vaultPath("investigations", case_id, file_name);
     ensureDir(filePath);
     writeFileSync(filePath, content, "utf-8");
-    const { error } = await supabase.from("vault_files").insert({
+    const { error } = await supabase.schema("ingest").from("vault_files").insert({
       case_id,
       file_type,
       file_path: join("investigations", case_id, file_name),
@@ -1242,7 +1242,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "list_vault_files") {
     const { case_id } = args as { case_id: string };
     const { data, error } = await supabase
-      .from("vault_files")
+      .schema("ingest").from("vault_files")
       .select("*")
       .eq("case_id", case_id)
       .order("created_at", { ascending: false });
@@ -1279,7 +1279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }));
 
     const { error } = await supabase
-      .from("graph_nodes")
+      .schema("intel").from("graph_nodes")
       .upsert(rows, { onConflict: "project_id,node_id", ignoreDuplicates: false });
     if (error) throw new Error(error.message);
 
@@ -1308,7 +1308,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Validate all referenced node_ids exist
     const referencedIds = [...new Set(edges.flatMap((e) => [e.source_node_id, e.target_node_id]))];
     const nodeQuery = supabase
-      .from("graph_nodes")
+      .schema("intel").from("graph_nodes")
       .select("node_id")
       .in("node_id", referencedIds);
     if (project_id !== undefined) {
@@ -1334,7 +1334,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }));
 
     const { error } = await supabase
-      .from("graph_edges")
+      .schema("intel").from("graph_edges")
       .upsert(rows, { onConflict: "project_id,edge_id", ignoreDuplicates: false });
     if (error) throw new Error(error.message);
 
