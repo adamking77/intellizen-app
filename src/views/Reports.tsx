@@ -1,4 +1,4 @@
-import { lazy, Suspense, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
@@ -6,7 +6,6 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
-  Layers,
   Loader2,
   Plus,
   Trash2,
@@ -15,22 +14,24 @@ import {
 import { ContextMenu } from "@/components/ui/context-menu";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
-  createStrategyFolder,
+  createWorkspaceFolder,
   createVaultDocument,
   deleteVaultDocument,
   deleteVaultFile,
+  ensureWorkspaceSystemNodes,
+  getWorkspaceNode,
   getVaultDocument,
   getVaultFile,
   listAllVaultFiles,
   listInvestigations,
-  listOperations,
   listProjects,
-  listStrategyFolders,
   listVaultDocuments,
+  listWorkspaceNodes,
+  updateWorkspaceFileContent,
   updateVaultDocumentContent,
   updateVaultFileContent,
 } from "@/lib/data";
-import type { Investigation, Operation, Project, VaultDocument, VaultFile, WorkspaceNodeSummary } from "@/lib/types";
+import type { Investigation, Project, VaultDocument, VaultFile, WorkspaceNodeSummary } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -38,7 +39,7 @@ import { useWindowSize } from "@/lib/use-window-size";
 type Selection =
   | { kind: "doc"; id: number }
   | { kind: "file"; id: number }
-  | { kind: "operation"; id: number }
+  | { kind: "workspace-file"; id: number }
   | { kind: "project"; id: number }
   | { kind: "investigation"; caseId: string }
   | null;
@@ -46,8 +47,18 @@ type Selection =
 type ReportSaveStatus = "idle" | "dirty" | "saving" | "error";
 
 type PathTreeNode =
-  | { kind: "folder"; name: string; fullPath: string; children: PathTreeNode[] }
-  | { kind: "doc"; name: string; fullPath: string; docId: number };
+  | {
+      kind: "folder";
+      name: string;
+      fullPath: string;
+      children: PathTreeNode[];
+      nodeId?: number;
+      projectId?: number | null;
+      caseId?: string | null;
+    }
+  | { kind: "doc"; name: string; fullPath: string; docId: number }
+  | { kind: "file"; name: string; fullPath: string; fileId: number }
+  | { kind: "workspace-file"; name: string; fullPath: string; nodeId: number };
 
 const InlineMarkdownEditor = lazy(async () => {
   const module = await import("@/components/reports/inline-markdown-editor");
@@ -101,17 +112,16 @@ export function ReportsView() {
     queryKey: ["vault-documents"],
     queryFn: listVaultDocuments,
   });
-  const { data: strategyFolders = [] } = useQuery({
-    queryKey: ["strategy-folders"],
-    queryFn: listStrategyFolders,
+  const { data: workspaceNodes = [], isLoading: loadingWorkspace } = useQuery({
+    queryKey: ["workspace-nodes"],
+    queryFn: async () => {
+      await ensureWorkspaceSystemNodes();
+      return listWorkspaceNodes();
+    },
   });
   const { data: vaultFiles = [], isLoading: loadingFiles } = useQuery({
     queryKey: ["vault-files-all"],
     queryFn: listAllVaultFiles,
-  });
-  const { data: operations = [] } = useQuery({
-    queryKey: ["operations"],
-    queryFn: listOperations,
   });
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -122,7 +132,7 @@ export function ReportsView() {
     queryFn: listInvestigations,
   });
 
-  const isLoading = loadingDocs || loadingFiles;
+  const isLoading = loadingDocs || loadingFiles || loadingWorkspace;
 
   const { data: selectedDoc, isLoading: loadingDoc } = useQuery({
     queryKey: ["vault-document", selection?.kind === "doc" ? selection.id : null],
@@ -135,15 +145,19 @@ export function ReportsView() {
     queryFn: () => getVaultFile((selection as { kind: "file"; id: number }).id),
     enabled: selection?.kind === "file",
   });
+  const { data: selectedWorkspaceFile, isLoading: loadingWorkspaceFile } = useQuery({
+    queryKey: ["workspace-file", selection?.kind === "workspace-file" ? selection.id : null],
+    queryFn: () => getWorkspaceNode((selection as { kind: "workspace-file"; id: number }).id),
+    enabled: selection?.kind === "workspace-file",
+  });
 
-  const docTree = useMemo(() => buildPathTree(vaultDocs, strategyFolders), [strategyFolders, vaultDocs]);
+  const fileTree = useMemo(
+    () => buildSupabaseProjectTree(workspaceNodes, vaultDocs, vaultFiles),
+    [vaultDocs, vaultFiles, workspaceNodes],
+  );
   const selectedFileSummary = useMemo(
     () => (selection?.kind === "file" ? vaultFiles.find((item) => item.id === selection.id) ?? null : null),
     [selection, vaultFiles],
-  );
-  const selectedOperation = useMemo(
-    () => (selection?.kind === "operation" ? operations.find((item) => item.id === selection.id) ?? null : null),
-    [operations, selection],
   );
   const selectedProject = useMemo(
     () => (selection?.kind === "project" ? projects.find((item) => item.id === selection.id) ?? null : null),
@@ -167,34 +181,9 @@ export function ReportsView() {
       ? `doc:${selection.id}`
       : selection?.kind === "file"
         ? `file:${selection.id}`
-        : null;
-
-  const filesByProject = useMemo(() => {
-    const map = new Map<number, VaultFile[]>();
-    for (const file of vaultFiles) {
-      if (file.project_id == null || file.case_id != null) continue;
-      const list = map.get(file.project_id) ?? [];
-      list.push(file);
-      map.set(file.project_id, list);
-    }
-    return map;
-  }, [vaultFiles]);
-
-  const filesByCase = useMemo(() => {
-    const map = new Map<string, VaultFile[]>();
-    for (const file of vaultFiles) {
-      if (!file.case_id) continue;
-      const list = map.get(file.case_id) ?? [];
-      list.push(file);
-      map.set(file.case_id, list);
-    }
-    return map;
-  }, [vaultFiles]);
-
-  const unlinkedFiles = useMemo(
-    () => vaultFiles.filter((file) => file.project_id == null && file.case_id == null),
-    [vaultFiles],
-  );
+        : selection?.kind === "workspace-file"
+          ? `workspace-file:${selection.id}`
+          : null;
 
   useEffect(() => {
     latestFileContentRef.current = fileContent;
@@ -214,6 +203,8 @@ export function ReportsView() {
         ? selectedDoc?.content
         : selection?.kind === "file"
           ? selectedFile?.content
+          : selection?.kind === "workspace-file"
+            ? selectedWorkspaceFile?.content
           : null;
 
     if (normalized === null || normalized === undefined) return;
@@ -237,7 +228,7 @@ export function ReportsView() {
       setPersistedContent(normalized);
       setSaveStatus("idle");
     }
-  }, [activeEditorSelectionKey, fileContent, persistedContent, selectedDoc, selectedFile, selection]);
+  }, [activeEditorSelectionKey, fileContent, persistedContent, selectedDoc, selectedFile, selectedWorkspaceFile, selection]);
 
   useEffect(() => {
     if (fileContent === null || saveStatus !== "dirty" || fileContent === persistedContent) return;
@@ -271,6 +262,26 @@ export function ReportsView() {
           queryClient.setQueryData(["vault-file", selection.id], updated);
           queryClient.setQueryData(["vault-files-all"], (prev: VaultFile[] | undefined) =>
             prev?.map((file) => (file.id === updated.id ? updated : file)) ?? prev,
+          );
+          setPersistedContent(valueToSave);
+          setSaveStatus(latestFileContentRef.current !== valueToSave ? "dirty" : "idle");
+        } catch {
+          setSaveStatus("error");
+        }
+      }, 700);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    if (selection?.kind === "workspace-file") {
+      const valueToSave = fileContent;
+      const timer = window.setTimeout(async () => {
+        try {
+          setSaveStatus("saving");
+          const updated = await updateWorkspaceFileContent(selection.id, valueToSave);
+          queryClient.setQueryData(["workspace-file", selection.id], updated);
+          queryClient.setQueryData(["workspace-nodes"], (prev: WorkspaceNodeSummary[] | undefined) =>
+            prev?.map((node) => (node.id === updated.id ? updated : node)) ?? prev,
           );
           setPersistedContent(valueToSave);
           setSaveStatus(latestFileContentRef.current !== valueToSave ? "dirty" : "idle");
@@ -316,11 +327,16 @@ export function ReportsView() {
       ? selectedDoc?.source_path ?? null
       : selection?.kind === "file"
         ? selectedFileSummary?.file_path ?? null
+        : selection?.kind === "workspace-file"
+          ? selectedWorkspaceFile?.path ?? null
         : null;
 
-  const showSaveStatus = selection?.kind === "doc" || (selection?.kind === "file" && isFileEditable);
+  const showSaveStatus =
+    selection?.kind === "doc" ||
+    (selection?.kind === "file" && isFileEditable) ||
+    selection?.kind === "workspace-file";
   const createTargetPath = activeStrategyFolderPath ?? (selection?.kind === "doc" ? dirname(selectedDoc?.source_path ?? null) : null);
-  const createTargetLabel = createTargetPath ?? "Strategy Vault";
+  const createTargetLabel = createTargetPath ?? "GenZen OS";
 
   function beginCreate(mode: "file" | "folder") {
     setCreateMode(mode);
@@ -343,11 +359,14 @@ export function ReportsView() {
       setCreateError(null);
 
       if (createMode === "folder") {
-        const createdFolder = await createStrategyFolder({
+        const parentFolder = createTargetPath
+          ? workspaceNodes.find((node) => node.kind === "folder" && node.path === createTargetPath)
+          : null;
+        const createdFolder = await createWorkspaceFolder({
           name: rawName,
-          parentPath: createTargetPath,
+          parentId: parentFolder?.id ?? null,
         });
-        await queryClient.invalidateQueries({ queryKey: ["strategy-folders"] });
+        await queryClient.invalidateQueries({ queryKey: ["workspace-nodes"] });
         setActiveStrategyFolderPath(createdFolder.path);
       } else {
         const fileName = ensureMarkdownExtension(rawName);
@@ -405,7 +424,7 @@ export function ReportsView() {
                 </div>
               ) : (
                 <>
-                  <SectionHeader label="Strategy Vault" count={vaultDocs.length} />
+                  <SectionHeader label="GenZen OS" count={countItems(fileTree)} />
                   <div className="mb-3 space-y-2 px-1">
                     <div className="flex items-center gap-2">
                       <button
@@ -478,37 +497,29 @@ export function ReportsView() {
                       </div>
                     ) : null}
                   </div>
-                  {docTree.length === 0 ? (
-                    <EmptySection message="No vault documents found." />
+                  {fileTree.length === 0 ? (
+                    <EmptySection message="No Supabase workspace data found." />
                   ) : (
-                    docTree.map((node) => (
+                    fileTree.map((node) => (
                       <PathNode
                         key={node.fullPath}
                         node={node}
                         selection={selection}
                         activeFolderPath={activeStrategyFolderPath}
+                        projects={projects}
+                        investigations={investigations}
                         onSelectDoc={(id) => setSelection({ kind: "doc", id })}
+                        onSelectFile={(id) => setSelection({ kind: "file", id })}
+                        onSelectWorkspaceFile={(id) => setSelection({ kind: "workspace-file", id })}
                         onSelectFolder={setActiveStrategyFolderPath}
+                        onSelectProject={(id) => setSelection({ kind: "project", id })}
+                        onSelectInvestigation={(caseId) => setSelection({ kind: "investigation", caseId })}
                         onDeleteDoc={handleDeleteDoc}
+                        onDeleteFile={handleDeleteFile}
                         depth={0}
                       />
                     ))
                   )}
-
-                  <div className="mt-4">
-                    <SectionHeader label="Intelligence" count={vaultFiles.length} />
-                    <IntelTree
-                      operations={operations}
-                      projects={projects}
-                      investigations={investigations}
-                      filesByProject={filesByProject}
-                      filesByCase={filesByCase}
-                      unlinkedFiles={unlinkedFiles}
-                      selection={selection}
-                      onSelect={setSelection}
-                      onDeleteFile={handleDeleteFile}
-                    />
-                  </div>
                 </>
               )}
             </div>
@@ -588,16 +599,20 @@ export function ReportsView() {
             <div className="flex h-full items-center justify-center">
               <Loader2 className={cn("h-4 w-4 text-[var(--subtext-0)]", loadingFile && "animate-spin")} />
             </div>
-          ) : selectedOperation ? (
-            <EntityDetail
-              label="Operation"
-              name={selectedOperation.name}
-              meta={[
-                { key: "Status", value: selectedOperation.status },
-                { key: "Description", value: selectedOperation.description ?? "—" },
-                { key: "Created", value: fmtDate(selectedOperation.created_at) },
-              ]}
-            />
+          ) : selection?.kind === "workspace-file" && selectedWorkspaceFile ? (
+            <div className="px-[10%] py-10">
+              <Suspense fallback={<EditorLoadingFallback />}>
+                <InlineMarkdownEditor
+                  key={`workspace-file-${selection.id}`}
+                  initialValue={fileContent ?? ""}
+                  onChange={handleEditorChange}
+                />
+              </Suspense>
+            </div>
+          ) : selection?.kind === "workspace-file" ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className={cn("h-4 w-4 text-[var(--subtext-0)]", loadingWorkspaceFile && "animate-spin")} />
+            </div>
           ) : selectedProject ? (
             <EntityDetail
               label="Project"
@@ -636,29 +651,53 @@ function PathNode({
   node,
   selection,
   activeFolderPath,
+  projects,
+  investigations,
   onSelectDoc,
+  onSelectFile,
+  onSelectWorkspaceFile,
   onSelectFolder,
+  onSelectProject,
+  onSelectInvestigation,
   onDeleteDoc,
+  onDeleteFile,
   depth,
 }: {
   node: PathTreeNode;
   selection: Selection;
   activeFolderPath: string | null;
+  projects: Project[];
+  investigations: Investigation[];
   onSelectDoc: (id: number) => void;
+  onSelectFile: (id: number) => void;
+  onSelectWorkspaceFile: (id: number) => void;
   onSelectFolder: (path: string) => void;
+  onSelectProject: (id: number) => void;
+  onSelectInvestigation: (caseId: string) => void;
   onDeleteDoc: (id: number) => void;
+  onDeleteFile: (file: VaultFile, event: MouseEvent) => void;
   depth: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
 
-  if (node.kind === "doc") {
-    const isSelected = selection?.kind === "doc" && selection.id === node.docId;
+  if (node.kind !== "folder") {
+    const isDoc = node.kind === "doc";
+    const isVaultFile = node.kind === "file";
+    const isSelected =
+      (node.kind === "doc" && selection?.kind === "doc" && selection.id === node.docId) ||
+      (node.kind === "file" && selection?.kind === "file" && selection.id === node.fileId) ||
+      (node.kind === "workspace-file" && selection?.kind === "workspace-file" && selection.id === node.nodeId);
+
     return (
       <>
         <button
           type="button"
-          onClick={() => onSelectDoc(node.docId)}
+          onClick={() => {
+            if (node.kind === "doc") onSelectDoc(node.docId);
+            if (node.kind === "file") onSelectFile(node.fileId);
+            if (node.kind === "workspace-file") onSelectWorkspaceFile(node.nodeId);
+          }}
           onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           className={cn(
@@ -674,11 +713,24 @@ function PathNode({
           <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
           <span className="min-w-0 flex-1 truncate text-[12px]">{node.name}</span>
         </button>
-        {ctx && (
+        {ctx && isDoc && (
           <ContextMenu
             x={ctx.x}
             y={ctx.y}
             items={[{ label: "Delete", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "danger", onSelect: () => onDeleteDoc(node.docId) }]}
+            onClose={() => setCtx(null)}
+          />
+        )}
+        {ctx && isVaultFile && (
+          <ContextMenu
+            x={ctx.x}
+            y={ctx.y}
+            items={[{
+              label: "Delete",
+              icon: <Trash2 className="h-3.5 w-3.5" />,
+              variant: "danger",
+              onSelect: () => onDeleteFile({ id: node.fileId } as VaultFile, { stopPropagation: () => {} } as unknown as MouseEvent),
+            }]}
             onClose={() => setCtx(null)}
           />
         )}
@@ -687,6 +739,11 @@ function PathNode({
   }
 
   const isActiveFolder = activeFolderPath === node.fullPath;
+  const folderProject = node.projectId != null ? projects.find((project) => project.id === node.projectId) : null;
+  const folderInvestigation = node.caseId ? investigations.find((investigation) => investigation.case_id === node.caseId) : null;
+  const isSelected =
+    (folderProject && selection?.kind === "project" && selection.id === folderProject.id) ||
+    (folderInvestigation && selection?.kind === "investigation" && selection.caseId === folderInvestigation.case_id);
 
   return (
     <div>
@@ -694,18 +751,24 @@ function PathNode({
         type="button"
         onClick={() => {
           onSelectFolder(node.fullPath);
+          if (folderProject) onSelectProject(folderProject.id);
+          if (folderInvestigation) onSelectInvestigation(folderInvestigation.case_id);
           setExpanded((value) => !value);
         }}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         className={cn(
-          "flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors hover:bg-[var(--surface-wash)]",
+          "relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors hover:bg-[var(--surface-wash)]",
+          isSelected && "bg-[var(--accent-soft)] text-[var(--accent)]",
           isActiveFolder && "bg-[var(--surface-wash)]",
         )}
       >
+        {isSelected ? (
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
+        ) : null}
         <ChevronRight className={cn("h-3 w-3 shrink-0 text-[var(--overlay-1)] transition-transform", expanded && "rotate-90")} />
         <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
         <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--subtext-1)]">{node.name}</span>
-        <span className="font-mono text-[10px] text-[var(--overlay-1)]">{countDocs(node)}</span>
+        <span className="font-mono text-[10px] text-[var(--overlay-1)]">{countItems([node])}</span>
       </button>
       {expanded
         ? node.children.map((child) => (
@@ -714,338 +777,21 @@ function PathNode({
               node={child}
               selection={selection}
               activeFolderPath={activeFolderPath}
+              projects={projects}
+              investigations={investigations}
               onSelectDoc={onSelectDoc}
+              onSelectFile={onSelectFile}
+              onSelectWorkspaceFile={onSelectWorkspaceFile}
               onSelectFolder={onSelectFolder}
+              onSelectProject={onSelectProject}
+              onSelectInvestigation={onSelectInvestigation}
               onDeleteDoc={onDeleteDoc}
+              onDeleteFile={onDeleteFile}
               depth={depth + 1}
             />
           ))
         : null}
     </div>
-  );
-}
-
-function IntelTree({
-  operations,
-  projects,
-  investigations,
-  filesByProject,
-  filesByCase,
-  unlinkedFiles,
-  selection,
-  onSelect,
-  onDeleteFile,
-}: {
-  operations: Operation[];
-  projects: Project[];
-  investigations: Investigation[];
-  filesByProject: Map<number, VaultFile[]>;
-  filesByCase: Map<string, VaultFile[]>;
-  unlinkedFiles: VaultFile[];
-  selection: Selection;
-  onSelect: (selection: Selection) => void;
-  onDeleteFile: (file: VaultFile, event: MouseEvent) => void;
-}) {
-  const projectsByOp = useMemo(() => groupBy(projects, (project) => String(project.operation_id ?? "__none__")), [projects]);
-  const investigationsByProject = useMemo(
-    () => groupBy(investigations, (investigation) => String(investigation.project_id ?? "__none__")),
-    [investigations],
-  );
-  const standaloneInvestigations = investigations.filter(
-    (investigation) =>
-      investigation.project_id == null && !operations.some((operation) => operation.id === investigation.operation_id),
-  );
-
-  if (
-    operations.length === 0
-    && projects.length === 0
-    && investigations.length === 0
-    && unlinkedFiles.length === 0
-  ) {
-    return <EmptySection message="No intelligence data yet." />;
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {operations.map((operation) => (
-        <IntelFolderRow
-          key={`op-${operation.id}`}
-          icon={<Layers className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />}
-          label={operation.name}
-          isSelected={selection?.kind === "operation" && selection.id === operation.id}
-          onSelect={() => onSelect({ kind: "operation", id: operation.id })}
-          depth={0}
-        >
-          {(projectsByOp.get(String(operation.id)) ?? []).map((project) => (
-            <IntelProjectNode
-              key={`proj-${project.id}`}
-              project={project}
-              files={filesByProject.get(project.id) ?? []}
-              investigations={investigationsByProject.get(String(project.id)) ?? []}
-              filesByCase={filesByCase}
-              selection={selection}
-              onSelect={onSelect}
-              onDeleteFile={onDeleteFile}
-              depth={1}
-            />
-          ))}
-        </IntelFolderRow>
-      ))}
-
-      {projects
-        .filter((project) => project.operation_id == null)
-        .map((project) => (
-          <IntelProjectNode
-            key={`proj-${project.id}`}
-            project={project}
-            files={filesByProject.get(project.id) ?? []}
-            investigations={investigationsByProject.get(String(project.id)) ?? []}
-            filesByCase={filesByCase}
-            selection={selection}
-            onSelect={onSelect}
-            onDeleteFile={onDeleteFile}
-            depth={0}
-          />
-        ))}
-
-      {standaloneInvestigations.map((investigation) => (
-        <IntelInvNode
-          key={investigation.case_id}
-          investigation={investigation}
-          files={filesByCase.get(investigation.case_id) ?? []}
-          selection={selection}
-          onSelect={onSelect}
-          onDeleteFile={onDeleteFile}
-          depth={0}
-        />
-      ))}
-
-      {unlinkedFiles.length > 0 ? (
-        <IntelFolderRow
-          icon={<FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />}
-          label="Unlinked Files"
-          isSelected={false}
-          onSelect={() => {}}
-          depth={0}
-        >
-          {unlinkedFiles.map((file) => (
-            <IntelFileRow
-              key={file.id}
-              file={file}
-              isSelected={selection?.kind === "file" && selection.id === file.id}
-              onSelect={() => onSelect({ kind: "file", id: file.id })}
-              onDelete={onDeleteFile}
-              depth={1}
-            />
-          ))}
-        </IntelFolderRow>
-      ) : null}
-    </div>
-  );
-}
-
-function IntelProjectNode({
-  project,
-  files,
-  investigations,
-  filesByCase,
-  selection,
-  onSelect,
-  onDeleteFile,
-  depth,
-}: {
-  project: Project;
-  files: VaultFile[];
-  investigations: Investigation[];
-  filesByCase: Map<string, VaultFile[]>;
-  selection: Selection;
-  onSelect: (selection: Selection) => void;
-  onDeleteFile: (file: VaultFile, event: MouseEvent) => void;
-  depth: number;
-}) {
-  return (
-    <IntelFolderRow
-      icon={<FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />}
-      label={project.name}
-      isSelected={selection?.kind === "project" && selection.id === project.id}
-      onSelect={() => onSelect({ kind: "project", id: project.id })}
-      depth={depth}
-    >
-      {files.map((file) => (
-        <IntelFileRow
-          key={file.id}
-          file={file}
-          isSelected={selection?.kind === "file" && selection.id === file.id}
-          onSelect={() => onSelect({ kind: "file", id: file.id })}
-          onDelete={onDeleteFile}
-          depth={depth + 1}
-        />
-      ))}
-      {investigations.map((investigation) => (
-        <IntelInvNode
-          key={investigation.case_id}
-          investigation={investigation}
-          files={filesByCase.get(investigation.case_id) ?? []}
-          selection={selection}
-          onSelect={onSelect}
-          onDeleteFile={onDeleteFile}
-          depth={depth + 1}
-        />
-      ))}
-    </IntelFolderRow>
-  );
-}
-
-function IntelInvNode({
-  investigation,
-  files,
-  selection,
-  onSelect,
-  onDeleteFile,
-  depth,
-}: {
-  investigation: Investigation;
-  files: VaultFile[];
-  selection: Selection;
-  onSelect: (selection: Selection) => void;
-  onDeleteFile: (file: VaultFile, event: MouseEvent) => void;
-  depth: number;
-}) {
-  return (
-    <IntelFolderRow
-      icon={<FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--subtext-1)]" />}
-      label={investigation.name}
-      isSelected={selection?.kind === "investigation" && selection.caseId === investigation.case_id}
-      onSelect={() => onSelect({ kind: "investigation", caseId: investigation.case_id })}
-      depth={depth}
-    >
-      {files.map((file) => (
-        <IntelFileRow
-          key={file.id}
-          file={file}
-          isSelected={selection?.kind === "file" && selection.id === file.id}
-          onSelect={() => onSelect({ kind: "file", id: file.id })}
-          onDelete={onDeleteFile}
-          depth={depth + 1}
-        />
-      ))}
-    </IntelFolderRow>
-  );
-}
-
-function IntelFolderRow({
-  icon,
-  label,
-  isSelected,
-  onSelect,
-  depth,
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  isSelected: boolean;
-  onSelect: () => void;
-  depth: number;
-  children?: ReactNode;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasChildren = !!children && (Array.isArray(children) ? children.length > 0 : true);
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => {
-          onSelect();
-          setExpanded((value) => !value);
-        }}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
-        className={cn(
-          "relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
-          isSelected
-            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
-        )}
-      >
-        {isSelected ? (
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
-        ) : null}
-        <ChevronRight
-          className={cn(
-            "h-3 w-3 shrink-0 text-[var(--overlay-1)] transition-transform",
-            expanded && hasChildren && "rotate-90",
-            !hasChildren && "opacity-0",
-          )}
-        />
-        {icon}
-        <span className="min-w-0 flex-1 truncate text-[12px]">{label}</span>
-      </button>
-      {expanded ? children : null}
-    </div>
-  );
-}
-
-function IntelFileRow({
-  file,
-  isSelected,
-  onSelect,
-  onDelete,
-  depth,
-}: {
-  file: VaultFile;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete: (file: VaultFile, event: MouseEvent) => void;
-  depth: number;
-}) {
-  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
-
-  function triggerDelete() {
-    onDelete(file, { stopPropagation: () => {} } as unknown as MouseEvent);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={onSelect}
-        onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        className={cn(
-          "group relative flex w-full items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
-          isSelected
-            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
-        )}
-      >
-        {isSelected ? (
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
-        ) : null}
-        <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        <span className="min-w-0 flex-1 truncate text-[12px]">{file.file_name}</span>
-        <span
-          role="button"
-          tabIndex={-1}
-          onClick={(event) => onDelete(file, event)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              onDelete(file, event as unknown as MouseEvent);
-            }
-          }}
-          className="ml-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
-        >
-          <Trash2 className="h-3 w-3" />
-        </span>
-      </button>
-      {ctx && (
-        <ContextMenu
-          x={ctx.x}
-          y={ctx.y}
-          items={[{ label: "Delete", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "danger", onSelect: triggerDelete }]}
-          onClose={() => setCtx(null)}
-        />
-      )}
-    </>
   );
 }
 
@@ -1087,10 +833,17 @@ function EntityDetail({
   );
 }
 
-function buildPathTree(docs: VaultDocument[], folders: WorkspaceNodeSummary[]): PathTreeNode[] {
+function buildSupabaseProjectTree(
+  workspaceNodes: WorkspaceNodeSummary[],
+  docs: VaultDocument[],
+  files: VaultFile[],
+): PathTreeNode[] {
   const root: PathTreeNode[] = [];
 
-  const ensureFolderPath = (fullPath: string) => {
+  const ensureFolderPath = (
+    fullPath: string,
+    metadata?: { nodeId?: number; projectId?: number | null; caseId?: string | null },
+  ) => {
     if (!fullPath) return;
 
     const parts = fullPath.split("/");
@@ -1109,37 +862,74 @@ function buildPathTree(docs: VaultDocument[], folders: WorkspaceNodeSummary[]): 
         nodes.push(folder);
       }
 
+      if (index === parts.length - 1 && metadata) {
+        folder.nodeId = metadata.nodeId ?? folder.nodeId;
+        folder.projectId = metadata.projectId ?? folder.projectId ?? null;
+        folder.caseId = metadata.caseId ?? folder.caseId ?? null;
+      }
+
       nodes = folder.children;
     }
   };
 
-  for (const folder of folders) {
-    ensureFolderPath(folder.path);
-  }
-
-  for (const doc of docs) {
-    const sourcePath = vaultDocumentPath(doc);
-    const parts = sourcePath.split("/");
+  const ensurePathParent = (fullPath: string) => {
+    const parts = fullPath.split("/").filter(Boolean);
     let nodes = root;
 
     for (let index = 0; index < parts.length - 1; index += 1) {
       const name = parts[index];
-      const fullPath = parts.slice(0, index + 1).join("/");
+      const folderPath = parts.slice(0, index + 1).join("/");
       let folder = nodes.find(
         (node): node is Extract<PathTreeNode, { kind: "folder" }> =>
-          node.kind === "folder" && node.name === name,
+          node.kind === "folder" && node.fullPath === folderPath,
       );
 
       if (!folder) {
-        folder = { kind: "folder", name, fullPath, children: [] };
+        folder = { kind: "folder", name, fullPath: folderPath, children: [] };
         nodes.push(folder);
       }
 
       nodes = folder.children;
     }
 
+    return nodes;
+  };
+
+  for (const node of workspaceNodes) {
+    if (node.kind === "folder") {
+      ensureFolderPath(node.path, {
+        nodeId: node.id,
+        projectId: node.project_id,
+        caseId: node.case_id,
+      });
+      continue;
+    }
+
+    const parentNodes = ensurePathParent(node.path);
+    parentNodes.push({
+      kind: "workspace-file",
+      name: node.name,
+      fullPath: node.path,
+      nodeId: node.id,
+    });
+  }
+
+  for (const doc of docs) {
+    const sourcePath = vaultDocumentPath(doc);
+    const parts = sourcePath.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+    const nodes = ensurePathParent(sourcePath);
     const fileName = parts[parts.length - 1];
     nodes.push({ kind: "doc", name: fileName, fullPath: sourcePath, docId: doc.id });
+  }
+
+  for (const file of files) {
+    const sourcePath = vaultFileTreePath(file);
+    const parts = sourcePath.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+    const nodes = ensurePathParent(sourcePath);
+    const fileName = parts[parts.length - 1];
+    nodes.push({ kind: "file", name: fileName, fullPath: sourcePath, fileId: file.id });
   }
 
   sortPathTree(root);
@@ -1167,20 +957,35 @@ function sortPathTree(nodes: PathTreeNode[]) {
   }
 }
 
-function countDocs(node: PathTreeNode): number {
-  if (node.kind === "doc") return 1;
-  return node.children.reduce((sum, child) => sum + countDocs(child), 0);
+function countItems(nodes: PathTreeNode[]): number {
+  return nodes.reduce((sum, node) => {
+    if (node.kind !== "folder") return sum + 1;
+    return sum + countItems(node.children);
+  }, 0);
 }
 
-function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const groupKey = key(item);
-    const list = map.get(groupKey) ?? [];
-    list.push(item);
-    map.set(groupKey, list);
+function vaultFileTreePath(file: VaultFile): string {
+  const rawPath = file.file_path.trim();
+  const normalized = rawPath.replace(/^\/+/, "");
+  const lower = normalized.toLowerCase();
+
+  if (lower.startsWith("investigations/")) {
+    return `Investigations/${normalized.slice("investigations/".length)}`;
   }
-  return map;
+
+  if (lower.startsWith("projects/")) {
+    return `Projects/${normalized.slice("projects/".length)}`;
+  }
+
+  if (file.case_id) {
+    return `Investigations/${file.case_id}/${file.file_name}`;
+  }
+
+  if (file.project_id != null) {
+    return `Projects/${file.project_id}/${file.file_name}`;
+  }
+
+  return `Vault Files/${normalized || file.file_name}`;
 }
 
 function saveStatusLabel(status: ReportSaveStatus) {
