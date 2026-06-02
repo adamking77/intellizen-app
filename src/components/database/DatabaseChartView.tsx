@@ -1,20 +1,20 @@
-import { useCallback, useId, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
+import { Bar } from "@/components/charts/bar";
+import { BarChart as BklitBarChart } from "@/components/charts/bar-chart";
+import { BarXAxis } from "@/components/charts/bar-x-axis";
+import { BarYAxis } from "@/components/charts/bar-y-axis";
+import { Gauge } from "@/components/charts/gauge";
+import { Grid } from "@/components/charts/grid";
+import { Line, LineChart as BklitLineChart } from "@/components/charts/line-chart";
+import { PieCenter } from "@/components/charts/pie-center";
+import { PieChart as BklitPieChart } from "@/components/charts/pie-chart";
+import { PieSlice } from "@/components/charts/pie-slice";
+import { ProfitLossLine } from "@/components/charts/profit-loss-line";
+import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
+import { XAxis } from "@/components/charts/x-axis";
+import { YAxis } from "@/components/charts/y-axis";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   findDefaultChartGroupField,
@@ -55,15 +55,18 @@ interface ChartDatum {
   detail?: string;
 }
 
-interface ChartTooltipEntry {
-  color?: string;
-  payload?: ChartDatum;
+interface ChartSeries {
+  key: string;
+  label: string;
+  color: string;
+  metricLabel: string;
 }
 
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: readonly ChartTooltipEntry[];
-}
+type SeriesChartDatum = Record<string, unknown> & {
+  key: string;
+  label: string;
+  fullLabel?: string;
+};
 
 type CartesianWidthTier = 0 | 1 | 2 | 3 | 4;
 
@@ -121,14 +124,6 @@ const CARTESIAN_TIER_ENTER_WIDTHS = [180, 280, 420, 560] as const;
 const CARTESIAN_TIER_EXIT_WIDTHS = [168, 264, 396, 528] as const;
 const COMPACT_CHART_HORIZONTAL_PADDING = 24;
 const COMPACT_CHART_VERTICAL_PADDING = 22;
-const CHART_TOOLTIP_WRAPPER_STYLE = {
-  zIndex: 3,
-  outline: "none",
-  pointerEvents: "none",
-  transition: "transform 390ms cubic-bezier(0.22, 1, 0.36, 1), opacity 250ms ease-out",
-  willChange: "transform, opacity",
-} satisfies CSSProperties;
-
 export function DatabaseChartView({
   database,
   view,
@@ -154,23 +149,59 @@ export function DatabaseChartView({
   const chartType = view.chartType ?? "bar";
   const chartRange = view.chartRange ?? "90d";
   const aggregation = view.chartAggregation ?? "count";
+  const supportsMultiSeries = chartType === "bar" || chartType === "line";
+  const chartSeriesMode = supportsMultiSeries ? view.chartSeriesMode ?? "single" : "single";
+  const metricAggregation = chartSeriesMode === "multi" && aggregation === "count" ? "sum" : aggregation;
   const palette = CHART_PALETTES[view.chartPalette ?? "blue"];
-  const groupField = database.schema.find((field) => field.id === view.groupBy) ?? findDefaultChartGroupField(database, chartType);
+  const groupField = chartType === "gauge"
+    ? undefined
+    : database.schema.find((field) => field.id === view.groupBy) ?? findDefaultChartGroupField(database, chartType);
   const valueField = database.schema.find((field) => field.id === view.chartValueField) ?? findDefaultChartValueField(database);
+  const multiValueFields = useMemo(
+    () => getSelectedChartValueFields(database, view.chartValueFields, valueField),
+    [database, valueField, view.chartValueFields],
+  );
+  const activeValueFields = chartSeriesMode === "multi" ? multiValueFields : valueField ? [valueField] : [];
   const isValidGroupField = groupField
     ? getChartGroupCandidates(database, chartType).some((field) => field.id === groupField.id)
-    : false;
+    : chartType === "gauge";
   const records = useMemo(() => getViewRecords(database, view, catalog), [catalog, database, view]);
   const chartRecords = useMemo(
     () => filterChartRecords(records, database, catalog, groupField, chartType, chartRange),
     [catalog, chartRange, chartType, database, groupField, records],
   );
   const chartData = useMemo(
-    () => buildChartData(chartRecords, database, catalog, groupField, valueField, aggregation, chartType),
-    [aggregation, catalog, chartRecords, chartType, database, groupField, valueField],
+    () =>
+      chartSeriesMode === "multi"
+        ? buildMultiSeriesChartData(chartRecords, database, catalog, groupField, activeValueFields, metricAggregation, chartType)
+        : buildChartData(chartRecords, database, catalog, groupField, valueField, aggregation, chartType),
+    [activeValueFields, aggregation, catalog, chartRecords, chartSeriesMode, chartType, database, groupField, metricAggregation, valueField],
+  );
+  const gaugeValue = useMemo(
+    () => buildGaugeValue(chartRecords, database, catalog, valueField, aggregation),
+    [aggregation, catalog, chartRecords, database, valueField],
+  );
+  const gaugeTarget = Math.max(view.chartGoalValue ?? 100, 0);
+  const chartSeries = useMemo(
+    () => activeValueFields.map((field, index) => ({
+      key: getSeriesKey(field.id),
+      label: field.name,
+      color: palette[index % palette.length],
+      metricLabel: `${capitalize(metricAggregation)} ${field.name}`,
+    })),
+    [activeValueFields, metricAggregation, palette],
+  );
+  const total = chartData.reduce((sum, datum) => sum + datum.value, 0);
+  const seriesData = useMemo(
+    () => chartData.map((datum, index) => ({
+      ...datum,
+      color: chartType === "line" ? palette[0] : palette[index % palette.length],
+      detail: chartType === "donut" || chartType === "pie" ? formatShare(datum.value, total) : undefined,
+    })),
+    [chartData, chartType, palette, total],
   );
 
-  if (!groupField || !isValidGroupField) {
+  if (chartType !== "gauge" && (!groupField || !isValidGroupField)) {
     return (
       <EmptyState
         title={chartType === "line" ? "Line charts need a date field" : "Chart needs a grouping field"}
@@ -184,17 +215,21 @@ export function DatabaseChartView({
     );
   }
 
-  if (aggregation !== "count" && !valueField) {
+  if ((aggregation !== "count" || chartSeriesMode === "multi") && activeValueFields.length === 0) {
     return (
       <EmptyState
         title="Chart needs a numeric field"
-        description="Choose a number, rollup, or formula field for this chart."
+        description={
+          chartSeriesMode === "multi"
+            ? "Choose at least one number, rollup, or formula field for the chart series."
+            : "Choose a number, rollup, or formula field for this chart."
+        }
         action={{ label: "+ New record", onClick: onCreateRecord }}
       />
     );
   }
 
-  if (chartData.length === 0) {
+  if (chartType !== "gauge" && chartData.length === 0) {
     return (
       <EmptyState
         title="No chart data"
@@ -208,29 +243,28 @@ export function DatabaseChartView({
     );
   }
 
-  const total = chartData.reduce((sum, datum) => sum + datum.value, 0);
   const summaryLabel = aggregation === "count"
-    ? `${total} records`
-    : `${formatAggregateValue(total)} ${aggregation}`;
+    ? chartType === "gauge"
+      ? `${gaugeValue} records`
+      : `${total} records`
+    : chartType === "gauge"
+      ? `${formatAggregateValue(gaugeValue)} ${aggregation}`
+      : `${formatAggregateValue(total)} ${aggregation}`;
   const valueLabel = aggregation === "count"
     ? "Count records"
     : `${capitalize(aggregation)} ${valueField?.name ?? "value"}`;
   const chartContextLabel =
-    chartType === "line" ? `${chartData.length} points` : `${chartData.length} groups`;
+    chartType === "gauge"
+      ? `Target ${formatAggregateValue(gaugeTarget)}`
+      : chartType === "line"
+        ? `${chartData.length} points`
+        : `${chartData.length} groups`;
   const rangeLabel = chartType === "line" ? formatChartRangeLabel(chartRange) : null;
-  const captionParts = [`${valueLabel} by ${groupField.name}`, chartContextLabel, rangeLabel].filter(Boolean);
-  const labelByKey = useMemo(
-    () => new Map(chartData.map((datum) => [datum.key, datum.label])),
-    [chartData],
-  );
-  const seriesData = useMemo(
-    () => chartData.map((datum, index) => ({
-      ...datum,
-      color: chartType === "line" ? palette[0] : palette[index % palette.length],
-      detail: chartType === "donut" ? formatShare(datum.value, total) : undefined,
-    })),
-    [chartData, chartType, palette, total],
-  );
+  const captionParts = [
+    chartType === "gauge" ? valueLabel : `${valueLabel} by ${groupField?.name ?? "group"}`,
+    chartContextLabel,
+    rangeLabel,
+  ].filter(Boolean);
 
   return (
     <div className={`db-chart-root${compact ? " db-chart-root--compact" : ""}`}>
@@ -246,13 +280,12 @@ export function DatabaseChartView({
       <div className="db-chart-surface">
         <div
           ref={frameRef}
-          className={`db-chart-frame${chartType === "donut" ? " db-chart-frame--donut" : " db-chart-frame--cartesian"}`}
+          className={`db-chart-frame${chartType === "donut" || chartType === "pie" || chartType === "gauge" ? " db-chart-frame--donut" : " db-chart-frame--cartesian"}`}
         >
-          {chartType === "donut" ? (
-            <DonutChart
+          {chartType === "donut" || chartType === "pie" ? (
+            <PieChartCard
               data={seriesData}
-              total={total}
-              metricLabel={valueLabel}
+              variant={chartType}
               showLegend={view.chartShowLegend ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
@@ -260,12 +293,26 @@ export function DatabaseChartView({
               compactPixelWidth={resolvedCompactFrameSize.width}
               compactPixelHeight={resolvedCompactFrameSize.height}
             />
+          ) : chartType === "gauge" ? (
+            <GaugeChartCard
+              value={gaugeValue}
+              target={gaugeTarget}
+              label={valueLabel}
+              color={palette[0]}
+              compact={compact}
+              compactPixelWidth={resolvedCompactFrameSize.width}
+              compactPixelHeight={resolvedCompactFrameSize.height}
+            />
           ) : chartType === "line" ? (
             <LineChartCard
               data={seriesData}
+              seriesData={chartData}
+              series={chartSeriesMode === "multi" ? chartSeries : undefined}
+              lineVariant={view.chartLineVariant ?? "standard"}
               metricLabel={valueLabel}
-              labelByKey={labelByKey}
               showGrid={view.chartShowGrid ?? true}
+              showXAxis={view.chartShowXAxis ?? true}
+              showYAxis={view.chartShowYAxis ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
@@ -276,8 +323,10 @@ export function DatabaseChartView({
           ) : (
             <BarChartCard
               data={seriesData}
+              seriesData={chartData}
+              series={chartSeriesMode === "multi" ? chartSeries : undefined}
+              orientation={view.chartOrientation ?? "vertical"}
               metricLabel={valueLabel}
-              labelByKey={labelByKey}
               showGrid={view.chartShowGrid ?? true}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
@@ -294,8 +343,10 @@ export function DatabaseChartView({
 
 function BarChartCard({
   data,
+  seriesData,
+  series,
+  orientation,
   metricLabel,
-  labelByKey,
   showGrid,
   compact,
   compactWidthUnits,
@@ -305,8 +356,10 @@ function BarChartCard({
   compactPixelHeight,
 }: {
   data: ChartDatum[];
+  seriesData?: SeriesChartDatum[];
+  series?: ChartSeries[];
+  orientation: "vertical" | "horizontal";
   metricLabel: string;
-  labelByKey: Map<string, string>;
   showGrid: boolean;
   compact?: boolean;
   compactWidthUnits?: number;
@@ -323,57 +376,93 @@ function BarChartCard({
     compactPixelWidth,
     compactPixelHeight,
   );
-  const tickInterval = Math.max(0, getAxisLabelStep(data.length) - 1);
+  const maxLabels = Math.ceil(data.length / getAxisLabelStep(data.length));
+  const isHorizontal = orientation === "horizontal";
+  const chartData = useMemo(
+    () => series?.length ? (seriesData ?? []).map(toBklitMultiCategoryDatum) : data.map(toBklitCategoryDatum),
+    [data, series, seriesData],
+  );
+  const barWidth = isHorizontal ? undefined : metrics.maxBarSize;
+  const margin = isHorizontal
+    ? {
+        ...metrics.margin,
+        left: compact ? 72 : 96,
+        right: compact ? 18 : 32,
+        bottom: compact ? 14 : 20,
+      }
+    : metrics.margin;
 
   return (
     <div className="db-chart-canvas" style={{ height: `${metrics.height}px` }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={metrics.margin} barCategoryGap={compact ? "26%" : "30%"}>
-          {showGrid ? <CartesianGrid vertical={false} stroke="var(--border-subtle)" className="db-chart-grid" /> : null}
-          <XAxis
-            dataKey="key"
-            tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
-            tickMargin={12}
-            interval={tickInterval}
-            minTickGap={compact ? 10 : 16}
-            tickFormatter={(key) => truncateLabel(labelByKey.get(String(key)) ?? String(key))}
+      <BklitBarChart
+        animationDuration={0}
+        aspectRatio="auto"
+        barWidth={barWidth}
+        className="h-full"
+        data={chartData}
+        margin={margin}
+        orientation={orientation}
+        xDataKey="label"
+      >
+        {showGrid ? (
+          <Grid
+            fadeHorizontal={false}
+            horizontal={!isHorizontal}
+            strokeDasharray="0"
+            vertical={isHorizontal}
           />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
-            tickMargin={8}
-            width={Math.max(metrics.margin.left - 8, 28)}
-            tickFormatter={(value) => formatTick(typeof value === "number" ? value : Number(value))}
-          />
-          <Tooltip
-            cursor={false}
-            wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-            content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
-          />
+        ) : null}
+        {series?.length ? (
+          series.map((item) => (
+            <Bar
+              animate={false}
+              dataKey={item.key}
+              fill={item.color}
+              key={item.key}
+              lineCap={metrics.barRadius}
+              stroke={item.color}
+            />
+          ))
+        ) : (
           <Bar
+            animate={false}
             dataKey="value"
-            radius={[metrics.barRadius, metrics.barRadius, 0, 0]}
-            maxBarSize={metrics.maxBarSize}
-            isAnimationActive={false}
-          >
-            {data.map((datum) => (
-              <Cell key={datum.key} className="db-chart-bar" fill={datum.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+            fill={(datum) => String(datum.color ?? "var(--chart-line-primary)")}
+            lineCap={metrics.barRadius}
+            stroke="var(--chart-line-primary)"
+          />
+        )}
+        {!isHorizontal ? <YAxis formatValue={formatTick} /> : null}
+        {isHorizontal ? <BarYAxis maxLabels={maxLabels} /> : <BarXAxis maxLabels={maxLabels} />}
+        <ChartTooltip
+          content={({ point }) =>
+            series?.length ? (
+              <MultiChartTooltipCard point={point} series={series} />
+            ) : (
+              <ChartTooltipCard
+                color={coerceChartDatum(point)?.color}
+                datum={coerceChartDatum(point)}
+                metricLabel={metricLabel}
+              />
+            )
+          }
+          showDatePill={false}
+          showDots={false}
+        />
+      </BklitBarChart>
     </div>
   );
 }
 
 function LineChartCard({
   data,
+  seriesData,
+  series,
+  lineVariant,
   metricLabel,
-  labelByKey,
   showGrid,
+  showXAxis,
+  showYAxis,
   compact,
   compactWidthUnits,
   compactHeightUnits,
@@ -382,9 +471,13 @@ function LineChartCard({
   compactPixelHeight,
 }: {
   data: ChartDatum[];
+  seriesData?: SeriesChartDatum[];
+  series?: ChartSeries[];
+  lineVariant: "standard" | "profitLoss";
   metricLabel: string;
-  labelByKey: Map<string, string>;
   showGrid: boolean;
+  showXAxis: boolean;
+  showYAxis: boolean;
   compact?: boolean;
   compactWidthUnits?: number;
   compactHeightUnits?: number;
@@ -400,77 +493,95 @@ function LineChartCard({
     compactPixelWidth,
     compactPixelHeight,
   );
-  const gradientId = useId();
   const lineColor = data[0]?.color ?? "var(--accent)";
-  const tickInterval = Math.max(0, getAxisLabelStep(data.length) - 1);
+  const isProfitLoss = lineVariant === "profitLoss" && !series?.length;
+  const chartData = useMemo(
+    () => series?.length ? (seriesData ?? []).map(toBklitMultiTimeDatum) : data.map(toBklitTimeDatum),
+    [data, series, seriesData],
+  );
+  const numTicks = Math.max(2, Math.min(5, Math.ceil(data.length / getAxisLabelStep(data.length))));
 
   return (
     <div className="db-chart-canvas" style={{ height: `${metrics.height}px` }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={metrics.margin}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={lineColor} stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          {showGrid ? <CartesianGrid vertical={false} stroke="var(--border-subtle)" className="db-chart-grid" /> : null}
-          <XAxis
-            dataKey="key"
-            tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
-            tickMargin={12}
-            interval={tickInterval}
-            minTickGap={compact ? 10 : 16}
-            tickFormatter={(key) => truncateLabel(labelByKey.get(String(key)) ?? String(key))}
+      <BklitLineChart
+        animationDuration={0}
+        aspectRatio="auto"
+        className="h-full"
+        data={chartData}
+        margin={metrics.margin}
+        xDataKey="date"
+      >
+        {showGrid ? (
+          <Grid
+            fadeHorizontal={false}
+            highlightRowStroke="var(--text)"
+            highlightRowStrokeOpacity={0.35}
+            highlightRowValues={isProfitLoss ? [0] : undefined}
+            horizontal
+            strokeDasharray="0"
           />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "var(--overlay-1)", fontSize: 10 }}
-            tickMargin={8}
-            width={Math.max(metrics.margin.left - 8, 28)}
-            tickFormatter={(value) => formatTick(typeof value === "number" ? value : Number(value))}
-          />
-          <Tooltip
-            cursor={false}
-            wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-            content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
-          />
-          <Area
-            type="monotone"
+        ) : null}
+        {series?.length ? (
+          series.map((item) => (
+            <Line
+              animate={false}
+              dataKey={item.key}
+              key={item.key}
+              showMarkers={false}
+              stroke={item.color}
+              strokeWidth={2.5}
+            />
+          ))
+        ) : isProfitLoss ? (
+          <>
+            <Line
+              animate={false}
+              dataKey="value"
+              fadeEdges={false}
+              showHighlight={false}
+              stroke="transparent"
+              strokeWidth={0}
+            />
+            <ProfitLossLine
+              dataKey="value"
+              negativeColor="var(--red)"
+              positiveColor="var(--green)"
+              strokeWidth={3}
+            />
+          </>
+        ) : (
+          <Line
+            animate={false}
             dataKey="value"
+            showMarkers={false}
             stroke={lineColor}
             strokeWidth={3}
-            fill={`url(#${gradientId})`}
-            fillOpacity={1}
-            isAnimationActive={false}
-            dot={{
-              r: 4,
-              fill: lineColor,
-              stroke: "var(--mantle)",
-              strokeWidth: 2,
-              className: "db-chart-point",
-            }}
-            activeDot={{
-              r: 5,
-              fill: lineColor,
-              stroke: "var(--mantle)",
-              strokeWidth: 2,
-              className: "db-chart-point",
-            }}
           />
-        </AreaChart>
-      </ResponsiveContainer>
+        )}
+        {showYAxis ? <YAxis formatValue={formatTick} /> : null}
+        {showXAxis ? <XAxis numTicks={numTicks} tickMode="data" /> : null}
+        <ChartTooltip
+          content={({ point }) =>
+            series?.length ? (
+              <MultiChartTooltipCard point={point} series={series} />
+            ) : (
+              <ChartTooltipCard
+                color={lineColor}
+                datum={coerceChartDatum(point)}
+                metricLabel={metricLabel}
+              />
+            )
+          }
+          showDatePill={false}
+        />
+      </BklitLineChart>
     </div>
   );
 }
 
-function DonutChart({
+function PieChartCard({
   data,
-  total,
-  metricLabel,
+  variant,
   showLegend,
   compact,
   compactWidthUnits,
@@ -479,8 +590,7 @@ function DonutChart({
   compactPixelHeight,
 }: {
   data: ChartDatum[];
-  total: number;
-  metricLabel: string;
+  variant: "donut" | "pie";
   showLegend: boolean;
   compact?: boolean;
   compactWidthUnits?: number;
@@ -512,6 +622,9 @@ function DonutChart({
         ? " db-chart-donut-layout--stacked"
         : "";
   const compactClass = compact ? " db-chart-donut-layout--compact" : "";
+  const chartSize = Math.min(config.chartWidth, config.height);
+  const innerRadius = variant === "donut" ? config.innerRadius : 0;
+  const chartData = useMemo(() => data.map(toBklitPieDatum), [data]);
   const canvasStyle = {
     width: `${config.chartWidth}px`,
     height: `${config.height}px`,
@@ -520,38 +633,41 @@ function DonutChart({
   return (
     <div className={`db-chart-donut-layout${layoutClass}${compactClass}`}>
       <div className="db-chart-donut-canvas" style={canvasStyle}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
-            <Tooltip
-              cursor={false}
-              wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-              content={(props) => <ChartTooltipCard {...props} metricLabel={metricLabel} />}
+        <BklitPieChart
+          className="h-full w-full"
+          cornerRadius={3}
+          data={chartData}
+          hoverOffset={4}
+          innerRadius={innerRadius}
+          padAngle={data.length > 1 ? 0.02 : 0}
+          size={chartSize}
+        >
+          {data.map((datum, index) => (
+            <PieSlice
+              animate={false}
+              color={datum.color}
+              hoverEffect="translate"
+              hoverOffset={4}
+              index={index}
+              key={datum.key}
+              showGlow={false}
             />
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="label"
-              cx="50%"
-              cy="50%"
-              startAngle={90}
-              endAngle={-270}
-              innerRadius={config.innerRadius}
-              outerRadius={config.outerRadius}
-              paddingAngle={data.length > 1 ? 1.2 : 0}
-              cornerRadius={3}
-              stroke="none"
-              isAnimationActive={false}
+          ))}
+          {variant === "donut" ? (
+            <PieCenter
+              defaultLabel="Total"
+              labelClassName="db-chart-donut-caption"
+              valueClassName="db-chart-donut-total"
             >
-              {data.map((datum) => (
-                <Cell key={datum.key} className="db-chart-donut-segment" fill={datum.color} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="db-chart-donut-center">
-          <div className="db-chart-donut-total">{formatAggregateValue(total)}</div>
-          <div className="db-chart-donut-caption">Total</div>
-        </div>
+              {({ value, label }) => (
+                <div className="flex flex-col items-center justify-center text-center">
+                  <span className="db-chart-donut-total">{formatAggregateValue(value)}</span>
+                  <span className="db-chart-donut-caption">{label}</span>
+                </div>
+              )}
+            </PieCenter>
+          ) : null}
+        </BklitPieChart>
       </div>
 
       {config.showLegend ? (
@@ -573,19 +689,77 @@ function DonutChart({
   );
 }
 
+function GaugeChartCard({
+  value,
+  target,
+  label,
+  color,
+  compact,
+  compactPixelWidth,
+  compactPixelHeight,
+}: {
+  value: number;
+  target: number;
+  label: string;
+  color: string;
+  compact?: boolean;
+  compactPixelWidth?: number;
+  compactPixelHeight?: number;
+}) {
+  const width = Math.max(compactPixelWidth ?? 320, compact ? 180 : 280);
+  const height = Math.max(Math.min(compactPixelHeight ?? 300, compact ? 260 : 340), compact ? 170 : 240);
+  const size = Math.min(width, height);
+  const percent = target > 0 ? Math.max(0, Math.min(100, (value / target) * 100)) : 0;
+
+  return (
+    <div className={`db-chart-donut-layout${compact ? " db-chart-donut-layout--compact" : " db-chart-donut-layout--side"}`}>
+      <div className="db-chart-donut-canvas" style={{ width: `${size}px`, height: `${height}px` }}>
+        <Gauge
+          activeFill={color}
+          centerValue={value}
+          className="h-full w-full"
+          defaultLabel={label}
+          height={size}
+          inactiveFill="var(--surface-wash)"
+          inactiveFillOpacity={0.55}
+          minWidth={0}
+          notchCornerRadius={3}
+          spacing={28}
+          suffix=""
+          totalNotches={44}
+          value={percent}
+          width={size}
+        />
+      </div>
+      {!compact ? (
+        <div className="db-chart-legend">
+          <div className="db-chart-legend-row">
+            <span aria-hidden className="db-chart-legend-swatch" style={{ backgroundColor: color }} />
+            <span className="db-chart-legend-label">Progress</span>
+            <span className="db-chart-legend-value">{formatAggregateValue(percent)}%</span>
+          </div>
+          <div className="db-chart-legend-row">
+            <span aria-hidden className="db-chart-legend-swatch" style={{ backgroundColor: "var(--surface-wash)" }} />
+            <span className="db-chart-legend-label">Target</span>
+            <span className="db-chart-legend-value">{formatAggregateValue(target)}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ChartTooltipCard({
-  active,
-  payload,
+  color,
+  datum,
   metricLabel,
-}: ChartTooltipProps & {
+}: {
+  color?: string;
+  datum: ChartDatum | null;
   metricLabel: string;
 }) {
-  if (!active || !payload?.length) return null;
-
-  const entry = payload[0];
-  const datum = entry.payload;
   if (!datum) return null;
-  const color = entry.color ?? datum.color ?? "var(--accent)";
+  const swatchColor = color ?? datum.color ?? "var(--accent)";
 
   return (
     <div className="db-chart-tooltip">
@@ -593,7 +767,7 @@ function ChartTooltipCard({
         <span
           aria-hidden
           className="db-chart-tooltip-swatch"
-          style={{ backgroundColor: color }}
+          style={{ backgroundColor: swatchColor }}
         />
         <span className="db-chart-tooltip-label">{datum.label}</span>
       </div>
@@ -604,6 +778,93 @@ function ChartTooltipCard({
       {datum.detail ? <div className="db-chart-tooltip-detail">{datum.detail}</div> : null}
     </div>
   );
+}
+
+function MultiChartTooltipCard({
+  point,
+  series,
+}: {
+  point: Record<string, unknown>;
+  series: ChartSeries[];
+}) {
+  const title = String(point.fullLabel ?? point.label ?? point.key ?? "Value");
+
+  return (
+    <div className="db-chart-tooltip">
+      <div className="db-chart-tooltip-title">
+        <span className="db-chart-tooltip-label">{title}</span>
+      </div>
+      {series.map((item) => {
+        const value = point[item.key];
+        if (typeof value !== "number" || !Number.isFinite(value)) return null;
+
+        return (
+          <div className="db-chart-tooltip-row" key={item.key}>
+            <span className="db-chart-tooltip-metric">
+              <span
+                aria-hidden
+                className="db-chart-tooltip-swatch"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.label}
+            </span>
+            <span className="db-chart-tooltip-value">{formatAggregateValue(value)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function toBklitCategoryDatum(datum: ChartDatum): Record<string, unknown> {
+  return {
+    ...datum,
+    fullLabel: datum.label,
+    label: truncateLabel(datum.label),
+  };
+}
+
+function toBklitMultiCategoryDatum(datum: SeriesChartDatum): Record<string, unknown> {
+  return {
+    ...datum,
+    fullLabel: datum.label,
+    label: truncateLabel(datum.label),
+  };
+}
+
+function toBklitTimeDatum(datum: ChartDatum): Record<string, unknown> {
+  return {
+    ...datum,
+    date: normalizeChartDateKey(datum.key),
+  };
+}
+
+function toBklitMultiTimeDatum(datum: SeriesChartDatum): Record<string, unknown> {
+  return {
+    ...datum,
+    date: normalizeChartDateKey(datum.key),
+  };
+}
+
+function toBklitPieDatum(datum: ChartDatum) {
+  return {
+    label: datum.label,
+    value: datum.value,
+    color: datum.color,
+  };
+}
+
+function coerceChartDatum(point: Record<string, unknown>): ChartDatum | null {
+  const value = point.value;
+  if (typeof value !== "number") return null;
+
+  return {
+    key: String(point.key ?? point.label ?? ""),
+    label: String(point.fullLabel ?? point.label ?? point.key ?? "Value"),
+    value,
+    color: typeof point.color === "string" ? point.color : undefined,
+    detail: typeof point.detail === "string" ? point.detail : undefined,
+  };
 }
 
 function useMeasuredElementSize<T extends HTMLElement>(enabled = true) {
@@ -771,13 +1032,97 @@ function buildChartData(
       label: bucket.label,
       value: aggregateBucket(bucket, aggregation),
     }))
-    .filter((datum) => Number.isFinite(datum.value) && datum.value > 0);
+    .filter((datum) =>
+      Number.isFinite(datum.value) &&
+      (chartType !== "line" || isValidChartDateKey(datum.key)) &&
+      (chartType === "line" || datum.value > 0)
+    );
 
   if (groupField.type === "date" || chartType === "line") {
     return data.sort((left, right) => compareChartKeys(left.key, right.key));
   }
 
   return data.sort((left, right) => right.value - left.value || left.label.localeCompare(right.label));
+}
+
+function buildMultiSeriesChartData(
+  records: WorkspaceDatabaseRecordModel[],
+  database: WorkspaceDatabaseModel,
+  catalog: WorkspaceDatabaseCatalogEntry[],
+  groupField: WorkspaceDatabaseField | undefined,
+  valueFields: WorkspaceDatabaseField[],
+  aggregation: WorkspaceDatabaseChartAggregation,
+  chartType: WorkspaceDatabaseModel["views"][number]["chartType"],
+) {
+  if (!groupField || valueFields.length === 0) return [];
+
+  const buckets = new Map<string, { label: string; values: Record<string, number[]>; count: number }>();
+
+  for (const record of records) {
+    const groups = getBucketEntries(record, groupField, database, catalog);
+    if (groups.length === 0) continue;
+
+    for (const group of groups) {
+      const existing = buckets.get(group.key) ?? { label: group.label, values: {}, count: 0 };
+      existing.count += 1;
+
+      for (const field of valueFields) {
+        const numericValue = getNumericValue(record, field, database, catalog);
+        if (numericValue === null) continue;
+        const key = getSeriesKey(field.id);
+        existing.values[key] = existing.values[key] ?? [];
+        existing.values[key].push(numericValue);
+      }
+
+      buckets.set(group.key, existing);
+    }
+  }
+
+  const data = [...buckets.entries()]
+    .map(([key, bucket]) => {
+      const datum: SeriesChartDatum & { value: number } = {
+        key,
+        label: bucket.label,
+        value: 0,
+      };
+
+      for (const field of valueFields) {
+        const seriesKey = getSeriesKey(field.id);
+        const value = aggregateBucket({ values: bucket.values[seriesKey] ?? [], count: bucket.count }, aggregation);
+        datum[seriesKey] = value;
+        datum.value += value;
+      }
+
+      return datum;
+    })
+    .filter((datum) =>
+      Number.isFinite(datum.value) &&
+      (chartType !== "line" || isValidChartDateKey(datum.key)) &&
+      (chartType === "line" || datum.value > 0)
+    );
+
+  if (groupField.type === "date" || chartType === "line") {
+    return data.sort((left, right) => compareChartKeys(left.key, right.key));
+  }
+
+  return data.sort((left, right) => right.value - left.value || left.label.localeCompare(right.label));
+}
+
+function buildGaugeValue(
+  records: WorkspaceDatabaseRecordModel[],
+  database: WorkspaceDatabaseModel,
+  catalog: WorkspaceDatabaseCatalogEntry[],
+  valueField: WorkspaceDatabaseField | undefined,
+  aggregation: WorkspaceDatabaseChartAggregation,
+) {
+  if (aggregation === "count") return records.length;
+  if (!valueField) return 0;
+
+  const values = records
+    .map((record) => getNumericValue(record, valueField, database, catalog))
+    .filter((value): value is number => value !== null);
+
+  return aggregateBucket({ values, count: records.length }, aggregation);
 }
 
 function filterChartRecords(
@@ -801,6 +1146,28 @@ function filterChartRecords(
     const time = Date.parse(value);
     return Number.isFinite(time) && time >= cutoff;
   });
+}
+
+function getSelectedChartValueFields(
+  database: WorkspaceDatabaseModel,
+  selectedIds: string[] | undefined,
+  fallbackField: WorkspaceDatabaseField | undefined,
+) {
+  const fieldsById = new Map(database.schema.map((field) => [field.id, field]));
+  const selectedFields = (selectedIds ?? [])
+    .map((fieldId) => fieldsById.get(fieldId))
+    .filter((field): field is WorkspaceDatabaseField => field !== undefined && isNumericChartField(field));
+
+  if (selectedFields.length > 0) return selectedFields;
+  return fallbackField && isNumericChartField(fallbackField) ? [fallbackField] : [];
+}
+
+function isNumericChartField(field: WorkspaceDatabaseField) {
+  return field.type === "number" || field.type === "rollup" || field.type === "formula";
+}
+
+function getSeriesKey(fieldId: string) {
+  return `series_${fieldId.replace(/[^a-zA-Z0-9_]/g, "_")}`;
 }
 
 function aggregateBucket(
@@ -1124,7 +1491,16 @@ function getDonutLegendPlacement(
 }
 
 function getDonutInnerRadius(outerRadius: number, minInnerRadius = 0) {
-  return Math.max(Math.floor(outerRadius * 0.7), minInnerRadius);
+  return Math.max(Math.floor(outerRadius * 0.9), minInnerRadius);
+}
+
+function normalizeChartDateKey(key: string): Date {
+  const date = new Date(key);
+  return Number.isFinite(date.getTime()) ? date : new Date(0);
+}
+
+function isValidChartDateKey(key: string): boolean {
+  return Number.isFinite(Date.parse(key));
 }
 
 function getCompactBarScale(

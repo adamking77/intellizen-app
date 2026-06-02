@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
 import type {
+  WorkspaceDatabaseChartType,
   WorkspaceDatabaseField,
   WorkspaceDatabaseModel,
   WorkspaceDatabaseViewConfig,
@@ -61,6 +62,18 @@ const VIEW_DEFAULT_NAMES: Record<WorkspaceDatabaseViewType, string> = {
   chart: "Chart",
   timeline: "Timeline",
 };
+
+const CHART_TYPE_OPTIONS: Array<{
+  value: WorkspaceDatabaseChartType;
+  label: string;
+  description: string;
+}> = [
+  { value: "bar", label: "Bar", description: "Compare groups or multiple fields." },
+  { value: "line", label: "Line", description: "Trend one or more metrics over time." },
+  { value: "donut", label: "Donut", description: "Show share with a center total." },
+  { value: "pie", label: "Pie", description: "Show share as a solid pie." },
+  { value: "gauge", label: "Gauge", description: "Track progress against a target." },
+];
 
 function getViewTabLabel(view: WorkspaceDatabaseModel["views"][number]): string {
   const aliases = {
@@ -788,6 +801,17 @@ function ViewSettingsModal({
   const isGallery = activeView.type === "gallery";
   const isChart = activeView.type === "chart";
   const isTimeline = activeView.type === "timeline";
+  const chartSeriesMode = chartType === "bar" || chartType === "line" ? activeView.chartSeriesMode ?? "single" : "single";
+  const chartLineVariant = chartType === "line" ? activeView.chartLineVariant ?? "standard" : "standard";
+  const selectedChartValueFields = activeView.chartValueFields ?? (activeView.chartValueField ? [activeView.chartValueField] : []);
+  const chartNeedsNumericField =
+    chartSeriesMode === "multi" || chartLineVariant === "profitLoss" || (activeView.chartAggregation ?? "count") !== "count";
+  const chartShowsTimeRange = chartType === "line";
+  const chartShowsGrid = chartType === "bar" || chartType === "line";
+  const chartShowsLegend = chartType === "donut" || chartType === "pie";
+  const chartShowsGoal = chartType === "gauge";
+  const chartShowsOrientation = chartType === "bar";
+  const chartShowsLineOptions = chartType === "line";
   const supportsCardFields = activeView.type === "gallery" || activeView.type === "kanban";
   const dateFields = database.schema.filter((f) => f.type === "date");
   const timelineLabelFields = database.schema.filter(
@@ -904,133 +928,305 @@ function ViewSettingsModal({
 
                 {isChart ? (
                   <>
-                    <label className="grid gap-1.5">
+                    <div className="grid gap-2">
                       <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Chart type
                       </span>
-                      <select
-                        className="db-select"
-                        value={activeView.chartType ?? "bar"}
-                        onChange={(event) => {
-                          const nextType = event.target.value as "bar" | "line" | "donut";
-                          const nextCandidates = getChartGroupCandidates(database, nextType);
-                          const currentGroupIsValid = nextCandidates.some((field) => field.id === activeView.groupBy);
-                          onUpdateViewConfig({
-                            chartType: nextType,
-                            groupBy: currentGroupIsValid
-                              ? activeView.groupBy
-                              : findDefaultChartGroupField(database, nextType)?.id,
-                          });
-                        }}
-                      >
-                        <option value="bar">Bar</option>
-                        <option value="line">Line</option>
-                        <option value="donut">Donut</option>
-                      </select>
-                    </label>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {CHART_TYPE_OPTIONS.map((option) => {
+                          const selected = chartType === option.value;
+                          return (
+                            <button
+                              className={cn(
+                                "grid min-h-[76px] gap-1 rounded-md border p-3 text-left transition-colors duration-150",
+                                selected
+                                  ? "border-[var(--border)] bg-[var(--base)] text-[var(--text)]"
+                                  : "border-transparent bg-transparent text-[var(--subtext-0)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                              )}
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                const nextType = option.value;
+                                const nextCandidates = getChartGroupCandidates(database, nextType);
+                                const currentGroupIsValid = nextCandidates.some((field) => field.id === activeView.groupBy);
+                                const nextSeriesMode = nextType === "bar" || nextType === "line"
+                                  ? activeView.chartSeriesMode ?? "single"
+                                  : "single";
+                                onUpdateViewConfig({
+                                  chartType: nextType,
+                                  chartSeriesMode: nextSeriesMode,
+                                  groupBy: nextType === "gauge"
+                                    ? undefined
+                                    : currentGroupIsValid
+                                      ? activeView.groupBy
+                                      : findDefaultChartGroupField(database, nextType)?.id,
+                                });
+                              }}
+                            >
+                              <span className="text-[13px] font-semibold">{option.label}</span>
+                              <span className="text-[11px] leading-4 text-[var(--overlay-1)]">{option.description}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                    <label className="grid gap-1.5">
-                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                        Value mode
-                      </span>
-                      <select
-                        className="db-select"
-                        value={activeView.chartAggregation ?? "count"}
-                        onChange={(event) =>
-                          onUpdateViewConfig({
-                            chartAggregation: event.target.value as "count" | "sum" | "avg" | "min" | "max",
-                          })
-                        }
-                      >
-                        <option value="count">Count records</option>
-                        <option value="sum">Sum field</option>
-                        <option value="avg">Average field</option>
-                        <option value="min">Minimum field</option>
-                        <option value="max">Maximum field</option>
-                      </select>
-                    </label>
+                    <div className="grid gap-3 pt-1">
+                      <div>
+                        <h5 className="text-[12px] font-semibold text-[var(--text)]">Data</h5>
+                      </div>
 
-                    {(activeView.chartAggregation ?? "count") !== "count" ? (
+                      {chartType === "bar" || chartType === "line" ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Series
+                          </span>
+                          <select
+                            className="db-select"
+                            value={chartSeriesMode}
+                            onChange={(event) => {
+                              const nextMode = event.target.value as "single" | "multi";
+                              onUpdateViewConfig({
+                                chartSeriesMode: nextMode,
+                                chartAggregation:
+                                  nextMode === "multi" && (activeView.chartAggregation ?? "count") === "count"
+                                    ? "sum"
+                                    : activeView.chartAggregation,
+                              });
+                            }}
+                          >
+                            <option value="single">Single metric</option>
+                            <option value="multi">{chartType === "bar" ? "Multi-bar" : "Multi-line"} fields</option>
+                          </select>
+                        </label>
+                      ) : null}
+
                       <label className="grid gap-1.5">
                         <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                          Numeric field
+                          Value mode
                         </span>
                         <select
                           className="db-select"
-                          value={activeView.chartValueField ?? ""}
-                          onChange={(event) =>
-                            onUpdateViewConfig({ chartValueField: event.target.value || undefined })
-                          }
-                        >
-                          <option value="">Select field...</option>
-                          {chartValueCandidates.map((field) => (
-                            <option key={field.id} value={field.id}>
-                              {field.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-
-                    <label className="grid gap-1.5">
-                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                        Palette
-                      </span>
-                      <select
-                        className="db-select"
-                        value={activeView.chartPalette ?? "blue"}
-                        onChange={(event) =>
-                          onUpdateViewConfig({
-                            chartPalette: event.target.value as "blue" | "rose" | "gold" | "teal",
-                          })
-                        }
-                      >
-                        <option value="blue">Blue</option>
-                        <option value="rose">Rose</option>
-                        <option value="gold">Gold</option>
-                        <option value="teal">Teal</option>
-                      </select>
-                    </label>
-
-                    {chartType === "line" ? (
-                      <label className="grid gap-1.5">
-                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                          Time range
-                        </span>
-                        <select
-                          className="db-select"
-                          value={activeView.chartRange ?? "90d"}
+                          value={activeView.chartAggregation ?? "count"}
                           onChange={(event) =>
                             onUpdateViewConfig({
-                              chartRange: event.target.value as "30d" | "90d" | "365d" | "all",
+                              chartAggregation: event.target.value as "count" | "sum" | "avg" | "min" | "max",
                             })
                           }
                         >
-                          <option value="30d">Last 30 days</option>
-                          <option value="90d">Last 90 days</option>
-                          <option value="365d">Last year</option>
-                          <option value="all">All time</option>
+                          {chartSeriesMode === "single" && chartLineVariant !== "profitLoss" ? <option value="count">Count records</option> : null}
+                          <option value="sum">Sum field</option>
+                          <option value="avg">Average field</option>
+                          <option value="min">Minimum field</option>
+                          <option value="max">Maximum field</option>
                         </select>
                       </label>
-                    ) : null}
 
-                    <div className="grid gap-2">
-                      <label className="db-fields-row">
-                        <input
-                          type="checkbox"
-                          checked={activeView.chartShowGrid ?? true}
-                          onChange={(event) => onUpdateViewConfig({ chartShowGrid: event.target.checked })}
-                        />
-                        <span className="db-fields-name">Show grid</span>
+                      {chartSeriesMode === "multi" ? (
+                        <div className="grid gap-2">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Numeric fields
+                          </span>
+                          <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md bg-[var(--base)] p-2">
+                            {chartValueCandidates.map((field) => {
+                              const checked = selectedChartValueFields.includes(field.id);
+                              return (
+                                <label className="db-fields-row" key={field.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) => {
+                                      const nextFields = event.target.checked
+                                        ? [...selectedChartValueFields, field.id]
+                                        : selectedChartValueFields.filter((fieldId) => fieldId !== field.id);
+                                      onUpdateViewConfig({
+                                        chartValueFields: nextFields,
+                                        chartValueField: nextFields[0] ?? activeView.chartValueField,
+                                      });
+                                    }}
+                                  />
+                                  <span className="db-fields-name">{field.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : chartNeedsNumericField ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Numeric field
+                          </span>
+                          <select
+                            className="db-select"
+                            value={activeView.chartValueField ?? ""}
+                            onChange={(event) =>
+                              onUpdateViewConfig({ chartValueField: event.target.value || undefined })
+                            }
+                          >
+                            <option value="">Select field...</option>
+                            {chartValueCandidates.map((field) => (
+                              <option key={field.id} value={field.id}>
+                                {field.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+
+                      {chartShowsGoal ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Gauge target
+                          </span>
+                          <Input
+                            min={0}
+                            type="number"
+                            value={activeView.chartGoalValue ?? 100}
+                            onChange={(event) =>
+                              onUpdateViewConfig({
+                                chartGoalValue: Number.isFinite(event.target.valueAsNumber)
+                                  ? event.target.valueAsNumber
+                                  : undefined,
+                              })
+                            }
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 pt-2">
+                      <h5 className="text-[12px] font-semibold text-[var(--text)]">Display</h5>
+                      {chartShowsLineOptions ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Line style
+                          </span>
+                          <select
+                            className="db-select"
+                            value={chartLineVariant}
+                            onChange={(event) => {
+                              const nextVariant = event.target.value as "standard" | "profitLoss";
+                              onUpdateViewConfig({
+                                chartLineVariant: nextVariant,
+                                chartSeriesMode: nextVariant === "profitLoss" ? "single" : activeView.chartSeriesMode,
+                                chartAggregation:
+                                  nextVariant === "profitLoss" && (activeView.chartAggregation ?? "count") === "count"
+                                    ? "sum"
+                                    : activeView.chartAggregation,
+                              });
+                            }}
+                          >
+                            <option value="standard">
+                              {chartSeriesMode === "multi" ? "Multiple lines" : "Standard line"}
+                            </option>
+                            <option value="profitLoss">Profit / Loss</option>
+                          </select>
+                        </label>
+                      ) : null}
+                      {chartShowsOrientation ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Bar direction
+                          </span>
+                          <select
+                            className="db-select"
+                            value={activeView.chartOrientation ?? "vertical"}
+                            onChange={(event) =>
+                              onUpdateViewConfig({
+                                chartOrientation: event.target.value as "vertical" | "horizontal",
+                              })
+                            }
+                          >
+                            <option value="vertical">Vertical bars</option>
+                            <option value="horizontal">Horizontal bars</option>
+                          </select>
+                        </label>
+                      ) : null}
+
+                      <label className="grid gap-1.5">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          Palette
+                        </span>
+                        <select
+                          className="db-select"
+                          value={activeView.chartPalette ?? "blue"}
+                          onChange={(event) =>
+                            onUpdateViewConfig({
+                              chartPalette: event.target.value as "blue" | "rose" | "gold" | "teal",
+                            })
+                          }
+                        >
+                          <option value="blue">Blue</option>
+                          <option value="rose">Rose</option>
+                          <option value="gold">Gold</option>
+                          <option value="teal">Teal</option>
+                        </select>
                       </label>
-                      <label className="db-fields-row">
-                        <input
-                          type="checkbox"
-                          checked={activeView.chartShowLegend ?? true}
-                          onChange={(event) => onUpdateViewConfig({ chartShowLegend: event.target.checked })}
-                        />
-                        <span className="db-fields-name">Show legend</span>
-                      </label>
+
+                      {chartShowsTimeRange ? (
+                        <label className="grid gap-1.5">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            Time range
+                          </span>
+                          <select
+                            className="db-select"
+                            value={activeView.chartRange ?? "90d"}
+                            onChange={(event) =>
+                              onUpdateViewConfig({
+                                chartRange: event.target.value as "30d" | "90d" | "365d" | "all",
+                              })
+                            }
+                          >
+                            <option value="30d">Last 30 days</option>
+                            <option value="90d">Last 90 days</option>
+                            <option value="365d">Last year</option>
+                            <option value="all">All time</option>
+                          </select>
+                        </label>
+                      ) : null}
+
+                      <div className="grid gap-2">
+                        {chartShowsLineOptions ? (
+                          <>
+                            <label className="db-fields-row">
+                              <input
+                                type="checkbox"
+                                checked={activeView.chartShowXAxis ?? true}
+                                onChange={(event) => onUpdateViewConfig({ chartShowXAxis: event.target.checked })}
+                              />
+                              <span className="db-fields-name">Show X axis</span>
+                            </label>
+                            <label className="db-fields-row">
+                              <input
+                                type="checkbox"
+                                checked={activeView.chartShowYAxis ?? true}
+                                onChange={(event) => onUpdateViewConfig({ chartShowYAxis: event.target.checked })}
+                              />
+                              <span className="db-fields-name">Show Y axis</span>
+                            </label>
+                          </>
+                        ) : null}
+                        {chartShowsGrid ? (
+                          <label className="db-fields-row">
+                            <input
+                              type="checkbox"
+                              checked={activeView.chartShowGrid ?? true}
+                              onChange={(event) => onUpdateViewConfig({ chartShowGrid: event.target.checked })}
+                            />
+                            <span className="db-fields-name">Show grid</span>
+                          </label>
+                        ) : null}
+                        {chartShowsLegend ? (
+                          <label className="db-fields-row">
+                            <input
+                              type="checkbox"
+                              checked={activeView.chartShowLegend ?? true}
+                              onChange={(event) => onUpdateViewConfig({ chartShowLegend: event.target.checked })}
+                            />
+                            <span className="db-fields-name">Show legend</span>
+                          </label>
+                        ) : null}
+                      </div>
                     </div>
                   </>
                 ) : null}

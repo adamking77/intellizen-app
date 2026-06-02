@@ -78,7 +78,14 @@ function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceD
     cardFields: view.cardFields,
     chartType: view.chartType,
     chartValueField: view.chartValueField,
+    chartValueFields: view.chartValueFields,
     chartAggregation: view.chartAggregation,
+    chartSeriesMode: view.chartSeriesMode,
+    chartOrientation: view.chartOrientation,
+    chartLineVariant: view.chartLineVariant,
+    chartShowXAxis: view.chartShowXAxis,
+    chartShowYAxis: view.chartShowYAxis,
+    chartGoalValue: view.chartGoalValue,
     chartShowLegend: view.chartShowLegend,
     chartShowGrid: view.chartShowGrid,
     chartPalette: view.chartPalette,
@@ -796,8 +803,24 @@ export function DatabaseEditorView({
           chartType: type === "chart" ? defaultChartType : activeView.chartType,
           chartValueField:
             type === "chart" ? activeView.chartValueField ?? defaultChartValueField?.id : activeView.chartValueField,
+          chartValueFields:
+            type === "chart"
+              ? activeView.chartValueFields ?? (defaultChartValueField ? [defaultChartValueField.id] : undefined)
+              : activeView.chartValueFields,
           chartAggregation:
             type === "chart" ? activeView.chartAggregation ?? "count" : activeView.chartAggregation,
+          chartSeriesMode:
+            type === "chart" ? activeView.chartSeriesMode ?? "single" : activeView.chartSeriesMode,
+          chartOrientation:
+            type === "chart" ? activeView.chartOrientation ?? "vertical" : activeView.chartOrientation,
+          chartLineVariant:
+            type === "chart" ? activeView.chartLineVariant ?? "standard" : activeView.chartLineVariant,
+          chartShowXAxis:
+            type === "chart" ? activeView.chartShowXAxis ?? true : activeView.chartShowXAxis,
+          chartShowYAxis:
+            type === "chart" ? activeView.chartShowYAxis ?? true : activeView.chartShowYAxis,
+          chartGoalValue:
+            type === "chart" ? activeView.chartGoalValue ?? 100 : activeView.chartGoalValue,
           chartShowLegend: type === "chart" ? activeView.chartShowLegend ?? true : activeView.chartShowLegend,
           chartShowGrid: type === "chart" ? activeView.chartShowGrid ?? true : activeView.chartShowGrid,
           chartPalette: type === "chart" ? activeView.chartPalette ?? "blue" : activeView.chartPalette,

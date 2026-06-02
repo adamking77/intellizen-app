@@ -1591,10 +1591,17 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
       ? candidate.cardFields.filter((item): item is string => typeof item === "string")
       : undefined,
     chartType:
-      candidate.chartType === "bar" || candidate.chartType === "line" || candidate.chartType === "donut"
+      candidate.chartType === "bar" ||
+      candidate.chartType === "line" ||
+      candidate.chartType === "donut" ||
+      candidate.chartType === "pie" ||
+      candidate.chartType === "gauge"
         ? candidate.chartType
         : undefined,
     chartValueField: typeof candidate.chartValueField === "string" ? candidate.chartValueField : undefined,
+    chartValueFields: Array.isArray(candidate.chartValueFields)
+      ? candidate.chartValueFields.filter((item): item is string => typeof item === "string")
+      : undefined,
     chartAggregation:
       candidate.chartAggregation === "count" ||
       candidate.chartAggregation === "sum" ||
@@ -1602,6 +1609,26 @@ function coerceViewConfig(value: unknown): WorkspaceDatabaseViewConfig {
       candidate.chartAggregation === "min" ||
       candidate.chartAggregation === "max"
         ? candidate.chartAggregation
+        : undefined,
+    chartSeriesMode:
+      candidate.chartSeriesMode === "single" || candidate.chartSeriesMode === "multi"
+        ? candidate.chartSeriesMode
+        : undefined,
+    chartOrientation:
+      candidate.chartOrientation === "vertical" || candidate.chartOrientation === "horizontal"
+        ? candidate.chartOrientation
+        : undefined,
+    chartLineVariant:
+      candidate.chartLineVariant === "standard" || candidate.chartLineVariant === "profitLoss"
+        ? candidate.chartLineVariant
+        : undefined,
+    chartShowXAxis:
+      typeof candidate.chartShowXAxis === "boolean" ? candidate.chartShowXAxis : undefined,
+    chartShowYAxis:
+      typeof candidate.chartShowYAxis === "boolean" ? candidate.chartShowYAxis : undefined,
+    chartGoalValue:
+      typeof candidate.chartGoalValue === "number" && Number.isFinite(candidate.chartGoalValue)
+        ? candidate.chartGoalValue
         : undefined,
     chartShowLegend:
       typeof candidate.chartShowLegend === "boolean" ? candidate.chartShowLegend : undefined,
@@ -1686,7 +1713,14 @@ function hydrateWorkspaceDatabaseViewModel(view: WorkspaceDatabaseView): Workspa
     listPropertyWidth: view.config.listPropertyWidth,
     chartType: view.config.chartType,
     chartValueField: view.config.chartValueField,
+    chartValueFields: view.config.chartValueFields,
     chartAggregation: view.config.chartAggregation,
+    chartSeriesMode: view.config.chartSeriesMode,
+    chartOrientation: view.config.chartOrientation,
+    chartLineVariant: view.config.chartLineVariant,
+    chartShowXAxis: view.config.chartShowXAxis,
+    chartShowYAxis: view.config.chartShowYAxis,
+    chartGoalValue: view.config.chartGoalValue,
     chartShowLegend: view.config.chartShowLegend,
     chartShowGrid: view.config.chartShowGrid,
     chartPalette: view.config.chartPalette,

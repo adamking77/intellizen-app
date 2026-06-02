@@ -193,7 +193,11 @@ export function getChartGroupCandidates(
       return field.type === "date" || field.type === "createdAt" || field.type === "lastEditedAt";
     }
 
-    if (chartType === "donut") {
+    if (chartType === "gauge") {
+      return false;
+    }
+
+    if (chartType === "donut" || chartType === "pie") {
       return (
         field.type === "status" ||
         field.type === "select" ||

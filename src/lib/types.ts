@@ -289,10 +289,13 @@ export type WorkspaceDatabaseViewType =
   | "chart"
   | "timeline";
 
-export type WorkspaceDatabaseChartType = "bar" | "line" | "donut";
+export type WorkspaceDatabaseChartType = "bar" | "line" | "donut" | "pie" | "gauge";
 export type WorkspaceDatabaseChartAggregation = "count" | "sum" | "avg" | "min" | "max";
 export type WorkspaceDatabaseChartPalette = "blue" | "rose" | "gold" | "teal";
 export type WorkspaceDatabaseChartRange = "30d" | "90d" | "365d" | "all";
+export type WorkspaceDatabaseChartSeriesMode = "single" | "multi";
+export type WorkspaceDatabaseChartOrientation = "vertical" | "horizontal";
+export type WorkspaceDatabaseChartLineVariant = "standard" | "profitLoss";
 
 export type WorkspaceDatabaseFieldValue =
   | string
@@ -340,7 +343,14 @@ export interface WorkspaceDatabaseViewConfig {
   cardFields?: string[];
   chartType?: WorkspaceDatabaseChartType;
   chartValueField?: string;
+  chartValueFields?: string[];
   chartAggregation?: WorkspaceDatabaseChartAggregation;
+  chartSeriesMode?: WorkspaceDatabaseChartSeriesMode;
+  chartOrientation?: WorkspaceDatabaseChartOrientation;
+  chartLineVariant?: WorkspaceDatabaseChartLineVariant;
+  chartShowXAxis?: boolean;
+  chartShowYAxis?: boolean;
+  chartGoalValue?: number;
   chartShowLegend?: boolean;
   chartShowGrid?: boolean;
   chartPalette?: WorkspaceDatabaseChartPalette;
@@ -417,7 +427,14 @@ export interface WorkspaceDatabaseModel {
     listPropertyWidth?: number;
     chartType?: WorkspaceDatabaseChartType;
     chartValueField?: string;
+    chartValueFields?: string[];
     chartAggregation?: WorkspaceDatabaseChartAggregation;
+    chartSeriesMode?: WorkspaceDatabaseChartSeriesMode;
+    chartOrientation?: WorkspaceDatabaseChartOrientation;
+    chartLineVariant?: WorkspaceDatabaseChartLineVariant;
+    chartShowXAxis?: boolean;
+    chartShowYAxis?: boolean;
+    chartGoalValue?: number;
     chartShowLegend?: boolean;
     chartShowGrid?: boolean;
     chartPalette?: WorkspaceDatabaseChartPalette;
