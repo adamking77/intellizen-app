@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 /* ============================================================
    Fonts — self-hosted variable fonts
    ============================================================ */
@@ -150,6 +152,31 @@
   --success-glow: transparent;
   --glow-accent: none;
   --glow-info: none;
+  --chart-1: var(--accent);
+  --chart-2: var(--lavender);
+  --chart-3: var(--sapphire);
+  --chart-4: var(--teal);
+  --chart-5: var(--mauve);
+  --chart-background: var(--mantle);
+  --chart-foreground: var(--text);
+  --chart-foreground-muted: var(--subtext-0);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: var(--accent);
+  --chart-grid: var(--border-subtle);
+  --chart-tooltip-background: rgba(24, 24, 37, 0.92);
+  --chart-tooltip-foreground: var(--text);
+  --chart-tooltip-muted: var(--subtext-0);
+  --chart-marker-background: var(--surface-0);
+  --chart-marker-border: var(--border-strong);
+  --chart-marker-foreground: var(--text);
+  --chart-ring-background: rgba(205, 214, 244, 0.08);
+  --chart-label: var(--overlay-1);
+  --legend: oklch(1 0 0);
+  --legend-foreground: oklch(0.141 0.005 285.823);
+  --legend-muted: oklch(0.967 0.001 286.375);
+  --legend-muted-foreground: oklch(0.552 0.016 285.938);
+  --legend-track: oklch(0.92 0.004 286.32);
 }
 
 * {
@@ -828,7 +855,6 @@ pre {
   color: var(--overlay-1);
 }
 
-
 /* Graph canvas — pure crust, no gradients, no dot grid */
 .graph-canvas {
   background: var(--crust);
@@ -847,8 +873,6 @@ pre {
   background: var(--base);
   flex-shrink: 0;
 }
-
-
 
 /* Scrollbar */
 ::-webkit-scrollbar {
@@ -3628,7 +3652,6 @@ pre {
   }
 }
 
-
 /* ─── Timeline view ─────────────────────────────────────── */
 .db-timeline-root {
   position: relative;
@@ -3917,8 +3940,6 @@ pre {
   pointer-events: none;
 }
 
-
-
 /* ─── Calendar view ─────────────────────────────────────── */
 .db-calendar-grid {
   display: grid;
@@ -4102,4 +4123,56 @@ pre {
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@theme inline {
+  --color-foreground: var(--text);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-background: var(--chart-background);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-ring-background: var(--chart-ring-background);
+  --color-chart-label: var(--chart-label);
+  --chart-line-secondary: var(----chart-line-secondary);
+  --chart-line-primary: var(----chart-line-primary);
+  --color-legend-track: var(----legend-track);
+  --color-legend-muted-foreground: var(----legend-muted-foreground);
+  --color-legend-muted: var(----legend-muted);
+  --color-legend-foreground: var(----legend-foreground);
+  --color-legend: var(----legend);
+}
+
+.dark {
+  --chart-1: oklch(1 0 none);
+  --chart-2: oklch(0.73 0 none);
+  --chart-3: oklch(0.51 0 none);
+  --chart-4: oklch(0.39 0 none);
+  --chart-5: oklch(0.32 0 none);
+  --chart-background: oklch(0.145 0 0);
+  --chart-foreground: oklch(0.45 0 0);
+  --chart-foreground-muted: oklch(0.65 0.01 260);
+  --chart-crosshair: oklch(0.45 0 0);
+  --chart-grid: oklch(0.25 0 0);
+  --chart-marker-background: oklch(0.25 0.01 260);
+  --chart-marker-border: oklch(0.4 0.01 260);
+  --chart-marker-foreground: oklch(0.9 0 0);
+  --chart-ring-background: oklch(0.35 0.01 260 / 0.25);
+  --chart-label: oklch(0.75 0.01 260);
+  --legend: oklch(0.21 0.006 285.885);
+  --legend-foreground: oklch(0.985 0 0);
+  --legend-muted: oklch(0.274 0.006 286.033);
+  --legend-muted-foreground: oklch(0.705 0.015 286.067);
+  --legend-track: oklch(0.274 0.006 286.033);
 }
