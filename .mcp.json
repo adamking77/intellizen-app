@@ -2,6 +2,6 @@
   "intelizen": {
     "type": "stdio",
     "command": "node",
-    "args": ["/Users/adamking/projects/intelizen-app/mcp-server/dist/index.js"]
+    "args": ["/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js"]
   }
 }
