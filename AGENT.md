@@ -172,7 +172,8 @@ Do not introduce new naming unless required by code clarity.
 ## Data and Security Constraints
 
 - Never commit `.env.local`
-- Use `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_EXA_API_KEY`
+- Use `VITE_SUPABASE_URL`, `VITE_SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `VITE_EXA_API_KEY`
+- Do not use the Supabase anon key for IntelliZen writes. The local desktop app and MCP server are trusted single-user operators and must use the service-role key from `.env.local`.
 - Treat the Supabase Brain project as shared infrastructure: do not alter unrelated tables
 - Avoid destructive migration edits once a table contract is in use; prefer follow-up migrations
 

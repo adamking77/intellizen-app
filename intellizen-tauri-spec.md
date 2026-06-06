@@ -243,7 +243,7 @@ EXA_WEBHOOK_SECRET=     # shared secret set when creating the Exa Monitor
 
 ## Tauri App — Supabase Connection
 
-Connect with anon key + Row Level Security, or service key if this is strictly local/personal use (no multi-user).
+Connect with the service-role key for the strictly local, single-user desktop app. Do not use the anon key for IntelliZen writes.
 
 **`src/lib/supabase.ts`**
 ```typescript
@@ -251,7 +251,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 )
 ```
 
@@ -468,7 +468,8 @@ Markdown rendered via `react-markdown` + `remark-gfm`.
 ### `app/.env.local`
 ```
 VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
+VITE_SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 VITE_EXA_API_KEY=
 VITE_VAULT_PATH=/Users/adamking/vault/intelligence
 ```

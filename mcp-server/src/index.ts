@@ -43,11 +43,9 @@ const SUPABASE_URL =
   "https://jicrdrwtwubveyvzyyrh.supabase.co";
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.VITE_SUPABASE_ANON_KEY ??
-  process.env.SUPABASE_ANON_KEY ??
   localEnv.SUPABASE_SERVICE_ROLE_KEY ??
-  localEnv.VITE_SUPABASE_ANON_KEY ??
-  localEnv.SUPABASE_ANON_KEY;
+  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ??
+  localEnv.VITE_SUPABASE_SERVICE_ROLE_KEY;
 const EXA_API_KEY =
   process.env.VITE_EXA_API_KEY ??
   process.env.EXA_API_KEY ??
@@ -56,7 +54,7 @@ const EXA_API_KEY =
   "ca04e163-e55b-49ca-9b40-3454d11a35d6";
 
 if (!SUPABASE_KEY) {
-  throw new Error("Missing Supabase key. Set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY.");
+  throw new Error("Missing Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY in .env.local.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);

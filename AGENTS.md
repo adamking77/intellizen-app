@@ -25,8 +25,9 @@ Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post 
 
 ```
 VITE_SUPABASE_URL=https://jicrdrwtwubveyvzyyrh.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppY3Jkcnd0d3VidmV5dnp5eXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NTI2MjgsImV4cCI6MjA4NzIyODYyOH0.tvPbYnbvHFhBp2u44h9P-O4DFFj9pd6mepuA0Yk9cvc
-VITE_EXA_API_KEY=ca04e163-e55b-49ca-9b40-3454d11a35d6
+VITE_SUPABASE_SERVICE_ROLE_KEY=<in .env.local>
+SUPABASE_SERVICE_ROLE_KEY=<in .env.local>
+VITE_EXA_API_KEY=<in .env.local>
 VITE_ANTHROPIC_API_KEY=<in .env.local>
 ```
 
