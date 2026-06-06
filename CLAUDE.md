@@ -21,6 +21,24 @@ Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post 
 - `pnpm tauri build` — production DMG
 - `pnpm icon` — regenerate all `src-tauri/icons/` sizes from `app-icon.svg`. **Always use this after updating the icon — never use `sips` or `qlmanage` manually.**
 
+## macOS DMG release rule
+
+InteliZen DMGs are shipped as **unsigned Apple Silicon builds**. Do not assume Developer ID signing or App Store notarization unless Adam explicitly changes the release model.
+
+The correct unsigned release flow is:
+
+1. Build the `.app` with signing disabled: `pnpm tauri build --bundles app --no-sign`.
+2. Re-sign the finished app bundle ad-hoc so its resources are sealed correctly:
+   `codesign --force --deep --sign - src-tauri/target/release/bundle/macos/IntelliZen.app`.
+3. Verify the app bundle before packaging:
+   `codesign --verify --deep --strict --verbose=4 src-tauri/target/release/bundle/macos/IntelliZen.app`.
+4. Package the verified app into the DMG, then run `hdiutil verify` on the DMG.
+5. Mount the DMG and verify the app inside it again with `codesign --verify --deep --strict --verbose=4`.
+6. `spctl --assess` will reject the app because it is unsigned; that is expected. The failure must be the unsigned/Gatekeeper rejection, **not** `code has no resources but signature indicates they must be present`.
+7. GitHub release notes must say: first launch requires right-click `IntelliZen.app` -> `Open` to bypass Gatekeeper.
+
+Never upload a DMG unless the app bundle inside the mounted DMG passes `codesign --verify --deep --strict`.
+
 ## Credentials
 
 ```
