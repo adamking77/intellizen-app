@@ -19,11 +19,6 @@ import {
 } from "@/lib/home-dashboard";
 import { listWorkspaceDatabaseCatalog } from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
-import {
-  groupWorkspaceDatabasesByEntity,
-  taxonomyAreaLabel,
-  taxonomyFolderLabel,
-} from "@/lib/taxonomy";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -66,21 +61,6 @@ export function HomeView() {
       })
       .filter((widget): widget is PinnedDatabaseWidgetModel => Boolean(widget));
   }, [catalog, pins]);
-
-  const entityGroups = useMemo(() => {
-    return groupWorkspaceDatabasesByEntity(
-      catalog.map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        icon: null,
-        schema: entry.schema,
-        header_field_ids: entry.headerFieldIds,
-        taxonomy: entry.taxonomy,
-        created_at: "",
-        updated_at: "",
-      })),
-    );
-  }, [catalog]);
 
   useEffect(() => {
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
@@ -156,48 +136,7 @@ export function HomeView() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        <section className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
-          {!isLoading && entityGroups.length > 0 ? (
-            <div className="grid gap-3 xl:grid-cols-3">
-              {entityGroups.map((group) => (
-                <section
-                  key={group.entity}
-                  className="min-w-0 border border-[var(--border)] bg-[var(--mantle)] px-4 py-3"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h2 className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">
-                      {group.entity}
-                    </h2>
-                    <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-                      {group.items.length}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {group.items.map((database) => (
-                      <button
-                        key={database.id}
-                        type="button"
-                        onClick={() => navigate(`/databases/${database.id}`)}
-                        className="group flex min-w-0 items-center justify-between gap-3 text-left"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-ui text-[12px] font-medium text-[var(--subtext-0)] group-hover:text-[var(--accent)]">
-                            {database.name}
-                          </span>
-                          <span className="block truncate font-ui text-[10px] text-[var(--overlay-1)]">
-                            {taxonomyAreaLabel(database.taxonomy)} / {taxonomyFolderLabel(database.taxonomy)}
-                          </span>
-                        </span>
-                        <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-                          {catalog.find((entry) => entry.id === database.id)?.records.length ?? 0}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : null}
+        <section className="mx-auto flex w-full max-w-[1600px] flex-col">
           {isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
               <Loader2 className="h-4 w-4 animate-spin" />
