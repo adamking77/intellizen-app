@@ -23,6 +23,7 @@ import type {
   ProjectSignal,
   SearchResultItem,
   SignalDraft,
+  TaxonomyMetadata,
   VaultDocument,
   VaultFile,
   WorkspaceDatabase,
@@ -232,10 +233,11 @@ export async function listOperations() {
 export async function createOperation(input: {
   name: string;
   description?: string | null;
+  taxonomy?: TaxonomyMetadata;
 }) {
   const { data, error } = await supabase
     .schema("anchors").from("operations")
-    .insert([{ name: input.name, description: input.description ?? null }])
+    .insert([{ name: input.name, description: input.description ?? null, taxonomy: input.taxonomy ?? {} }])
     .select("*")
     .single();
 
@@ -249,7 +251,7 @@ export async function createOperation(input: {
 
 export async function updateOperation(
   id: number,
-  input: Partial<Pick<Operation, "name" | "description" | "status">>,
+  input: Partial<Pick<Operation, "name" | "description" | "status" | "taxonomy">>,
 ) {
   const { data, error } = await supabase
     .schema("anchors").from("operations")
@@ -306,6 +308,7 @@ export async function createProject(input: {
   type: Project["type"];
   watch_domain?: string | null;
   operation_id?: number | null;
+  taxonomy?: TaxonomyMetadata;
 }) {
   const { data, error } = await supabase
     .schema("anchors").from("projects")
@@ -315,6 +318,7 @@ export async function createProject(input: {
         type: input.type,
         watch_domain: input.watch_domain ?? null,
         operation_id: input.operation_id ?? null,
+        taxonomy: input.taxonomy ?? {},
       },
     ])
     .select("*")
@@ -330,7 +334,7 @@ export async function createProject(input: {
 
 export async function updateProject(
   id: number,
-  input: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id">>,
+  input: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id" | "taxonomy">>,
 ) {
   const { data, error } = await supabase
     .schema("anchors").from("projects")
@@ -1691,6 +1695,7 @@ function hydrateWorkspaceDatabaseModel(
     name: database.name,
     icon: database.icon,
     schema: database.schema,
+    taxonomy: database.taxonomy,
     headerFieldIds: database.header_field_ids ?? undefined,
     views: views.map(hydrateWorkspaceDatabaseViewModel),
     records: records.map(hydrateWorkspaceDatabaseRecord),
@@ -1787,6 +1792,7 @@ type WorkspaceDatabaseRow = {
   icon: string | null;
   schema: WorkspaceDatabaseField[];
   header_field_ids: string[] | null;
+  taxonomy: TaxonomyMetadata | null;
   created_at: string;
   updated_at: string;
 };
@@ -1807,6 +1813,7 @@ type WorkspaceDatabaseRecordRow = {
   database_id: string;
   fields: Record<string, WorkspaceDatabaseFieldValue>;
   body: string | null;
+  taxonomy: TaxonomyMetadata | null;
   created_at: string;
   updated_at: string;
 };
@@ -1818,6 +1825,7 @@ function toWorkspaceDatabase(row: WorkspaceDatabaseRow): WorkspaceDatabase {
     icon: row.icon,
     schema: row.schema ?? [],
     header_field_ids: row.header_field_ids ?? [],
+    taxonomy: row.taxonomy ?? {},
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -1842,6 +1850,7 @@ function toWorkspaceDatabaseRecord(row: WorkspaceDatabaseRecordRow): WorkspaceDa
     database_id: row.database_id,
     fields: row.fields ?? {},
     body: row.body,
+    taxonomy: row.taxonomy ?? {},
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -1851,10 +1860,12 @@ async function updateWorkspaceRecordFields(
   id: string,
   nextFields: Record<string, WorkspaceDatabaseFieldValue>,
   nextBody?: string | null,
+  nextTaxonomy?: TaxonomyMetadata,
 ) {
   const update: {
     fields: Record<string, WorkspaceDatabaseFieldValue>;
     body?: string | null;
+    taxonomy?: TaxonomyMetadata;
   } = {
     fields: nextFields,
   };
@@ -1862,12 +1873,15 @@ async function updateWorkspaceRecordFields(
   if (nextBody !== undefined) {
     update.body = nextBody;
   }
+  if (nextTaxonomy !== undefined) {
+    update.taxonomy = nextTaxonomy;
+  }
 
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .update(update)
     .eq("id", id)
-    .select("id, database_id, fields, body, created_at, updated_at")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -1992,6 +2006,10 @@ function fieldsEqual(
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function taxonomyEqual(left?: TaxonomyMetadata | null, right?: TaxonomyMetadata | null) {
+  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
+}
+
 export function isOperationalSystemWorkspaceIcon(icon: string | null | undefined): icon is (typeof SYSTEM_WORKSPACE_DATABASE_ICONS)[OperationalSystemKind] {
   return Boolean(icon && Object.values(SYSTEM_WORKSPACE_DATABASE_ICONS).includes(icon as (typeof SYSTEM_WORKSPACE_DATABASE_ICONS)[OperationalSystemKind]));
 }
@@ -2005,12 +2023,20 @@ function getOperationalSystemKindFromIcon(icon: string | null | undefined): Oper
 async function getWorkspaceDatabaseSummaryById(id: string) {
   const { data, error } = await supabase
     .schema("workspace").from("databases")
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .eq("id", id)
     .single();
 
   if (error) throw error;
   return toWorkspaceDatabase(data as WorkspaceDatabaseRow);
+}
+
+function defaultRecordTaxonomy(database: WorkspaceDatabaseSummary): TaxonomyMetadata {
+  return {
+    ...database.taxonomy,
+    object_type: "database_record",
+    routing_rule: database.taxonomy?.routing_rule ?? "named_database_wins",
+  };
 }
 
 async function getOperationalSystemKindForDatabaseId(id: string) {
@@ -2025,7 +2051,7 @@ async function findWorkspaceRecordByLegacyId(
 ) {
   const { data, error } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, created_at, updated_at")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", databaseId);
 
   if (error) throw error;
@@ -2125,7 +2151,7 @@ function sanitizeProjectType(value: WorkspaceDatabaseFieldValue): Project["type"
 async function ensureOperationalWorkspaceDatabases() {
   const { data, error } = await supabase
     .schema("workspace").from("databases")
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .in("icon", [SYSTEM_WORKSPACE_DATABASE_ICONS.operations, SYSTEM_WORKSPACE_DATABASE_ICONS.projects]);
 
   if (error) throw error;
@@ -2142,6 +2168,15 @@ async function ensureOperationalWorkspaceDatabases() {
       name: "Operations",
       icon: SYSTEM_WORKSPACE_DATABASE_ICONS.operations,
       schema: buildOperationsWorkspaceSchema(),
+      taxonomy: {
+        entity: "genzen",
+        entity_label: "GenZen",
+        area: "internal_ops",
+        area_label: "Internal Ops",
+        folder: "Operations",
+        object_type: "system_database",
+        routing_rule: "intellizen_operations_surface",
+      },
     });
     operationsDatabase = created.database;
     await Promise.all([
@@ -2169,6 +2204,15 @@ async function ensureOperationalWorkspaceDatabases() {
       name: "Projects",
       icon: SYSTEM_WORKSPACE_DATABASE_ICONS.projects,
       schema: buildProjectsWorkspaceSchema(operationsDatabase?.id),
+      taxonomy: {
+        entity: "genzen",
+        entity_label: "GenZen",
+        area: "internal_ops",
+        area_label: "Internal Ops",
+        folder: "Projects",
+        object_type: "system_database",
+        routing_rule: "intellizen_projects_surface",
+      },
     });
     projectsDatabase = created.database;
     await Promise.all([
@@ -2227,11 +2271,11 @@ async function syncOperationalWorkspaceDatabasesInner() {
     supabase.schema("anchors").from("projects").select("*").order("id", { ascending: true }),
     supabase
       .schema("workspace").from("records")
-      .select("id, database_id, fields, body, created_at, updated_at")
+      .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
       .eq("database_id", operationsDatabase.id),
     supabase
       .schema("workspace").from("records")
-      .select("id, database_id, fields, body, created_at, updated_at")
+      .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
       .eq("database_id", projectsDatabase.id),
   ]);
 
@@ -2262,6 +2306,7 @@ async function syncOperationalWorkspaceDatabasesInner() {
   }
 
   for (const operation of operations) {
+    const nextTaxonomy = operation.taxonomy ?? defaultRecordTaxonomy(operationsDatabase);
     const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
       [OPERATIONS_DB_FIELDS.legacyId]: operation.id,
       [OPERATIONS_DB_FIELDS.name]: operation.name,
@@ -2274,18 +2319,20 @@ async function syncOperationalWorkspaceDatabasesInner() {
       const created = await createWorkspaceRecord({
         databaseId: operationsDatabase.id,
         fields: nextFields,
+        taxonomy: nextTaxonomy,
         skipSystemSync: true,
       });
       operationRecordByLegacyId.set(operation.id, created);
       continue;
     }
-    if (!fieldsEqual(existing.fields, nextFields)) {
-      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+    if (!fieldsEqual(existing.fields, nextFields) || !taxonomyEqual(existing.taxonomy, nextTaxonomy)) {
+      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields, taxonomy: nextTaxonomy }, true);
       operationRecordByLegacyId.set(operation.id, updated);
     }
   }
 
   for (const project of projects) {
+    const nextTaxonomy = project.taxonomy ?? defaultRecordTaxonomy(projectsDatabase);
     const relatedOperationRecord = project.operation_id != null
       ? operationRecordByLegacyId.get(project.operation_id)
       : undefined;
@@ -2303,13 +2350,14 @@ async function syncOperationalWorkspaceDatabasesInner() {
       const created = await createWorkspaceRecord({
         databaseId: projectsDatabase.id,
         fields: nextFields,
+        taxonomy: nextTaxonomy,
         skipSystemSync: true,
       });
       projectRecordByLegacyId.set(project.id, created);
       continue;
     }
-    if (!fieldsEqual(existing.fields, nextFields)) {
-      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+    if (!fieldsEqual(existing.fields, nextFields) || !taxonomyEqual(existing.taxonomy, nextTaxonomy)) {
+      const updated = await updateWorkspaceRecord(existing.id, { fields: nextFields, taxonomy: nextTaxonomy }, true);
       projectRecordByLegacyId.set(project.id, updated);
     }
   }
@@ -2327,6 +2375,7 @@ async function syncOperationalWorkspaceDatabasesInner() {
   for (const operation of operations) {
     const existing = operationRecordByLegacyId.get(operation.id);
     if (!existing) continue;
+    const nextTaxonomy = operation.taxonomy ?? defaultRecordTaxonomy(operationsDatabase);
     const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
       [OPERATIONS_DB_FIELDS.legacyId]: operation.id,
       [OPERATIONS_DB_FIELDS.name]: operation.name,
@@ -2334,8 +2383,8 @@ async function syncOperationalWorkspaceDatabasesInner() {
       [OPERATIONS_DB_FIELDS.description]: operation.description ?? null,
       [OPERATIONS_DB_FIELDS.projects]: projectsByOperationId.get(operation.id) ?? [],
     };
-    if (!fieldsEqual(existing.fields, nextFields)) {
-      await updateWorkspaceRecord(existing.id, { fields: nextFields }, true);
+    if (!fieldsEqual(existing.fields, nextFields) || !taxonomyEqual(existing.taxonomy, nextTaxonomy)) {
+      await updateWorkspaceRecord(existing.id, { fields: nextFields, taxonomy: nextTaxonomy }, true);
     }
   }
 
@@ -2382,7 +2431,7 @@ export async function listWorkspaceDatabases() {
   await syncOperationalWorkspaceDatabases();
   const { data, error } = await supabase
     .schema("workspace").from("databases")
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .order("updated_at", { ascending: false })
     .order("name", { ascending: true });
 
@@ -2400,11 +2449,11 @@ export async function listWorkspaceDatabaseCatalog() {
     await Promise.all([
       supabase
         .schema("workspace").from("databases")
-        .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+        .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
         .order("name", { ascending: true }),
       supabase
         .schema("workspace").from("records")
-        .select("id, database_id, fields, body, created_at, updated_at")
+        .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
         .order("created_at", { ascending: true })
         .order("id", { ascending: true }),
       supabase
@@ -2441,6 +2490,7 @@ export async function listWorkspaceDatabaseCatalog() {
       name: database.name,
       schema: database.schema,
       headerFieldIds: database.header_field_ids ?? [],
+      taxonomy: database.taxonomy,
       records: recordsByDatabase.get(database.id) ?? [],
       views: viewsByDatabase.get(database.id) ?? [],
     } satisfies WorkspaceDatabaseCatalogEntry;
@@ -2455,7 +2505,7 @@ async function fetchWorkspaceDatabaseBundleRows(id: string) {
   ] = await Promise.all([
     supabase
       .schema("workspace").from("databases")
-      .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+      .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
       .eq("id", id)
       .single(),
     supabase
@@ -2466,7 +2516,7 @@ async function fetchWorkspaceDatabaseBundleRows(id: string) {
       .order("created_at", { ascending: true }),
     supabase
       .schema("workspace").from("records")
-      .select("id, database_id, fields, body, created_at, updated_at")
+      .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
       .eq("database_id", id)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true }),
@@ -2519,19 +2569,32 @@ export async function createWorkspaceDatabase(input?: {
   name?: string;
   icon?: string | null;
   schema?: WorkspaceDatabaseField[];
+  taxonomy?: TaxonomyMetadata;
 }) {
   const schema = input?.schema ?? defaultWorkspaceSchema(input?.name);
+  const databaseName = input?.name?.trim() || "Untitled database";
+  const taxonomy: TaxonomyMetadata = {
+    entity: "genzen",
+    entity_label: "GenZen",
+    area: "internal_ops",
+    area_label: "Internal Ops",
+    folder: databaseName,
+    object_type: "database",
+    routing_rule: "named_database_wins",
+    ...(input?.taxonomy ?? {}),
+  };
   const { data: databaseRow, error: databaseError } = await supabase
     .schema("workspace").from("databases")
     .insert([
       {
-        name: input?.name?.trim() || "Untitled database",
+        name: databaseName,
         icon: input?.icon ?? null,
         schema,
         header_field_ids: [],
+        taxonomy,
       },
     ])
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .single();
 
   if (databaseError) throw databaseError;
@@ -2564,7 +2627,7 @@ export async function createWorkspaceDatabase(input?: {
 
 export async function updateWorkspaceDatabase(
   id: string,
-  input: Partial<Pick<WorkspaceDatabase, "name" | "icon">>,
+  input: Partial<Pick<WorkspaceDatabase, "name" | "icon" | "taxonomy">>,
 ) {
   const database = await getWorkspaceDatabaseSummaryById(id);
   if (isOperationalSystemWorkspaceIcon(database.icon)) {
@@ -2574,7 +2637,7 @@ export async function updateWorkspaceDatabase(
     .schema("workspace").from("databases")
     .update(input)
     .eq("id", id)
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -2590,7 +2653,7 @@ export async function updateWorkspaceDatabaseSchema(id: string, schema: Workspac
     .schema("workspace").from("databases")
     .update({ schema })
     .eq("id", id)
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -2606,7 +2669,7 @@ export async function updateWorkspaceDatabaseHeaderFields(id: string, fieldIds: 
     .schema("workspace").from("databases")
     .update({ header_field_ids: fieldIds })
     .eq("id", id)
-    .select("id, name, icon, schema, header_field_ids, created_at, updated_at")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -2703,11 +2766,17 @@ export async function createWorkspaceRecord(input: {
   databaseId: string;
   fields?: Record<string, WorkspaceDatabaseFieldValue>;
   body?: string | null;
+  taxonomy?: TaxonomyMetadata;
   skipSystemSync?: boolean;
 }) {
   if (!input.skipSystemSync) {
     const { operationsDatabase, projectsDatabase } = await ensureOperationalWorkspaceDatabases();
     if (input.databaseId === operationsDatabase.id) {
+      const taxonomy: TaxonomyMetadata = {
+        ...defaultRecordTaxonomy(operationsDatabase),
+        ...(input.taxonomy ?? {}),
+        object_type: "operation",
+      };
       const { data, error } = await supabase
         .schema("anchors").from("operations")
         .insert([
@@ -2718,6 +2787,7 @@ export async function createWorkspaceRecord(input: {
                 ? input.fields[OPERATIONS_DB_FIELDS.description]
                 : null,
             status: sanitizeOperationStatus(input.fields?.[OPERATIONS_DB_FIELDS.status]),
+            taxonomy,
           },
         ])
         .select("*")
@@ -2750,6 +2820,11 @@ export async function createWorkspaceRecord(input: {
     }
 
     if (input.databaseId === projectsDatabase.id) {
+      const taxonomy: TaxonomyMetadata = {
+        ...defaultRecordTaxonomy(projectsDatabase),
+        ...(input.taxonomy ?? {}),
+        object_type: "intellizen_project",
+      };
       const linkedOperationIds = Array.isArray(input.fields?.[PROJECTS_DB_FIELDS.operation])
         ? (input.fields?.[PROJECTS_DB_FIELDS.operation] as string[])
         : [];
@@ -2772,6 +2847,7 @@ export async function createWorkspaceRecord(input: {
                 ? input.fields[PROJECTS_DB_FIELDS.notes]
                 : null,
             operation_id: operationId,
+            taxonomy,
           },
         ])
         .select("*")
@@ -2790,6 +2866,12 @@ export async function createWorkspaceRecord(input: {
     }
   }
 
+  const sourceDatabase = await getWorkspaceDatabaseSummaryById(input.databaseId);
+  const taxonomy = {
+    ...defaultRecordTaxonomy(sourceDatabase),
+    ...(input.taxonomy ?? {}),
+  };
+
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .insert([
@@ -2797,9 +2879,10 @@ export async function createWorkspaceRecord(input: {
         database_id: input.databaseId,
         fields: input.fields ?? {},
         body: input.body ?? null,
+        taxonomy,
       },
     ])
-    .select("id, database_id, fields, body, created_at, updated_at")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -2811,20 +2894,41 @@ export async function createWorkspaceRecords(
     databaseId: string;
     fields?: Record<string, WorkspaceDatabaseFieldValue>;
     body?: string | null;
+    taxonomy?: TaxonomyMetadata;
   }>,
 ) {
   if (input.length === 0) return [] as WorkspaceDatabaseRecord[];
+  const databaseIds = Array.from(new Set(input.map((record) => record.databaseId)));
+  const { data: databaseRows, error: databaseError } = await supabase
+    .schema("workspace").from("databases")
+    .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
+    .in("id", databaseIds);
+
+  if (databaseError) throw databaseError;
+  const databasesById = new Map(
+    ((databaseRows ?? []) as WorkspaceDatabaseRow[]).map((row) => {
+      const database = toWorkspaceDatabase(row);
+      return [database.id, database] as const;
+    }),
+  );
 
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .insert(
-      input.map((record) => ({
-        database_id: record.databaseId,
-        fields: record.fields ?? {},
-        body: record.body ?? null,
-      })),
+      input.map((record) => {
+        const database = databasesById.get(record.databaseId);
+        return {
+          database_id: record.databaseId,
+          fields: record.fields ?? {},
+          body: record.body ?? null,
+          taxonomy: {
+            ...(database ? defaultRecordTaxonomy(database) : {}),
+            ...(record.taxonomy ?? {}),
+          },
+        };
+      }),
     )
-    .select("id, database_id, fields, body, created_at, updated_at");
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at");
 
   if (error) throw error;
   return ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
@@ -2836,12 +2940,13 @@ export async function updateWorkspaceRecord(
     fields?: Record<string, WorkspaceDatabaseFieldValue>;
     fieldId?: string;
     value?: WorkspaceDatabaseFieldValue;
+    taxonomy?: TaxonomyMetadata;
   },
   skipSystemSync = false,
 ) {
   const { data: existing, error: existingError } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, created_at, updated_at")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("id", id)
     .single();
 
@@ -2859,7 +2964,7 @@ export async function updateWorkspaceRecord(
     if (systemKind === "operations") {
       const legacyId = current.fields[OPERATIONS_DB_FIELDS.legacyId];
       if (typeof legacyId === "number") {
-        const updatePayload: Partial<Pick<Operation, "name" | "description" | "status">> = {
+        const updatePayload: Partial<Pick<Operation, "name" | "description" | "status" | "taxonomy">> = {
           name: String(nextFields[OPERATIONS_DB_FIELDS.name] ?? current.fields[OPERATIONS_DB_FIELDS.name] ?? "Untitled operation").trim() || "Untitled operation",
           description:
             typeof nextFields[OPERATIONS_DB_FIELDS.description] === "string"
@@ -2867,6 +2972,9 @@ export async function updateWorkspaceRecord(
               : null,
           status: sanitizeOperationStatus(nextFields[OPERATIONS_DB_FIELDS.status]),
         };
+        if (input.taxonomy !== undefined) {
+          updatePayload.taxonomy = { ...input.taxonomy, object_type: "operation" };
+        }
         const { error } = await supabase.schema("anchors").from("operations").update(updatePayload).eq("id", legacyId);
         if (error) throw error;
 
@@ -2917,7 +3025,7 @@ export async function updateWorkspaceRecord(
           : [];
         const operationIdMap = await getLegacyIdMapForWorkspaceRecords(relationIds.slice(0, 1), OPERATIONS_DB_FIELDS.legacyId);
         const nextOperationId = relationIds[0] ? (operationIdMap.get(relationIds[0]) ?? null) : null;
-        const updatePayload: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id">> = {
+        const updatePayload: Partial<Pick<Project, "name" | "type" | "watch_domain" | "status" | "notes" | "operation_id" | "taxonomy">> = {
           name: String(nextFields[PROJECTS_DB_FIELDS.name] ?? current.fields[PROJECTS_DB_FIELDS.name] ?? "Untitled project").trim() || "Untitled project",
           type: sanitizeProjectType(nextFields[PROJECTS_DB_FIELDS.type]),
           watch_domain:
@@ -2931,6 +3039,9 @@ export async function updateWorkspaceRecord(
               : null,
           operation_id: nextOperationId,
         };
+        if (input.taxonomy !== undefined) {
+          updatePayload.taxonomy = { ...input.taxonomy, object_type: "intellizen_project" };
+        }
         const { error } = await supabase.schema("anchors").from("projects").update(updatePayload).eq("id", legacyId);
         if (error) throw error;
 
@@ -2946,14 +3057,14 @@ export async function updateWorkspaceRecord(
     }
   }
 
-  return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body);
+  return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body, input.taxonomy);
 }
 
 export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {
   if (!skipSystemSync) {
     const { data: existing, error: existingError } = await supabase
       .schema("workspace").from("records")
-      .select("id, database_id, fields, body, created_at, updated_at")
+      .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
       .eq("id", id)
       .single();
 
@@ -3037,7 +3148,7 @@ export async function updateWorkspaceRelationLinks(input: {
 
   const { data: targetRows, error: targetError } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, created_at, updated_at")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", targetDatabaseId)
     .in("id", affectedIds);
 
@@ -3246,7 +3357,7 @@ export async function createStrategyFolder(input: {
 export async function listVaultDocuments() {
   const { data, error } = await supabase
     .schema("knowledge").from("documents")
-    .select("id, title, source_path, document_type, domain, created_at, updated_at")
+    .select("id, title, source_path, document_type, domain, taxonomy, created_at, updated_at")
     .order("source_path");
 
   if (error) throw error;
@@ -3256,7 +3367,7 @@ export async function listVaultDocuments() {
 export async function getVaultDocument(id: number) {
   const { data, error } = await supabase
     .schema("knowledge").from("documents")
-    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .select("id, title, source_path, document_type, domain, taxonomy, content, metadata, created_at, updated_at")
     .eq("id", id)
     .single();
 
@@ -3284,7 +3395,7 @@ export async function createVaultDocument(input: {
         metadata: input.metadata ?? {},
       },
     ])
-    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .select("id, title, source_path, document_type, domain, taxonomy, content, metadata, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -3296,7 +3407,7 @@ export async function updateVaultDocumentContent(id: number, content: string) {
     .schema("knowledge").from("documents")
     .update({ content })
     .eq("id", id)
-    .select("id, title, source_path, document_type, domain, content, metadata, created_at, updated_at")
+    .select("id, title, source_path, document_type, domain, taxonomy, content, metadata, created_at, updated_at")
     .single();
 
   if (error) throw error;

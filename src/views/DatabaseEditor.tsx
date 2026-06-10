@@ -13,6 +13,7 @@ import { DatabasePeekPanel } from "@/components/database/DatabasePeekPanel";
 import { DatabaseSchemaEditor } from "@/components/database/DatabaseSchemaEditor";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { ViewTabBar } from "@/components/database/ViewTabBar";
+import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { saveCurrentDatabaseId } from "@/lib/current-database";
@@ -52,6 +53,7 @@ import {
   updateWorkspaceRelationLinks,
   updateWorkspaceView,
 } from "@/lib/data";
+import { buildTaxonomyMetadata, taxonomyBreadcrumb } from "@/lib/taxonomy";
 import type {
   WorkspaceDatabaseBundle,
   WorkspaceDatabaseCatalogEntry,
@@ -115,6 +117,9 @@ export function DatabaseEditorView({
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [activePeek, setActivePeek] = useState<{ databaseId: string; recordId: string } | null>(null);
   const [schemaOpen, setSchemaOpen] = useState(false);
+  const [taxonomyEditorOpen, setTaxonomyEditorOpen] = useState(false);
+  const [taxonomyDraft, setTaxonomyDraft] = useState(() => taxonomyDraftFromMetadata(null));
+  const [taxonomySaving, setTaxonomySaving] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const [homePins, setHomePins] = useState(() => loadHomePins());
   const csvInputRef = useRef<HTMLInputElement | null>(null);
@@ -145,6 +150,7 @@ export function DatabaseEditorView({
               name: database.name,
               schema: database.schema,
               headerFieldIds: database.headerFieldIds ?? [],
+              taxonomy: database.taxonomy,
               records: database.records,
               views: database.views,
             }]
@@ -157,6 +163,11 @@ export function DatabaseEditorView({
     if (!databaseId) return;
     saveCurrentDatabaseId(databaseId);
   }, [databaseId]);
+
+  useEffect(() => {
+    setTaxonomyEditorOpen(false);
+    setTaxonomyDraft(taxonomyDraftFromMetadata(bundle?.database.taxonomy));
+  }, [bundle?.database.id]);
 
   useEffect(() => {
     if (!database?.views.length) {
@@ -214,6 +225,7 @@ export function DatabaseEditorView({
         name: entry.name,
         schema: entry.schema,
         headerFieldIds: entry.headerFieldIds,
+        taxonomy: entry.taxonomy,
         records: entry.records,
         views: entry.views,
       });
@@ -484,6 +496,48 @@ export function DatabaseEditorView({
     } catch (err) {
       restoreSnapshots(snapshot);
       toastError("Rename failed", err);
+    }
+  }
+
+  async function handleSaveDatabaseTaxonomy() {
+    if (!bundle || isOperationalSystemWorkspaceIcon(bundle.database.icon)) return;
+    const nextTaxonomy = buildTaxonomyMetadata({
+      entity: taxonomyDraft.entity,
+      area: taxonomyDraft.area,
+      folder: taxonomyDraft.folder || bundle.database.name,
+      objectType: "database",
+      routingRule: "named_database_wins",
+    });
+    const snapshot = {
+      bundle: getBundleSnapshot(),
+      catalog: getCatalogSnapshot(),
+      databases: getDatabaseListSnapshot(),
+    };
+    patchBundle((current) => ({
+      ...current,
+      database: { ...current.database, taxonomy: nextTaxonomy },
+      model: { ...current.model, taxonomy: nextTaxonomy },
+    }));
+    patchCatalog((entries) =>
+      entries.map((entry) => (entry.id === bundle.database.id ? { ...entry, taxonomy: nextTaxonomy } : entry)),
+    );
+    patchDatabaseList((entries) =>
+      entries.map((entry) => (entry.id === bundle.database.id ? { ...entry, taxonomy: nextTaxonomy } : entry)),
+    );
+    setTaxonomySaving(true);
+    try {
+      await updateWorkspaceDatabase(bundle.database.id, { taxonomy: nextTaxonomy });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", databaseId] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+      ]);
+      setTaxonomyEditorOpen(false);
+    } catch (err) {
+      restoreSnapshots(snapshot);
+      toastError("Taxonomy update failed", err);
+    } finally {
+      setTaxonomySaving(false);
     }
   }
 
@@ -1262,6 +1316,8 @@ export function DatabaseEditorView({
     );
   }
 
+  const databaseBreadcrumb = taxonomyBreadcrumb(bundle.database.taxonomy);
+
   return (
     <div className="flex h-full flex-col bg-[var(--base)]">
       {/* Hidden CSV input */}
@@ -1300,6 +1356,54 @@ export function DatabaseEditorView({
           disabled={isSystemDatabase}
           className="mb-4 h-auto border-transparent bg-transparent px-0 text-[22px] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
         />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 font-ui text-[11px] text-[var(--overlay-1)]">
+            {databaseBreadcrumb.map((part, index) => (
+              <span key={`${part}-${index}`} className="inline-flex items-center gap-1.5">
+                {index > 0 ? <ChevronRight className="h-3 w-3 text-[var(--overlay-0)]" /> : null}
+                <span>{part}</span>
+              </span>
+            ))}
+          </div>
+          {!isSystemDatabase ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setTaxonomyEditorOpen((open) => !open)}
+            >
+              {taxonomyEditorOpen ? "Close taxonomy" : "Edit taxonomy"}
+            </Button>
+          ) : null}
+        </div>
+        {taxonomyEditorOpen && !isSystemDatabase ? (
+          <div className="mb-4 grid max-w-2xl gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+            <TaxonomyFields value={taxonomyDraft} onChange={setTaxonomyDraft} />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setTaxonomyDraft(taxonomyDraftFromMetadata(bundle.database.taxonomy));
+                  setTaxonomyEditorOpen(false);
+                }}
+                disabled={taxonomySaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                onClick={handleSaveDatabaseTaxonomy}
+                disabled={taxonomySaving}
+              >
+                {taxonomySaving ? "Saving..." : "Save taxonomy"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {/* View tab bar */}
         <ViewTabBar

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 
+import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createProject, listOperations } from "@/lib/data";
+import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import type { ProjectType } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
 
@@ -21,6 +23,13 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
   const [operationId, setOperationId] = useState<number | null>(initialOperationId);
+  const [taxonomy, setTaxonomy] = useState(() =>
+    taxonomyDraftFromMetadata(null, {
+      entity: "genzen",
+      area: "research_intelligence",
+      folder: "",
+    }),
+  );
 
   const { data: operations } = useQuery({
     queryKey: ["operations"],
@@ -39,6 +48,13 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
         type,
         watch_domain: watchDomain || null,
         operation_id: operationId,
+        taxonomy: buildTaxonomyMetadata({
+          entity: taxonomy.entity,
+          area: taxonomy.area,
+          folder: taxonomy.folder || name.trim(),
+          objectType: "intellizen_project",
+          routingRule: "explicit_intellizen_project_only",
+        }),
       }),
     onSuccess: async (project) => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -47,6 +63,11 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
       setType("research");
       setWatchDomain("");
       setOperationId(null);
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen",
+        area: "research_intelligence",
+        folder: "",
+      }));
       onCreated?.(project.id);
       onClose();
     },
@@ -67,8 +88,20 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
       setType("research");
       setWatchDomain("");
       setOperationId(initialOperationId);
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen",
+        area: "research_intelligence",
+        folder: "",
+      }));
     }
   }, [open, initialOperationId]);
+
+  useEffect(() => {
+    if (!open || operationId == null) return;
+    const operation = (operations ?? []).find((candidate) => candidate.id === operationId);
+    if (!operation?.taxonomy) return;
+    setTaxonomy(taxonomyDraftFromMetadata(operation.taxonomy));
+  }, [open, operationId, operations]);
 
   if (!open) return null;
 
@@ -180,6 +213,8 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
               </select>
             </label>
           )}
+
+          <TaxonomyFields value={taxonomy} onChange={setTaxonomy} />
 
           <div className="mt-2 flex items-center justify-end gap-2">
             <button

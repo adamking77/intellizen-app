@@ -19,11 +19,17 @@ import {
   isOperationalSystemWorkspaceIcon,
   listWorkspaceDatabases,
 } from "@/lib/data";
+import {
+  groupWorkspaceDatabasesByEntity,
+  taxonomyAreaLabel,
+  taxonomyFolderLabel,
+} from "@/lib/taxonomy";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const DATABASE_RAIL_STORAGE_KEY = "intelizen:databases-rail-collapsed";
 const DATABASE_RAIL_WIDTH_EXPANDED = 280;
+const ENTITY_ORDER = ["GenZen", "GenZen Solutions", "GoKart Studio", "Founder Context", "Archive", "Unfiled"];
 
 export function DatabasesView() {
   const queryClient = useQueryClient();
@@ -85,6 +91,26 @@ export function DatabasesView() {
     () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? safeDatabases[0] ?? null,
     [currentDatabaseId, safeDatabases],
   );
+  const groupedDatabases = useMemo(() => {
+    return groupWorkspaceDatabasesByEntity(safeDatabases)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((left, right) => {
+          const leftArea = taxonomyAreaLabel(left.taxonomy);
+          const rightArea = taxonomyAreaLabel(right.taxonomy);
+          if (leftArea !== rightArea) return leftArea.localeCompare(rightArea);
+          return left.name.localeCompare(right.name);
+        }),
+      }))
+      .sort((left, right) => {
+        const leftIndex = ENTITY_ORDER.indexOf(left.entity);
+        const rightIndex = ENTITY_ORDER.indexOf(right.entity);
+        const normalizedLeft = leftIndex === -1 ? ENTITY_ORDER.length : leftIndex;
+        const normalizedRight = rightIndex === -1 ? ENTITY_ORDER.length : rightIndex;
+        if (normalizedLeft !== normalizedRight) return normalizedLeft - normalizedRight;
+        return left.entity.localeCompare(right.entity);
+      });
+  }, [safeDatabases]);
   const canDeleteCurrentDatabase = Boolean(currentDatabase && !isOperationalSystemWorkspaceIcon(currentDatabase.icon));
 
   async function handleCreateDatabase() {
@@ -234,49 +260,65 @@ export function DatabasesView() {
               )
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
-                {safeDatabases.map((database) => {
-                  if (railCollapsed) {
-                    return (
-                      <button
-                        key={database.id}
-                        type="button"
-                        title={database.name}
-                        onClick={() => setCurrentDatabaseId(database.id)}
-                        className={cn(
-                          "group flex h-14 w-full items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
-                          currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
-                        )}
-                      >
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
-                          {database.name.slice(0, 1)}
-                        </span>
-                      </button>
-                    );
-                  }
+                {groupedDatabases.map((group) => (
+                  <section key={group.entity}>
+                    {!railCollapsed ? (
+                      <div className="px-4 pb-1 pt-3">
+                        <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          {group.entity}
+                        </p>
+                      </div>
+                    ) : null}
+                    {group.items.map((database) => {
+                      if (railCollapsed) {
+                        return (
+                          <button
+                            key={database.id}
+                            type="button"
+                            title={`${group.entity} / ${taxonomyAreaLabel(database.taxonomy)} / ${database.name}`}
+                            onClick={() => setCurrentDatabaseId(database.id)}
+                            className={cn(
+                              "group flex h-14 w-full items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
+                              currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                            )}
+                          >
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
+                              {database.name.slice(0, 1)}
+                            </span>
+                          </button>
+                        );
+                      }
 
-                  return (
-                    <button
-                      key={database.id}
-                      type="button"
-                      onClick={() => setCurrentDatabaseId(database.id)}
-                      className={cn(
-                        "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
-                        currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
-                      )}
-                    >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                          currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                        )}
-                      />
-                      <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
-                        {database.name}
-                      </p>
-                    </button>
-                  );
-                })}
+                      return (
+                        <button
+                          key={database.id}
+                          type="button"
+                          onClick={() => setCurrentDatabaseId(database.id)}
+                          className={cn(
+                            "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
+                            currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                              currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
+                              {database.name}
+                            </span>
+                            <span className="mt-1 block truncate font-ui text-[11px] text-[var(--overlay-1)]">
+                              {taxonomyAreaLabel(database.taxonomy)} / {taxonomyFolderLabel(database.taxonomy)}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </section>
+                ))}
               </div>
             )}
           </div>

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, X } from "lucide-react";
 
+import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createProject, listProjects } from "@/lib/data";
+import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { cn } from "@/lib/utils";
 import type { ProjectType } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
@@ -26,6 +28,13 @@ export function ProjectPickerModal({
   const [name, setName] = useState("");
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
+  const [taxonomy, setTaxonomy] = useState(() =>
+    taxonomyDraftFromMetadata(null, {
+      entity: "genzen",
+      area: "research_intelligence",
+      folder: "",
+    }),
+  );
   const [creating, setCreating] = useState(false);
   const [savingProjectId, setSavingProjectId] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -42,12 +51,24 @@ export function ProjectPickerModal({
         name,
         type,
         watch_domain: watchDomain || null,
+        taxonomy: buildTaxonomyMetadata({
+          entity: taxonomy.entity,
+          area: taxonomy.area,
+          folder: taxonomy.folder || name.trim(),
+          objectType: "intellizen_project",
+          routingRule: "explicit_intellizen_project_only",
+        }),
       }),
     onSuccess: async (project) => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       setName("");
       setType("research");
       setWatchDomain("");
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen",
+        area: "research_intelligence",
+        folder: "",
+      }));
       setCreating(false);
       await onSelect(project.id);
       onClose();
@@ -72,6 +93,11 @@ export function ProjectPickerModal({
       setName("");
       setType("research");
       setWatchDomain("");
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen",
+        area: "research_intelligence",
+        folder: "",
+      }));
       setSavingProjectId(null);
     }
   }, [open]);
@@ -227,6 +253,7 @@ export function ProjectPickerModal({
                     ))}
                   </select>
                 </div>
+                <TaxonomyFields value={taxonomy} onChange={setTaxonomy} />
                 <Button
                   onClick={() => createMutation.mutate()}
                   disabled={!name.trim() || createMutation.isPending}

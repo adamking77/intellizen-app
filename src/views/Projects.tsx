@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
 import { AssignProjectsModal } from "@/components/projects/assign-projects-modal";
 import { OperationCreateModal } from "@/components/projects/operation-create-modal";
+import { TaxonomySummary } from "@/components/taxonomy/TaxonomyFields";
 import { VaultFileRow } from "@/components/vault/vault-file-row";
 import { ProjectCreateModal } from "@/components/projects/project-create-modal";
 import { SignalCard } from "@/components/signals/signal-card";
@@ -825,7 +826,7 @@ function ProjectDetailPane({
         {/* Project eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-            {project.type.replace("_", " ")}
+            IntelliZen Project · {project.type.replace("_", " ")}
           </span>
           <StatusPill variant={project.status === "active" ? "active" : "paused"}>
             {project.status.toUpperCase()}
@@ -883,6 +884,9 @@ function ProjectDetailPane({
               {deletePending ? "Deleting…" : "Delete"}
             </Button>
           </div>
+        </div>
+        <div className="px-5 pb-3">
+          <TaxonomySummary taxonomy={project.taxonomy} />
         </div>
       </div>
 
@@ -1087,6 +1091,9 @@ function OperationDetailPane({
               {deletePending ? "Deleting…" : "Delete"}
             </Button>
           </div>
+        </div>
+        <div className="px-5 pb-3">
+          <TaxonomySummary taxonomy={operation.taxonomy} />
         </div>
       </div>
 

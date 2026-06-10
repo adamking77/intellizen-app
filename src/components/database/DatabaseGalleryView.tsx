@@ -204,7 +204,7 @@ export function DatabaseGalleryView({
         >
           <div className="db-gallery-add-card-inner">
             <Plus className="h-5 w-5" />
-            <span>{records.length === 0 ? "New record" : "New page"}</span>
+            <span>New record</span>
           </div>
         </button>
       </div>

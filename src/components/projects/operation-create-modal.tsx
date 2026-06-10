@@ -4,8 +4,10 @@ import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { Textarea } from "@/components/ui/textarea";
 import { createOperation } from "@/lib/data";
+import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { toastError } from "@/lib/toast";
 
 type OperationCreateModalProps = {
@@ -18,13 +20,35 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [taxonomy, setTaxonomy] = useState(() =>
+    taxonomyDraftFromMetadata(null, {
+      entity: "genzen_solutions",
+      area: "research_intelligence",
+      folder: "",
+    }),
+  );
 
   const createMutation = useMutation({
-    mutationFn: () => createOperation({ name: name.trim(), description: description.trim() || null }),
+    mutationFn: () =>
+      createOperation({
+        name: name.trim(),
+        description: description.trim() || null,
+        taxonomy: buildTaxonomyMetadata({
+          entity: taxonomy.entity,
+          area: taxonomy.area,
+          folder: taxonomy.folder || name.trim(),
+          objectType: "operation",
+        }),
+      }),
     onSuccess: async (operation) => {
       await queryClient.invalidateQueries({ queryKey: ["operations"] });
       setName("");
       setDescription("");
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen_solutions",
+        area: "research_intelligence",
+        folder: "",
+      }));
       onCreated?.(operation.id);
       onClose();
     },
@@ -41,7 +65,15 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) { setName(""); setDescription(""); }
+    if (!open) {
+      setName("");
+      setDescription("");
+      setTaxonomy(taxonomyDraftFromMetadata(null, {
+        entity: "genzen_solutions",
+        area: "research_intelligence",
+        folder: "",
+      }));
+    }
   }, [open]);
 
   if (!open) return null;
@@ -95,6 +127,8 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
               onChange={(e) => setName(e.target.value)}
             />
           </label>
+
+          <TaxonomyFields value={taxonomy} onChange={setTaxonomy} />
 
           <label className="grid gap-1.5">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">

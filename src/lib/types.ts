@@ -4,10 +4,38 @@ export interface VaultDocument {
   source_path: string | null;
   document_type: string;
   domain: string;
+  taxonomy?: TaxonomyMetadata | null;
   content?: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+}
+
+export type TaxonomyEntity =
+  | "genzen"
+  | "genzen_solutions"
+  | "gokart_studio"
+  | "founder_context"
+  | "archive";
+
+export type TaxonomyArea =
+  | "company_hq"
+  | "revenue"
+  | "client_work"
+  | "internal_ops"
+  | "product_systems"
+  | "research_intelligence"
+  | "founder_context";
+
+export interface TaxonomyMetadata {
+  entity?: TaxonomyEntity | string;
+  entity_label?: string;
+  area?: TaxonomyArea | string;
+  area_label?: string;
+  folder?: string;
+  object_type?: string;
+  routing_rule?: string;
+  [key: string]: unknown;
 }
 
 export type OperationStatus = "active" | "on_hold" | "archived";
@@ -63,6 +91,7 @@ export interface Operation {
   name: string;
   description: string | null;
   status: OperationStatus;
+  taxonomy?: TaxonomyMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -77,6 +106,7 @@ export interface Project {
   notes: string | null;
   operation_id: number | null;
   operation_record_id?: string | null;
+  taxonomy?: TaxonomyMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -217,6 +247,7 @@ export interface Investigation {
   seed_entities: string[];
   known_hypotheses: string[];
   phase_gates: Record<string, boolean>;
+  taxonomy?: TaxonomyMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -373,6 +404,7 @@ export interface WorkspaceDatabaseSummary {
   icon: string | null;
   schema: WorkspaceDatabaseField[];
   header_field_ids: string[] | null;
+  taxonomy?: TaxonomyMetadata;
   created_at: string;
   updated_at: string;
 }
@@ -395,6 +427,7 @@ export interface WorkspaceDatabaseRecord {
   database_id: string;
   fields: Record<string, WorkspaceDatabaseFieldValue>;
   body: string | null;
+  taxonomy?: TaxonomyMetadata;
   created_at: string;
   updated_at: string;
 }
@@ -412,6 +445,7 @@ export interface WorkspaceDatabaseModel {
   name: string;
   icon?: string | null;
   schema: WorkspaceDatabaseField[];
+  taxonomy?: TaxonomyMetadata;
   views: Array<{
     id: string;
     name: string;
@@ -462,6 +496,7 @@ export interface WorkspaceDatabaseCatalogEntry {
   name: string;
   schema: WorkspaceDatabaseField[];
   headerFieldIds: string[];
+  taxonomy?: TaxonomyMetadata;
   records: WorkspaceDatabaseRecordModel[];
   views: WorkspaceDatabaseModel["views"];
 }
