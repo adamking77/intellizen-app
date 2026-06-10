@@ -12,6 +12,7 @@ const OPENROUTER_MODEL = `openai/${OPENAI_MODEL}`;
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
 const useOpenAiDirect = args.has("--openai-direct");
+const insertNullChunks = args.has("--insert-null-chunks");
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -40,11 +41,11 @@ if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Missing Supabase URL or service role key.");
 }
 
-if (useOpenAiDirect && !openAiKey) {
+if (useOpenAiDirect && !openAiKey && !insertNullChunks) {
   throw new Error("Missing OPENAI_API_KEY for --openai-direct.");
 }
 
-if (!useOpenAiDirect && !openRouterKey) {
+if (!useOpenAiDirect && !openRouterKey && !insertNullChunks) {
   throw new Error("Missing OPENROUTER_API_KEY.");
 }
 
@@ -154,7 +155,7 @@ async function backfillDocumentChunks(doc) {
   const rows = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const content = chunks[i];
-    const embedding = await embed(embeddingInputForDoc(doc, content));
+    const embedding = insertNullChunks ? null : await embed(embeddingInputForDoc(doc, content));
     rows.push({ document_id: doc.id, chunk_index: i, content, embedding });
   }
 
@@ -175,7 +176,8 @@ async function backfillNullChunkEmbedding(chunk, docsById) {
 
 async function main() {
   const provider = useOpenAiDirect ? "OpenAI API" : "OpenRouter gateway";
-  console.log(`${dryRun ? "Dry run" : "Backfill"} using ${provider} / ${useOpenAiDirect ? OPENAI_MODEL : OPENROUTER_MODEL}`);
+  const mode = insertNullChunks ? "chunk-row insert without embeddings" : `${provider} / ${useOpenAiDirect ? OPENAI_MODEL : OPENROUTER_MODEL}`;
+  console.log(`${dryRun ? "Dry run" : "Backfill"} using ${mode}`);
 
   const docs = await fetchAll(
     "documents",
@@ -200,8 +202,10 @@ async function main() {
   let updatedDocs = 0;
   let updatedChunks = 0;
 
-  for (const doc of docsMissingEmbeddings) {
-    if (await updateDocumentEmbedding(doc)) updatedDocs += 1;
+  if (!insertNullChunks) {
+    for (const doc of docsMissingEmbeddings) {
+      if (await updateDocumentEmbedding(doc)) updatedDocs += 1;
+    }
   }
 
   for (const doc of docsMissingChunks) {
@@ -212,13 +216,15 @@ async function main() {
     }
   }
 
-  for (const chunk of chunksMissingEmbeddings) {
-    if (await backfillNullChunkEmbedding(chunk, docsById)) updatedChunks += 1;
+  if (!insertNullChunks) {
+    for (const chunk of chunksMissingEmbeddings) {
+      if (await backfillNullChunkEmbedding(chunk, docsById)) updatedChunks += 1;
+    }
   }
 
-  console.log(`${dryRun ? "Would update" : "Updated"} document embeddings: ${dryRun ? docsMissingEmbeddings.length : updatedDocs}`);
+  console.log(`${dryRun ? "Would update" : "Updated"} document embeddings: ${insertNullChunks ? 0 : dryRun ? docsMissingEmbeddings.length : updatedDocs}`);
   console.log(`${dryRun ? "Would insert" : "Inserted"} chunks: ${insertedChunks}`);
-  console.log(`${dryRun ? "Would update" : "Updated"} chunk embeddings: ${dryRun ? chunksMissingEmbeddings.length : updatedChunks}`);
+  console.log(`${dryRun ? "Would update" : "Updated"} chunk embeddings: ${insertNullChunks ? 0 : dryRun ? chunksMissingEmbeddings.length : updatedChunks}`);
 }
 
 main().catch(error => {
