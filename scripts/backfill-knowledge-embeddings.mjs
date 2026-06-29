@@ -29,12 +29,13 @@ function loadEnvFile(path) {
 }
 
 loadEnvFile(join(process.env.HOME ?? "", "vault", ".env"));
+loadEnvFile(join(process.env.HOME ?? "", ".hermes", ".env"));
 loadEnvFile(".env.local");
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-const openAiKey = process.env.OPENAI_API_KEY;
+const openAiKey = process.env.OPENAI_API_KEY ?? process.env.VOICE_TOOLS_OPENAI_KEY;
 const openRouterKey = process.env.OPENROUTER_API_KEY;
 
 if (!supabaseUrl || !serviceRoleKey) {
@@ -42,7 +43,7 @@ if (!supabaseUrl || !serviceRoleKey) {
 }
 
 if (useOpenAiDirect && !openAiKey && !insertNullChunks) {
-  throw new Error("Missing OPENAI_API_KEY for --openai-direct.");
+  throw new Error("Missing OPENAI_API_KEY or VOICE_TOOLS_OPENAI_KEY for --openai-direct.");
 }
 
 if (!useOpenAiDirect && !openRouterKey && !insertNullChunks) {
