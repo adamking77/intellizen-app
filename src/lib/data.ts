@@ -9,6 +9,11 @@ import type {
   CanvasDocumentData,
   CanvasDocumentSummary,
   DeepResearchResult,
+  AgentWorkFollowupInput,
+  AgentWorkItem,
+  AgentWorkOutcome,
+  AgentProjectItem,
+  AgentWorkReceiptInput,
   FionaInboxItem,
   GraphEntityType,
   GraphEdgeRecord,
@@ -48,6 +53,31 @@ import { supabase } from "@/lib/supabase";
 const SYSTEM_WORKSPACE_DATABASE_ICONS = {
   operations: "intel-system:operations",
   projects: "intel-system:projects",
+} as const;
+
+export const GENZEN_WORKSPACE_DATABASE_IDS = {
+  bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
+  tasks: "654acc9c-0270-49e2-86f7-788e25c59a76",
+} as const;
+
+const AGENT_TASK_FIELDS = {
+  name: "task_name",
+  status: "task_status",
+  assignee: "task_assignee",
+  priority: "task_priority",
+  stage: "task_stage",
+  area: "task_area",
+  project: "task_project",
+} as const;
+
+const AGENT_BIZ_OPS_FIELDS = {
+  name: "initiative_name",
+  stage: "initiative_stage",
+  priority: "initiative_priority",
+  assignee: "initiative_assignee",
+  agentOwner: "initiative_agent_owner",
+  weekTheme: "initiative_week_theme",
+  tasks: "biz_ops_tasks",
 } as const;
 
 const OPERATIONS_DB_FIELDS = {
@@ -3058,6 +3088,347 @@ export async function updateWorkspaceRecord(
   }
 
   return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body, input.taxonomy);
+}
+
+function formatAgentWorkTimestamp(date = new Date()) {
+  return date.toISOString().replace("T", " ").slice(0, 16);
+}
+
+function asStringArray(value: WorkspaceDatabaseFieldValue): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return typeof value === "string" && value ? [value] : [];
+}
+
+function fieldString(value: WorkspaceDatabaseFieldValue): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function appendMarkdownSection(body: string | null | undefined, section: string) {
+  const trimmedBody = (body ?? "").trimEnd();
+  return trimmedBody ? `${trimmedBody}\n\n${section}` : section;
+}
+
+function markdownList(items?: string[]) {
+  if (!items?.length) return "none";
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+function firstRelationId(value: WorkspaceDatabaseFieldValue) {
+  return asStringArray(value)[0] ?? null;
+}
+
+type AgentWorkInitiativeMeta = {
+  name: string;
+  assignees: string[];
+  agentOwner: string | null;
+};
+
+function toAgentWorkItem(
+  record: WorkspaceDatabaseRecord,
+  initiativeMeta = new Map<string, AgentWorkInitiativeMeta>(),
+): AgentWorkItem {
+  const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+  const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
+  const title = fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? "Untitled work";
+  return {
+    id: record.id,
+    source: "workspace.records",
+    database_id: record.database_id,
+    title,
+    status: fieldString(record.fields[AGENT_TASK_FIELDS.status]),
+    stage: fieldString(record.fields[AGENT_TASK_FIELDS.stage]),
+    assignee: Array.isArray(record.fields[AGENT_TASK_FIELDS.assignee])
+      ? asStringArray(record.fields[AGENT_TASK_FIELDS.assignee])
+      : fieldString(record.fields[AGENT_TASK_FIELDS.assignee]),
+    priority: fieldString(record.fields[AGENT_TASK_FIELDS.priority]),
+    area: record.fields[AGENT_TASK_FIELDS.area],
+    initiative_id: initiativeId,
+    initiative_name: initiative?.name ?? null,
+    initiative_agent_owner: initiative?.agentOwner ?? null,
+    durable_role: null,
+    functional_lane: null,
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+function toAgentProjectItem(record: WorkspaceDatabaseRecord): AgentProjectItem {
+  return {
+    id: record.id,
+    source: "workspace.records",
+    database_id: record.database_id,
+    title: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.name]) ?? "Untitled project",
+    stage: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.stage]),
+    priority: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.priority]),
+    assignee: asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.assignee]),
+    agent_owner: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.agentOwner]),
+    week_theme: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.weekTheme]),
+    task_ids: asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.tasks]),
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+async function getWorkspaceRecord(id: string) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+}
+
+export async function listAgentProjects(input: {
+  actor?: string | null;
+  stages?: string[];
+  includeDone?: boolean;
+  limit?: number;
+} = {}) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.bizOps)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  const rows = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  const filtered = rows.filter((record) => {
+    const stage = fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.stage]) ?? "";
+    if (!input.includeDone && stage === "Done") return false;
+    if (input.stages?.length && !input.stages.includes(stage)) return false;
+
+    if (input.actor) {
+      const agentOwner = fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.agentOwner]);
+      const fallbackAssignees = asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.assignee]);
+      if (agentOwner ? agentOwner !== input.actor : !fallbackAssignees.includes(input.actor)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  return filtered
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map((record) => toAgentProjectItem(record));
+}
+
+async function getInitiativeMetaMap(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (!uniqueIds.length) return new Map<string, AgentWorkInitiativeMeta>();
+
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, fields")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.bizOps)
+    .in("id", uniqueIds);
+
+  if (error) throw error;
+  return new Map(
+    ((data ?? []) as Array<{ id: string; fields: Record<string, WorkspaceDatabaseFieldValue> }>).map((record) => [
+      record.id,
+      {
+        name: fieldString(record.fields?.[AGENT_BIZ_OPS_FIELDS.name]) ?? "Untitled initiative",
+        assignees: asStringArray(record.fields?.[AGENT_BIZ_OPS_FIELDS.assignee]),
+        agentOwner: fieldString(record.fields?.[AGENT_BIZ_OPS_FIELDS.agentOwner]),
+      },
+    ]),
+  );
+}
+
+export async function listAgentWork(input: {
+  actor?: string | null;
+  initiativeId?: string | null;
+  statuses?: string[];
+  includeDone?: boolean;
+  limit?: number;
+} = {}) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  const rows = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  const initiativeMeta = await getInitiativeMetaMap(
+    rows.map((record) => firstRelationId(record.fields[AGENT_TASK_FIELDS.project])).filter(Boolean) as string[],
+  );
+  const filtered = rows.filter((record) => {
+    const status = fieldString(record.fields[AGENT_TASK_FIELDS.status]) ?? "";
+    if (!input.includeDone && status === "Done") return false;
+    if (input.statuses?.length && !input.statuses.includes(status)) return false;
+
+    if (input.actor) {
+      const assignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
+      const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+      const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
+      const inheritsFromProject =
+        initiative?.agentOwner === input.actor ||
+        (!initiative?.agentOwner && initiative?.assignees.includes(input.actor));
+      if (!assignees.includes(input.actor) && !inheritsFromProject) return false;
+    }
+
+    if (input.initiativeId) {
+      const initiatives = asStringArray(record.fields[AGENT_TASK_FIELDS.project]);
+      if (!initiatives.includes(input.initiativeId)) return false;
+    }
+
+    return true;
+  });
+  const limited = filtered.slice(0, Math.max(input.limit ?? 50, 1));
+
+  return limited.map((record) => toAgentWorkItem(record, initiativeMeta));
+}
+
+export async function getAgentWorkItem(workItemId: string) {
+  const record = await getWorkspaceRecord(workItemId);
+  const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+  const initiativeMeta = await getInitiativeMetaMap(initiativeId ? [initiativeId] : []);
+  return toAgentWorkItem(record, initiativeMeta);
+}
+
+export async function claimAgentWork(input: {
+  workItemId: string;
+  claimedByActor: string;
+  durableRole: string;
+  functionalLane: string;
+  backupActor?: string | null;
+  reason: string;
+  sourcesChecked?: string[];
+  approvalNeededBefore?: string | null;
+  reassign?: boolean;
+}) {
+  const record = await getWorkspaceRecord(input.workItemId);
+  const currentAssignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
+  const nextFields = {
+    ...record.fields,
+    [AGENT_TASK_FIELDS.status]: "In progress",
+    [AGENT_TASK_FIELDS.stage]: "Doing",
+    [AGENT_TASK_FIELDS.assignee]:
+      currentAssignees.length === 0 || input.reassign
+        ? input.claimedByActor
+        : record.fields[AGENT_TASK_FIELDS.assignee],
+  };
+  const section = `## Agent Claim - ${formatAgentWorkTimestamp()}
+
+Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
+Durable role: ${input.durableRole}
+Functional lane: ${input.functionalLane}
+Current actor: ${input.claimedByActor}
+Backup actor: ${input.backupActor ?? "none"}
+Reason for claim: ${input.reason}
+Sources checked:
+${markdownList(input.sourcesChecked)}
+Approval needed before: ${input.approvalNeededBefore ?? "none"}`;
+
+  const updated = await updateWorkspaceRecord(
+    record.id,
+    { fields: nextFields, body: appendMarkdownSection(record.body, section) },
+    true,
+  );
+  return toAgentWorkItem(updated);
+}
+
+export async function appendAgentWorkNote(input: {
+  workItemId: string;
+  actor: string;
+  durableRole: string;
+  functionalLane: string;
+  note: string;
+  sources?: string[];
+  openQuestions?: string[];
+}) {
+  const record = await getWorkspaceRecord(input.workItemId);
+  const section = `## Agent Note - ${formatAgentWorkTimestamp()}
+
+Actor: ${input.actor}
+Durable role: ${input.durableRole}
+Functional lane: ${input.functionalLane}
+Note:
+${input.note}
+Sources:
+${markdownList(input.sources)}
+Open questions:
+${markdownList(input.openQuestions)}`;
+
+  const updated = await updateWorkspaceRecord(
+    record.id,
+    { body: appendMarkdownSection(record.body, section) },
+    true,
+  );
+  return toAgentWorkItem(updated);
+}
+
+export async function closeAgentWork(input: {
+  workItemId: string;
+  actor: string;
+  durableRole: string;
+  functionalLane: string;
+  currentActor?: string;
+  backupActor?: string | null;
+  outcome: AgentWorkOutcome;
+  receipt: AgentWorkReceiptInput;
+  followups?: AgentWorkFollowupInput[];
+}) {
+  const record = await getWorkspaceRecord(input.workItemId);
+  const statusByOutcome: Record<AgentWorkOutcome, string> = {
+    done: "Done",
+    blocked: "Blocked",
+    deferred: "Not started",
+    needs_approval: "Needs approval",
+  };
+  const stageByOutcome: Record<AgentWorkOutcome, string> = {
+    done: "Done",
+    blocked: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Doing",
+    deferred: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Backlog",
+    needs_approval: "Review",
+  };
+  const nextFields = {
+    ...record.fields,
+    [AGENT_TASK_FIELDS.status]: statusByOutcome[input.outcome],
+    [AGENT_TASK_FIELDS.stage]: stageByOutcome[input.outcome],
+  };
+  const section = `## Agent Receipt - ${formatAgentWorkTimestamp()}
+
+Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
+Outcome: ${input.outcome}
+Durable role: ${input.durableRole}
+Functional lane: ${input.functionalLane}
+Current actor: ${input.currentActor ?? input.actor}
+Backup actor: ${input.backupActor ?? "none"}
+Sources used:
+${markdownList(input.receipt.sources_used)}
+Actions taken:
+${markdownList(input.receipt.actions_taken)}
+Files touched:
+${markdownList(input.receipt.files_touched)}
+Records touched:
+${markdownList(input.receipt.records_touched)}
+Artifacts created:
+${markdownList(input.receipt.artifacts_created)}
+Verification:
+${markdownList(input.receipt.verification)}
+Approval needed: ${input.receipt.approval_needed ?? "none"}
+Blocked items:
+${markdownList(input.receipt.blocked_items)}
+Follow-up tasks:
+${markdownList(input.receipt.follow_up_tasks ?? input.followups?.map((followup) => followup.title))}
+Next step: ${input.receipt.next_step ?? "none"}
+
+Summary:
+${input.receipt.summary}`;
+
+  const updated = await updateWorkspaceRecord(
+    record.id,
+    { fields: nextFields, body: appendMarkdownSection(record.body, section) },
+    true,
+  );
+  return toAgentWorkItem(updated);
 }
 
 export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {

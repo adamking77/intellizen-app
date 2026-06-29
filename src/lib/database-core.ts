@@ -487,17 +487,18 @@ export function applyFilters(
       const database = { schema, records };
       const value = getFieldValue(record, field, database, catalog);
       const stringValue = valueAsFilterString(getFieldDisplayValue(record, field, database, catalog));
+      const rawStringValue = valueAsFilterString(value);
       const filterValue = filter.value.toLowerCase();
 
       switch (filter.op) {
         case "contains":
-          return stringValue.includes(filterValue);
+          return stringValue.includes(filterValue) || rawStringValue.includes(filterValue);
         case "not_contains":
-          return !stringValue.includes(filterValue);
+          return !stringValue.includes(filterValue) && !rawStringValue.includes(filterValue);
         case "equals":
-          return stringValue === filterValue;
+          return stringValue === filterValue || rawStringValue === filterValue;
         case "not_equals":
-          return stringValue !== filterValue;
+          return stringValue !== filterValue && rawStringValue !== filterValue;
         case "is_empty":
           return value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
         case "is_not_empty":
