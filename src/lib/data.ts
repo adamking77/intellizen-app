@@ -3383,7 +3383,7 @@ export async function closeAgentWork(input: {
     done: "Done",
     blocked: "Blocked",
     deferred: "Not started",
-    needs_approval: "Needs approval",
+    needs_approval: "In progress",
   };
   const stageByOutcome: Record<AgentWorkOutcome, string> = {
     done: "Done",
