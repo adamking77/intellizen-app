@@ -216,6 +216,7 @@ function taskMatchesActor(
   if (!actor) return true;
   const assignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
   if (assignees.includes(actor)) return true;
+  if (assignees.length > 0) return false;
 
   const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
   const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
