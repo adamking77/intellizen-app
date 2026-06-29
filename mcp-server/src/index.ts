@@ -172,6 +172,34 @@ async function listWorkspaceRecords(databaseId: string): Promise<WorkspaceRecord
   return (data ?? []) as WorkspaceRecordRow[];
 }
 
+async function getWorkspaceTaskRecord(id: string): Promise<WorkspaceRecordRow> {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, updated_at")
+    .eq("id", id)
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as WorkspaceRecordRow;
+}
+
+async function updateWorkspaceTaskRecord(
+  id: string,
+  updates: { fields?: Record<string, unknown>; body?: string | null },
+): Promise<WorkspaceRecordRow> {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
+    .select("id, database_id, fields, body, updated_at")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as WorkspaceRecordRow;
+}
+
 type InitiativeMeta = {
   name: string;
   assignees: string[];
@@ -310,6 +338,210 @@ async function listAgentWork(input: {
     })
     .slice(0, Math.max(input.limit ?? 50, 1))
     .map((record) => toAgentWorkItem(record, initiativeMeta));
+}
+
+function formatAgentWorkTimestamp(date = new Date()): string {
+  return date.toISOString().replace("T", " ").slice(0, 16);
+}
+
+function appendMarkdownSection(body: string | null | undefined, section: string): string {
+  const trimmedBody = (body ?? "").trimEnd();
+  return trimmedBody ? `${trimmedBody}\n\n${section}` : section;
+}
+
+function markdownList(items?: string[]): string {
+  if (!items?.length) return "none";
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+async function agentWorkItemForRecord(record: WorkspaceRecordRow) {
+  const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+  const initiativeMeta = await getInitiativeMetaMap(initiativeId ? [initiativeId] : []);
+  return toAgentWorkItem(record, initiativeMeta);
+}
+
+function agentWritePreview<T extends Record<string, unknown>>(
+  tool: string,
+  record: WorkspaceRecordRow,
+  nextFields: Record<string, unknown> | undefined,
+  nextBody: string | null | undefined,
+  extra: T,
+) {
+  return {
+    dry_run: true,
+    tool,
+    message: "Preview only. Re-run with confirm_write: true to update the task record.",
+    work_item_id: record.id,
+    current: {
+      title: fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id,
+      status: fieldString(record.fields[AGENT_TASK_FIELDS.status]),
+      stage: fieldString(record.fields[AGENT_TASK_FIELDS.stage]),
+      assignee: record.fields[AGENT_TASK_FIELDS.assignee] ?? null,
+    },
+    next: {
+      status: nextFields ? fieldString(nextFields[AGENT_TASK_FIELDS.status]) : undefined,
+      stage: nextFields ? fieldString(nextFields[AGENT_TASK_FIELDS.stage]) : undefined,
+      assignee: nextFields?.[AGENT_TASK_FIELDS.assignee],
+      body_appended: nextBody !== record.body,
+    },
+    ...extra,
+  };
+}
+
+async function claimAgentWork(input: {
+  work_item_id: string;
+  actor: string;
+  durable_role: string;
+  functional_lane: string;
+  backup_actor?: string | null;
+  reason: string;
+  sources_checked?: string[];
+  approval_needed_before?: string | null;
+  reassign?: boolean;
+  confirm_write?: boolean;
+}) {
+  const record = await getWorkspaceTaskRecord(input.work_item_id);
+  const currentAssignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
+  const nextFields = {
+    ...record.fields,
+    [AGENT_TASK_FIELDS.status]: "In progress",
+    [AGENT_TASK_FIELDS.stage]: "Doing",
+    [AGENT_TASK_FIELDS.assignee]:
+      currentAssignees.length === 0 || input.reassign
+        ? input.actor
+        : record.fields[AGENT_TASK_FIELDS.assignee],
+  };
+  const section = `## Agent Claim - ${formatAgentWorkTimestamp()}
+
+Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
+Durable role: ${input.durable_role}
+Functional lane: ${input.functional_lane}
+Current actor: ${input.actor}
+Backup actor: ${input.backup_actor ?? "none"}
+Reason for claim: ${input.reason}
+Sources checked:
+${markdownList(input.sources_checked)}
+Approval needed before: ${input.approval_needed_before ?? "none"}`;
+  const nextBody = appendMarkdownSection(record.body, section);
+
+  if (!input.confirm_write) {
+    return agentWritePreview("claim_agent_work", record, nextFields, nextBody, { appended_section: section });
+  }
+
+  const updated = await updateWorkspaceTaskRecord(record.id, { fields: nextFields, body: nextBody });
+  return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
+}
+
+async function appendAgentWorkNote(input: {
+  work_item_id: string;
+  actor: string;
+  durable_role: string;
+  functional_lane: string;
+  note: string;
+  sources?: string[];
+  open_questions?: string[];
+  confirm_write?: boolean;
+}) {
+  const record = await getWorkspaceTaskRecord(input.work_item_id);
+  const section = `## Agent Note - ${formatAgentWorkTimestamp()}
+
+Actor: ${input.actor}
+Durable role: ${input.durable_role}
+Functional lane: ${input.functional_lane}
+Note:
+${input.note}
+Sources:
+${markdownList(input.sources)}
+Open questions:
+${markdownList(input.open_questions)}`;
+  const nextBody = appendMarkdownSection(record.body, section);
+
+  if (!input.confirm_write) {
+    return agentWritePreview("append_agent_work_note", record, undefined, nextBody, { appended_section: section });
+  }
+
+  const updated = await updateWorkspaceTaskRecord(record.id, { body: nextBody });
+  return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
+}
+
+type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
+
+async function closeAgentWork(input: {
+  work_item_id: string;
+  actor: string;
+  durable_role: string;
+  functional_lane: string;
+  current_actor?: string;
+  backup_actor?: string | null;
+  outcome: AgentWorkOutcome;
+  summary: string;
+  sources_used?: string[];
+  actions_taken?: string[];
+  files_touched?: string[];
+  records_touched?: string[];
+  artifacts_created?: string[];
+  verification?: string[];
+  approval_needed?: string | null;
+  blocked_items?: string[];
+  follow_up_tasks?: string[];
+  next_step?: string | null;
+  confirm_write?: boolean;
+}) {
+  const record = await getWorkspaceTaskRecord(input.work_item_id);
+  const statusByOutcome: Record<AgentWorkOutcome, string> = {
+    done: "Done",
+    blocked: "Blocked",
+    deferred: "Not started",
+    needs_approval: "In progress",
+  };
+  const stageByOutcome: Record<AgentWorkOutcome, string> = {
+    done: "Done",
+    blocked: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Doing",
+    deferred: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Backlog",
+    needs_approval: "Review",
+  };
+  const nextFields = {
+    ...record.fields,
+    [AGENT_TASK_FIELDS.status]: statusByOutcome[input.outcome],
+    [AGENT_TASK_FIELDS.stage]: stageByOutcome[input.outcome],
+  };
+  const section = `## Agent Receipt - ${formatAgentWorkTimestamp()}
+
+Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
+Outcome: ${input.outcome}
+Durable role: ${input.durable_role}
+Functional lane: ${input.functional_lane}
+Current actor: ${input.current_actor ?? input.actor}
+Backup actor: ${input.backup_actor ?? "none"}
+Sources used:
+${markdownList(input.sources_used)}
+Actions taken:
+${markdownList(input.actions_taken)}
+Files touched:
+${markdownList(input.files_touched)}
+Records touched:
+${markdownList(input.records_touched)}
+Artifacts created:
+${markdownList(input.artifacts_created)}
+Verification:
+${markdownList(input.verification)}
+Approval needed: ${input.approval_needed ?? "none"}
+Blocked items:
+${markdownList(input.blocked_items)}
+Follow-up tasks:
+${markdownList(input.follow_up_tasks)}
+Next step: ${input.next_step ?? "none"}
+
+Summary:
+${input.summary}`;
+  const nextBody = appendMarkdownSection(record.body, section);
+
+  if (!input.confirm_write) {
+    return agentWritePreview("close_agent_work", record, nextFields, nextBody, { appended_section: section });
+  }
+
+  const updated = await updateWorkspaceTaskRecord(record.id, { fields: nextFields, body: nextBody });
+  return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
 }
 
 async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearchResult> {
@@ -474,6 +706,76 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           include_done: { type: "boolean", description: "Include Done tasks. Defaults to false." },
           limit: { type: "number", description: "Max tasks to return. Defaults to 50." },
         },
+      },
+    },
+    {
+      name: "claim_agent_work",
+      description:
+        "Preview or write an Agent Claim section to a Tasks record and move it to In progress/Doing. Defaults to dry-run; set confirm_write true to update.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          work_item_id: { type: "string", description: "Tasks record UUID." },
+          actor: { type: "string", description: "Current actor claiming the task." },
+          durable_role: { type: "string", description: "Durable role represented by this actor." },
+          functional_lane: { type: "string", description: "Work lane, e.g. engineering, research, ops, copy." },
+          backup_actor: { type: "string", description: "Optional backup actor." },
+          reason: { type: "string", description: "Why the actor is claiming this task now." },
+          sources_checked: { type: "array", items: { type: "string" } },
+          approval_needed_before: { type: "string" },
+          reassign: { type: "boolean", description: "If true, replace an existing task assignee with actor." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["work_item_id", "actor", "durable_role", "functional_lane", "reason"],
+      },
+    },
+    {
+      name: "append_agent_work_note",
+      description:
+        "Preview or append an Agent Note section to a Tasks record body. Defaults to dry-run; set confirm_write true to update.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          work_item_id: { type: "string", description: "Tasks record UUID." },
+          actor: { type: "string" },
+          durable_role: { type: "string" },
+          functional_lane: { type: "string" },
+          note: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+          open_questions: { type: "array", items: { type: "string" } },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["work_item_id", "actor", "durable_role", "functional_lane", "note"],
+      },
+    },
+    {
+      name: "close_agent_work",
+      description:
+        "Preview or append an Agent Receipt and update task status/stage for done, blocked, deferred, or needs_approval. Defaults to dry-run; set confirm_write true to update.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          work_item_id: { type: "string", description: "Tasks record UUID." },
+          actor: { type: "string" },
+          durable_role: { type: "string" },
+          functional_lane: { type: "string" },
+          current_actor: { type: "string" },
+          backup_actor: { type: "string" },
+          outcome: { type: "string", enum: ["done", "blocked", "deferred", "needs_approval"] },
+          summary: { type: "string" },
+          sources_used: { type: "array", items: { type: "string" } },
+          actions_taken: { type: "array", items: { type: "string" } },
+          files_touched: { type: "array", items: { type: "string" } },
+          records_touched: { type: "array", items: { type: "string" } },
+          artifacts_created: { type: "array", items: { type: "string" } },
+          verification: { type: "array", items: { type: "string" } },
+          approval_needed: { type: "string" },
+          blocked_items: { type: "array", items: { type: "string" } },
+          follow_up_tasks: { type: "array", items: { type: "string" } },
+          next_step: { type: "string" },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["work_item_id", "actor", "durable_role", "functional_lane", "outcome", "summary"],
       },
     },
     {
@@ -979,6 +1281,64 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       statuses?: string[];
       include_done?: boolean;
       limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── claim_agent_work ──────────────────────────────────────────────────────
+  if (name === "claim_agent_work") {
+    const result = await claimAgentWork((args ?? {}) as {
+      work_item_id: string;
+      actor: string;
+      durable_role: string;
+      functional_lane: string;
+      backup_actor?: string | null;
+      reason: string;
+      sources_checked?: string[];
+      approval_needed_before?: string | null;
+      reassign?: boolean;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── append_agent_work_note ────────────────────────────────────────────────
+  if (name === "append_agent_work_note") {
+    const result = await appendAgentWorkNote((args ?? {}) as {
+      work_item_id: string;
+      actor: string;
+      durable_role: string;
+      functional_lane: string;
+      note: string;
+      sources?: string[];
+      open_questions?: string[];
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── close_agent_work ──────────────────────────────────────────────────────
+  if (name === "close_agent_work") {
+    const result = await closeAgentWork((args ?? {}) as {
+      work_item_id: string;
+      actor: string;
+      durable_role: string;
+      functional_lane: string;
+      current_actor?: string;
+      backup_actor?: string | null;
+      outcome: AgentWorkOutcome;
+      summary: string;
+      sources_used?: string[];
+      actions_taken?: string[];
+      files_touched?: string[];
+      records_touched?: string[];
+      artifacts_created?: string[];
+      verification?: string[];
+      approval_needed?: string | null;
+      blocked_items?: string[];
+      follow_up_tasks?: string[];
+      next_step?: string | null;
+      confirm_write?: boolean;
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
