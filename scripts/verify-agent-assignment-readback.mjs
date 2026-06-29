@@ -123,6 +123,7 @@ function projectMatchesActor(record, actor) {
 function taskMatchesActor(record, initiativeById, actor) {
   const directAssignees = asStringArray(record.fields?.[FIELDS.taskAssignee]);
   if (directAssignees.includes(actor)) return true;
+  if (directAssignees.length > 0) return false;
 
   const projectId = firstRelationId(record.fields?.[FIELDS.taskProject]);
   const initiative = projectId ? initiativeById.get(projectId) : null;

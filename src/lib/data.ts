@@ -3265,12 +3265,15 @@ export async function listAgentWork(input: {
 
     if (input.actor) {
       const assignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
+      if (assignees.includes(input.actor)) return true;
+      if (assignees.length > 0) return false;
+
       const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
       const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
       const inheritsFromProject =
         initiative?.agentOwner === input.actor ||
         (!initiative?.agentOwner && initiative?.assignees.includes(input.actor));
-      if (!assignees.includes(input.actor) && !inheritsFromProject) return false;
+      if (!inheritsFromProject) return false;
     }
 
     if (input.initiativeId) {
