@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "icon": "tauri icon app-icon.svg",
     "analyze:bundle": "ANALYZE_BUNDLE=1 pnpm run build",
+    "verify:agent-work": "node scripts/verify-agent-assignment-readback.mjs",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "lint": "pnpm run check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",

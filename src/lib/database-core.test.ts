@@ -110,6 +110,30 @@ describe("database-core", () => {
     expect(filtered.map((record) => record.id)).toEqual(["initiative-a"]);
   });
 
+  it("filters relation fields by raw ids when a view stores durable relation filters", () => {
+    const taskSchema: WorkspaceDatabaseField[] = [
+      { id: "title", name: "Title", type: "text" },
+      {
+        id: "project",
+        name: "Project",
+        type: "relation",
+        relation: { targetDatabaseId: "db-projects" },
+      },
+    ];
+    const taskRecords: WorkspaceDatabaseRecordModel[] = [
+      { id: "task-a", title: "Draft page", project: ["project-a"] },
+      { id: "task-b", title: "Review page", project: ["project-b"] },
+    ];
+
+    const filtered = applyFilters(
+      taskRecords,
+      [{ fieldId: "project", op: "contains", value: "project-a" }],
+      taskSchema,
+    );
+
+    expect(filtered.map((record) => record.id)).toEqual(["task-a"]);
+  });
+
   it("evaluates formula fields with references and functions", () => {
     const schema: WorkspaceDatabaseField[] = [
       { id: "title", name: "Title", type: "text" },

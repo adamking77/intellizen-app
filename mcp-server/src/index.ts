@@ -60,6 +60,30 @@ if (!SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const exa = new Exa(EXA_API_KEY);
 const VAULT_BASE = join(homedir(), "vault", "intelligence");
+const GENZEN_WORKSPACE_DATABASE_IDS = {
+  bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
+  tasks: "654acc9c-0270-49e2-86f7-788e25c59a76",
+} as const;
+
+const AGENT_TASK_FIELDS = {
+  name: "task_name",
+  status: "task_status",
+  assignee: "task_assignee",
+  priority: "task_priority",
+  stage: "task_stage",
+  area: "task_area",
+  project: "task_project",
+} as const;
+
+const AGENT_BIZ_OPS_FIELDS = {
+  name: "initiative_name",
+  stage: "initiative_stage",
+  priority: "initiative_priority",
+  assignee: "initiative_assignee",
+  agentOwner: "initiative_agent_owner",
+  weekTheme: "initiative_week_theme",
+  tasks: "biz_ops_tasks",
+} as const;
 
 function vaultPath(...segments: string[]): string {
   return join(VAULT_BASE, ...segments);
@@ -108,10 +132,183 @@ interface UpsertedSearchResult {
   titles: string[];
 }
 
+type WorkspaceRecordRow = {
+  id: string;
+  database_id: string;
+  fields: Record<string, unknown>;
+  body: string | null;
+  updated_at: string;
+};
+
 function definedFields<T extends Record<string, unknown>>(fields: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(fields).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return typeof value === "string" && value ? [value] : [];
+}
+
+function fieldString(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function firstRelationId(value: unknown): string | null {
+  return asStringArray(value)[0] ?? null;
+}
+
+async function listWorkspaceRecords(databaseId: string): Promise<WorkspaceRecordRow[]> {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, updated_at")
+    .eq("database_id", databaseId)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WorkspaceRecordRow[];
+}
+
+type InitiativeMeta = {
+  name: string;
+  assignees: string[];
+  agentOwner: string | null;
+};
+
+async function getInitiativeMetaMap(ids: string[]): Promise<Map<string, InitiativeMeta>> {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (!uniqueIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, fields")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.bizOps)
+    .in("id", uniqueIds);
+
+  if (error) throw new Error(error.message);
+  return new Map(
+    ((data ?? []) as Array<{ id: string; fields: Record<string, unknown> }>).map((record) => [
+      record.id,
+      {
+        name: fieldString(record.fields?.[AGENT_BIZ_OPS_FIELDS.name]) ?? "Untitled project",
+        assignees: asStringArray(record.fields?.[AGENT_BIZ_OPS_FIELDS.assignee]),
+        agentOwner: fieldString(record.fields?.[AGENT_BIZ_OPS_FIELDS.agentOwner]),
+      },
+    ]),
+  );
+}
+
+function projectMatchesActor(record: WorkspaceRecordRow, actor?: string | null): boolean {
+  if (!actor) return true;
+  const agentOwner = fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.agentOwner]);
+  const fallbackAssignees = asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.assignee]);
+  return agentOwner ? agentOwner === actor : fallbackAssignees.includes(actor);
+}
+
+function taskMatchesActor(
+  record: WorkspaceRecordRow,
+  initiativeMeta: Map<string, InitiativeMeta>,
+  actor?: string | null,
+): boolean {
+  if (!actor) return true;
+  const assignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
+  if (assignees.includes(actor)) return true;
+
+  const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+  const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
+  return Boolean(
+    initiative?.agentOwner === actor ||
+      (!initiative?.agentOwner && initiative?.assignees.includes(actor)),
+  );
+}
+
+function toAgentProjectItem(record: WorkspaceRecordRow) {
+  return {
+    id: record.id,
+    source: "workspace.records",
+    database_id: record.database_id,
+    title: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.name]) ?? "Untitled project",
+    stage: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.stage]),
+    priority: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.priority]),
+    assignee: asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.assignee]),
+    agent_owner: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.agentOwner]),
+    week_theme: fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.weekTheme]),
+    task_ids: asStringArray(record.fields[AGENT_BIZ_OPS_FIELDS.tasks]),
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+function toAgentWorkItem(
+  record: WorkspaceRecordRow,
+  initiativeMeta: Map<string, InitiativeMeta>,
+) {
+  const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
+  const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
+  return {
+    id: record.id,
+    source: "workspace.records",
+    database_id: record.database_id,
+    title: fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? "Untitled work",
+    status: fieldString(record.fields[AGENT_TASK_FIELDS.status]),
+    stage: fieldString(record.fields[AGENT_TASK_FIELDS.stage]),
+    assignee: asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]),
+    priority: fieldString(record.fields[AGENT_TASK_FIELDS.priority]),
+    area: record.fields[AGENT_TASK_FIELDS.area] ?? null,
+    initiative_id: initiativeId,
+    initiative_name: initiative?.name ?? null,
+    initiative_agent_owner: initiative?.agentOwner ?? null,
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+async function listAgentProjects(input: {
+  actor?: string | null;
+  stages?: string[];
+  include_done?: boolean;
+  limit?: number;
+}) {
+  const records = await listWorkspaceRecords(GENZEN_WORKSPACE_DATABASE_IDS.bizOps);
+  return records
+    .filter((record) => {
+      const stage = fieldString(record.fields[AGENT_BIZ_OPS_FIELDS.stage]) ?? "";
+      if (!input.include_done && stage === "Done") return false;
+      if (input.stages?.length && !input.stages.includes(stage)) return false;
+      return projectMatchesActor(record, input.actor);
+    })
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map(toAgentProjectItem);
+}
+
+async function listAgentWork(input: {
+  actor?: string | null;
+  initiative_id?: string | null;
+  statuses?: string[];
+  include_done?: boolean;
+  limit?: number;
+}) {
+  const records = await listWorkspaceRecords(GENZEN_WORKSPACE_DATABASE_IDS.tasks);
+  const initiativeMeta = await getInitiativeMetaMap(
+    records.map((record) => firstRelationId(record.fields[AGENT_TASK_FIELDS.project])).filter(Boolean) as string[],
+  );
+
+  return records
+    .filter((record) => {
+      const status = fieldString(record.fields[AGENT_TASK_FIELDS.status]) ?? "";
+      if (!input.include_done && status === "Done") return false;
+      if (input.statuses?.length && !input.statuses.includes(status)) return false;
+      if (input.initiative_id) {
+        const initiativeIds = asStringArray(record.fields[AGENT_TASK_FIELDS.project]);
+        if (!initiativeIds.includes(input.initiative_id)) return false;
+      }
+      return taskMatchesActor(record, initiativeMeta, input.actor);
+    })
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map((record) => toAgentWorkItem(record, initiativeMeta));
 }
 
 async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearchResult> {
@@ -241,6 +438,43 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     // ── Search ──────────────────────────────────────────────────────────────
+    {
+      name: "list_agent_projects",
+      description:
+        "List Biz Ops projects assigned to an agent. Uses initiative_agent_owner as the primary owner and falls back to initiative_assignee only when Agent Owner is blank.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          actor: { type: "string", description: "Agent/person name, e.g. Fiona, Keel, Claude, Steve, Codex." },
+          stages: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional stage filter.",
+          },
+          include_done: { type: "boolean", description: "Include Done projects. Defaults to false." },
+          limit: { type: "number", description: "Max projects to return. Defaults to 50." },
+        },
+      },
+    },
+    {
+      name: "list_agent_work",
+      description:
+        "List task cards assigned to an agent directly or inherited from the parent Biz Ops project's Agent Owner.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          actor: { type: "string", description: "Agent/person name, e.g. Fiona, Keel, Claude, Steve, Codex." },
+          initiative_id: { type: "string", description: "Optional Biz Ops project record ID." },
+          statuses: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional task status filter.",
+          },
+          include_done: { type: "boolean", description: "Include Done tasks. Defaults to false." },
+          limit: { type: "number", description: "Max tasks to return. Defaults to 50." },
+        },
+      },
+    },
     {
       name: "run_exa_search",
       description:
@@ -724,6 +958,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  // ── list_agent_projects ───────────────────────────────────────────────────
+  if (name === "list_agent_projects") {
+    const result = await listAgentProjects((args ?? {}) as {
+      actor?: string | null;
+      stages?: string[];
+      include_done?: boolean;
+      limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── list_agent_work ───────────────────────────────────────────────────────
+  if (name === "list_agent_work") {
+    const result = await listAgentWork((args ?? {}) as {
+      actor?: string | null;
+      initiative_id?: string | null;
+      statuses?: string[];
+      include_done?: boolean;
+      limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
 
   // ── run_exa_search ─────────────────────────────────────────────────────────
   if (name === "run_exa_search") {

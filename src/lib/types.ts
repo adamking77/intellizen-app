@@ -85,6 +85,64 @@ export interface FionaInboxItem {
   updated_at: string;
 }
 
+export type AgentWorkSource = "workspace.records";
+export type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
+
+export interface AgentWorkItem {
+  id: string;
+  source: AgentWorkSource;
+  database_id: string;
+  title: string;
+  status: string | null;
+  stage: string | null;
+  assignee: string | string[] | null;
+  priority: string | null;
+  area: WorkspaceDatabaseFieldValue;
+  initiative_id: string | null;
+  initiative_name?: string | null;
+  initiative_agent_owner?: string | null;
+  durable_role?: string | null;
+  functional_lane?: string | null;
+  body_preview: string;
+  updated_at: string;
+}
+
+export interface AgentProjectItem {
+  id: string;
+  source: AgentWorkSource;
+  database_id: string;
+  title: string;
+  stage: string | null;
+  priority: string | null;
+  assignee: string[];
+  agent_owner: string | null;
+  week_theme: string | null;
+  task_ids: string[];
+  body_preview: string;
+  updated_at: string;
+}
+
+export interface AgentWorkReceiptInput {
+  summary: string;
+  sources_used?: string[];
+  actions_taken?: string[];
+  files_touched?: string[];
+  records_touched?: string[];
+  artifacts_created?: string[];
+  verification?: string[];
+  approval_needed?: string | null;
+  blocked_items?: string[];
+  follow_up_tasks?: string[];
+  next_step?: string | null;
+}
+
+export interface AgentWorkFollowupInput {
+  title: string;
+  assignee?: string;
+  priority?: string;
+  body?: string;
+}
+
 export interface Operation {
   id: number;
   record_id?: string | null;

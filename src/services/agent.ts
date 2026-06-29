@@ -41,8 +41,7 @@ export class AgentWorkflowQueuedError extends Error {
 }
 
 const hermesGatewayUrl =
-  import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") ||
-  "https://hermes-agent-production-c98b.up.railway.app";
+  import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") || null;
 const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
 const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
 
@@ -79,6 +78,10 @@ async function enqueueFionaWorkflow(input: AgentWorkflowInput) {
 }
 
 async function submitHermesWebhook(input: AgentWorkflowInput) {
+  if (!hermesGatewayUrl) {
+    throw new Error("Hermes gateway URL is not configured.");
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
