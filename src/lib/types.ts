@@ -143,6 +143,67 @@ export interface AgentWorkFollowupInput {
   body?: string;
 }
 
+export interface WorkflowTemplateItem {
+  id: string;
+  workflow_id: string;
+  name: string;
+  status: string | null;
+  entity: string | null;
+  owner_role: string | null;
+  default_actor: string | null;
+  source_document_id: WorkspaceDatabaseFieldValue;
+  source_path: string | null;
+  trigger: string | null;
+  required_inputs: string | null;
+  default_routing: string | null;
+  approval_gates: string | null;
+  expected_output: string | null;
+  related_databases: string[];
+  receipt_template: string | null;
+  success_criteria: string | null;
+  failure_behavior: string | null;
+  run_ids: string[];
+  body_preview: string;
+  updated_at: string;
+}
+
+export interface WorkflowRunItem {
+  id: string;
+  name: string;
+  status: string | null;
+  workflow_record_id: string | null;
+  task_id: string | null;
+  biz_ops_id: string | null;
+  entity_scope: string | null;
+  owner_role: string | null;
+  actor: string | null;
+  trigger_source: string | null;
+  current_step: string | null;
+  source_documents: string[];
+  source_records: string | null;
+  context: string | null;
+  receipt: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  body_preview: string;
+  updated_at: string;
+}
+
+export interface StartWorkflowInput {
+  workflowId: string;
+  triggerSource: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
+  requestedBy: string;
+  entityScope?: string | null;
+  taskId?: string | null;
+  bizOpsId?: string | null;
+  sourceRecords?: string[];
+  sourceDocuments?: Array<string | number>;
+  context?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  requiresApproval?: boolean;
+  confirmWrite?: boolean;
+}
+
 export interface Operation {
   id: number;
   record_id?: string | null;
