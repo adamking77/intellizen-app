@@ -15,6 +15,7 @@ import type {
   AgentProjectItem,
   AgentWorkReceiptInput,
   StartWorkflowInput,
+  UpdateWorkflowRunInput,
   FionaInboxItem,
   GraphEntityType,
   GraphEdgeRecord,
@@ -44,6 +45,7 @@ import type {
   WorkspaceDatabaseView,
   WorkspaceDatabaseViewConfig,
   WorkflowRunItem,
+  WorkflowRunStatus,
   WorkflowTemplateItem,
   WorkspaceNode,
   WorkspaceNodeSummary,
@@ -3545,6 +3547,155 @@ function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
     completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
+  };
+}
+
+export async function listWorkflowRuns(input: {
+  status?: string | null;
+  actor?: string | null;
+  workflowId?: string | null;
+  taskId?: string | null;
+  bizOpsId?: string | null;
+  includeCompleted?: boolean;
+  limit?: number;
+} = {}) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  const workflowRecordId = input.workflowId ? await resolveWorkflowRecordId(input.workflowId) : null;
+  const records = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  return records
+    .filter((record) => {
+      const status = fieldString(record.fields[WORKFLOW_RUN_FIELDS.status]) ?? "";
+      if (!input.includeCompleted && ["Done", "Deferred"].includes(status)) return false;
+      if (input.status && status !== input.status) return false;
+      if (input.actor && fieldString(record.fields[WORKFLOW_RUN_FIELDS.actor]) !== input.actor) return false;
+      if (workflowRecordId && firstRelationId(record.fields[WORKFLOW_RUN_FIELDS.workflow]) !== workflowRecordId) return false;
+      if (input.taskId && !asStringArray(record.fields[WORKFLOW_RUN_FIELDS.task]).includes(input.taskId)) return false;
+      if (input.bizOpsId && !asStringArray(record.fields[WORKFLOW_RUN_FIELDS.bizOps]).includes(input.bizOpsId)) return false;
+      return true;
+    })
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map(toWorkflowRunItem);
+}
+
+async function resolveWorkflowRecordId(workflowIdOrRecordId: string) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workflowIdOrRecordId)) {
+    return workflowIdOrRecordId;
+  }
+  const workflow = await getWorkflowTemplateByWorkflowId(workflowIdOrRecordId);
+  return workflow.id;
+}
+
+function workflowRunUpdateSection(input: UpdateWorkflowRunInput) {
+  return `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Actor: ${input.actor}
+Status: ${input.status ?? "unchanged"}
+Current step: ${input.currentStep ?? "unchanged"}
+Sources:
+${markdownList(input.sources)}
+Actions taken:
+${markdownList(input.actionsTaken)}
+Verification:
+${markdownList(input.verification)}
+Blocked items:
+${markdownList(input.blockedItems)}
+Approval needed: ${input.approvalNeeded ?? "none"}
+Next step: ${input.nextStep ?? "none"}
+
+Summary:
+${input.summary}`;
+}
+
+function taskStateForWorkflowRunStatus(status?: WorkflowRunStatus) {
+  if (status === "Done") return { status: "Done", stage: "Done" };
+  if (status === "Blocked") return { status: "Blocked", stage: "Doing" };
+  if (status === "Deferred") return { status: "Deferred", stage: "Backlog" };
+  if (status === "Needs approval") return { status: "Needs approval", stage: "Review" };
+  if (status === "In progress") return { status: "In progress", stage: "Doing" };
+  return null;
+}
+
+export async function updateWorkflowRun(input: UpdateWorkflowRunInput) {
+  const run = await getWorkspaceRecord(input.workflowRunId);
+  if (run.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns) {
+    throw new Error("Workflow run not found.");
+  }
+
+  const section = workflowRunUpdateSection(input);
+  const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
+    ...run.fields,
+    ...(input.status ? { [WORKFLOW_RUN_FIELDS.status]: input.status } : {}),
+    ...(input.currentStep !== undefined ? { [WORKFLOW_RUN_FIELDS.currentStep]: input.currentStep } : {}),
+    [WORKFLOW_RUN_FIELDS.receipt]: section,
+    ...(["Done", "Blocked", "Deferred"].includes(input.status ?? "")
+      ? { [WORKFLOW_RUN_FIELDS.completedAt]: new Date().toISOString() }
+      : {}),
+  };
+  const nextBody = appendMarkdownSection(run.body, section);
+  const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
+  const syncTask = input.syncTask !== false && Boolean(taskId);
+  const taskState = taskStateForWorkflowRunStatus(input.status);
+
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirmWrite: true to update the Workflow Runs record.",
+      workflow_run_id: run.id,
+      next_run: toWorkflowRunItem({ ...run, fields: nextFields, body: nextBody }),
+      task_sync: syncTask
+        ? {
+            task_id: taskId,
+            next_status: taskState?.status ?? "unchanged",
+            next_stage: taskState?.stage ?? "unchanged",
+            body_appended: true,
+          }
+        : null,
+      appended_section: section,
+    };
+  }
+
+  const updatedRun = await updateWorkspaceRecord(
+    run.id,
+    {
+      fields: nextFields,
+      body: nextBody,
+      taxonomy: run.taxonomy,
+    },
+    true,
+  );
+
+  let syncedTask: AgentWorkItem | null = null;
+  if (syncTask && taskId) {
+    const task = await getWorkspaceRecord(taskId);
+    const nextTaskFields = taskState
+      ? {
+          ...task.fields,
+          [AGENT_TASK_FIELDS.status]: taskState.status,
+          [AGENT_TASK_FIELDS.stage]: taskState.stage,
+        }
+      : task.fields;
+    const updatedTask = await updateWorkspaceRecord(
+      task.id,
+      {
+        fields: nextTaskFields,
+        body: appendMarkdownSection(task.body, section),
+        taxonomy: task.taxonomy,
+      },
+      true,
+    );
+    syncedTask = toAgentWorkItem(updatedTask);
+  }
+
+  return {
+    dry_run: false,
+    run: toWorkflowRunItem(updatedRun),
+    synced_task: syncedTask,
   };
 }
 
