@@ -1495,6 +1495,7 @@ export function DatabaseEditorView({
                 database={database}
                 view={activeView}
                 catalog={catalog}
+                embedded={embedded}
                 activeRecordId={activeRecordId}
                 onOpenRecord={handleOpenRecord}
                 onUpdateField={handleUpdateRecordField}
