@@ -14,6 +14,7 @@ import type {
   AgentWorkOutcome,
   AgentProjectItem,
   AgentWorkReceiptInput,
+  StartWorkflowInput,
   FionaInboxItem,
   GraphEntityType,
   GraphEdgeRecord,
@@ -42,6 +43,8 @@ import type {
   WorkspaceDatabaseSummary,
   WorkspaceDatabaseView,
   WorkspaceDatabaseViewConfig,
+  WorkflowRunItem,
+  WorkflowTemplateItem,
   WorkspaceNode,
   WorkspaceNodeSummary,
 } from "@/lib/types";
@@ -58,6 +61,8 @@ const SYSTEM_WORKSPACE_DATABASE_ICONS = {
 export const GENZEN_WORKSPACE_DATABASE_IDS = {
   bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
   tasks: "654acc9c-0270-49e2-86f7-788e25c59a76",
+  workflowRegistry: "c1000000-0000-0000-0000-000000000001",
+  workflowRuns: "c1000000-0000-0000-0000-000000000002",
 } as const;
 
 const AGENT_TASK_FIELDS = {
@@ -78,6 +83,46 @@ const AGENT_BIZ_OPS_FIELDS = {
   agentOwner: "initiative_agent_owner",
   weekTheme: "initiative_week_theme",
   tasks: "biz_ops_tasks",
+} as const;
+
+const WORKFLOW_REGISTRY_FIELDS = {
+  name: "workflow_name",
+  workflowId: "workflow_id",
+  status: "workflow_status",
+  entity: "workflow_entity",
+  ownerRole: "workflow_owner_role",
+  defaultActor: "workflow_default_actor",
+  sourceDocumentId: "workflow_source_document_id",
+  sourcePath: "workflow_source_path",
+  trigger: "workflow_trigger",
+  requiredInputs: "workflow_required_inputs",
+  defaultRouting: "workflow_default_routing",
+  approvalGates: "workflow_approval_gates",
+  expectedOutput: "workflow_expected_output",
+  relatedDatabases: "workflow_related_databases",
+  receiptTemplate: "workflow_receipt_template",
+  successCriteria: "workflow_success_criteria",
+  failureBehavior: "workflow_failure_behavior",
+  runs: "workflow_runs",
+} as const;
+
+const WORKFLOW_RUN_FIELDS = {
+  name: "run_name",
+  status: "run_status",
+  workflow: "run_workflow",
+  task: "run_task",
+  bizOps: "run_biz_ops",
+  entityScope: "run_entity_scope",
+  ownerRole: "run_owner_role",
+  actor: "run_actor",
+  triggerSource: "run_trigger_source",
+  currentStep: "run_current_step",
+  sourceDocuments: "run_source_documents",
+  sourceRecords: "run_source_records",
+  context: "run_context",
+  receipt: "run_receipt",
+  startedAt: "run_started_at",
+  completedAt: "run_completed_at",
 } as const;
 
 const OPERATIONS_DB_FIELDS = {
@@ -3432,6 +3477,213 @@ ${input.receipt.summary}`;
     true,
   );
   return toAgentWorkItem(updated);
+}
+
+function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTemplateItem {
+  return {
+    id: record.id,
+    workflow_id: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.workflowId]) ?? record.id,
+    name: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.name]) ?? "Untitled workflow",
+    status: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.status]),
+    entity: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.entity]),
+    owner_role: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.ownerRole]),
+    default_actor: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.defaultActor]),
+    source_document_id: record.fields[WORKFLOW_REGISTRY_FIELDS.sourceDocumentId],
+    source_path: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.sourcePath]),
+    trigger: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.trigger]),
+    required_inputs: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.requiredInputs]),
+    default_routing: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.defaultRouting]),
+    approval_gates: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.approvalGates]),
+    expected_output: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.expectedOutput]),
+    related_databases: asStringArray(record.fields[WORKFLOW_REGISTRY_FIELDS.relatedDatabases]),
+    receipt_template: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.receiptTemplate]),
+    success_criteria: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.successCriteria]),
+    failure_behavior: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.failureBehavior]),
+    run_ids: asStringArray(record.fields[WORKFLOW_REGISTRY_FIELDS.runs]),
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
+  return {
+    id: record.id,
+    name: fieldString(record.fields[WORKFLOW_RUN_FIELDS.name]) ?? "Untitled workflow run",
+    status: fieldString(record.fields[WORKFLOW_RUN_FIELDS.status]),
+    workflow_record_id: firstRelationId(record.fields[WORKFLOW_RUN_FIELDS.workflow]),
+    task_id: firstRelationId(record.fields[WORKFLOW_RUN_FIELDS.task]),
+    biz_ops_id: firstRelationId(record.fields[WORKFLOW_RUN_FIELDS.bizOps]),
+    entity_scope: fieldString(record.fields[WORKFLOW_RUN_FIELDS.entityScope]),
+    owner_role: fieldString(record.fields[WORKFLOW_RUN_FIELDS.ownerRole]),
+    actor: fieldString(record.fields[WORKFLOW_RUN_FIELDS.actor]),
+    trigger_source: fieldString(record.fields[WORKFLOW_RUN_FIELDS.triggerSource]),
+    current_step: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStep]),
+    source_documents: asStringArray(record.fields[WORKFLOW_RUN_FIELDS.sourceDocuments]),
+    source_records: fieldString(record.fields[WORKFLOW_RUN_FIELDS.sourceRecords]),
+    context: fieldString(record.fields[WORKFLOW_RUN_FIELDS.context]),
+    receipt: fieldString(record.fields[WORKFLOW_RUN_FIELDS.receipt]),
+    started_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.startedAt]),
+    completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
+    body_preview: (record.body ?? "").slice(0, 500),
+    updated_at: record.updated_at,
+  };
+}
+
+export async function listWorkflows(input: {
+  entity?: string | null;
+  ownerRole?: string | null;
+  status?: string | null;
+  includeInactive?: boolean;
+  limit?: number;
+} = {}) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw error;
+  const records = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  return records
+    .filter((record) => {
+      const status = fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.status]) ?? "";
+      if (!input.includeInactive && status !== "Active") return false;
+      if (input.status && status !== input.status) return false;
+      if (input.entity && fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.entity]) !== input.entity) return false;
+      if (input.ownerRole && fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.ownerRole]) !== input.ownerRole) {
+        return false;
+      }
+      return true;
+    })
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map(toWorkflowTemplateItem);
+}
+
+async function getWorkflowTemplateByWorkflowId(workflowId: string) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry)
+    .eq(`fields->>${WORKFLOW_REGISTRY_FIELDS.workflowId}`, workflowId)
+    .single();
+
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+}
+
+export async function startWorkflow(input: StartWorkflowInput) {
+  const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
+  const workflowItem = toWorkflowTemplateItem(workflow);
+  const sourceDocumentIds = Array.from(
+    new Set([
+      ...(input.sourceDocuments ?? []).map((value) => String(value)),
+      ...(workflowItem.source_document_id ? [String(workflowItem.source_document_id)] : []),
+    ]),
+  );
+  const sourceRecords = Array.from(
+    new Set([
+      ...(input.sourceRecords ?? []),
+      ...(input.taskId ? [input.taskId] : []),
+      ...(input.bizOpsId ? [input.bizOpsId] : []),
+    ]),
+  );
+  const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
+  const currentStep = input.requiresApproval ? "Queued for approval" : "Queued";
+  const fields: Record<string, WorkspaceDatabaseFieldValue> = {
+    [WORKFLOW_RUN_FIELDS.name]: runName,
+    [WORKFLOW_RUN_FIELDS.status]: input.requiresApproval ? "Needs approval" : "Queued",
+    [WORKFLOW_RUN_FIELDS.workflow]: [workflow.id],
+    [WORKFLOW_RUN_FIELDS.task]: input.taskId ? [input.taskId] : [],
+    [WORKFLOW_RUN_FIELDS.bizOps]: input.bizOpsId ? [input.bizOpsId] : [],
+    [WORKFLOW_RUN_FIELDS.entityScope]: input.entityScope ?? workflowItem.entity,
+    [WORKFLOW_RUN_FIELDS.ownerRole]: workflowItem.owner_role,
+    [WORKFLOW_RUN_FIELDS.actor]: workflowItem.default_actor,
+    [WORKFLOW_RUN_FIELDS.triggerSource]: input.triggerSource,
+    [WORKFLOW_RUN_FIELDS.currentStep]: currentStep,
+    [WORKFLOW_RUN_FIELDS.sourceDocuments]: sourceDocumentIds,
+    [WORKFLOW_RUN_FIELDS.sourceRecords]: sourceRecords.join("\n"),
+    [WORKFLOW_RUN_FIELDS.context]: JSON.stringify({
+      requested_by: input.requestedBy,
+      workflow_id: input.workflowId,
+      context: input.context ?? {},
+      config: input.config ?? {},
+    }),
+    [WORKFLOW_RUN_FIELDS.receipt]: "",
+    [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
+    [WORKFLOW_RUN_FIELDS.completedAt]: null,
+  };
+  const body = `# ${runName}
+
+Workflow: ${workflowItem.workflow_id}
+Requested by: ${input.requestedBy}
+Trigger source: ${input.triggerSource}
+Owner role: ${workflowItem.owner_role ?? "none"}
+Default actor: ${workflowItem.default_actor ?? "none"}
+Approval gates: ${workflowItem.approval_gates ?? "none"}
+Expected output: ${workflowItem.expected_output ?? "none"}
+
+Source records:
+${markdownList(sourceRecords)}
+
+Source documents:
+${markdownList(sourceDocumentIds)}
+
+Context:
+${JSON.stringify(input.context ?? {}, null, 2)}`;
+
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirmWrite: true to create a Workflow Runs record.",
+      workflow: workflowItem,
+      next_run: {
+        name: runName,
+        status: fields[WORKFLOW_RUN_FIELDS.status],
+        current_step: currentStep,
+        actor: workflowItem.default_actor,
+        owner_role: workflowItem.owner_role,
+        source_documents: sourceDocumentIds,
+        source_records: sourceRecords,
+      },
+    };
+  }
+
+  const created = await createWorkspaceRecord(
+    {
+      databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns,
+      fields,
+      body,
+      taxonomy: {
+        entity: "genzen",
+        area: "operations",
+        object_type: "workflow_run",
+        workflow_id: input.workflowId,
+      },
+      skipSystemSync: true,
+    },
+  );
+  const existingRuns = asStringArray(workflow.fields[WORKFLOW_REGISTRY_FIELDS.runs]);
+  await updateWorkspaceRecord(
+    workflow.id,
+    {
+      fields: {
+        ...workflow.fields,
+        [WORKFLOW_REGISTRY_FIELDS.runs]: Array.from(new Set([...existingRuns, created.id])),
+      },
+      body: workflow.body,
+      taxonomy: workflow.taxonomy,
+    },
+    true,
+  );
+
+  return {
+    dry_run: false,
+    workflow_run_id: created.id,
+    session_id: null,
+    status: fieldString(created.fields[WORKFLOW_RUN_FIELDS.status])?.toLowerCase().replace(/\s+/g, "_") ?? "queued",
+    current_step: fieldString(created.fields[WORKFLOW_RUN_FIELDS.currentStep]),
+    run: toWorkflowRunItem(created),
+  };
 }
 
 export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {
