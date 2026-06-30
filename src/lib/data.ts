@@ -73,6 +73,7 @@ const AGENT_TASK_FIELDS = {
   stage: "task_stage",
   area: "task_area",
   project: "task_project",
+  workflowRuns: "task_workflow_runs",
 } as const;
 
 const AGENT_BIZ_OPS_FIELDS = {
@@ -83,6 +84,7 @@ const AGENT_BIZ_OPS_FIELDS = {
   agentOwner: "initiative_agent_owner",
   weekTheme: "initiative_week_theme",
   tasks: "biz_ops_tasks",
+  workflowRuns: "initiative_workflow_runs",
 } as const;
 
 const WORKFLOW_REGISTRY_FIELDS = {
@@ -3227,6 +3229,23 @@ async function getWorkspaceRecord(id: string) {
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
+async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, relatedRecordId: string) {
+  const record = await getWorkspaceRecord(recordId);
+  const existing = asStringArray(record.fields[fieldId]);
+  await updateWorkspaceRecord(
+    recordId,
+    {
+      fields: {
+        ...record.fields,
+        [fieldId]: Array.from(new Set([...existing, relatedRecordId])),
+      },
+      body: record.body,
+      taxonomy: record.taxonomy,
+    },
+    true,
+  );
+}
+
 export async function listAgentProjects(input: {
   actor?: string | null;
   stages?: string[];
@@ -3675,6 +3694,13 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     },
     true,
   );
+
+  if (input.taskId) {
+    await appendWorkspaceRecordRelation(input.taskId, AGENT_TASK_FIELDS.workflowRuns, created.id);
+  }
+  if (input.bizOpsId) {
+    await appendWorkspaceRecordRelation(input.bizOpsId, AGENT_BIZ_OPS_FIELDS.workflowRuns, created.id);
+  }
 
   return {
     dry_run: false,
