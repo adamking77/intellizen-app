@@ -75,6 +75,7 @@ const AGENT_TASK_FIELDS = {
   stage: "task_stage",
   area: "task_area",
   project: "task_project",
+  workflowRuns: "task_workflow_runs",
 } as const;
 
 const AGENT_BIZ_OPS_FIELDS = {
@@ -85,6 +86,7 @@ const AGENT_BIZ_OPS_FIELDS = {
   agentOwner: "initiative_agent_owner",
   weekTheme: "initiative_week_theme",
   tasks: "biz_ops_tasks",
+  workflowRuns: "initiative_workflow_runs",
 } as const;
 
 const WORKFLOW_REGISTRY_FIELDS = {
@@ -240,6 +242,33 @@ async function updateWorkspaceTaskRecord(
 
   if (error) throw new Error(error.message);
   return data as WorkspaceRecordRow;
+}
+
+async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, relatedRecordId: string) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("fields")
+    .eq("id", recordId)
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const fields = (data?.fields ?? {}) as Record<string, unknown>;
+  const existing = asStringArray(fields[fieldId]);
+  const next = Array.from(new Set([...existing, relatedRecordId]));
+
+  const { error: updateError } = await supabase
+    .schema("workspace").from("records")
+    .update({
+      fields: {
+        ...fields,
+        [fieldId]: next,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", recordId);
+
+  if (updateError) throw new Error(updateError.message);
 }
 
 type InitiativeMeta = {
@@ -793,6 +822,13 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     .eq("id", workflow.id);
 
   if (registryError) throw new Error(registryError.message);
+
+  if (input.task_id) {
+    await appendWorkspaceRecordRelation(input.task_id, AGENT_TASK_FIELDS.workflowRuns, run.id);
+  }
+  if (input.biz_ops_id) {
+    await appendWorkspaceRecordRelation(input.biz_ops_id, AGENT_BIZ_OPS_FIELDS.workflowRuns, run.id);
+  }
 
   return {
     dry_run: false,
