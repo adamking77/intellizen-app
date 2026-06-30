@@ -274,6 +274,33 @@ export function DatabasePeekPanel({
     && field.type !== "formula"
     && field.type !== "rollup";
 
+  const renderRelationSection = (field: WorkspaceDatabaseField) => {
+    const targetDatabase = resolveTargetDatabase(database, field, catalog);
+    if (!targetDatabase) return null;
+    return (
+      <TaskRelationsSection
+        key={field.id}
+        sourceDatabaseId={database.id}
+        sourceRecordId={record.id}
+        fieldId={field.id}
+        fieldName={field.name}
+        targetDatabase={targetDatabase}
+        relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
+        catalog={catalog}
+        onOpenRecord={onOpenRecord}
+        onCreateRecord={onCreateRecord}
+        onUpdateField={onUpdateField}
+        onUpdateRelation={onUpdateRelation}
+        onUpdateViewConfig={onUpdateViewConfig}
+        onSaveSchema={onSaveSchema}
+        onDeleteRecord={onDelete}
+        onDeleteRecords={onDeleteRecords}
+        onDuplicateRecord={onDuplicate}
+        onDuplicateRecords={onDuplicateRecords}
+      />
+    );
+  };
+
   return (
     <>
       <div
@@ -475,38 +502,18 @@ export function DatabasePeekPanel({
           )}
 
           {database.schema
+            .filter((field) => field.type === "relation" && isWorkflowRunsRelationField(field))
+            .map(renderRelationSection)}
+
+          {database.schema
             .filter((field) => {
               if (field.type !== "relation") return false;
+              if (isWorkflowRunsRelationField(field)) return false;
               if (isStructuralHierarchyRelationField(field, database)) return false;
               const tid = field.relation?.targetDatabaseId;
               return !tid || tid === database.id;
             })
-            .map((field) => {
-              const targetDatabase = resolveTargetDatabase(database, field, catalog);
-              if (!targetDatabase) return null;
-              return (
-                <TaskRelationsSection
-                  key={field.id}
-                  sourceDatabaseId={database.id}
-                  sourceRecordId={record.id}
-                  fieldId={field.id}
-                  fieldName={field.name}
-                  targetDatabase={targetDatabase}
-                  relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
-                  catalog={catalog}
-                  onOpenRecord={onOpenRecord}
-                  onCreateRecord={onCreateRecord}
-                  onUpdateField={onUpdateField}
-                  onUpdateRelation={onUpdateRelation}
-                  onUpdateViewConfig={onUpdateViewConfig}
-                  onSaveSchema={onSaveSchema}
-                  onDeleteRecord={onDelete}
-                  onDeleteRecords={onDeleteRecords}
-                  onDuplicateRecord={onDuplicate}
-                  onDuplicateRecords={onDuplicateRecords}
-                />
-              );
-            })}
+            .map(renderRelationSection)}
 
           <div className="db-record-section px-6 py-3">
             <details
@@ -575,35 +582,11 @@ export function DatabasePeekPanel({
           {database.schema
             .filter((field) => {
               if (field.type !== "relation") return false;
+              if (isWorkflowRunsRelationField(field)) return false;
               const tid = field.relation?.targetDatabaseId;
               return tid !== undefined && tid !== database.id;
             })
-            .map((field) => {
-              const targetDatabase = resolveTargetDatabase(database, field, catalog);
-              if (!targetDatabase) return null;
-              return (
-                <TaskRelationsSection
-                  key={field.id}
-                  sourceDatabaseId={database.id}
-                  sourceRecordId={record.id}
-                  fieldId={field.id}
-                  fieldName={field.name}
-                  targetDatabase={targetDatabase}
-                  relatedRecordIds={Array.isArray(record[field.id]) ? (record[field.id] as string[]) : []}
-                  catalog={catalog}
-                  onOpenRecord={onOpenRecord}
-                  onCreateRecord={onCreateRecord}
-                  onUpdateField={onUpdateField}
-                  onUpdateRelation={onUpdateRelation}
-                  onUpdateViewConfig={onUpdateViewConfig}
-                  onSaveSchema={onSaveSchema}
-                  onDeleteRecord={onDelete}
-                  onDeleteRecords={onDeleteRecords}
-                  onDuplicateRecord={onDuplicate}
-                  onDuplicateRecords={onDuplicateRecords}
-                />
-              );
-            })}
+            .map(renderRelationSection)}
 
           <div className="db-record-section px-6 pb-6">
             <div className="db-record-section-head db-record-notes-head">
@@ -742,4 +725,8 @@ function isStructuralHierarchyRelationField(
 
 function isHierarchyRelationName(name: string) {
   return /^parent$/.test(name) || /^sub[-\s]?records?$/.test(name) || /^sub[-\s]?items?$/.test(name);
+}
+
+function isWorkflowRunsRelationField(field: WorkspaceDatabaseField) {
+  return field.type === "relation" && field.name.trim().toLowerCase() === "workflow runs";
 }
