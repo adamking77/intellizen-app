@@ -87,6 +87,7 @@ export interface FionaInboxItem {
 
 export type AgentWorkSource = "workspace.records";
 export type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
+export type WorkflowRunStatus = "Queued" | "In progress" | "Blocked" | "Needs approval" | "Done" | "Deferred";
 
 export interface AgentWorkItem {
   id: string;
@@ -201,6 +202,22 @@ export interface StartWorkflowInput {
   context?: Record<string, unknown>;
   config?: Record<string, unknown>;
   requiresApproval?: boolean;
+  confirmWrite?: boolean;
+}
+
+export interface UpdateWorkflowRunInput {
+  workflowRunId: string;
+  actor: string;
+  status?: WorkflowRunStatus;
+  currentStep?: string | null;
+  summary: string;
+  sources?: string[];
+  actionsTaken?: string[];
+  verification?: string[];
+  blockedItems?: string[];
+  approvalNeeded?: string | null;
+  nextStep?: string | null;
+  syncTask?: boolean;
   confirmWrite?: boolean;
 }
 

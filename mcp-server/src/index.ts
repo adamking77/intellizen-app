@@ -536,6 +536,7 @@ ${markdownList(input.open_questions)}`;
 }
 
 type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
+type WorkflowRunStatus = "Queued" | "In progress" | "Blocked" | "Needs approval" | "Done" | "Deferred";
 
 async function closeAgentWork(input: {
   work_item_id: string;
@@ -662,6 +663,181 @@ function toWorkflowRunItem(record: WorkspaceRecordRow) {
     completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
+  };
+}
+
+async function listWorkflowRuns(input: {
+  status?: string | null;
+  actor?: string | null;
+  workflow_id?: string | null;
+  task_id?: string | null;
+  biz_ops_id?: string | null;
+  include_completed?: boolean;
+  limit?: number;
+}) {
+  const records = await listWorkspaceRecords(GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns);
+  const workflowRecordId = input.workflow_id
+    ? await resolveWorkflowRecordId(input.workflow_id)
+    : null;
+  return records
+    .filter((record) => {
+      const status = fieldString(record.fields[WORKFLOW_RUN_FIELDS.status]) ?? "";
+      if (!input.include_completed && ["Done", "Deferred"].includes(status)) return false;
+      if (input.status && status !== input.status) return false;
+      if (input.actor && fieldString(record.fields[WORKFLOW_RUN_FIELDS.actor]) !== input.actor) return false;
+      if (workflowRecordId && firstRelationId(record.fields[WORKFLOW_RUN_FIELDS.workflow]) !== workflowRecordId) return false;
+      if (input.task_id && !asStringArray(record.fields[WORKFLOW_RUN_FIELDS.task]).includes(input.task_id)) return false;
+      if (input.biz_ops_id && !asStringArray(record.fields[WORKFLOW_RUN_FIELDS.bizOps]).includes(input.biz_ops_id)) return false;
+      return true;
+    })
+    .slice(0, Math.max(input.limit ?? 50, 1))
+    .map(toWorkflowRunItem);
+}
+
+async function resolveWorkflowRecordId(workflowIdOrRecordId: string) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workflowIdOrRecordId)) {
+    return workflowIdOrRecordId;
+  }
+  const workflow = await getWorkflowByWorkflowId(workflowIdOrRecordId);
+  return workflow.id;
+}
+
+async function getWorkflowRunRecord(id: string): Promise<WorkspaceRecordRow> {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, fields, body, updated_at")
+    .eq("id", id)
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
+    .single();
+
+  if (error) throw new Error(`Workflow run not found for id ${id}: ${error.message}`);
+  return data as WorkspaceRecordRow;
+}
+
+function workflowRunUpdateSection(input: {
+  actor: string;
+  status?: WorkflowRunStatus;
+  current_step?: string | null;
+  summary: string;
+  sources?: string[];
+  actions_taken?: string[];
+  verification?: string[];
+  blocked_items?: string[];
+  approval_needed?: string | null;
+  next_step?: string | null;
+}) {
+  return `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Actor: ${input.actor}
+Status: ${input.status ?? "unchanged"}
+Current step: ${input.current_step ?? "unchanged"}
+Sources:
+${markdownList(input.sources)}
+Actions taken:
+${markdownList(input.actions_taken)}
+Verification:
+${markdownList(input.verification)}
+Blocked items:
+${markdownList(input.blocked_items)}
+Approval needed: ${input.approval_needed ?? "none"}
+Next step: ${input.next_step ?? "none"}
+
+Summary:
+${input.summary}`;
+}
+
+function taskStateForWorkflowRunStatus(status?: WorkflowRunStatus) {
+  if (status === "Done") return { status: "Done", stage: "Done" };
+  if (status === "Blocked") return { status: "Blocked", stage: "Doing" };
+  if (status === "Deferred") return { status: "Deferred", stage: "Backlog" };
+  if (status === "Needs approval") return { status: "Needs approval", stage: "Review" };
+  if (status === "In progress") return { status: "In progress", stage: "Doing" };
+  return null;
+}
+
+async function updateWorkflowRun(input: {
+  workflow_run_id: string;
+  actor: string;
+  status?: WorkflowRunStatus;
+  current_step?: string | null;
+  summary: string;
+  sources?: string[];
+  actions_taken?: string[];
+  verification?: string[];
+  blocked_items?: string[];
+  approval_needed?: string | null;
+  next_step?: string | null;
+  sync_task?: boolean;
+  confirm_write?: boolean;
+}) {
+  const run = await getWorkflowRunRecord(input.workflow_run_id);
+  const section = workflowRunUpdateSection(input);
+  const nextFields: Record<string, unknown> = {
+    ...run.fields,
+    ...(input.status ? { [WORKFLOW_RUN_FIELDS.status]: input.status } : {}),
+    ...(input.current_step !== undefined ? { [WORKFLOW_RUN_FIELDS.currentStep]: input.current_step } : {}),
+    [WORKFLOW_RUN_FIELDS.receipt]: section,
+    ...(["Done", "Blocked", "Deferred"].includes(input.status ?? "")
+      ? { [WORKFLOW_RUN_FIELDS.completedAt]: new Date().toISOString() }
+      : {}),
+  };
+  const nextBody = appendMarkdownSection(run.body, section);
+  const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
+  const syncTask = input.sync_task !== false && Boolean(taskId);
+  const taskState = taskStateForWorkflowRunStatus(input.status);
+
+  if (!input.confirm_write) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirm_write: true to update the Workflow Runs record.",
+      workflow_run_id: run.id,
+      next_run: toWorkflowRunItem({ ...run, fields: nextFields, body: nextBody }),
+      task_sync: syncTask
+        ? {
+            task_id: taskId,
+            next_status: taskState?.status ?? "unchanged",
+            next_stage: taskState?.stage ?? "unchanged",
+            body_appended: true,
+          }
+        : null,
+      appended_section: section,
+    };
+  }
+
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .update({
+      fields: nextFields,
+      body: nextBody,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", run.id)
+    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
+    .select("id, database_id, fields, body, updated_at")
+    .single();
+
+  if (error) throw new Error(error.message);
+  let syncedTask = null;
+  if (syncTask && taskId) {
+    const task = await getWorkspaceTaskRecord(taskId);
+    const nextTaskFields = taskState
+      ? {
+          ...task.fields,
+          [AGENT_TASK_FIELDS.status]: taskState.status,
+          [AGENT_TASK_FIELDS.stage]: taskState.stage,
+        }
+      : task.fields;
+    const updatedTask = await updateWorkspaceTaskRecord(task.id, {
+      fields: nextTaskFields,
+      body: appendMarkdownSection(task.body, section),
+    });
+    syncedTask = await agentWorkItemForRecord(updatedTask);
+  }
+
+  return {
+    dry_run: false,
+    run: toWorkflowRunItem(data as WorkspaceRecordRow),
+    synced_task: syncedTask,
   };
 }
 
@@ -1114,6 +1290,50 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           confirm_write: { type: "boolean", description: "Required true to create the run. Defaults to preview only." },
         },
         required: ["workflow_id", "trigger_source", "requested_by"],
+      },
+    },
+    {
+      name: "list_workflow_runs",
+      description:
+        "List Workflow Runs records from IntelliZen Databases. Filters by status, actor, workflow, task, Biz Ops, and active/completed state.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "Optional exact run status filter." },
+          actor: { type: "string", description: "Optional actor filter, e.g. Steve, Fiona, Claude, Codex." },
+          workflow_id: { type: "string", description: "Optional canonical workflow id or Workflow Registry record UUID." },
+          task_id: { type: "string", description: "Optional linked Tasks record UUID." },
+          biz_ops_id: { type: "string", description: "Optional linked Biz Ops record UUID." },
+          include_completed: { type: "boolean", description: "Include Done and Deferred runs. Defaults to false." },
+          limit: { type: "number", description: "Max runs to return. Defaults to 50." },
+        },
+      },
+    },
+    {
+      name: "update_workflow_run",
+      description:
+        "Preview or update a Workflow Runs record, append a run receipt, and optionally sync the linked Task status/body. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_run_id: { type: "string", description: "Workflow Runs record UUID." },
+          actor: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["Queued", "In progress", "Blocked", "Needs approval", "Done", "Deferred"],
+          },
+          current_step: { type: "string" },
+          summary: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+          actions_taken: { type: "array", items: { type: "string" } },
+          verification: { type: "array", items: { type: "string" } },
+          blocked_items: { type: "array", items: { type: "string" } },
+          approval_needed: { type: "string" },
+          next_step: { type: "string" },
+          sync_task: { type: "boolean", description: "Append the same receipt to the linked Task and sync task state. Defaults true when linked task exists." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["workflow_run_id", "actor", "summary"],
       },
     },
     {
@@ -1707,6 +1927,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       context?: Record<string, unknown>;
       config?: Record<string, unknown>;
       requires_approval?: boolean;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── list_workflow_runs ───────────────────────────────────────────────────
+  if (name === "list_workflow_runs") {
+    const result = await listWorkflowRuns((args ?? {}) as {
+      status?: string | null;
+      actor?: string | null;
+      workflow_id?: string | null;
+      task_id?: string | null;
+      biz_ops_id?: string | null;
+      include_completed?: boolean;
+      limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── update_workflow_run ──────────────────────────────────────────────────
+  if (name === "update_workflow_run") {
+    const result = await updateWorkflowRun((args ?? {}) as {
+      workflow_run_id: string;
+      actor: string;
+      status?: WorkflowRunStatus;
+      current_step?: string | null;
+      summary: string;
+      sources?: string[];
+      actions_taken?: string[];
+      verification?: string[];
+      blocked_items?: string[];
+      approval_needed?: string | null;
+      next_step?: string | null;
+      sync_task?: boolean;
       confirm_write?: boolean;
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
