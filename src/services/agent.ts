@@ -17,6 +17,14 @@ export interface AgentWorkflowInput {
   prompt?: string;
 }
 
+export interface AgentChatInput {
+  message: string;
+  targetAgent: string;
+  context: AgentContext;
+  submit?: boolean;
+  priority?: "low" | "normal" | "high" | "urgent";
+}
+
 export interface AgentSubmission {
   status: "submitted" | "queued";
   messageId?: string;
@@ -68,6 +76,7 @@ async function hmacSha256Hex(secret: string, body: string) {
 function workflowPayload(input: AgentWorkflowInput) {
   return {
     source: "intelizen",
+    kind: "workflow",
     workflow_id: input.workflowId,
     task: input.task,
     context: input.context,
@@ -77,15 +86,31 @@ function workflowPayload(input: AgentWorkflowInput) {
   };
 }
 
-async function enqueueFionaWorkflow(input: AgentWorkflowInput) {
-  const payload = workflowPayload(input);
+function agentChatPayload(input: AgentChatInput & { message: string }) {
+  return {
+    source: "intelizen",
+    kind: "chat_message",
+    action: "send_message",
+    target_agent: input.targetAgent,
+    message: input.message,
+    submit: input.submit ?? true,
+    context: input.context,
+    priority: input.priority ?? "normal",
+  };
+}
+
+async function enqueueFionaInbox(input: {
+  task: string;
+  payload: Record<string, unknown>;
+  priority?: "low" | "normal" | "high" | "urgent";
+}) {
   const { data, error } = await supabase
     .schema("comms").from("fiona_inbox")
     .insert([
       {
         from_agent: "intelizen",
         task: input.task,
-        context: payload,
+        context: input.payload,
         priority: input.priority ?? "normal",
         status: "pending",
       },
@@ -97,15 +122,18 @@ async function enqueueFionaWorkflow(input: AgentWorkflowInput) {
   return data.id as string;
 }
 
-async function submitHermesWebhook(input: AgentWorkflowInput) {
+async function submitHermesPayload(input: {
+  event: "intellizen.workflow" | "intellizen.chat";
+  payload: Record<string, unknown>;
+}) {
   if (!hermesGatewayUrl) {
     throw new Error("Hermes gateway URL is not configured.");
   }
 
-  const body = JSON.stringify(workflowPayload(input));
+  const body = JSON.stringify(input.payload);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-GitHub-Event": "intellizen.workflow",
+    "X-GitHub-Event": input.event,
     "X-GitHub-Delivery": randomDeliveryId(),
   };
   if (hermesWebhookSecret) {
@@ -135,14 +163,43 @@ async function submitHermesWebhook(input: AgentWorkflowInput) {
 }
 
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {
+  const payload = workflowPayload(input);
   try {
-    const result = await submitHermesWebhook(input);
+    const result = await submitHermesPayload({ event: "intellizen.workflow", payload });
     return {
       status: "submitted",
       messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
     };
   } catch {
-    const inboxItemId = await enqueueFionaWorkflow(input);
+    const inboxItemId = await enqueueFionaInbox({
+      task: input.task,
+      payload,
+      priority: input.priority,
+    });
+    return { status: "queued", inboxItemId };
+  }
+}
+
+export async function sendToAgentChat(input: AgentChatInput): Promise<AgentSubmission> {
+  const message = input.message.trim();
+  if (!message) throw new Error("Message is required.");
+  if (input.submit === false) {
+    throw new Error("Draft-only agent chat messages are not supported yet.");
+  }
+
+  const payload = agentChatPayload({ ...input, message });
+  try {
+    const result = await submitHermesPayload({ event: "intellizen.chat", payload });
+    return {
+      status: "submitted",
+      messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
+    };
+  } catch {
+    const inboxItemId = await enqueueFionaInbox({
+      task: `Direct chat message for ${input.targetAgent}: ${message}`,
+      payload,
+      priority: input.priority,
+    });
     return { status: "queued", inboxItemId };
   }
 }

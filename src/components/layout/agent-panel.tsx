@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CheckCircle2, ExternalLink, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Square, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { createVoiceDraftTask, GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
@@ -9,6 +9,7 @@ import type { WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { sendToAgentChat } from "@/services/agent";
 import {
   getPreferredVoiceInputProvider,
   getPreferredVoiceOutputProvider,
@@ -24,6 +25,16 @@ const RUN_BOARD_VIEW_ID = "c2000000-0000-0000-0000-000000000102";
 const APPROVAL_QUEUE_VIEW_ID = "c2000000-0000-0000-0000-000000000103";
 
 type RunAction = "start" | "request_approval" | "approve" | "block" | "done";
+type ChatEntryStatus = "submitted" | "queued" | "failed";
+
+interface AgentChatEntry {
+  id: string;
+  message: string;
+  targetAgent: string;
+  status: ChatEntryStatus;
+  detail: string;
+  createdAt: string;
+}
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -204,6 +215,10 @@ export function AgentPanel() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isCreatingVoiceTask, setIsCreatingVoiceTask] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -243,6 +258,19 @@ export function AgentPanel() {
   const voiceProviderLabel = voiceProviders.find((provider) => provider.id === "hermes" && (provider.canTranscribe || provider.canSpeak))?.label ??
     voiceProviders.find((provider) => provider.id === "browser" && (provider.canTranscribe || provider.canSpeak))?.label ??
     "Voice unavailable";
+  const agentOptions = useMemo(() => {
+    const values = [
+      selectedWorkflow?.default_actor,
+      selectedWorkflow?.owner_role,
+      ...workflows.map((workflow) => workflow.default_actor),
+      ...workflows.map((workflow) => workflow.owner_role),
+      "Fiona/Hermes",
+      "Steve/Claude",
+      "Keel/Codex",
+    ];
+    return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+  }, [selectedWorkflow?.default_actor, selectedWorkflow?.owner_role, workflows]);
+  const targetAgent = selectedAgent || agentOptions[0] || "Fiona/Hermes";
 
   const visibleRuns = useMemo(() => {
     const approvalIds = new Set(approvals.map((run) => run.id));
@@ -304,6 +332,70 @@ export function AgentPanel() {
       toastError("Workflow start failed", startError);
     } finally {
       setIsStartingWorkflow(false);
+    }
+  }
+
+  async function sendChatMessage() {
+    const message = chatDraft.trim();
+    if (!message || isSendingChat) return;
+
+    try {
+      setIsSendingChat(true);
+      const result = await sendToAgentChat({
+        message,
+        targetAgent,
+        context: {
+          type: "agent_panel_chat",
+          route: typeof window === "undefined" ? undefined : window.location.pathname,
+          payload: {
+            target_agent: targetAgent,
+            selected_workflow_id: activeWorkflowId || null,
+            selected_workflow_name: selectedWorkflow?.name ?? null,
+            active_run_count: visibleRuns.length,
+            pending_approval_count: approvals.length,
+            available_actions: [
+              "send_message",
+              "start_workflow",
+              "request_approval",
+              "resolve_approval",
+              "add_receipt",
+            ],
+          },
+        },
+        submit: true,
+      });
+      const status: ChatEntryStatus = result.status === "submitted" ? "submitted" : "queued";
+      setChatEntries((current) => [
+        {
+          id: result.messageId ?? result.inboxItemId ?? `chat-${Date.now()}`,
+          message,
+          targetAgent,
+          status,
+          detail: result.messageId ?? result.inboxItemId ?? status,
+          createdAt: new Date().toISOString(),
+        },
+        ...current,
+      ].slice(0, 4));
+      setChatDraft("");
+      toast.success(status === "submitted" ? "Message sent to agent" : "Message queued for agent", {
+        description: result.messageId ?? result.inboxItemId,
+      });
+    } catch (chatError) {
+      const status: ChatEntryStatus = "failed";
+      setChatEntries((current) => [
+        {
+          id: `failed-${Date.now()}`,
+          message,
+          targetAgent,
+          status,
+          detail: chatError instanceof Error ? chatError.message : "Send failed",
+          createdAt: new Date().toISOString(),
+        },
+        ...current,
+      ].slice(0, 4));
+      toastError("Agent chat failed", chatError);
+    } finally {
+      setIsSendingChat(false);
     }
   }
 
@@ -607,6 +699,76 @@ export function AgentPanel() {
             </p>
           </div>
         ) : null}
+
+        <section className="mb-5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Chat</h2>
+            <select
+              value={targetAgent}
+              onChange={(event) => setSelectedAgent(event.target.value)}
+              aria-label="Agent chat target"
+              className="h-6 max-w-[158px] rounded border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[10.5px] text-[var(--subtext-0)] outline-none transition-colors focus:border-[var(--accent-border)]"
+            >
+              {agentOptions.map((agent) => (
+                <option key={agent} value={agent}>
+                  {agent}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--base)] p-2.5">
+            <div className="mb-2 flex items-center gap-2 text-[var(--overlay-1)]">
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate font-ui text-[10.5px]">
+                Same agent runtime as workflows
+              </span>
+            </div>
+            <textarea
+              value={chatDraft}
+              onChange={(event) => setChatDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  void sendChatMessage();
+                }
+              }}
+              rows={3}
+              placeholder="Message the loaded agent"
+              className="min-h-[72px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
+                Sends context for this route
+              </span>
+              <button
+                type="button"
+                onClick={() => void sendChatMessage()}
+                disabled={!chatDraft.trim() || isSendingChat}
+                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
+              >
+                {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Send
+              </button>
+            </div>
+            {chatEntries.length > 0 ? (
+              <div className="mt-2 space-y-1.5 border-t border-[var(--border-subtle)] pt-2">
+                {chatEntries.map((entry) => (
+                  <div key={entry.id} className="rounded border border-[var(--border-subtle)] px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-ui text-[10px] font-medium text-[var(--subtext-0)]">
+                        {entry.status === "submitted" ? "Sent" : entry.status === "queued" ? "Queued" : "Failed"}
+                      </span>
+                      <span className="shrink-0 font-ui text-[10px] text-[var(--overlay-1)]">
+                        {formatRunTime(entry.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--text)]">{entry.message}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
 
         <section className="mb-5 space-y-2">
           <div className="flex items-center justify-between gap-2">
