@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CheckCircle2, ExternalLink, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
+import { Bot, CheckCircle2, ExternalLink, PanelRightClose, PanelRightOpen, Play, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns } from "@/lib/data";
+import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow } from "@/lib/data";
 import type { WorkflowRunItem } from "@/lib/types";
+import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 
@@ -50,8 +51,15 @@ function runTitle(run: WorkflowRunItem) {
 
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const { isCramped } = useWindowSize();
 
+  const workflowsQuery = useQuery({
+    queryKey: ["workflows", "agent-panel", "active"],
+    queryFn: () => listWorkflows({ includeInactive: false, limit: 24 }),
+    staleTime: 60_000,
+  });
   const activeRunsQuery = useQuery({
     queryKey: ["workflow-runs", "agent-panel", "active"],
     queryFn: () => listWorkflowRuns({ includeCompleted: false, limit: 8 }),
@@ -67,8 +75,11 @@ export function AgentPanel() {
 
   const activeRuns = activeRunsQuery.data ?? [];
   const approvals = approvalsQuery.data ?? [];
-  const isFetching = activeRunsQuery.isFetching || approvalsQuery.isFetching;
-  const error = activeRunsQuery.error ?? approvalsQuery.error;
+  const workflows = workflowsQuery.data ?? [];
+  const selectedWorkflow = workflows.find((workflow) => workflow.workflow_id === selectedWorkflowId) ?? workflows[0] ?? null;
+  const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
+  const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching;
+  const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
 
   const visibleRuns = useMemo(() => {
     const approvalIds = new Set(approvals.map((run) => run.id));
@@ -89,9 +100,37 @@ export function AgentPanel() {
 
   async function refresh() {
     await Promise.all([
+      workflowsQuery.refetch(),
       activeRunsQuery.refetch(),
       approvalsQuery.refetch(),
     ]);
+  }
+
+  async function handleStartWorkflow() {
+    if (!activeWorkflowId || isStartingWorkflow) return;
+
+    try {
+      setIsStartingWorkflow(true);
+      const result = await startWorkflow({
+        workflowId: activeWorkflowId,
+        triggerSource: "ui",
+        requestedBy: "Adam",
+        entityScope: selectedWorkflow?.entity ?? undefined,
+        context: {
+          route: typeof window === "undefined" ? null : window.location.pathname,
+          source: "agent_panel",
+        },
+        confirmWrite: true,
+      });
+      await refresh();
+      toast.success("Workflow run started", {
+        description: result.run?.name ?? result.workflow_run_id,
+      });
+    } catch (startError) {
+      toastError("Workflow start failed", startError);
+    } finally {
+      setIsStartingWorkflow(false);
+    }
   }
 
   if (collapsed || isCramped) {
@@ -163,6 +202,48 @@ export function AgentPanel() {
             </p>
           </div>
         ) : null}
+
+        <section className="mb-5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Start Workflow</h2>
+            <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--subtext-0)]">
+              {workflows.length}
+            </span>
+          </div>
+          <div className="rounded-md border border-[var(--border)] bg-[var(--base)] p-2.5">
+            <select
+              value={activeWorkflowId}
+              onChange={(event) => setSelectedWorkflowId(event.target.value)}
+              disabled={workflows.length === 0 || isStartingWorkflow}
+              aria-label="Workflow"
+              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] outline-none transition-colors focus:border-[var(--accent-border)] disabled:opacity-50"
+            >
+              {workflows.length === 0 ? (
+                <option value="">No workflows</option>
+              ) : (
+                workflows.map((workflow) => (
+                  <option key={workflow.id} value={workflow.workflow_id}>
+                    {workflow.name}
+                  </option>
+                ))
+              )}
+            </select>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
+                {selectedWorkflow?.default_actor ?? selectedWorkflow?.owner_role ?? "No actor"}
+              </span>
+              <button
+                type="button"
+                onClick={handleStartWorkflow}
+                disabled={!activeWorkflowId || isStartingWorkflow}
+                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
+              >
+                {isStartingWorkflow ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                Start
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section className="space-y-2">
           <PanelSectionHeader
