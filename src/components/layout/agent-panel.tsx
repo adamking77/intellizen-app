@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Bot, CheckCircle2, ExternalLink, PanelRightClose, PanelRightOpen, Play, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow } from "@/lib/data";
-import type { WorkflowRunItem } from "@/lib/types";
+import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
+import type { WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
 const RUN_BOARD_VIEW_ID = "c2000000-0000-0000-0000-000000000102";
 const APPROVAL_QUEUE_VIEW_ID = "c2000000-0000-0000-0000-000000000103";
+
+type RunAction = "start" | "request_approval" | "approve" | "block" | "done";
 
 function readCollapsed() {
   if (typeof window === "undefined") return false;
@@ -49,10 +51,86 @@ function runTitle(run: WorkflowRunItem) {
   return run.name.trim() || "Untitled workflow run";
 }
 
+function actionLabel(action: RunAction) {
+  if (action === "start") return "Start";
+  if (action === "request_approval") return "Approval";
+  if (action === "approve") return "Approve";
+  if (action === "block") return "Block";
+  return "Done";
+}
+
+function actionConfig(action: RunAction, run: WorkflowRunItem): {
+  status: WorkflowRunStatus;
+  currentStep: string;
+  summary: string;
+  actionsTaken: string[];
+  approvalNeeded?: string | null;
+  blockedItems?: string[];
+  nextStep?: string | null;
+} {
+  const title = runTitle(run);
+  if (action === "start") {
+    return {
+      status: "In progress",
+      currentStep: "Execution underway",
+      summary: `Started ${title} from the Agent Panel.`,
+      actionsTaken: ["Started workflow run from Agent Panel"],
+      nextStep: "Execute the registered workflow steps",
+    };
+  }
+  if (action === "request_approval") {
+    return {
+      status: "Needs approval",
+      currentStep: "Awaiting approval",
+      summary: `Requested approval for ${title} from the Agent Panel.`,
+      actionsTaken: ["Requested approval from Agent Panel"],
+      approvalNeeded: "Approval requested from Agent Panel",
+      nextStep: "Await approval decision",
+    };
+  }
+  if (action === "approve") {
+    return {
+      status: "In progress",
+      currentStep: "Approval granted",
+      summary: `Approved ${title} from the Agent Panel.`,
+      actionsTaken: ["Resolved approval as approved from Agent Panel"],
+      approvalNeeded: null,
+      nextStep: "Resume workflow execution",
+    };
+  }
+  if (action === "block") {
+    return {
+      status: "Blocked",
+      currentStep: "Blocked from Agent Panel",
+      summary: `Blocked ${title} from the Agent Panel.`,
+      actionsTaken: ["Blocked workflow run from Agent Panel"],
+      blockedItems: ["Blocked from Agent Panel"],
+      nextStep: "Review blocker and decide next action",
+    };
+  }
+  return {
+    status: "Done",
+    currentStep: "Completed from Agent Panel",
+    summary: `Marked ${title} done from the Agent Panel.`,
+    actionsTaken: ["Marked workflow run done from Agent Panel"],
+    nextStep: "Review receipt and archive if appropriate",
+  };
+}
+
+function actionsForRun(run: WorkflowRunItem): RunAction[] {
+  const status = run.status?.trim().toLowerCase();
+  if (status === "queued") return ["start", "request_approval", "block"];
+  if (status === "in progress") return ["request_approval", "done", "block"];
+  if (status === "needs approval") return ["approve", "block"];
+  if (status === "blocked") return ["start"];
+  return [];
+}
+
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
+  const [updatingRunId, setUpdatingRunId] = useState<string | null>(null);
   const { isCramped } = useWindowSize();
 
   const workflowsQuery = useQuery({
@@ -130,6 +208,36 @@ export function AgentPanel() {
       toastError("Workflow start failed", startError);
     } finally {
       setIsStartingWorkflow(false);
+    }
+  }
+
+  async function handleRunAction(run: WorkflowRunItem, action: RunAction) {
+    if (updatingRunId) return;
+    const config = actionConfig(action, run);
+
+    try {
+      setUpdatingRunId(run.id);
+      const result = await updateWorkflowRun({
+        workflowRunId: run.id,
+        actor: "Adam",
+        status: config.status,
+        currentStep: config.currentStep,
+        summary: config.summary,
+        actionsTaken: config.actionsTaken,
+        verification: ["Updated from IntelliZen Agent Panel"],
+        blockedItems: config.blockedItems,
+        approvalNeeded: config.approvalNeeded,
+        nextStep: config.nextStep,
+        confirmWrite: true,
+      });
+      await refresh();
+      toast.success("Workflow run updated", {
+        description: result.run ? `${result.run.name}: ${result.run.status}` : runTitle(run),
+      });
+    } catch (actionError) {
+      toastError("Workflow update failed", actionError);
+    } finally {
+      setUpdatingRunId(null);
     }
   }
 
@@ -252,7 +360,15 @@ export function AgentPanel() {
             to={workflowRunsUrl(APPROVAL_QUEUE_VIEW_ID)}
           />
           {approvals.length > 0 ? (
-            approvals.map((run) => <RunCard key={run.id} run={run} approval />)
+            approvals.map((run) => (
+              <RunCard
+                key={run.id}
+                run={run}
+                approval
+                updating={updatingRunId === run.id}
+                onAction={handleRunAction}
+              />
+            ))
           ) : (
             <EmptyState label="No pending approvals" icon={<CheckCircle2 className="h-4 w-4" />} />
           )}
@@ -265,7 +381,14 @@ export function AgentPanel() {
             to={workflowRunsUrl(RUN_BOARD_VIEW_ID)}
           />
           {visibleRuns.length > 0 ? (
-            visibleRuns.map((run) => <RunCard key={run.id} run={run} />)
+            visibleRuns.map((run) => (
+              <RunCard
+                key={run.id}
+                run={run}
+                updating={updatingRunId === run.id}
+                onAction={handleRunAction}
+              />
+            ))
           ) : (
             <EmptyState label={isFetching ? "Loading runs" : "No active runs"} icon={<RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />} />
           )}
@@ -306,7 +429,18 @@ function PanelSectionHeader({ label, count, to }: { label: string; count: number
   );
 }
 
-function RunCard({ run, approval = false }: { run: WorkflowRunItem; approval?: boolean }) {
+function RunCard({
+  run,
+  approval = false,
+  updating = false,
+  onAction,
+}: {
+  run: WorkflowRunItem;
+  approval?: boolean;
+  updating?: boolean;
+  onAction?: (run: WorkflowRunItem, action: RunAction) => void;
+}) {
+  const actions = actionsForRun(run);
   return (
     <article className="rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
       <div className="flex items-start justify-between gap-2">
@@ -329,6 +463,28 @@ function RunCard({ run, approval = false }: { run: WorkflowRunItem; approval?: b
       {approval ? (
         <div className="mt-2 border-t border-[var(--border-subtle)] pt-2 font-ui text-[10.5px] text-[var(--caution)]">
           {run.receipt || run.body_preview || "Approval required"}
+        </div>
+      ) : null}
+      {onAction && actions.length > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[var(--border-subtle)] pt-2">
+          {actions.map((action) => (
+            <button
+              key={action}
+              type="button"
+              onClick={() => onAction(run, action)}
+              disabled={updating}
+              className={cn(
+                "inline-flex h-6 items-center justify-center rounded border px-2 font-ui text-[10.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+                action === "block"
+                  ? "border-[color-mix(in_srgb,var(--danger)_34%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
+                  : action === "done" || action === "approve"
+                    ? "border-[color-mix(in_srgb,var(--success)_34%,transparent)] text-[var(--success)] hover:bg-[color-mix(in_srgb,var(--success)_10%,transparent)]"
+                    : "border-[var(--accent-border)] text-[var(--accent)] hover:bg-[var(--accent-soft)]",
+              )}
+            >
+              {updating ? "..." : actionLabel(action)}
+            </button>
+          ))}
         </div>
       ) : null}
     </article>
