@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,6 +28,7 @@ const DATABASE_RAIL_WIDTH_EXPANDED = 280;
 
 export function DatabasesView() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -73,19 +75,37 @@ export function DatabasesView() {
       return;
     }
 
+    const requestedDatabaseId = searchParams.get("database");
+    if (requestedDatabaseId && safeDatabases.some((database) => database.id === requestedDatabaseId)) {
+      if (currentDatabaseId !== requestedDatabaseId) {
+        setCurrentDatabaseId(requestedDatabaseId);
+      }
+      return;
+    }
+
     const currentExists = currentDatabaseId
       ? safeDatabases.some((database) => database.id === currentDatabaseId)
       : false;
 
     if (currentExists) return;
     setCurrentDatabaseId(safeDatabases[0]?.id ?? null);
-  }, [currentDatabaseId, safeDatabases]);
+  }, [currentDatabaseId, safeDatabases, searchParams]);
 
   const currentDatabase = useMemo(
     () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? safeDatabases[0] ?? null,
     [currentDatabaseId, safeDatabases],
   );
   const canDeleteCurrentDatabase = Boolean(currentDatabase && !isOperationalSystemWorkspaceIcon(currentDatabase.icon));
+
+  function selectDatabase(databaseId: string) {
+    setCurrentDatabaseId(databaseId);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("database", databaseId);
+      next.delete("view");
+      return next;
+    }, { replace: true });
+  }
 
   async function handleCreateDatabase() {
     if (isCreating) return;
@@ -241,7 +261,7 @@ export function DatabasesView() {
                         key={database.id}
                         type="button"
                         title={database.name}
-                        onClick={() => setCurrentDatabaseId(database.id)}
+                        onClick={() => selectDatabase(database.id)}
                         className={cn(
                           "group flex h-14 w-full items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
                           currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
@@ -258,7 +278,7 @@ export function DatabasesView() {
                     <button
                       key={database.id}
                       type="button"
-                      onClick={() => setCurrentDatabaseId(database.id)}
+                      onClick={() => selectDatabase(database.id)}
                       className={cn(
                         "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
                         currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",

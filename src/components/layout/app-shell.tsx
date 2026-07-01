@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { Toaster } from "sonner";
+import { AgentPanel } from "./agent-panel";
 import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider } from "./command-palette";
 
@@ -11,6 +12,7 @@ export function AppShell() {
         <main className="relative flex-1 min-w-0 overflow-hidden">
           <Outlet />
         </main>
+        <AgentPanel />
       </div>
       <Toaster
         position="bottom-right"
