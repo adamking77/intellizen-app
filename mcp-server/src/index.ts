@@ -537,6 +537,7 @@ ${markdownList(input.open_questions)}`;
 
 type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
 type WorkflowRunStatus = "Queued" | "In progress" | "Blocked" | "Needs approval" | "Done" | "Deferred";
+type WorkflowApprovalDecision = "approved" | "rejected" | "changes_requested";
 
 async function closeAgentWork(input: {
   work_item_id: string;
@@ -839,6 +840,97 @@ async function updateWorkflowRun(input: {
     run: toWorkflowRunItem(data as WorkspaceRecordRow),
     synced_task: syncedTask,
   };
+}
+
+async function requestWorkflowApproval(input: {
+  workflow_run_id: string;
+  requested_by: string;
+  approval_needed: string;
+  approval_type?: string | null;
+  current_step?: string | null;
+  summary?: string | null;
+  sources?: string[];
+  actions_taken?: string[];
+  verification?: string[];
+  next_step?: string | null;
+  sync_task?: boolean;
+  confirm_write?: boolean;
+}) {
+  const approvalType = input.approval_type?.trim() || "workflow";
+  const approvalNeeded = input.approval_needed.trim();
+
+  return updateWorkflowRun({
+    workflow_run_id: input.workflow_run_id,
+    actor: input.requested_by,
+    status: "Needs approval",
+    current_step: input.current_step ?? `Approval requested: ${approvalNeeded}`,
+    summary: input.summary ?? `${approvalType} approval requested: ${approvalNeeded}`,
+    sources: input.sources,
+    actions_taken: [
+      `Requested ${approvalType} approval`,
+      ...(input.actions_taken ?? []),
+    ],
+    verification: input.verification,
+    approval_needed: approvalNeeded,
+    next_step: input.next_step ?? "Await approval decision",
+    sync_task: input.sync_task,
+    confirm_write: input.confirm_write,
+  });
+}
+
+function defaultWorkflowApprovalStatus(decision: WorkflowApprovalDecision): WorkflowRunStatus {
+  if (decision === "approved") return "In progress";
+  if (decision === "changes_requested") return "Needs approval";
+  return "Blocked";
+}
+
+async function resolveWorkflowApproval(input: {
+  workflow_run_id: string;
+  decision: WorkflowApprovalDecision;
+  decision_summary: string;
+  decided_by?: string | null;
+  approval_type?: string | null;
+  next_status?: WorkflowRunStatus;
+  current_step?: string | null;
+  sources?: string[];
+  actions_taken?: string[];
+  verification?: string[];
+  blocked_items?: string[];
+  next_step?: string | null;
+  sync_task?: boolean;
+  confirm_write?: boolean;
+}) {
+  const approvalType = input.approval_type?.trim() || "workflow";
+  const decisionSummary = input.decision_summary.trim();
+  const decisionLabel = input.decision.replace("_", " ");
+  const nextStatus = input.next_status ?? defaultWorkflowApprovalStatus(input.decision);
+
+  return updateWorkflowRun({
+    workflow_run_id: input.workflow_run_id,
+    actor: input.decided_by?.trim() || "Adam",
+    status: nextStatus,
+    current_step: input.current_step ?? (
+      input.decision === "approved"
+        ? `Approval approved: ${approvalType}`
+        : `Approval ${decisionLabel}: ${approvalType}`
+    ),
+    summary: `${approvalType} approval ${decisionLabel}: ${decisionSummary}`,
+    sources: input.sources,
+    actions_taken: [
+      `Resolved ${approvalType} approval as ${decisionLabel}`,
+      ...(input.actions_taken ?? []),
+    ],
+    verification: input.verification,
+    blocked_items: input.decision === "approved"
+      ? input.blocked_items
+      : [decisionSummary, ...(input.blocked_items ?? [])],
+    approval_needed: input.decision === "approved" ? null : decisionSummary,
+    next_step: input.next_step ?? (
+      input.decision === "approved" ? "Resume workflow execution" : "Revise and return for approval"
+    ),
+    sync_task: input.sync_task,
+    confirm_write: input.confirm_write,
+  });
 }
 
 async function listWorkflows(input: {
@@ -1334,6 +1426,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
         },
         required: ["workflow_run_id", "actor", "summary"],
+      },
+    },
+    {
+      name: "request_workflow_approval",
+      description:
+        "Move a Workflow Runs record to Needs approval, append an approval request receipt, and sync the linked Task into Review. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_run_id: { type: "string", description: "Workflow Runs record UUID." },
+          requested_by: { type: "string", description: "Agent or actor requesting approval." },
+          approval_needed: { type: "string", description: "Concrete decision, permission, or review needed from Adam." },
+          approval_type: {
+            type: "string",
+            enum: ["publish", "send", "contact", "spend", "delete", "schema", "identity", "reputational_risk", "other"],
+          },
+          current_step: { type: "string" },
+          summary: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+          actions_taken: { type: "array", items: { type: "string" } },
+          verification: { type: "array", items: { type: "string" } },
+          next_step: { type: "string" },
+          sync_task: { type: "boolean", description: "Append the same receipt to the linked Task and sync task state. Defaults true when linked task exists." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["workflow_run_id", "requested_by", "approval_needed"],
+      },
+    },
+    {
+      name: "resolve_workflow_approval",
+      description:
+        "Record an approval decision on a Workflow Runs record, append a decision receipt, and sync the linked Task. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_run_id: { type: "string", description: "Workflow Runs record UUID." },
+          decision: {
+            type: "string",
+            enum: ["approved", "rejected", "changes_requested"],
+          },
+          decision_summary: { type: "string", description: "Decision record, condition, rejection reason, or requested change." },
+          decided_by: { type: "string", description: "Decision actor. Defaults to Adam." },
+          approval_type: {
+            type: "string",
+            enum: ["publish", "send", "contact", "spend", "delete", "schema", "identity", "reputational_risk", "other"],
+          },
+          next_status: {
+            type: "string",
+            enum: ["Queued", "In progress", "Blocked", "Needs approval", "Done", "Deferred"],
+            description: "Override the default decision status. Defaults approved -> In progress, changes_requested -> Needs approval, rejected -> Blocked.",
+          },
+          current_step: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+          actions_taken: { type: "array", items: { type: "string" } },
+          verification: { type: "array", items: { type: "string" } },
+          blocked_items: { type: "array", items: { type: "string" } },
+          next_step: { type: "string" },
+          sync_task: { type: "boolean", description: "Append the same receipt to the linked Task and sync task state. Defaults true when linked task exists." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["workflow_run_id", "decision", "decision_summary"],
       },
     },
     {
@@ -1959,6 +2112,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       verification?: string[];
       blocked_items?: string[];
       approval_needed?: string | null;
+      next_step?: string | null;
+      sync_task?: boolean;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── request_workflow_approval ─────────────────────────────────────────────
+  if (name === "request_workflow_approval") {
+    const result = await requestWorkflowApproval((args ?? {}) as {
+      workflow_run_id: string;
+      requested_by: string;
+      approval_needed: string;
+      approval_type?: string | null;
+      current_step?: string | null;
+      summary?: string | null;
+      sources?: string[];
+      actions_taken?: string[];
+      verification?: string[];
+      next_step?: string | null;
+      sync_task?: boolean;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── resolve_workflow_approval ─────────────────────────────────────────────
+  if (name === "resolve_workflow_approval") {
+    const result = await resolveWorkflowApproval((args ?? {}) as {
+      workflow_run_id: string;
+      decision: WorkflowApprovalDecision;
+      decision_summary: string;
+      decided_by?: string | null;
+      approval_type?: string | null;
+      next_status?: WorkflowRunStatus;
+      current_step?: string | null;
+      sources?: string[];
+      actions_taken?: string[];
+      verification?: string[];
+      blocked_items?: string[];
       next_step?: string | null;
       sync_task?: boolean;
       confirm_write?: boolean;
