@@ -31,6 +31,7 @@ import type {
   SearchResultItem,
   SignalDraft,
   TaxonomyMetadata,
+  VoiceDraftTaskInput,
   VaultDocument,
   VaultFile,
   WorkspaceDatabase,
@@ -3353,6 +3354,81 @@ export async function listAgentWork(input: {
   const limited = filtered.slice(0, Math.max(input.limit ?? 50, 1));
 
   return limited.map((record) => toAgentWorkItem(record, initiativeMeta));
+}
+
+function titleFromVoiceTranscript(transcript: string) {
+  const normalized = transcript.replace(/\s+/g, " ").trim();
+  const firstSentence = normalized.split(/[.!?]\s/)[0]?.trim() || normalized;
+  const title = firstSentence.length > 86 ? `${firstSentence.slice(0, 83).trim()}...` : firstSentence;
+  return title || "Voice draft task";
+}
+
+export async function createVoiceDraftTask(input: VoiceDraftTaskInput) {
+  const transcript = input.transcript.trim();
+  if (!transcript) {
+    throw new Error("Voice transcript is required.");
+  }
+
+  const title = titleFromVoiceTranscript(transcript);
+  const body = `## Voice Draft Intake - ${formatAgentWorkTimestamp()}
+
+Requested by: ${input.requestedBy}
+Source: IntelliZen Agent Panel voice intake
+Voice provider: ${input.sourceProvider ?? "unknown"}
+Route: ${input.sourceRoute ?? "unknown"}
+Approval needed before: none
+
+Transcript:
+${transcript}
+
+Next step:
+Review, assign, or attach this draft to a registered workflow.`;
+
+  const fields: Record<string, WorkspaceDatabaseFieldValue> = {
+    [AGENT_TASK_FIELDS.name]: title,
+    [AGENT_TASK_FIELDS.status]: "Not started",
+    [AGENT_TASK_FIELDS.stage]: "Backlog",
+    [AGENT_TASK_FIELDS.priority]: "Medium",
+    [AGENT_TASK_FIELDS.area]: "Voice Intake",
+  };
+
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirmWrite: true to create a voice draft task.",
+      next_task: toAgentWorkItem({
+        id: "preview",
+        database_id: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+        fields,
+        body,
+        taxonomy: {
+          entity: "genzen",
+          source: "agent_panel_voice_intake",
+          object_type: "task",
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    };
+  }
+
+  const record = await createWorkspaceRecord({
+    databaseId: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+    fields,
+    body,
+    taxonomy: {
+      entity: "genzen",
+      source: "agent_panel_voice_intake",
+      object_type: "task",
+    },
+    skipSystemSync: true,
+  });
+
+  return {
+    dry_run: false,
+    task_id: record.id,
+    task: toAgentWorkItem(record),
+  };
 }
 
 export async function getAgentWorkItem(workItemId: string) {

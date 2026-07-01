@@ -144,6 +144,14 @@ export interface AgentWorkFollowupInput {
   body?: string;
 }
 
+export interface VoiceDraftTaskInput {
+  transcript: string;
+  requestedBy: string;
+  sourceRoute?: string | null;
+  sourceProvider?: string | null;
+  confirmWrite?: boolean;
+}
+
 export interface WorkflowTemplateItem {
   id: string;
   workflow_id: string;

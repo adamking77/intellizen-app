@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CheckCircle2, ExternalLink, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, RefreshCw, Square, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, ExternalLink, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
+import { createVoiceDraftTask, GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
 import type { WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import {
+  getPreferredVoiceInputProvider,
+  getPreferredVoiceOutputProvider,
+  getVoiceProviderStatus,
+  speakWithHermes,
+  transcribeWithHermes,
+} from "@/services/voice";
+import type { VoiceProviderId } from "@/services/voice";
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
@@ -195,7 +203,11 @@ export function AgentPanel() {
   const [voiceDraft, setVoiceDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isCreatingVoiceTask, setIsCreatingVoiceTask] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { isCramped } = useWindowSize();
 
   const workflowsQuery = useQuery({
@@ -223,8 +235,14 @@ export function AgentPanel() {
   const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
   const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching;
   const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
-  const canListen = Boolean(getSpeechRecognitionConstructor());
-  const canSpeak = supportsSpeechSynthesis();
+  const voiceProviders = getVoiceProviderStatus();
+  const voiceInputProvider = getPreferredVoiceInputProvider();
+  const voiceOutputProvider = getPreferredVoiceOutputProvider();
+  const canListen = Boolean(voiceInputProvider);
+  const canSpeak = Boolean(voiceOutputProvider);
+  const voiceProviderLabel = voiceProviders.find((provider) => provider.id === "hermes" && (provider.canTranscribe || provider.canSpeak))?.label ??
+    voiceProviders.find((provider) => provider.id === "browser" && (provider.canTranscribe || provider.canSpeak))?.label ??
+    "Voice unavailable";
 
   const visibleRuns = useMemo(() => {
     const approvalIds = new Set(approvals.map((run) => run.id));
@@ -234,6 +252,8 @@ export function AgentPanel() {
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      audioRef.current?.pause();
       if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
     };
   }, []);
@@ -270,7 +290,8 @@ export function AgentPanel() {
         entityScope: selectedWorkflow?.entity ?? undefined,
         context: {
           route: typeof window === "undefined" ? null : window.location.pathname,
-          source: voiceDraft.trim() ? "agent_panel_voice" : "agent_panel",
+          source: voiceDraft.trim() ? "agent_panel_voice_intake" : "agent_panel",
+          voice_provider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
           voice_transcript: voiceDraft.trim() || null,
         },
         confirmWrite: true,
@@ -286,7 +307,71 @@ export function AgentPanel() {
     }
   }
 
-  function startVoiceDraft() {
+  function appendVoiceDraft(text: string) {
+    const normalized = text.replace(/\s+\[[^\]]+\]$/, "").trim();
+    if (!normalized) return;
+    setVoiceDraft((current) => `${current.replace(/\s+\[[^\]]+\]$/, "").trim()}${current.trim() ? " " : ""}${normalized}`.trim());
+  }
+
+  async function transcribeHermesRecording(audio: Blob) {
+    try {
+      const result = await transcribeWithHermes(audio);
+      if (!result.transcript) {
+        toast.error("No speech detected");
+        return;
+      }
+      appendVoiceDraft(result.transcript);
+      toast.success("Transcript added", {
+        description: result.provider,
+      });
+    } catch (transcribeError) {
+      toastError("Hermes transcription failed", transcribeError);
+    }
+  }
+
+  async function startHermesVoiceDraft() {
+    if (isListening) {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast.error("Audio recording unavailable");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setIsListening(false);
+        toast.error("Audio recording stopped");
+        stream.getTracks().forEach((track) => track.stop());
+      };
+      recorder.onstop = () => {
+        setIsListening(false);
+        stream.getTracks().forEach((track) => track.stop());
+        const audio = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        recordedChunksRef.current = [];
+        if (audio.size > 0) void transcribeHermesRecording(audio);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setIsListening(true);
+    } catch (recordError) {
+      setIsListening(false);
+      toastError("Microphone unavailable", recordError);
+    }
+  }
+
+  function startBrowserVoiceDraft() {
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
@@ -312,7 +397,7 @@ export function AgentPanel() {
         else interimText += result[0].transcript;
       }
       if (finalText.trim()) {
-        setVoiceDraft((current) => `${current}${current.trim() ? " " : ""}${finalText.trim()}`);
+        appendVoiceDraft(finalText);
       }
       if (interimText.trim() && !finalText.trim()) {
         setVoiceDraft((current) => current.replace(/\s+\[[^\]]+\]$/, "") + ` [${interimText.trim()}]`);
@@ -333,23 +418,94 @@ export function AgentPanel() {
     setIsListening(true);
   }
 
-  function speakBrief() {
-    if (!canSpeak) {
-      toast.error("Speech output unavailable");
+  function startVoiceDraft() {
+    if (voiceInputProvider?.id === "hermes") {
+      void startHermesVoiceDraft();
       return;
     }
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    startBrowserVoiceDraft();
+  }
+
+  function stopSpeaking() {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  }
+
+  async function speakWithProvider(text: string, providerId: VoiceProviderId) {
+    if (providerId === "hermes") {
+      const result = await speakWithHermes(text);
+      const audio = new Audio(result.dataUrl);
+      audioRef.current = audio;
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      await audio.play();
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(buildVoiceBrief(approvals, visibleRuns));
+
+    if (!supportsSpeechSynthesis()) throw new Error("Speech output unavailable.");
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.94;
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
+  }
+
+  async function speakBrief() {
+    if (isSpeaking) {
+      stopSpeaking();
+      return;
+    }
+
+    if (!voiceOutputProvider) {
+      toast.error("Speech output unavailable");
+      return;
+    }
+
+    try {
+      setIsSpeaking(true);
+      await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), voiceOutputProvider.id);
+    } catch (speakError) {
+      if (voiceOutputProvider.id === "hermes" && supportsSpeechSynthesis()) {
+        try {
+          await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), "browser");
+          toast.error("Hermes speech unavailable", {
+            description: "Used browser speech fallback.",
+          });
+          return;
+        } catch {
+          /* report the original Hermes error */
+        }
+      }
+      setIsSpeaking(false);
+      toastError("Speech output failed", speakError);
+    }
+  }
+
+  async function createTaskFromVoiceDraft() {
+    const transcript = voiceDraft.replace(/\s+\[[^\]]+\]$/, "").trim();
+    if (!transcript || isCreatingVoiceTask) return;
+
+    try {
+      setIsCreatingVoiceTask(true);
+      const result = await createVoiceDraftTask({
+        transcript,
+        requestedBy: "Adam",
+        sourceRoute: typeof window === "undefined" ? null : window.location.pathname,
+        sourceProvider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
+        confirmWrite: true,
+      });
+      toast.success("Voice task created", {
+        description: result.task?.title ?? result.task_id,
+      });
+      setVoiceDraft("");
+    } catch (createError) {
+      toastError("Voice task creation failed", createError);
+    } finally {
+      setIsCreatingVoiceTask(false);
+    }
   }
 
   async function handleRunAction(run: WorkflowRunItem, action: RunAction) {
@@ -498,6 +654,9 @@ export function AgentPanel() {
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Voice</h2>
             <div className="flex items-center gap-1">
+              <span className="mr-1 max-w-[92px] truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-ui text-[10px] text-[var(--subtext-0)]">
+                {voiceProviderLabel}
+              </span>
               <button
                 type="button"
                 onClick={startVoiceDraft}
@@ -538,7 +697,16 @@ export function AgentPanel() {
             className="min-h-[76px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
           />
           {voiceDraft.trim() ? (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={createTaskFromVoiceDraft}
+                disabled={isCreatingVoiceTask}
+                className="inline-flex h-6 items-center justify-center gap-1 rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
+              >
+                {isCreatingVoiceTask ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                Create task
+              </button>
               <button
                 type="button"
                 onClick={() => setVoiceDraft("")}
