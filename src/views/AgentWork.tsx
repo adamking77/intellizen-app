@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
@@ -17,7 +18,8 @@ import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { listAgentProjects, listAgentWork } from "@/lib/data";
+import { delegateAgentWork, listAgentProjects, listAgentWork } from "@/lib/data";
+import { toast, toastError } from "@/lib/toast";
 import type { AgentProjectItem, AgentWorkItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +74,13 @@ function filterStatuses(filter: WorkStatusFilter) {
 
 function normalizeSnippet(value: string | null | undefined) {
   return value?.replace(/\n{3,}/g, "\n\n").trim() || "No recorded detail yet.";
+}
+
+function splitList(value: string) {
+  return value
+    .split(/[\n,]/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function InfoCell({ label, value }: { label: string; value: string | null | undefined }) {
@@ -169,10 +178,18 @@ function ProjectRow({ project }: { project: AgentProjectItem }) {
 }
 
 export function AgentWorkView() {
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>("open");
   const [actorFilter, setActorFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [delegateRole, setDelegateRole] = useState("");
+  const [delegateActor, setDelegateActor] = useState("");
+  const [delegateReason, setDelegateReason] = useState("");
+  const [delegateExpectedOutput, setDelegateExpectedOutput] = useState("");
+  const [delegateAllowedTools, setDelegateAllowedTools] = useState("workspace.records, Workflow Registry, Workflow Runs, Agent Panel");
+  const [delegateApprovalLimits, setDelegateApprovalLimits] = useState("No external send, publish, delete, schema, identity, or spend action without Adam approval.");
+  const [delegateReturnPath, setDelegateReturnPath] = useState("Return a receipt on the parent work item with sources, actions taken, output, verification, and next step.");
 
   const includeDone = statusFilter === "all" || statusFilter === "done";
   const statuses = filterStatuses(statusFilter);
@@ -244,12 +261,62 @@ export function AgentWorkView() {
   }, [filteredWork, selectedId]);
 
   const selected = filteredWork.find((item) => item.id === selectedId) ?? filteredWork[0] ?? null;
+  const delegationMutation = useMutation({
+    mutationFn: () => {
+      if (!selected) throw new Error("Select work before delegating.");
+      return delegateAgentWork({
+        parentWorkItemId: selected.id,
+        requestedRole: delegateRole,
+        requestedActor: delegateActor || null,
+        reason: delegateReason,
+        sourceContext: {
+          records: [selected.id, selected.initiative_id].filter((value): value is string => Boolean(value)),
+          documents: [],
+          artifacts: [],
+        },
+        expectedOutput: delegateExpectedOutput,
+        allowedTools: splitList(delegateAllowedTools),
+        approvalLimits: splitList(delegateApprovalLimits),
+        returnPath: delegateReturnPath,
+        receiptRequired: true,
+        confirmWrite: true,
+      });
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["agent-work"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database"] }),
+      ]);
+      toast.success("Delegated work item created", {
+        description: result.child_work_item_id ?? result.delegation_id,
+      });
+      setDelegateReason("");
+      setDelegateExpectedOutput("");
+    },
+    onError: (error) => toastError("Delegation failed", error),
+  });
   const metrics = useMemo(() => ({
     open: work.filter((item) => item.status !== "Done").length,
     approvals: work.filter((item) => item.status === "Needs approval" || Boolean(item.approval_needed)).length,
     blocked: work.filter((item) => item.status === "Blocked").length,
     activeProjects: projects.length,
   }), [projects.length, work]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setDelegateRole(selected.durable_role ?? selected.functional_lane ?? "");
+    setDelegateActor("");
+    setDelegateReason("");
+    setDelegateExpectedOutput("");
+    setDelegateReturnPath("Return a receipt on the parent work item with sources, actions taken, output, verification, and next step.");
+  }, [selected?.id]);
+
+  function submitDelegation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (delegationMutation.isPending) return;
+    delegationMutation.mutate();
+  }
 
   if (error) {
     return (
@@ -455,6 +522,97 @@ export function AgentWorkView() {
                       </p>
                     </div>
                   </div>
+
+                  <form onSubmit={submitDelegation} className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Delegate</div>
+                        <p className="mt-1 font-ui text-[11px] text-[var(--overlay-1)]">Creates a child task with this work as source context.</p>
+                      </div>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant="accent-soft"
+                        disabled={
+                          delegationMutation.isPending ||
+                          !delegateRole.trim() ||
+                          !delegateReason.trim() ||
+                          !delegateExpectedOutput.trim() ||
+                          !delegateReturnPath.trim()
+                        }
+                        className="shrink-0 gap-1.5"
+                      >
+                        {delegationMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                        Delegate
+                      </Button>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Requested role</span>
+                        <input
+                          value={delegateRole}
+                          onChange={(event) => setDelegateRole(event.target.value)}
+                          className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Requested actor</span>
+                        <input
+                          value={delegateActor}
+                          onChange={(event) => setDelegateActor(event.target.value)}
+                          placeholder="Optional"
+                          className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-2 block space-y-1">
+                      <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Reason</span>
+                      <textarea
+                        value={delegateReason}
+                        onChange={(event) => setDelegateReason(event.target.value)}
+                        rows={2}
+                        className="min-h-[56px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                      />
+                    </label>
+                    <label className="mt-2 block space-y-1">
+                      <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Expected output</span>
+                      <textarea
+                        value={delegateExpectedOutput}
+                        onChange={(event) => setDelegateExpectedOutput(event.target.value)}
+                        rows={2}
+                        className="min-h-[56px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                      />
+                    </label>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Allowed tools</span>
+                        <textarea
+                          value={delegateAllowedTools}
+                          onChange={(event) => setDelegateAllowedTools(event.target.value)}
+                          rows={2}
+                          className="min-h-[56px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Approval limits</span>
+                        <textarea
+                          value={delegateApprovalLimits}
+                          onChange={(event) => setDelegateApprovalLimits(event.target.value)}
+                          rows={2}
+                          className="min-h-[56px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-2 block space-y-1">
+                      <span className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Return path</span>
+                      <textarea
+                        value={delegateReturnPath}
+                        onChange={(event) => setDelegateReturnPath(event.target.value)}
+                        rows={2}
+                        className="min-h-[56px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2 py-1.5 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                      />
+                    </label>
+                  </form>
 
                   <div>
                     <div className="mb-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Active Projects</div>

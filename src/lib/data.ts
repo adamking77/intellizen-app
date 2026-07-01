@@ -14,6 +14,8 @@ import type {
   AgentWorkOutcome,
   AgentProjectItem,
   AgentWorkReceiptInput,
+  DelegateAgentWorkInput,
+  DelegateAgentWorkResult,
   StartWorkflowInput,
   UpdateWorkflowRunInput,
   FionaInboxItem,
@@ -3161,6 +3163,10 @@ function appendMarkdownSection(body: string | null | undefined, section: string)
   return trimmedBody ? `${trimmedBody}\n\n${section}` : section;
 }
 
+function newRecordId(prefix = "delegation") {
+  return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function markdownList(items?: string[]) {
   if (!items?.length) return "none";
   return items.map((item) => `- ${item}`).join("\n");
@@ -3238,7 +3244,7 @@ function toAgentWorkItem(
     backup_actor: latestBodyField(body, ["Backup actor"]),
     approval_needed: latestBodyField(body, ["Approval needed before", "Approval needed"]),
     next_step: latestBodyField(body, ["Next step"]),
-    latest_note: latestMarkdownSection(body, ["Agent Note", "Agent Claim"]),
+    latest_note: latestMarkdownSection(body, ["Agent Delegation", "Agent Note", "Agent Claim"]),
     latest_receipt: latestMarkdownSection(body, ["Agent Receipt", "Workflow Run Update", "Voice Draft Intake"]),
     body_preview: body.slice(0, 500),
     updated_at: record.updated_at,
@@ -3615,6 +3621,143 @@ ${input.receipt.summary}`;
     true,
   );
   return toAgentWorkItem(updated);
+}
+
+export async function delegateAgentWork(input: DelegateAgentWorkInput): Promise<DelegateAgentWorkResult> {
+  const requestedRole = input.requestedRole.trim();
+  const reason = input.reason.trim();
+  const expectedOutput = input.expectedOutput.trim();
+  const returnPath = input.returnPath.trim();
+  if (!requestedRole) throw new Error("Requested role is required.");
+  if (!reason) throw new Error("Reason is required.");
+  if (!expectedOutput) throw new Error("Expected output is required.");
+  if (!returnPath) throw new Error("Return path is required.");
+
+  const parent = await getWorkspaceRecord(input.parentWorkItemId);
+  if (parent.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.tasks) {
+    throw new Error("Delegation parent must be a task workspace record.");
+  }
+
+  const delegationId = newRecordId("delegation");
+  const parentTitle = fieldString(parent.fields[AGENT_TASK_FIELDS.name]) ?? parent.id;
+  const sourceRecords = Array.from(new Set([parent.id, ...(input.sourceContext?.records ?? [])].filter(Boolean)));
+  const sourceDocuments = input.sourceContext?.documents ?? [];
+  const sourceArtifacts = input.sourceContext?.artifacts ?? [];
+  const childTitle = expectedOutput.length > 86 ? `Delegated: ${expectedOutput.slice(0, 75).trim()}...` : `Delegated: ${expectedOutput}`;
+  const allowedTools = input.allowedTools?.map((tool) => tool.trim()).filter(Boolean);
+  const approvalLimits = input.approvalLimits?.map((limit) => limit.trim()).filter(Boolean);
+  const parentProject = parent.fields[AGENT_TASK_FIELDS.project];
+  const parentPriority = fieldString(parent.fields[AGENT_TASK_FIELDS.priority]) ?? "Medium";
+
+  const childFields: Record<string, WorkspaceDatabaseFieldValue> = {
+    [AGENT_TASK_FIELDS.name]: childTitle,
+    [AGENT_TASK_FIELDS.status]: "Not started",
+    [AGENT_TASK_FIELDS.stage]: "Backlog",
+    [AGENT_TASK_FIELDS.priority]: parentPriority,
+    [AGENT_TASK_FIELDS.area]: requestedRole,
+  };
+  if (input.requestedActor?.trim()) childFields[AGENT_TASK_FIELDS.assignee] = input.requestedActor.trim();
+  if (parentProject !== null && parentProject !== undefined) childFields[AGENT_TASK_FIELDS.project] = parentProject;
+
+  const childBody = `## Agent Delegation - ${formatAgentWorkTimestamp()}
+
+Delegation ID: ${delegationId}
+Parent task: ${parentTitle}
+Parent task ID: ${parent.id}
+Requested role: ${requestedRole}
+Requested actor: ${input.requestedActor?.trim() || "unassigned"}
+Reason:
+${reason}
+
+Source records:
+${markdownList(sourceRecords)}
+Source documents:
+${markdownList(sourceDocuments)}
+Source artifacts:
+${markdownList(sourceArtifacts)}
+Expected output:
+${expectedOutput}
+Allowed tools:
+${markdownList(allowedTools)}
+Approval limits:
+${markdownList(approvalLimits)}
+Receipt required: ${input.receiptRequired === false ? "no" : "yes"}
+Return path:
+${returnPath}`;
+
+  const childPreviewRecord: WorkspaceDatabaseRecord = {
+    id: "preview",
+    database_id: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+    fields: childFields,
+    body: childBody,
+    taxonomy: {
+      entity: "genzen",
+      source: "agent_delegation",
+      object_type: "task",
+      tags: ["delegation", requestedRole],
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true,
+      child_work_item_id: null,
+      delegation_id: delegationId,
+      status: "preview",
+      child_work_item: toAgentWorkItem(childPreviewRecord),
+      parent_work_item: toAgentWorkItem(parent),
+    };
+  }
+
+  const child = await createWorkspaceRecord({
+    databaseId: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+    fields: childFields,
+    body: childBody,
+    taxonomy: {
+      entity: "genzen",
+      source: "agent_delegation",
+      object_type: "task",
+      tags: ["delegation", requestedRole],
+    },
+    skipSystemSync: true,
+  });
+
+  const parentSection = `## Agent Delegation - ${formatAgentWorkTimestamp()}
+
+Delegation ID: ${delegationId}
+Parent task: ${parentTitle}
+Child task: ${fieldString(child.fields[AGENT_TASK_FIELDS.name]) ?? child.id}
+Child task ID: ${child.id}
+Requested role: ${requestedRole}
+Requested actor: ${input.requestedActor?.trim() || "unassigned"}
+Reason:
+${reason}
+Expected output:
+${expectedOutput}
+Allowed tools:
+${markdownList(allowedTools)}
+Approval limits:
+${markdownList(approvalLimits)}
+Receipt required: ${input.receiptRequired === false ? "no" : "yes"}
+Return path:
+${returnPath}`;
+
+  const updatedParent = await updateWorkspaceRecord(
+    parent.id,
+    { fields: parent.fields, body: appendMarkdownSection(parent.body, parentSection), taxonomy: parent.taxonomy },
+    true,
+  );
+
+  return {
+    dry_run: false,
+    child_work_item_id: child.id,
+    delegation_id: delegationId,
+    status: "created",
+    child_work_item: toAgentWorkItem(child),
+    parent_work_item: toAgentWorkItem(updatedParent),
+  };
 }
 
 function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTemplateItem {

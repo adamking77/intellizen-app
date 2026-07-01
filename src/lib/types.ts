@@ -150,6 +150,35 @@ export interface AgentWorkFollowupInput {
   body?: string;
 }
 
+export interface AgentDelegationSourceContext {
+  records?: string[];
+  documents?: string[];
+  artifacts?: string[];
+}
+
+export interface DelegateAgentWorkInput {
+  parentWorkItemId: string;
+  requestedRole: string;
+  requestedActor?: string | null;
+  reason: string;
+  sourceContext?: AgentDelegationSourceContext;
+  expectedOutput: string;
+  allowedTools?: string[];
+  approvalLimits?: string[];
+  returnPath: string;
+  receiptRequired?: boolean;
+  confirmWrite?: boolean;
+}
+
+export interface DelegateAgentWorkResult {
+  dry_run: boolean;
+  child_work_item_id: string | null;
+  delegation_id: string;
+  status: "preview" | "created";
+  child_work_item: AgentWorkItem;
+  parent_work_item?: AgentWorkItem | null;
+}
+
 export interface VoiceDraftTaskInput {
   transcript: string;
   requestedBy: string;
