@@ -2,19 +2,16 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import {
-  Bot,
   Database,
   FileText,
   FolderOpen,
   House,
   Inbox,
   LayoutGrid,
-  ListChecks,
   Network,
   Rss,
   Search,
   Spline,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,9 +28,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Operations", to: "/projects", key: "projects", icon: FolderOpen },
-  { label: "Agent Work", to: "/agent-work", key: "agent-work", icon: Bot },
-  { label: "Workflows", to: "/workflows", key: "workflows", icon: ListChecks },
-  { label: "Roles", to: "/roles", key: "roles", icon: UsersRound },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
