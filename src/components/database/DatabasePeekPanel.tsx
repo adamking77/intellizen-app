@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, Copy, Maximize2, Minimize2, Trash2, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeftRight, Copy, Maximize2, Minimize2, Play, RefreshCw, Trash2, X } from "lucide-react";
 
 import { TaskRelationsSection } from "@/components/database/primitives/TaskRelationsSection";
 import { DatabaseRichTextEditor } from "@/components/database/primitives/DatabaseRichTextEditor";
@@ -7,6 +8,7 @@ import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows, startWorkflow } from "@/lib/data";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -22,6 +24,7 @@ import type {
   WorkspaceDatabaseSchemaSaveOptions,
   WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
+import { toast, toastError } from "@/lib/toast";
 import { formatDateTime } from "@/lib/utils";
 
 let lastPanelWidth = 560;
@@ -92,6 +95,9 @@ export function DatabasePeekPanel({
   const [headerFieldOrder, setHeaderFieldOrder] = useState<string[]>([]);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
+  const queryClient = useQueryClient();
   const lastSavedNotesRef = useRef(String(record?._body ?? ""));
   const notesSaveSeqRef = useRef(0);
   const headerPickerRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +186,16 @@ export function DatabasePeekPanel({
     () => database.schema.filter((field) => field !== titleField),
     [database.schema, titleField],
   );
+  const canStartRecordWorkflow = isWorkflowSourceDatabase(database.id);
+  const workflowsQuery = useQuery({
+    queryKey: ["workflows", "record-peek", "active"],
+    queryFn: () => listWorkflows({ includeInactive: false, limit: 24 }),
+    staleTime: 60_000,
+    enabled: canStartRecordWorkflow,
+  });
+  const workflows = workflowsQuery.data ?? [];
+  const selectedWorkflow = workflows.find((workflow) => workflow.workflow_id === selectedWorkflowId) ?? workflows[0] ?? null;
+  const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
 
   const suggestedHeaderFields = useMemo(
     () => getSuggestedHeaderFields(database),
@@ -300,6 +316,44 @@ export function DatabasePeekPanel({
       />
     );
   };
+
+  async function handleStartRecordWorkflow() {
+    if (!record || !canStartRecordWorkflow || !activeWorkflowId || isStartingWorkflow) return;
+
+    try {
+      setIsStartingWorkflow(true);
+      const result = await startWorkflow({
+        workflowId: activeWorkflowId,
+        triggerSource: "ui",
+        requestedBy: "Adam",
+        entityScope: selectedWorkflow?.entity ?? undefined,
+        taskId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.tasks ? record.id : undefined,
+        bizOpsId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.bizOps ? record.id : undefined,
+        context: {
+          route: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+          source: "database_peek_panel",
+          record_database_id: database.id,
+          record_id: record.id,
+        },
+        confirmWrite: true,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", database.id] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "active"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "approvals"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflows", "agent-panel", "active"] }),
+      ]);
+      toast.success("Workflow run started", {
+        description: result.run?.name ?? result.workflow_run_id,
+      });
+    } catch (startError) {
+      toastError("Workflow start failed", startError);
+    } finally {
+      setIsStartingWorkflow(false);
+    }
+  }
 
   return (
     <>
@@ -497,6 +551,57 @@ export function DatabasePeekPanel({
                     </button>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {canStartRecordWorkflow && (
+            <div className="db-record-section px-6 py-3">
+              <div className="db-record-section-head">
+                <div className="db-record-section-title mb-0">Start Workflow</div>
+                <button
+                  type="button"
+                  className="db-btn"
+                  onClick={() => void workflowsQuery.refetch()}
+                  disabled={workflowsQuery.isFetching}
+                  title="Refresh workflows"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${workflowsQuery.isFetching ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+              <div className="db-record-workflow-launcher">
+                <select
+                  className="db-select db-record-workflow-select"
+                  value={activeWorkflowId}
+                  disabled={workflowsQuery.isLoading || isStartingWorkflow || workflows.length === 0}
+                  onChange={(event) => setSelectedWorkflowId(event.target.value)}
+                >
+                  {workflows.length === 0 ? (
+                    <option value="">No active workflows</option>
+                  ) : (
+                    workflows.map((workflow) => (
+                      <option key={workflow.workflow_id} value={workflow.workflow_id}>
+                        {workflow.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="db-btn db-btn-primary db-record-workflow-start"
+                  onClick={() => void handleStartRecordWorkflow()}
+                  disabled={!activeWorkflowId || isStartingWorkflow || workflowsQuery.isLoading}
+                >
+                  {isStartingWorkflow ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  Start
+                </button>
+              </div>
+              {workflowsQuery.error && (
+                <div className="db-record-workflow-error">Workflow templates could not load.</div>
               )}
             </div>
           )}
@@ -729,4 +834,8 @@ function isHierarchyRelationName(name: string) {
 
 function isWorkflowRunsRelationField(field: WorkspaceDatabaseField) {
   return field.type === "relation" && field.name.trim().toLowerCase() === "workflow runs";
+}
+
+function isWorkflowSourceDatabase(databaseId: string) {
+  return databaseId === GENZEN_WORKSPACE_DATABASE_IDS.tasks || databaseId === GENZEN_WORKSPACE_DATABASE_IDS.bizOps;
 }
