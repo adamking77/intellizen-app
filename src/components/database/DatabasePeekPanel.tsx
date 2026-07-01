@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Copy, Maximize2, Minimize2, Play, RefreshCw, Trash2, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Copy,
+  FileText,
+  GitBranch,
+  Maximize2,
+  Minimize2,
+  Play,
+  RefreshCw,
+  Route,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 
 import { TaskRelationsSection } from "@/components/database/primitives/TaskRelationsSection";
 import { DatabaseRichTextEditor } from "@/components/database/primitives/DatabaseRichTextEditor";
@@ -8,6 +22,7 @@ import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows, startWorkflow } from "@/lib/data";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
@@ -28,6 +43,25 @@ import { toast, toastError } from "@/lib/toast";
 import { formatDateTime } from "@/lib/utils";
 
 let lastPanelWidth = 560;
+
+const WORKFLOW_RUN_FIELD_IDS = {
+  name: "run_name",
+  status: "run_status",
+  workflow: "run_workflow",
+  task: "run_task",
+  bizOps: "run_biz_ops",
+  entityScope: "run_entity_scope",
+  ownerRole: "run_owner_role",
+  actor: "run_actor",
+  triggerSource: "run_trigger_source",
+  currentStep: "run_current_step",
+  sourceDocuments: "run_source_documents",
+  sourceRecords: "run_source_records",
+  context: "run_context",
+  receipt: "run_receipt",
+  startedAt: "run_started_at",
+  completedAt: "run_completed_at",
+} as const;
 
 interface DatabasePeekPanelProps {
   database: WorkspaceDatabaseModel;
@@ -606,6 +640,10 @@ export function DatabasePeekPanel({
             </div>
           )}
 
+          {database.id === GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns && (
+            <WorkflowRunOperationsSection record={record} catalog={catalog} />
+          )}
+
           {database.schema
             .filter((field) => field.type === "relation" && isWorkflowRunsRelationField(field))
             .map(renderRelationSection)}
@@ -787,6 +825,227 @@ function SummaryFieldValue({
     return <span>{value === true ? "Yes" : "No"}</span>;
   }
   return <span className="truncate">{displayValue || "—"}</span>;
+}
+
+function WorkflowRunOperationsSection({
+  record,
+  catalog,
+}: {
+  record: WorkspaceDatabaseModel["records"][number];
+  catalog: WorkspaceDatabaseCatalogEntry[];
+}) {
+  const status = fieldText(record[WORKFLOW_RUN_FIELD_IDS.status]);
+  const actor = fieldText(record[WORKFLOW_RUN_FIELD_IDS.actor]);
+  const ownerRole = fieldText(record[WORKFLOW_RUN_FIELD_IDS.ownerRole]);
+  const currentStep = fieldText(record[WORKFLOW_RUN_FIELD_IDS.currentStep]);
+  const triggerSource = fieldText(record[WORKFLOW_RUN_FIELD_IDS.triggerSource]);
+  const entityScope = fieldText(record[WORKFLOW_RUN_FIELD_IDS.entityScope]);
+  const startedAt = fieldText(record[WORKFLOW_RUN_FIELD_IDS.startedAt]);
+  const completedAt = fieldText(record[WORKFLOW_RUN_FIELD_IDS.completedAt]);
+  const receipt = fieldText(record[WORKFLOW_RUN_FIELD_IDS.receipt]);
+  const sourceDocumentIds = fieldStringArray(record[WORKFLOW_RUN_FIELD_IDS.sourceDocuments]);
+  const sourceRecordIds = splitLines(fieldText(record[WORKFLOW_RUN_FIELD_IDS.sourceRecords]));
+  const context = formatRunContext(fieldText(record[WORKFLOW_RUN_FIELD_IDS.context]));
+  const timelineEntries = parseWorkflowRunTimeline(record._body, receipt, record._updatedAt);
+
+  return (
+    <section className="db-record-section db-workflow-run-ops px-6 py-3">
+      <div className="db-record-section-head">
+        <div className="db-record-section-title mb-0">Workflow Run</div>
+        {status ? (
+          <span className="db-workflow-run-status">
+            {status}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="db-workflow-run-routing">
+        <div className="db-workflow-run-routing-card db-workflow-run-routing-card-primary">
+          <div className="db-workflow-run-routing-icon">
+            <UserRound className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <div className="db-workflow-run-routing-label">Current actor</div>
+            <div className="db-workflow-run-routing-value">{actor ?? "Unassigned"}</div>
+          </div>
+        </div>
+        <div className="db-workflow-run-routing-card">
+          <div className="db-workflow-run-routing-icon">
+            <Route className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <div className="db-workflow-run-routing-label">Owner role</div>
+            <div className="db-workflow-run-routing-value">{ownerRole ?? "No role"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="db-workflow-run-facts">
+        <WorkflowRunFact label="Current step" value={currentStep} />
+        <WorkflowRunFact label="Trigger" value={triggerSource} />
+        <WorkflowRunFact label="Entity" value={entityScope} />
+        <WorkflowRunFact label="Started" value={startedAt ? formatDateTime(startedAt) : null} />
+        <WorkflowRunFact label="Completed" value={completedAt ? formatDateTime(completedAt) : null} />
+      </div>
+
+      <div className="db-workflow-run-context-grid">
+        <WorkflowRunSourceList
+          icon={<FileText className="h-3.5 w-3.5" />}
+          title="Source documents"
+          values={sourceDocumentIds}
+        />
+        <WorkflowRunSourceList
+          icon={<GitBranch className="h-3.5 w-3.5" />}
+          title="Source records"
+          values={sourceRecordIds}
+          resolveValue={(id) => resolveCatalogRecordLabel(id, catalog)}
+        />
+      </div>
+
+      {context ? (
+        <details className="db-workflow-run-context">
+          <summary>Context payload</summary>
+          <pre>{context}</pre>
+        </details>
+      ) : null}
+
+      <div className="db-workflow-run-timeline">
+        <div className="db-record-section-head">
+          <div className="db-record-section-title mb-0">Receipt Timeline</div>
+          <span className="db-record-section-count">{timelineEntries.length}</span>
+        </div>
+        {timelineEntries.length > 0 ? (
+          <div className="db-workflow-run-timeline-list">
+            {timelineEntries.map((entry, index) => (
+              <article key={`${entry.title}-${index}`} className="db-workflow-run-timeline-entry">
+                <div className="db-workflow-run-timeline-marker" />
+                <div className="db-workflow-run-timeline-card">
+                  <div className="db-workflow-run-timeline-title">{entry.title}</div>
+                  {entry.timestamp ? <div className="db-workflow-run-timeline-time">{entry.timestamp}</div> : null}
+                  <MarkdownBody content={entry.content} className="db-workflow-run-timeline-body" />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="db-workflow-run-empty">No receipts have been written yet.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function WorkflowRunFact({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="db-workflow-run-fact">
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
+    </div>
+  );
+}
+
+function WorkflowRunSourceList({
+  icon,
+  title,
+  values,
+  resolveValue,
+}: {
+  icon: ReactNode;
+  title: string;
+  values: string[];
+  resolveValue?: (value: string) => string;
+}) {
+  return (
+    <div className="db-workflow-run-source-list">
+      <div className="db-workflow-run-source-title">
+        {icon}
+        <span>{title}</span>
+      </div>
+      {values.length > 0 ? (
+        <div className="db-workflow-run-source-items">
+          {values.map((value) => (
+            <span key={value} className="db-workflow-run-source-item">
+              {resolveValue ? resolveValue(value) : value}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="db-workflow-run-empty db-workflow-run-empty-compact">None linked</div>
+      )}
+    </div>
+  );
+}
+
+function fieldText(value: WorkspaceDatabaseFieldValue) {
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function fieldStringArray(value: WorkspaceDatabaseFieldValue) {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  const single = fieldText(value);
+  return single ? [single] : [];
+}
+
+function splitLines(value: string | null) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function formatRunContext(value: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function resolveCatalogRecordLabel(recordId: string, catalog: WorkspaceDatabaseCatalogEntry[]) {
+  for (const database of catalog) {
+    const record = database.records.find((candidate) => candidate.id === recordId);
+    if (!record) continue;
+    const titleField = database.schema.find((field) => field.type === "text");
+    const title = titleField ? fieldText(record[titleField.id]) : null;
+    return title ? `${title}` : recordId;
+  }
+  return recordId;
+}
+
+function parseWorkflowRunTimeline(
+  body: string | null | undefined,
+  latestReceipt: string | null,
+  updatedAt: string | undefined,
+) {
+  const source = body?.trim() || latestReceipt?.trim() || "";
+  if (!source) return [];
+  const sections = source
+    .split(/\n(?=##\s+)/)
+    .map((section) => section.trim())
+    .filter(Boolean);
+
+  const receiptSections = sections.filter((section) => /^##\s+Workflow Run Update/i.test(section));
+  if (receiptSections.length === 0) {
+    return [{
+      title: "Run created",
+      timestamp: updatedAt ? formatDateTime(updatedAt) : null,
+      content: source,
+    }];
+  }
+
+  return receiptSections.map((section) => {
+    const [headingLine, ...rest] = section.split(/\r?\n/);
+    const title = headingLine.replace(/^##\s+/, "").trim() || "Workflow Run Update";
+    const timestamp = title.replace(/^Workflow Run Update\s*-\s*/i, "").trim();
+    return {
+      title: "Workflow Run Update",
+      timestamp,
+      content: rest.join("\n").trim(),
+    };
+  }).reverse();
 }
 
 function resolveTargetDatabase(

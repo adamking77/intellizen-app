@@ -2182,6 +2182,251 @@ pre {
   color: var(--danger);
 }
 
+.db-workflow-run-ops {
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-wash) 42%, transparent);
+}
+
+.db-workflow-run-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--base);
+}
+
+.db-workflow-run-routing {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.db-workflow-run-routing-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px;
+  background: var(--base);
+}
+
+.db-workflow-run-routing-card-primary {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.db-workflow-run-routing-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.db-workflow-run-routing-label {
+  font-size: 10.5px;
+  color: var(--overlay-1);
+}
+
+.db-workflow-run-routing-value {
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.db-workflow-run-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.db-workflow-run-fact {
+  min-width: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  padding: 0 0 7px;
+}
+
+.db-workflow-run-fact span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--overlay-1);
+}
+
+.db-workflow-run-fact strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.db-workflow-run-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.db-workflow-run-source-list {
+  min-width: 0;
+}
+
+.db-workflow-run-source-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--overlay-1);
+}
+
+.db-workflow-run-source-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.db-workflow-run-source-item {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--base);
+}
+
+.db-workflow-run-context {
+  margin: 0 0 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--base);
+}
+
+.db-workflow-run-context summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--overlay-1);
+}
+
+.db-workflow-run-context pre {
+  max-height: 220px;
+  overflow: auto;
+  border-top: 1px solid var(--border-subtle);
+  margin: 0;
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--subtext-0);
+  white-space: pre-wrap;
+}
+
+.db-workflow-run-timeline {
+  padding-top: 3px;
+}
+
+.db-workflow-run-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.db-workflow-run-timeline-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.db-workflow-run-timeline-entry::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: -10px;
+  left: 5px;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.db-workflow-run-timeline-entry:last-child::before {
+  display: none;
+}
+
+.db-workflow-run-timeline-marker {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--base);
+}
+
+.db-workflow-run-timeline-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--base);
+}
+
+.db-workflow-run-timeline-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.db-workflow-run-timeline-time {
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: var(--overlay-1);
+}
+
+.db-workflow-run-timeline-body {
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+
+.db-workflow-run-empty {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+  color: var(--overlay-1);
+  background: color-mix(in srgb, var(--base) 58%, transparent);
+}
+
+.db-workflow-run-empty-compact {
+  padding: 6px 8px;
+}
+
 .db-record-header-fields-panel {
   min-width: 260px;
   max-width: 320px;

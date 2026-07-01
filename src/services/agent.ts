@@ -45,6 +45,26 @@ const hermesGatewayUrl =
 const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
 const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
 
+function randomDeliveryId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `intellizen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function hmacSha256Hex(secret: string, body: string) {
+  const encoder = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(body));
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function workflowPayload(input: AgentWorkflowInput) {
   return {
     source: "intelizen",
@@ -82,17 +102,22 @@ async function submitHermesWebhook(input: AgentWorkflowInput) {
     throw new Error("Hermes gateway URL is not configured.");
   }
 
+  const body = JSON.stringify(workflowPayload(input));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "X-GitHub-Event": "intellizen.workflow",
+    "X-GitHub-Delivery": randomDeliveryId(),
   };
-  if (hermesWebhookSecret) headers["X-Gitlab-Token"] = hermesWebhookSecret;
+  if (hermesWebhookSecret) {
+    headers["X-Hub-Signature-256"] = `sha256=${await hmacSha256Hex(hermesWebhookSecret, body)}`;
+  }
 
   const res = await fetch(
     `${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`,
     {
       method: "POST",
       headers,
-      body: JSON.stringify(workflowPayload(input)),
+      body,
     },
   );
 
@@ -101,7 +126,12 @@ async function submitHermesWebhook(input: AgentWorkflowInput) {
     throw new Error(`Hermes webhook failed (${res.status}): ${detail || res.statusText}`);
   }
 
-  return (await res.json()) as { message_id?: string; messageId?: string };
+  return (await res.json()) as {
+    message_id?: string;
+    messageId?: string;
+    delivery_id?: string;
+    deliveryId?: string;
+  };
 }
 
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {
@@ -109,7 +139,7 @@ export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSu
     const result = await submitHermesWebhook(input);
     return {
       status: "submitted",
-      messageId: result.message_id ?? result.messageId,
+      messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
     };
   } catch {
     const inboxItemId = await enqueueFionaWorkflow(input);

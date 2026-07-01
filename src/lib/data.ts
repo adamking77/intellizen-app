@@ -54,6 +54,7 @@ import { safeHostname } from "@/lib/utils";
 import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import { supabase } from "@/lib/supabase";
+import { submitWorkflow } from "@/services/agent";
 
 const SYSTEM_WORKSPACE_DATABASE_ICONS = {
   operations: "intel-system:operations",
@@ -3741,6 +3742,43 @@ async function getWorkflowTemplateByWorkflowId(workflowId: string) {
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
+function workflowRuntimeDispatchSection(input: {
+  status: "submitted" | "queued" | "failed";
+  actor: string | null;
+  workflowRunId: string;
+  messageId?: string;
+  inboxItemId?: string;
+  error?: unknown;
+}) {
+  const details: string[] = [];
+  if (input.messageId) details.push(`- Gateway delivery: ${input.messageId}`);
+  if (input.inboxItemId) details.push(`- Fallback inbox item: ${input.inboxItemId}`);
+  if (input.error instanceof Error && input.error.message) details.push(`- Error: ${input.error.message}`);
+  if (!details.length) details.push("- No delivery identifier returned.");
+
+  const summary =
+    input.status === "submitted"
+      ? "Agent Gateway accepted the run for local Hermes execution."
+      : input.status === "queued"
+        ? "Agent Gateway was unavailable; the run was queued through the Fiona inbox fallback."
+        : "Runtime dispatch did not complete. The Workflow Run remains durable for retry.";
+
+  return `## Workflow Run Update
+
+Timestamp: ${new Date().toISOString()}
+Actor: IntelliZen App
+Status: ${input.status === "failed" ? "Queued" : "In progress"}
+Current step: ${input.status === "failed" ? "Runtime dispatch needs retry" : "Dispatched to local runtime"}
+Summary: ${summary}
+
+Actions taken:
+- Created Workflow Run ${input.workflowRunId}.
+- Routed execution to ${input.actor ?? "the configured workflow actor"} through the Agent Gateway boundary.
+
+Verification:
+${details.join("\n")}`;
+}
+
 export async function startWorkflow(input: StartWorkflowInput) {
   const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
   const workflowItem = toWorkflowTemplateItem(workflow);
@@ -3818,7 +3856,7 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     };
   }
 
-  const created = await createWorkspaceRecord(
+  let created = await createWorkspaceRecord(
     {
       databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns,
       fields,
@@ -3851,6 +3889,86 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
   }
   if (input.bizOpsId) {
     await appendWorkspaceRecordRelation(input.bizOpsId, AGENT_BIZ_OPS_FIELDS.workflowRuns, created.id);
+  }
+
+  if (!input.requiresApproval) {
+    try {
+      const dispatch = await submitWorkflow({
+        workflowId: input.workflowId,
+        task: `Execute Workflow Run ${created.id}: ${runName}. Update the Workflow Run with receipts and sync the linked Task when work progresses.`,
+        context: {
+          type: "workflow_run",
+          id: created.id,
+          route: "workflow_runs",
+          payload: {
+            workflow_run_id: created.id,
+            workflow_record_id: workflow.id,
+            workflow_id: input.workflowId,
+            task_id: input.taskId ?? null,
+            biz_ops_id: input.bizOpsId ?? null,
+            source_records: sourceRecords,
+            source_documents: sourceDocumentIds,
+            trigger_source: input.triggerSource,
+            requested_by: input.requestedBy,
+            context: input.context ?? {},
+          },
+        },
+        priority: "normal",
+        config: {
+          confirm_write_required: true,
+          sync_task: true,
+        },
+        prompt:
+          "Use the configured IntelliZen workspace tools to continue this Workflow Run. Keep writes bounded to the supplied workflow_run_id and linked records, append receipts for every state change, and request approval before any external-facing artifact or irreversible action.",
+      });
+      const section = workflowRuntimeDispatchSection({
+        status: dispatch.status,
+        actor: workflowItem.default_actor,
+        workflowRunId: created.id,
+        messageId: dispatch.messageId,
+        inboxItemId: dispatch.inboxItemId,
+      });
+      created = await updateWorkspaceRecord(
+        created.id,
+        {
+          fields: {
+            ...created.fields,
+            [WORKFLOW_RUN_FIELDS.status]: "In progress",
+            [WORKFLOW_RUN_FIELDS.currentStep]: "Dispatched to local runtime",
+            [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
+              fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
+              section,
+            ),
+          },
+          body: appendMarkdownSection(created.body, section),
+          taxonomy: created.taxonomy,
+        },
+        true,
+      );
+    } catch (error) {
+      const section = workflowRuntimeDispatchSection({
+        status: "failed",
+        actor: workflowItem.default_actor,
+        workflowRunId: created.id,
+        error,
+      });
+      created = await updateWorkspaceRecord(
+        created.id,
+        {
+          fields: {
+            ...created.fields,
+            [WORKFLOW_RUN_FIELDS.currentStep]: "Runtime dispatch needs retry",
+            [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
+              fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
+              section,
+            ),
+          },
+          body: appendMarkdownSection(created.body, section),
+          taxonomy: created.taxonomy,
+        },
+        true,
+      );
+    }
   }
 
   return {
