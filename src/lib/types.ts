@@ -104,6 +104,12 @@ export interface AgentWorkItem {
   initiative_agent_owner?: string | null;
   durable_role?: string | null;
   functional_lane?: string | null;
+  current_actor?: string | null;
+  backup_actor?: string | null;
+  approval_needed?: string | null;
+  next_step?: string | null;
+  latest_note?: string | null;
+  latest_receipt?: string | null;
   body_preview: string;
   updated_at: string;
 }

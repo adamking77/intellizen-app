@@ -3166,6 +3166,35 @@ function markdownList(items?: string[]) {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function latestBodyField(body: string | null | undefined, labels: string[]) {
+  const source = body ?? "";
+  let latest: string | null = null;
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = source.matchAll(new RegExp(`^${escaped}:\\s*(.+)$`, "gim"));
+    for (const match of matches) {
+      const value = match[1]?.trim();
+      if (value && value !== "none") latest = value;
+    }
+  }
+  return latest;
+}
+
+function latestMarkdownSection(body: string | null | undefined, headings: string[]) {
+  const source = (body ?? "").trim();
+  if (!source) return null;
+  const sections = source.split(/\n(?=##\s+)/g);
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    const section = sections[index]?.trim();
+    if (!section) continue;
+    const firstLine = section.split("\n", 1)[0]?.replace(/^##\s*/, "") ?? "";
+    if (headings.some((heading) => firstLine.startsWith(heading))) {
+      return section.slice(0, 900);
+    }
+  }
+  return null;
+}
+
 function firstRelationId(value: WorkspaceDatabaseFieldValue) {
   return asStringArray(value)[0] ?? null;
 }
@@ -3183,6 +3212,13 @@ function toAgentWorkItem(
   const initiativeId = firstRelationId(record.fields[AGENT_TASK_FIELDS.project]);
   const initiative = initiativeId ? initiativeMeta.get(initiativeId) : undefined;
   const title = fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? "Untitled work";
+  const body = record.body ?? "";
+  const assignee = Array.isArray(record.fields[AGENT_TASK_FIELDS.assignee])
+    ? asStringArray(record.fields[AGENT_TASK_FIELDS.assignee])
+    : fieldString(record.fields[AGENT_TASK_FIELDS.assignee]);
+  const currentActorFromFields = Array.isArray(assignee)
+    ? assignee[0] ?? initiative?.agentOwner ?? null
+    : assignee ?? initiative?.agentOwner ?? null;
   return {
     id: record.id,
     source: "workspace.records",
@@ -3190,17 +3226,21 @@ function toAgentWorkItem(
     title,
     status: fieldString(record.fields[AGENT_TASK_FIELDS.status]),
     stage: fieldString(record.fields[AGENT_TASK_FIELDS.stage]),
-    assignee: Array.isArray(record.fields[AGENT_TASK_FIELDS.assignee])
-      ? asStringArray(record.fields[AGENT_TASK_FIELDS.assignee])
-      : fieldString(record.fields[AGENT_TASK_FIELDS.assignee]),
+    assignee,
     priority: fieldString(record.fields[AGENT_TASK_FIELDS.priority]),
     area: record.fields[AGENT_TASK_FIELDS.area],
     initiative_id: initiativeId,
     initiative_name: initiative?.name ?? null,
     initiative_agent_owner: initiative?.agentOwner ?? null,
-    durable_role: null,
-    functional_lane: null,
-    body_preview: (record.body ?? "").slice(0, 500),
+    durable_role: latestBodyField(body, ["Durable role"]),
+    functional_lane: latestBodyField(body, ["Functional lane"]) ?? fieldString(record.fields[AGENT_TASK_FIELDS.area]),
+    current_actor: latestBodyField(body, ["Current actor", "Actor"]) ?? currentActorFromFields,
+    backup_actor: latestBodyField(body, ["Backup actor"]),
+    approval_needed: latestBodyField(body, ["Approval needed before", "Approval needed"]),
+    next_step: latestBodyField(body, ["Next step"]),
+    latest_note: latestMarkdownSection(body, ["Agent Note", "Agent Claim"]),
+    latest_receipt: latestMarkdownSection(body, ["Agent Receipt", "Workflow Run Update", "Voice Draft Intake"]),
+    body_preview: body.slice(0, 500),
     updated_at: record.updated_at,
   };
 }
