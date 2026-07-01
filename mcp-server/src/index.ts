@@ -50,15 +50,13 @@ const EXA_API_KEY =
   process.env.VITE_EXA_API_KEY ??
   process.env.EXA_API_KEY ??
   localEnv.VITE_EXA_API_KEY ??
-  localEnv.EXA_API_KEY ??
-  "ca04e163-e55b-49ca-9b40-3454d11a35d6";
+  localEnv.EXA_API_KEY;
 
 if (!SUPABASE_KEY) {
   throw new Error("Missing Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY in .env.local.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const exa = new Exa(EXA_API_KEY);
 const VAULT_BASE = join(homedir(), "vault", "intelligence");
 const GENZEN_WORKSPACE_DATABASE_IDS = {
   bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
@@ -1109,6 +1107,10 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
 }
 
 async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearchResult> {
+  if (!EXA_API_KEY) {
+    throw new Error("Missing Exa API key. Set EXA_API_KEY or VITE_EXA_API_KEY before calling run_exa_search.");
+  }
+
   const {
     query,
     category = "web",
@@ -1133,6 +1135,7 @@ async function runSearchAndUpsert(input: ExaSearchInput): Promise<UpsertedSearch
     searchOptions.startPublishedDate = start_published_date;
   }
 
+  const exa = new Exa(EXA_API_KEY);
   const res = await exa.searchAndContents(query, searchOptions);
   const upserted: number[] = [];
 
