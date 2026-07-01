@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CheckCircle2, ExternalLink, PanelRightClose, PanelRightOpen, Play, RefreshCw } from "lucide-react";
+import { Bot, CheckCircle2, ExternalLink, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, RefreshCw, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
@@ -16,6 +16,34 @@ const RUN_BOARD_VIEW_ID = "c2000000-0000-0000-0000-000000000102";
 const APPROVAL_QUEUE_VIEW_ID = "c2000000-0000-0000-0000-000000000103";
 
 type RunAction = "start" | "request_approval" | "approve" | "block" | "done";
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: {
+      transcript: string;
+    };
+  }>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface VoiceWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
 
 function readCollapsed() {
   if (typeof window === "undefined") return false;
@@ -126,11 +154,48 @@ function actionsForRun(run: WorkflowRunItem): RunAction[] {
   return [];
 }
 
+function getSpeechRecognitionConstructor() {
+  if (typeof window === "undefined") return null;
+  const voiceWindow = window as VoiceWindow;
+  return voiceWindow.SpeechRecognition ?? voiceWindow.webkitSpeechRecognition ?? null;
+}
+
+function supportsSpeechSynthesis() {
+  return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function buildVoiceBrief(approvals: WorkflowRunItem[], runs: WorkflowRunItem[]) {
+  const lines: string[] = [];
+  if (approvals.length > 0) {
+    lines.push(`${approvals.length} approval${approvals.length === 1 ? "" : "s"} waiting.`);
+    for (const run of approvals.slice(0, 3)) {
+      lines.push(`${runTitle(run)}. ${run.current_step ?? "Awaiting decision."}`);
+    }
+  } else {
+    lines.push("No approvals waiting.");
+  }
+
+  if (runs.length > 0) {
+    lines.push(`${runs.length} active workflow${runs.length === 1 ? "" : "s"}.`);
+    for (const run of runs.slice(0, 3)) {
+      lines.push(`${runTitle(run)} is ${run.status ?? "active"}. ${run.current_step ?? ""}`.trim());
+    }
+  } else {
+    lines.push("No active workflows.");
+  }
+
+  return lines.join(" ");
+}
+
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [updatingRunId, setUpdatingRunId] = useState<string | null>(null);
+  const [voiceDraft, setVoiceDraft] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const { isCramped } = useWindowSize();
 
   const workflowsQuery = useQuery({
@@ -158,11 +223,20 @@ export function AgentPanel() {
   const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
   const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching;
   const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
+  const canListen = Boolean(getSpeechRecognitionConstructor());
+  const canSpeak = supportsSpeechSynthesis();
 
   const visibleRuns = useMemo(() => {
     const approvalIds = new Set(approvals.map((run) => run.id));
     return activeRuns.filter((run) => !approvalIds.has(run.id)).slice(0, 5);
   }, [activeRuns, approvals]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+      if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -196,7 +270,8 @@ export function AgentPanel() {
         entityScope: selectedWorkflow?.entity ?? undefined,
         context: {
           route: typeof window === "undefined" ? null : window.location.pathname,
-          source: "agent_panel",
+          source: voiceDraft.trim() ? "agent_panel_voice" : "agent_panel",
+          voice_transcript: voiceDraft.trim() || null,
         },
         confirmWrite: true,
       });
@@ -209,6 +284,72 @@ export function AgentPanel() {
     } finally {
       setIsStartingWorkflow(false);
     }
+  }
+
+  function startVoiceDraft() {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const Recognition = getSpeechRecognitionConstructor();
+    if (!Recognition) {
+      toast.error("Speech recognition unavailable");
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      let finalText = "";
+      let interimText = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result.isFinal) finalText += result[0].transcript;
+        else interimText += result[0].transcript;
+      }
+      if (finalText.trim()) {
+        setVoiceDraft((current) => `${current}${current.trim() ? " " : ""}${finalText.trim()}`);
+      }
+      if (interimText.trim() && !finalText.trim()) {
+        setVoiceDraft((current) => current.replace(/\s+\[[^\]]+\]$/, "") + ` [${interimText.trim()}]`);
+      }
+    };
+    recognition.onerror = (event) => {
+      setIsListening(false);
+      toast.error("Speech recognition stopped", {
+        description: event.error ?? "Recognition error",
+      });
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+      setVoiceDraft((current) => current.replace(/\s+\[[^\]]+\]$/, "").trim());
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
+
+  function speakBrief() {
+    if (!canSpeak) {
+      toast.error("Speech output unavailable");
+      return;
+    }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(buildVoiceBrief(approvals, visibleRuns));
+    utterance.rate = 0.94;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
   }
 
   async function handleRunAction(run: WorkflowRunItem, action: RunAction) {
@@ -351,6 +492,62 @@ export function AgentPanel() {
               </button>
             </div>
           </div>
+        </section>
+
+        <section className="mb-5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Voice</h2>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={startVoiceDraft}
+                disabled={!canListen}
+                aria-label={isListening ? "Stop dictation" : "Start dictation"}
+                title={isListening ? "Stop dictation" : "Start dictation"}
+                className={cn(
+                  "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40",
+                  isListening
+                    ? "border-[color-mix(in_srgb,var(--danger)_34%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
+                    : "border-[var(--border)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                )}
+              >
+                {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={speakBrief}
+                disabled={!canSpeak}
+                aria-label={isSpeaking ? "Stop speaking" : "Speak brief"}
+                title={isSpeaking ? "Stop speaking" : "Speak brief"}
+                className={cn(
+                  "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40",
+                  isSpeaking
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                )}
+              >
+                {isSpeaking ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={voiceDraft}
+            onChange={(event) => setVoiceDraft(event.target.value)}
+            rows={3}
+            placeholder="Dictated context"
+            className="min-h-[76px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
+          />
+          {voiceDraft.trim() ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setVoiceDraft("")}
+                className="inline-flex h-6 items-center justify-center rounded border border-[var(--border)] px-2 font-ui text-[10.5px] font-medium text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              >
+                Clear
+              </button>
+            </div>
+          ) : null}
         </section>
 
         <section className="space-y-2">
