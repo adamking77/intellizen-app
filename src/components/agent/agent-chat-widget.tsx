@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
+import { SandboxedGenui } from "@/components/agent/sandboxed-genui";
 import { MetricCell } from "@/components/ui/metric-cell";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,6 +14,9 @@ import { cn } from "@/lib/utils";
  * agent output is not visually special.
  */
 export function AgentChatWidget({ widget }: { widget: AgentChatWidgetModel }) {
+  if (widget.kind === "html") {
+    return <SandboxedGenui html={widget.html} title={widget.title} />;
+  }
   return (
     <div className="mt-1.5 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)]">
       {widget.title ? (

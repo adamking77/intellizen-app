@@ -49,7 +49,8 @@ export type AgentChatWidget =
   | { kind: "data-chart"; title?: string; chart: AgentDataChartWidget }
   | { kind: "data-insights"; title?: string; insights: string[] }
   | { kind: "data-metrics"; title?: string; metrics: AgentMetricItem[] }
-  | { kind: "record-links"; title?: string; links: AgentRecordLink[] };
+  | { kind: "record-links"; title?: string; links: AgentRecordLink[] }
+  | { kind: "html"; title?: string; html: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -119,6 +120,10 @@ export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
       );
     return metrics.length > 0 ? { kind: "data-metrics", title, metrics } : null;
   }
+  if (value.kind === "html" && typeof value.html === "string" && value.html.trim()) {
+    // Rendered in a hard sandbox (no network, opaque origin); cap size.
+    return { kind: "html", title, html: value.html.slice(0, 100_000) };
+  }
   if (value.kind === "record-links" || Array.isArray(value.links)) {
     const links = (Array.isArray(value.links) ? value.links : [])
       .filter(
@@ -152,14 +157,37 @@ Supported kinds:
 
 One JSON object per genui block. The app renders these with its own native components.
 
+For richer INTERACTIVE views (drill-downs, custom layouts, live data exploration), emit a genui-html block with a complete HTML fragment:
+
+\`\`\`genui-html
+<div id="app">…</div>
+<script>/* inline JS */</script>
+\`\`\`
+
+genui-html rules:
+- Runs in a locked sandbox: NO network access, NO external scripts/CDNs — inline script and style only.
+- IntelliZen design tokens are available as CSS variables (--base, --mantle, --text, --subtext-0, --overlay-1, --accent, --border, --success, --danger, plus --red/--peach/--yellow/--green/--teal/--blue/--mauve for series colors). Use them; never hardcode other colors.
+- Live Supabase data (read-only) via: await window.intellizen.query({ table, filters, orderBy, limit })
+  Tables: "workspace_records" (filter by database_id/id; record fields are in the .fields object), "work_events" (filter record_id/workflow_run_id/event_kind/actor), "signals" (status/source), "entities" (entity_type/first_case_id), "claims" (case_id/claim_origin).
+  filters: [{column, op: "eq"|"in", value}]. limit max 200. Example:
+  const rows = await window.intellizen.query({ table: "entities", filters: [{column: "entity_type", op: "eq", value: "person"}], limit: 50 });
+- Keep it compact (the panel is ~320-540px wide); the frame auto-sizes to your content up to 600px.
+- Prefer the simple genui JSON kinds when they suffice; use genui-html only when interactivity earns it.
+
 NEVER draw charts with unicode block characters, ASCII art, or markdown tables of bars — always use a genui block instead.`;
 
 const GENUI_FENCE_RE = /```genui\s*\n([\s\S]*?)```/g;
+const GENUI_HTML_FENCE_RE = /```genui-html\s*\n([\s\S]*?)```/g;
 
 /** Extract genui widget blocks out of streamed reply text. */
 export function extractGenuiBlocks(text: string): { text: string; widgets: AgentChatWidget[] } {
   const widgets: AgentChatWidget[] = [];
   const cleaned = text
+    .replace(GENUI_HTML_FENCE_RE, (_match, html: string) => {
+      const trimmed = html.trim();
+      if (trimmed) widgets.push({ kind: "html", html: trimmed.slice(0, 100_000) });
+      return "";
+    })
     .replace(GENUI_FENCE_RE, (_match, json: string) => {
       try {
         const widget = parseAgentChatWidget(JSON.parse(json.trim()));
@@ -176,7 +204,7 @@ export function extractGenuiBlocks(text: string): { text: string; widgets: Agent
 
 /** Streaming display: hide completed genui blocks and any unterminated tail. */
 export function stripGenuiForStreaming(text: string): string {
-  const withoutComplete = text.replace(GENUI_FENCE_RE, "").trimEnd();
+  const withoutComplete = text.replace(GENUI_HTML_FENCE_RE, "").replace(GENUI_FENCE_RE, "").trimEnd();
   const openFence = withoutComplete.lastIndexOf("```genui");
   return (openFence === -1 ? withoutComplete : withoutComplete.slice(0, openFence)).trimEnd();
 }
