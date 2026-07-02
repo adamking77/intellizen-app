@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Bot, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
+import { parseAgentChatResult, type AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
+
 import {
   createVoiceDraftTask,
   GENZEN_WORKSPACE_DATABASE_IDS,
@@ -44,6 +47,10 @@ interface AgentChatEntry {
   status: ChatEntryStatus;
   detail: string;
   createdAt: string;
+  /** Agent reply text parsed from the completed inbox result. */
+  reply?: string | null;
+  /** In-chat GenUI widget (agent-native data-widget contract). */
+  widget?: AgentChatWidgetModel | null;
 }
 
 interface ChatPayloadContext {
@@ -138,6 +145,7 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
       : item.task.replace(/^Direct chat message for\s+/, "").split(":")[0]?.trim() || "Fiona/Hermes";
   const status: ChatEntryStatus =
     item.status === "blocked" ? "failed" : item.status === "pending" || item.status === "in_progress" ? "queued" : "submitted";
+  const { reply, widget } = item.status === "complete" ? parseAgentChatResult(item.result) : { reply: null, widget: null };
   return {
     id: item.id,
     message,
@@ -145,6 +153,8 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
     status,
     detail: item.status,
     createdAt: item.updated_at ?? item.created_at,
+    reply,
+    widget,
   };
 }
 
@@ -686,6 +696,12 @@ export function AgentPanel() {
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--text)]">{entry.message}</p>
+                    {entry.reply ? (
+                      <p className="mt-1.5 border-l-2 border-[var(--accent-border)] pl-2 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">
+                        {entry.reply}
+                      </p>
+                    ) : null}
+                    {entry.widget ? <AgentChatWidget widget={entry.widget} /> : null}
                     <p className="mt-1 truncate font-mono text-[9.5px] text-[var(--overlay-1)]">{entry.detail}</p>
                   </div>
                 ))}

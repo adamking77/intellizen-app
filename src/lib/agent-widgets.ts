@@ -1,0 +1,136 @@
+// In-chat GenUI widget contract, borrowed from agent-native
+// (packages/core/src/data-widgets + action-ui.ts renderer ids) per the
+// 2026-07-02 adoption spike. Agents attach a widget to a chat result and
+// IntelliZen renders it natively — no framework dependency.
+
+export interface AgentDataTableColumn {
+  key: string;
+  label: string;
+  align?: "left" | "right";
+}
+
+export interface AgentDataTableWidget {
+  title?: string;
+  columns: AgentDataTableColumn[];
+  rows: Array<Record<string, unknown>>;
+  totalRows?: number;
+  truncated?: boolean;
+}
+
+export interface AgentDataChartSeries {
+  key: string;
+  label: string;
+  color?: string;
+}
+
+export interface AgentDataChartWidget {
+  type: "bar" | "line" | "area";
+  title?: string;
+  xKey: string;
+  series: AgentDataChartSeries[];
+  data: Array<Record<string, unknown>>;
+}
+
+export type AgentChatWidget =
+  | { kind: "data-table"; title?: string; table: AgentDataTableWidget }
+  | { kind: "data-chart"; title?: string; chart: AgentDataChartWidget }
+  | { kind: "data-insights"; title?: string; insights: string[] };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function parseTable(value: unknown): AgentDataTableWidget | null {
+  if (!isRecord(value)) return null;
+  const columns = Array.isArray(value.columns)
+    ? value.columns.filter(
+        (col): col is AgentDataTableColumn =>
+          isRecord(col) && typeof col.key === "string" && typeof col.label === "string",
+      )
+    : [];
+  const rows = Array.isArray(value.rows) ? value.rows.filter(isRecord) : [];
+  if (columns.length === 0 || rows.length === 0) return null;
+  return {
+    title: typeof value.title === "string" ? value.title : undefined,
+    columns,
+    rows,
+    totalRows: typeof value.totalRows === "number" ? value.totalRows : undefined,
+    truncated: value.truncated === true,
+  };
+}
+
+function parseChart(value: unknown): AgentDataChartWidget | null {
+  if (!isRecord(value)) return null;
+  const type = value.type === "bar" || value.type === "line" || value.type === "area" ? value.type : null;
+  const series = Array.isArray(value.series)
+    ? value.series.filter(
+        (item): item is AgentDataChartSeries =>
+          isRecord(item) && typeof item.key === "string" && typeof item.label === "string",
+      )
+    : [];
+  const data = Array.isArray(value.data) ? value.data.filter(isRecord) : [];
+  if (!type || typeof value.xKey !== "string" || series.length === 0 || data.length === 0) return null;
+  return { type, xKey: value.xKey, series, data, title: typeof value.title === "string" ? value.title : undefined };
+}
+
+/** Parse an agent-native-style widget envelope from an agent result payload. */
+export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
+  if (!isRecord(value)) return null;
+  const title = typeof value.title === "string" ? value.title : undefined;
+
+  if (value.kind === "data-table" || isRecord(value.table)) {
+    const table = parseTable(value.table ?? value);
+    return table ? { kind: "data-table", title, table } : null;
+  }
+  if (value.kind === "data-chart" || isRecord(value.chart)) {
+    const chart = parseChart(value.chart ?? value);
+    return chart ? { kind: "data-chart", title, chart } : null;
+  }
+  if (value.kind === "data-insights" || Array.isArray(value.insights)) {
+    const insights = asStringList(value.insights);
+    return insights.length > 0 ? { kind: "data-insights", title, insights } : null;
+  }
+  return null;
+}
+
+export interface AgentChatResult {
+  reply: string | null;
+  widget: AgentChatWidget | null;
+}
+
+/**
+ * Extract a human reply and optional GenUI widget from a fiona_inbox result.
+ * Accepts a bare string, or an object with message/summary/reply text and a
+ * widget (or first of widgets) in the agent-native envelope shape.
+ */
+export function parseAgentChatResult(result: unknown): AgentChatResult {
+  if (typeof result === "string") {
+    const trimmed = result.trim();
+    if (!trimmed) return { reply: null, widget: null };
+    // Results are often stored as stringified JSON (text column); decode
+    // structured payloads before falling back to plain-text replies.
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        return parseAgentChatResult(JSON.parse(trimmed));
+      } catch {
+        /* plain text that happens to start with a brace */
+      }
+    }
+    return { reply: trimmed, widget: null };
+  }
+  if (!isRecord(result)) return { reply: null, widget: null };
+
+  const textCandidate = [result.message, result.reply, result.summary, result.text].find(
+    (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
+  );
+  const widgetSource = result.widget ?? (Array.isArray(result.widgets) ? result.widgets[0] : null);
+  return {
+    reply: textCandidate?.trim() ?? null,
+    widget: parseAgentChatWidget(widgetSource),
+  };
+}
