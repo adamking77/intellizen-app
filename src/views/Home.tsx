@@ -27,7 +27,13 @@ import {
   listWorkflows,
   listWorkspaceDatabaseCatalog,
 } from "@/lib/data";
-import { buildGzsDistributionHealthView, type GzsDistributionHealthView } from "@/lib/operating-views";
+import {
+  buildActiveApprovalsView,
+  buildGzsDistributionHealthView,
+  type ActiveApprovalItem,
+  type ActiveApprovalsView,
+  type GzsDistributionHealthView,
+} from "@/lib/operating-views";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import type { AgentWorkItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -38,6 +44,8 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Ops: "var(--yellow)",
   Slack: "var(--lavender)",
 };
+
+type OperatingViewMode = "distribution" | "approvals";
 
 function OperatingMetric({
   label,
@@ -81,6 +89,69 @@ function AttentionRow({ item }: { item: AgentWorkItem }) {
         {item.current_actor ? <Badge variant="outline">{item.current_actor}</Badge> : null}
         {item.initiative_name ? <Badge variant="info">{item.initiative_name}</Badge> : null}
       </div>
+    </div>
+  );
+}
+
+function ApprovalDecisionRow({ item }: { item: ActiveApprovalItem }) {
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-2">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
+        <p className="line-clamp-2 min-w-0 font-ui text-[12px] font-semibold leading-snug text-[var(--text)]">{item.title}</p>
+        <Badge variant={item.source === "workflow_run" ? "info" : "warning"}>
+          {item.source === "workflow_run" ? "Run" : "Task"}
+        </Badge>
+      </div>
+      <p className="mt-2 line-clamp-2 font-ui text-[12px] leading-snug text-[var(--subtext-0)]">
+        {item.approvalNeeded ?? item.currentStep ?? "Approval needed."}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {item.priority ? <Badge variant="neutral">{item.priority}</Badge> : null}
+        {item.owner ? <Badge variant="outline">{item.owner}</Badge> : null}
+        {item.currentStep ? <Badge variant="secondary">{item.currentStep}</Badge> : null}
+      </div>
+    </div>
+  );
+}
+
+function OperatingViewTabs({
+  mode,
+  approvalsCount,
+  onChange,
+}: {
+  mode: OperatingViewMode;
+  approvalsCount: number;
+  onChange: (mode: OperatingViewMode) => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => onChange("distribution")}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
+          mode === "distribution"
+            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
+        )}
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Distribution
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("approvals")}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
+          mode === "approvals"
+            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
+        )}
+      >
+        <CircleAlert className="h-3.5 w-3.5" />
+        Approvals
+        <span className="font-mono text-[10px] text-current">{approvalsCount}</span>
+      </button>
     </div>
   );
 }
@@ -207,10 +278,111 @@ function GzsDistributionHealthPanel({
   );
 }
 
+function ActiveApprovalsPanel({
+  view,
+  isFetching,
+  onRefresh,
+}: {
+  view: ActiveApprovalsView;
+  isFetching: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="mb-5 rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
+      <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-label">{view.spec.title}</span>
+            <Badge variant="outline">{view.spec.view_id}</Badge>
+          </div>
+          <p className="mt-1 max-w-3xl font-ui text-[12px] leading-relaxed text-[var(--overlay-1)]">{view.spec.purpose}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onRefresh} disabled={isFetching} className="gap-1.5">
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            Refresh
+          </Button>
+          <Link
+            to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}?view=c2000000-0000-0000-0000-000000000103`}
+            className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "gap-1.5")}
+          >
+            Approval Queue
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 2xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-5">
+            <OperatingMetric label="Approvals" value={view.metrics.total} tone="warning" />
+            <OperatingMetric label="Tasks" value={view.metrics.workItems} />
+            <OperatingMetric label="Runs" value={view.metrics.workflowRuns} tone="success" />
+            <OperatingMetric label="High priority" value={view.metrics.highPriority} tone="danger" />
+            <OperatingMetric label="Stale 48h" value={view.metrics.stale} tone="warning" />
+          </div>
+
+          <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+            <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Decision queue
+            </div>
+            <div className="space-y-2">
+              {view.approvals.length > 0 ? (
+                view.approvals.map((item) => <ApprovalDecisionRow key={`${item.source}-${item.id}`} item={item} />)
+              ) : (
+                <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-4 font-ui text-[12px] text-[var(--overlay-1)]">
+                  No active approvals are currently visible.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <aside className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Native view spec</div>
+            <p className="mt-1 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+              {view.spec.entity_scope} · {view.spec.layout}
+            </p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-1">
+            <div>
+              <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Sources</div>
+              <ul className="mt-1 space-y-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                {view.spec.source_tables.map((source) => <li key={source}>{source}</li>)}
+              </ul>
+            </div>
+            <div>
+              <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Policy</div>
+              <ul className="mt-1 space-y-1 font-ui text-[12px] text-[var(--subtext-0)]">
+                {view.spec.permissions.map((permission) => <li key={permission}>{permission}</li>)}
+              </ul>
+            </div>
+          </div>
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Records sampled</div>
+            <p className="mt-1 font-mono text-[11px] text-[var(--overlay-1)]">{view.spec.source_records.length} live records</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.tasks}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+              Tasks
+            </Link>
+            <Link to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+              Runs
+            </Link>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 export function HomeView() {
   const navigate = useNavigate();
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
+  const [operatingViewMode, setOperatingViewMode] = useState<OperatingViewMode>("distribution");
   const rotation = currentRotation();
   const {
     data: catalog = [],
@@ -222,7 +394,7 @@ export function HomeView() {
     refetchInterval: 60_000,
   });
   const operatingViewQuery = useQuery({
-    queryKey: ["home-operating-view", "gzs-distribution-health"],
+    queryKey: ["home-operating-views"],
     queryFn: async () => {
       const [projects, workItems, workflows, workflowRuns] = await Promise.all([
         listAgentProjects({ includeDone: false, limit: 120 }),
@@ -230,7 +402,10 @@ export function HomeView() {
         listWorkflows({ includeInactive: false, limit: 120 }),
         listWorkflowRuns({ includeCompleted: false, limit: 120 }),
       ]);
-      return buildGzsDistributionHealthView({ projects, workItems, workflows, workflowRuns });
+      return {
+        distribution: buildGzsDistributionHealthView({ projects, workItems, workflows, workflowRuns }),
+        approvals: buildActiveApprovalsView({ workItems, workflowRuns }),
+      };
     },
     refetchInterval: 60_000,
   });
@@ -336,11 +511,26 @@ export function HomeView() {
               <span>Loading GZS distribution health...</span>
             </div>
           ) : operatingViewQuery.data ? (
-            <GzsDistributionHealthPanel
-              view={operatingViewQuery.data}
-              isFetching={operatingViewQuery.isFetching}
-              onRefresh={() => void operatingViewQuery.refetch()}
-            />
+            <>
+              <OperatingViewTabs
+                mode={operatingViewMode}
+                approvalsCount={operatingViewQuery.data.approvals.metrics.total}
+                onChange={setOperatingViewMode}
+              />
+              {operatingViewMode === "distribution" ? (
+                <GzsDistributionHealthPanel
+                  view={operatingViewQuery.data.distribution}
+                  isFetching={operatingViewQuery.isFetching}
+                  onRefresh={() => void operatingViewQuery.refetch()}
+                />
+              ) : (
+                <ActiveApprovalsPanel
+                  view={operatingViewQuery.data.approvals}
+                  isFetching={operatingViewQuery.isFetching}
+                  onRefresh={() => void operatingViewQuery.refetch()}
+                />
+              )}
+            </>
           ) : operatingViewQuery.error ? (
             <div className="mb-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
               <p className="font-ui text-[13px] text-[var(--danger)]">

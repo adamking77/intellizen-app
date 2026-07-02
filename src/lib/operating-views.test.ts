@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReceiptReflectionDigest, buildWeeklyOperatingBrief } from "@/lib/operating-views";
+import { buildActiveApprovalsView, buildReceiptReflectionDigest, buildWeeklyOperatingBrief } from "@/lib/operating-views";
 import type { AgentProjectItem, AgentWorkItem, WorkflowRunItem, WorkflowTemplateItem } from "@/lib/types";
 
 const baseWork = {
@@ -206,5 +206,73 @@ describe("operating-views", () => {
     expect(digest.markdown).toContain("Publish distribution page");
     expect(digest.markdown).toContain("## Follow-Up Signals");
     expect(digest.sourceRecords).toEqual(expect.arrayContaining(["task-approval", "task-blocked", "run-1"]));
+  });
+
+  it("builds an active approvals view from work and workflow run approval gates", () => {
+    const workItems: AgentWorkItem[] = [
+      {
+        ...baseWork,
+        id: "task-approval",
+        title: "Review homepage proof section",
+        status: "Needs approval",
+        stage: "Review",
+        priority: "High",
+        current_actor: "Adam",
+        approval_needed: "Approve proof section before publishing.",
+        updated_at: "2026-06-29T08:00:00.000Z",
+      },
+      {
+        ...baseWork,
+        id: "task-low",
+        title: "Review optional copy note",
+        status: "Needs approval",
+        stage: "Review",
+        priority: "Low",
+        current_actor: "Adam",
+        approval_needed: "Optional copy decision.",
+        updated_at: "2026-07-02T06:00:00.000Z",
+      },
+    ];
+    const workflowRuns: WorkflowRunItem[] = [
+      {
+        id: "run-approval",
+        name: "GZS Expertise Page Approval",
+        status: "Needs approval",
+        workflow_record_id: "workflow-1",
+        task_id: "task-approval",
+        biz_ops_id: "project-1",
+        entity_scope: "GenZen Solutions",
+        owner_role: "Distribution Operator",
+        actor: "Steve",
+        trigger_source: "ui",
+        current_step: "Approve final draft.",
+        source_documents: ["1600"],
+        source_records: "task-approval",
+        context: null,
+        receipt: null,
+        started_at: "2026-07-01T12:00:00.000Z",
+        completed_at: null,
+        body_preview: "",
+        updated_at: "2026-07-01T13:00:00.000Z",
+      },
+    ];
+
+    const view = buildActiveApprovalsView({
+      workItems,
+      workflowRuns,
+      generatedAt: new Date("2026-07-02T08:00:00.000Z"),
+    });
+
+    expect(view.spec.view_id).toBe("ops.active_approvals");
+    expect(view.metrics).toMatchObject({
+      total: 3,
+      workItems: 2,
+      workflowRuns: 1,
+      highPriority: 1,
+      stale: 1,
+    });
+    expect(view.approvals[0].id).toBe("task-approval");
+    expect(view.approvals.map((item) => item.id)).toEqual(expect.arrayContaining(["task-approval", "task-low", "run-approval"]));
+    expect(view.spec.source_records).toEqual(expect.arrayContaining(["task-approval", "task-low", "run-approval"]));
   });
 });

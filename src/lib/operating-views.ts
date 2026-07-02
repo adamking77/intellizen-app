@@ -42,6 +42,30 @@ export interface GzsDistributionHealthView {
   workflowRuns: WorkflowRunItem[];
 }
 
+export interface ActiveApprovalItem {
+  id: string;
+  source: "work" | "workflow_run";
+  title: string;
+  status: string | null;
+  priority: string | null;
+  owner: string | null;
+  currentStep: string | null;
+  approvalNeeded: string | null;
+  updatedAt: string;
+}
+
+export interface ActiveApprovalsView {
+  spec: NativeOperatingViewSpec;
+  metrics: {
+    total: number;
+    workItems: number;
+    workflowRuns: number;
+    highPriority: number;
+    stale: number;
+  };
+  approvals: ActiveApprovalItem[];
+}
+
 export interface WeeklyOperatingBrief {
   title: string;
   sourcePath: string;
@@ -133,6 +157,14 @@ function sortWork(left: AgentWorkItem, right: AgentWorkItem) {
 
 function sortRuns(left: WorkflowRunItem, right: WorkflowRunItem) {
   return updatedTime(right) - updatedTime(left);
+}
+
+function approvalUpdatedTime(item: ActiveApprovalItem) {
+  return new Date(item.updatedAt).getTime() || 0;
+}
+
+function sortApprovals(left: ActiveApprovalItem, right: ActiveApprovalItem) {
+  return priorityRank(right.priority) - priorityRank(left.priority) || approvalUpdatedTime(right) - approvalUpdatedTime(left);
 }
 
 function formatDate(value: Date) {
@@ -313,6 +345,74 @@ export function buildGzsDistributionHealthView(input: {
       .slice(0, 6),
     workflowTemplates,
     workflowRuns,
+  };
+}
+
+export function buildActiveApprovalsView(input: {
+  workItems: AgentWorkItem[];
+  workflowRuns: WorkflowRunItem[];
+  generatedAt?: Date;
+}): ActiveApprovalsView {
+  const generatedAt = input.generatedAt ?? new Date();
+  const staleBefore = generatedAt.getTime() - 48 * 60 * 60 * 1000;
+  const workApprovals: ActiveApprovalItem[] = input.workItems
+    .filter((item) => item.status === "Needs approval" || Boolean(item.approval_needed))
+    .map((item) => ({
+      id: item.id,
+      source: "work",
+      title: item.title,
+      status: item.status,
+      priority: item.priority,
+      owner: item.current_actor ?? (Array.isArray(item.assignee) ? item.assignee.join(", ") : item.assignee),
+      currentStep: item.stage,
+      approvalNeeded: item.approval_needed ?? item.next_step ?? null,
+      updatedAt: item.updated_at,
+    }));
+  const runApprovals: ActiveApprovalItem[] = input.workflowRuns
+    .filter((run) => run.status === "Needs approval")
+    .map((run) => ({
+      id: run.id,
+      source: "workflow_run",
+      title: run.name,
+      status: run.status,
+      priority: null,
+      owner: run.actor,
+      currentStep: run.current_step,
+      approvalNeeded: run.current_step,
+      updatedAt: run.updated_at,
+    }));
+  const approvals = [...workApprovals, ...runApprovals].sort(sortApprovals).slice(0, 12);
+  const highPriority = approvals.filter((item) => priorityRank(item.priority) >= 3).length;
+  const stale = approvals.filter((item) => approvalUpdatedTime(item) > 0 && approvalUpdatedTime(item) < staleBefore).length;
+  const sourceRecords = approvals.map((item) => item.id);
+
+  return {
+    spec: {
+      view_id: "ops.active_approvals",
+      title: "Active approvals",
+      entity_scope: "GenZen OS",
+      purpose: "Show decisions waiting on Adam or an accountable actor before work can continue.",
+      source_tables: ["workspace.records / Tasks", "workspace.records / Workflow Runs"],
+      source_records: Array.from(new Set(sourceRecords)),
+      filters: ["Tasks where status = Needs approval or approval_needed is set", "Workflow Runs where status = Needs approval"],
+      layout: "Home operating snapshot with approval metrics, decision queue, and visible source/policy metadata.",
+      components: ["metrics", "decision_queue", "source_spec"],
+      fields: ["title", "status", "priority", "current_actor", "approval_needed", "current_step", "updated_at"],
+      sort: "priority desc, updated_at desc",
+      grouping: "work approvals and workflow-run approvals",
+      actions: ["open Approval Queue", "open Tasks database", "open Workflow Runs database"],
+      permissions: ["read workspace.records", "no write path", "no external action"],
+      freshness: "React Query refetches every 60 seconds.",
+      save_policy: "Native typed view spec in code; no generated React or second state store.",
+    },
+    metrics: {
+      total: approvals.length,
+      workItems: workApprovals.length,
+      workflowRuns: runApprovals.length,
+      highPriority,
+      stale,
+    },
+    approvals,
   };
 }
 
