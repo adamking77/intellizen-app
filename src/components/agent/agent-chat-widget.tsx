@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { SandboxedGenui } from "@/components/agent/sandboxed-genui";
@@ -6,17 +6,52 @@ import { MetricCell } from "@/components/ui/metric-cell";
 import { Badge } from "@/components/ui/badge";
 
 import type { AgentChatWidget as AgentChatWidgetModel, AgentDataChartWidget } from "@/lib/agent-widgets";
+import { pinGenuiWidget } from "@/lib/genui-pins";
 import { cn } from "@/lib/utils";
 
 /**
  * Native renderer for in-chat GenUI widgets (agent-native data-widget
  * contract). Same tokens and density as every other surface per DESIGN.md —
  * agent output is not visually special.
+ *
+ * `pinnable` (chat surfaces) adds a Pin-to-Home action so any agent-built
+ * view can become a persistent dashboard widget.
  */
-export function AgentChatWidget({ widget }: { widget: AgentChatWidgetModel }) {
-  if (widget.kind === "html") {
-    return <SandboxedGenui html={widget.html} title={widget.title} />;
-  }
+export function AgentChatWidget({ widget, pinnable = false }: { widget: AgentChatWidgetModel; pinnable?: boolean }) {
+  const body =
+    widget.kind === "html" ? <SandboxedGenui html={widget.html} title={widget.title} /> : <WidgetCard widget={widget} />;
+  if (!pinnable) return body;
+  return (
+    <div>
+      {body}
+      <div className="mt-1 flex justify-end">
+        <PinAction widget={widget} />
+      </div>
+    </div>
+  );
+}
+
+function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
+  const [pinned, setPinned] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={pinned}
+      onClick={() => {
+        pinGenuiWidget(widget);
+        setPinned(true);
+      }}
+      className={cn(
+        "font-ui text-[9.5px] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+        pinned ? "text-[var(--success)]" : "text-[var(--overlay-1)] hover:text-[var(--accent)]",
+      )}
+    >
+      {pinned ? "Pinned to Home" : "Pin to Home"}
+    </button>
+  );
+}
+
+function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: "html" }> }) {
   return (
     <div className="mt-1.5 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)]">
       {widget.title ? (

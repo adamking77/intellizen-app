@@ -4,6 +4,7 @@ import type { Layout } from "react-grid-layout";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { PinnedViewGrid, type PinnedDatabaseWidgetModel } from "@/components/home/pinned-view-grid";
 import {
   loadHomePins,
@@ -11,6 +12,7 @@ import {
   supportsPinnedHomeView,
   type HomePin,
 } from "@/lib/home-pins";
+import { loadGenuiPins, unpinGenuiWidget, type GenuiPin } from "@/lib/genui-pins";
 import {
   loadHomeDashboardLayout,
   mergeHomeDashboardLayout,
@@ -30,6 +32,7 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 export function HomeView() {
   const navigate = useNavigate();
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
+  const [genuiPins, setGenuiPins] = useState<GenuiPin[]>(() => loadGenuiPins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
   const rotation = currentRotation();
   const {
@@ -168,8 +171,59 @@ export function HomeView() {
               </button>
             </div>
           )}
+
+          {genuiPins.length > 0 ? (
+            <div className="mt-6">
+              <div className="mb-2 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                Agent widgets
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                {genuiPins.map((pin) => (
+                  <AgentWidgetCard key={pin.id} pin={pin} onUnpin={() => setGenuiPins(unpinGenuiWidget(pin.id))} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A pinned agent-built widget. html widgets run in the GenUI sandbox and
+ * re-query Supabase on every mount — Refresh remounts the frame, so the
+ * widget re-pulls live data.
+ */
+function AgentWidgetCard({ pin, onUnpin }: { pin: GenuiPin; onUnpin: () => void }) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-3 py-2.5">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          {pin.title}
+        </span>
+        <span className="flex shrink-0 items-center gap-3">
+          {pin.widget.kind === "html" ? (
+            <button
+              type="button"
+              onClick={() => setRefreshKey((key) => key + 1)}
+              className="font-ui text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            >
+              Refresh
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onUnpin}
+            className="font-ui text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          >
+            Unpin
+          </button>
+        </span>
+      </div>
+      {/* Card header already shows the title; suppress the widget's own. */}
+      <AgentChatWidget key={refreshKey} widget={{ ...pin.widget, title: undefined }} />
     </div>
   );
 }

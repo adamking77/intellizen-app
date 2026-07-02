@@ -936,7 +936,7 @@ export function AgentPanel() {
                       {turn.text ? (
                         <MarkdownBody content={turn.text} className="agent-chat-markdown" />
                       ) : null}
-                      {turn.widget ? <AgentChatWidget widget={turn.widget} /> : null}
+                      {turn.widget ? <AgentChatWidget widget={turn.widget} pinnable /> : null}
                     </div>
                   )}
                 </div>

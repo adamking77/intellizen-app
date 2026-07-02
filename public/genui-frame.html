@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<!-- Own CSP: no network of any kind; inline code only. Loaded as a real HTTP
+     document so the host app's CSP does not inherit into this sandbox. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
+<style>
+:root {
+  --crust: #11111b; --mantle: #181825; --base: #1e1e2e;
+  --surface-0: #313244; --surface-1: #45475a; --surface-2: #585b70;
+  --text: #cdd6f4; --subtext-1: #bac2de; --subtext-0: #a6adc8;
+  --overlay-2: #9399b2; --overlay-1: #7f849c; --overlay-0: #6c7086;
+  --accent: #89b4fa; --accent-soft: rgba(137, 180, 250, 0.10);
+  --accent-border: rgba(137, 180, 250, 0.30);
+  --success: #a6e3a1; --warning: #f9e2af; --caution: #fab387;
+  --danger: #f03f3f; --info: #74c7ec;
+  --red: #f38ba8; --peach: #fab387; --yellow: #f9e2af; --green: #a6e3a1;
+  --teal: #94e2d5; --sky: #89dceb; --blue: #89b4fa; --mauve: #cba6f7; --lavender: #b4befe;
+  --border: rgba(69, 71, 90, 0.6); --border-subtle: rgba(69, 71, 90, 0.3);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 10px;
+  background: var(--base); color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12.5px; line-height: 1.55;
+}
+</style>
+<script>
+(function () {
+  var NONCE = null;
+  var nextId = 1;
+  var pending = {};
+
+  function postToHost(message) {
+    message.nonce = NONCE;
+    parent.postMessage(message, "*");
+  }
+
+  window.intellizen = {
+    query: function (payload) {
+      return new Promise(function (resolve, reject) {
+        var id = nextId++;
+        pending[id] = { resolve: resolve, reject: reject };
+        postToHost({ type: "query", id: id, payload: payload });
+        setTimeout(function () {
+          if (pending[id]) { delete pending[id]; reject(new Error("Query timed out")); }
+        }, 10000);
+      });
+    },
+  };
+
+  function executeScripts(container) {
+    var scripts = container.querySelectorAll("script");
+    scripts.forEach(function (old) {
+      var s = document.createElement("script");
+      s.textContent = old.textContent;
+      old.replaceWith(s);
+    });
+  }
+
+  window.addEventListener("message", function (event) {
+    var data = event.data || {};
+    if (data.type === "render" && typeof data.html === "string" && NONCE === null) {
+      NONCE = data.nonce || "";
+      var root = document.getElementById("root");
+      root.innerHTML = data.html;
+      executeScripts(root);
+      postResize();
+      return;
+    }
+    if (data.nonce !== NONCE || typeof data.id !== "number" || !pending[data.id]) return;
+    var entry = pending[data.id];
+    delete pending[data.id];
+    if (data.type === "query-result") entry.resolve(data.rows);
+    else entry.reject(new Error(data.error || "Query failed"));
+  });
+
+  function postResize() {
+    // Measure body content, not documentElement - the latter is floored at
+    // the iframe viewport height, so the frame could grow but never shrink.
+    postToHost({ type: "resize", height: Math.ceil(document.body.getBoundingClientRect().height) });
+  }
+  window.addEventListener("load", function () {
+    new ResizeObserver(postResize).observe(document.body);
+    parent.postMessage({ type: "genui-ready" }, "*");
+  });
+})();
+</script>
+</head>
+<body><div id="root"></div></body>
+</html>
