@@ -23,14 +23,17 @@ import type {
 
 const DEFAULT_COLUMN_WIDTH = 168;
 
-const OPTION_COLOR_PRESETS: Array<{ label: string; value: string; swatch: string }> = [
-  { label: "Gray", value: "#6b7280", swatch: "⚫" },
-  { label: "Brown", value: "#8b6b4a", swatch: "🟤" },
-  { label: "Amber", value: "#f59e0b", swatch: "🟡" },
-  { label: "Green", value: "#10b981", swatch: "🟢" },
-  { label: "Blue", value: "#3b82f6", swatch: "🔵" },
-  { label: "Purple", value: "#a855f7", swatch: "🟣" },
-  { label: "Red", value: "#ef4444", swatch: "🔴" },
+// Stored per-option as data, so literal hex is required — values come from
+// the Catppuccin Mocha palette per DESIGN.md.
+const OPTION_COLOR_PRESETS: Array<{ label: string; value: string }> = [
+  { label: "Gray", value: "#6c7086" },
+  { label: "Red", value: "#f38ba8" },
+  { label: "Peach", value: "#fab387" },
+  { label: "Yellow", value: "#f9e2af" },
+  { label: "Green", value: "#a6e3a1" },
+  { label: "Teal", value: "#94e2d5" },
+  { label: "Blue", value: "#89b4fa" },
+  { label: "Mauve", value: "#cba6f7" },
 ];
 
 const FIELD_TYPES: WorkspaceDatabaseFieldType[] = [
