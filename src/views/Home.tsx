@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Layout } from "react-grid-layout";
-import { ArrowUpRight, CheckCircle2, CircleAlert, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, CircleAlert, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { PinnedViewGrid, type PinnedDatabaseWidgetModel } from "@/components/home/pinned-view-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  loadOperatingViewPins,
+  OPERATING_VIEW_LABELS,
+  saveOperatingViewPins,
+  type OperatingViewKey,
+} from "@/lib/home-operating-views";
 import {
   loadHomePins,
   saveHomePins,
@@ -26,6 +32,7 @@ import {
   listWorkflowRuns,
   listWorkflows,
   listWorkspaceDatabaseCatalog,
+  WORKFLOW_RUN_VIEW_IDS,
 } from "@/lib/data";
 import {
   buildActiveApprovalsView,
@@ -46,8 +53,6 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Ops: "var(--yellow)",
   Slack: "var(--lavender)",
 };
-
-type OperatingViewMode = "distribution" | "approvals" | "roles";
 
 function OperatingMetric({
   label,
@@ -116,72 +121,16 @@ function ApprovalDecisionRow({ item }: { item: ActiveApprovalItem }) {
   );
 }
 
-function OperatingViewTabs({
-  mode,
-  approvalsCount,
-  roleCount,
-  onChange,
-}: {
-  mode: OperatingViewMode;
-  approvalsCount: number;
-  roleCount: number;
-  onChange: (mode: OperatingViewMode) => void;
-}) {
-  return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={() => onChange("distribution")}
-        className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
-          mode === "distribution"
-            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
-        )}
-      >
-        <ShieldCheck className="h-3.5 w-3.5" />
-        Distribution
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("approvals")}
-        className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
-          mode === "approvals"
-            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
-        )}
-      >
-        <CircleAlert className="h-3.5 w-3.5" />
-        Approvals
-        <span className="font-mono text-[10px] text-current">{approvalsCount}</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("roles")}
-        className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
-          mode === "roles"
-            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
-            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
-        )}
-      >
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Roles
-        <span className="font-mono text-[10px] text-current">{roleCount}</span>
-      </button>
-    </div>
-  );
-}
-
 function GzsDistributionHealthPanel({
   view,
   isFetching,
   onRefresh,
+  onUnpin,
 }: {
   view: GzsDistributionHealthView;
   isFetching: boolean;
   onRefresh: () => void;
+  onUnpin: () => void;
 }) {
   return (
     <section className="mb-5 rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
@@ -202,6 +151,10 @@ function GzsDistributionHealthPanel({
             Databases
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
+          <Button type="button" size="sm" variant="ghost" onClick={onUnpin} className="gap-1.5" title="Unpin view">
+            <X className="h-3.5 w-3.5" />
+            Unpin
+          </Button>
         </div>
       </div>
 
@@ -300,10 +253,12 @@ function ActiveApprovalsPanel({
   view,
   isFetching,
   onRefresh,
+  onUnpin,
 }: {
   view: ActiveApprovalsView;
   isFetching: boolean;
   onRefresh: () => void;
+  onUnpin: () => void;
 }) {
   return (
     <section className="mb-5 rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
@@ -321,12 +276,16 @@ function ActiveApprovalsPanel({
             Refresh
           </Button>
           <Link
-            to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}?view=c2000000-0000-0000-0000-000000000103`}
+            to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}?view=${WORKFLOW_RUN_VIEW_IDS.approvalQueue}`}
             className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "gap-1.5")}
           >
             Approval Queue
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
+          <Button type="button" size="sm" variant="ghost" onClick={onUnpin} className="gap-1.5" title="Unpin view">
+            <X className="h-3.5 w-3.5" />
+            Unpin
+          </Button>
         </div>
       </div>
 
@@ -400,10 +359,12 @@ function AgentRoleWorkloadPanel({
   view,
   isFetching,
   onRefresh,
+  onUnpin,
 }: {
   view: AgentRoleWorkloadView;
   isFetching: boolean;
   onRefresh: () => void;
+  onUnpin: () => void;
 }) {
   return (
     <section className="mb-5 rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
@@ -424,6 +385,10 @@ function AgentRoleWorkloadPanel({
             Tasks
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
+          <Button type="button" size="sm" variant="ghost" onClick={onUnpin} className="gap-1.5" title="Unpin view">
+            <X className="h-3.5 w-3.5" />
+            Unpin
+          </Button>
         </div>
       </div>
 
@@ -501,7 +466,7 @@ export function HomeView() {
   const navigate = useNavigate();
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
-  const [operatingViewMode, setOperatingViewMode] = useState<OperatingViewMode>("distribution");
+  const [operatingViewPins, setOperatingViewPins] = useState<OperatingViewKey[]>(() => loadOperatingViewPins());
   const rotation = currentRotation();
   const {
     data: catalog = [],
@@ -512,6 +477,8 @@ export function HomeView() {
     queryFn: listWorkspaceDatabaseCatalog,
     refetchInterval: 60_000,
   });
+  // Operating views are opt-in pins (agents propose, Adam pins). No pins,
+  // no query: Home defaults to the pinned database dashboard.
   const operatingViewQuery = useQuery({
     queryKey: ["home-operating-views"],
     queryFn: async () => {
@@ -528,7 +495,20 @@ export function HomeView() {
       };
     },
     refetchInterval: 60_000,
+    enabled: operatingViewPins.length > 0,
   });
+
+  useEffect(() => {
+    saveOperatingViewPins(operatingViewPins);
+  }, [operatingViewPins]);
+
+  function pinOperatingView(key: OperatingViewKey) {
+    setOperatingViewPins((current) => (current.includes(key) ? current : [...current, key]));
+  }
+
+  function unpinOperatingView(key: OperatingViewKey) {
+    setOperatingViewPins((current) => current.filter((candidate) => candidate !== key));
+  }
 
   useEffect(() => {
     saveHomePins(pins);
@@ -621,51 +601,72 @@ export function HomeView() {
             {rotation.week} week · {rotation.daysRemaining} days remaining
           </p>
         </div>
+        <div className="flex items-center gap-2 pb-0.5">
+          <select
+            value=""
+            onChange={(event) => {
+              if (event.target.value) pinOperatingView(event.target.value as OperatingViewKey);
+            }}
+            aria-label="Pin operating view"
+            className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--subtext-0)] outline-none transition-colors focus:border-[var(--accent-border)]"
+          >
+            <option value="">Pin operating view…</option>
+            {(Object.keys(OPERATING_VIEW_LABELS) as OperatingViewKey[])
+              .filter((key) => !operatingViewPins.includes(key))
+              .map((key) => (
+                <option key={key} value={key}>
+                  {OPERATING_VIEW_LABELS[key]}
+                </option>
+              ))}
+          </select>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <section className="mx-auto flex w-full max-w-[1600px] flex-col">
-          {operatingViewQuery.isLoading ? (
-            <div className="mb-5 flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading GZS distribution health...</span>
-            </div>
-          ) : operatingViewQuery.data ? (
-            <>
-              <OperatingViewTabs
-                mode={operatingViewMode}
-                approvalsCount={operatingViewQuery.data.approvals.metrics.total}
-                roleCount={operatingViewQuery.data.roles.metrics.actors}
-                onChange={setOperatingViewMode}
-              />
-              {operatingViewMode === "distribution" ? (
-                <GzsDistributionHealthPanel
-                  view={operatingViewQuery.data.distribution}
-                  isFetching={operatingViewQuery.isFetching}
-                  onRefresh={() => void operatingViewQuery.refetch()}
-                />
-              ) : operatingViewMode === "approvals" ? (
-                <ActiveApprovalsPanel
-                  view={operatingViewQuery.data.approvals}
-                  isFetching={operatingViewQuery.isFetching}
-                  onRefresh={() => void operatingViewQuery.refetch()}
-                />
-              ) : (
-                <AgentRoleWorkloadPanel
-                  view={operatingViewQuery.data.roles}
-                  isFetching={operatingViewQuery.isFetching}
-                  onRefresh={() => void operatingViewQuery.refetch()}
-                />
-              )}
-            </>
-          ) : operatingViewQuery.error ? (
-            <div className="mb-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
-              <p className="font-ui text-[13px] text-[var(--danger)]">
-                {operatingViewQuery.error instanceof Error
-                  ? operatingViewQuery.error.message
-                  : "GZS distribution health could not be loaded."}
-              </p>
-            </div>
+          {operatingViewPins.length > 0 ? (
+            operatingViewQuery.isLoading ? (
+              <div className="mb-5 flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading operating views...</span>
+              </div>
+            ) : operatingViewQuery.data ? (
+              operatingViewPins.map((key) =>
+                key === "distribution" ? (
+                  <GzsDistributionHealthPanel
+                    key={key}
+                    view={operatingViewQuery.data.distribution}
+                    isFetching={operatingViewQuery.isFetching}
+                    onRefresh={() => void operatingViewQuery.refetch()}
+                    onUnpin={() => unpinOperatingView(key)}
+                  />
+                ) : key === "approvals" ? (
+                  <ActiveApprovalsPanel
+                    key={key}
+                    view={operatingViewQuery.data.approvals}
+                    isFetching={operatingViewQuery.isFetching}
+                    onRefresh={() => void operatingViewQuery.refetch()}
+                    onUnpin={() => unpinOperatingView(key)}
+                  />
+                ) : (
+                  <AgentRoleWorkloadPanel
+                    key={key}
+                    view={operatingViewQuery.data.roles}
+                    isFetching={operatingViewQuery.isFetching}
+                    onRefresh={() => void operatingViewQuery.refetch()}
+                    onUnpin={() => unpinOperatingView(key)}
+                  />
+                ),
+              )
+            ) : operatingViewQuery.error ? (
+              <div className="mb-5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                <p className="font-ui text-[13px] text-[var(--danger)]">
+                  {operatingViewQuery.error instanceof Error
+                    ? operatingViewQuery.error.message
+                    : "Operating views could not be loaded."}
+                </p>
+              </div>
+            ) : null
           ) : null}
 
           {isLoading ? (

@@ -23,7 +23,15 @@ import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownBody } from "@/components/ui/markdown-body";
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows } from "@/lib/data";
+import {
+  GENZEN_WORKSPACE_DATABASE_IDS,
+  listWorkflows,
+  OPERATOR_ACTOR,
+  requestWorkflowApproval,
+  resolveWorkflowApproval,
+  updateWorkflowRun,
+} from "@/lib/data";
+import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
@@ -816,6 +824,28 @@ function SummaryFieldValue({
   return <span className="truncate">{displayValue || "—"}</span>;
 }
 
+type WorkflowRunAction = "start" | "request_approval" | "approve" | "block" | "done";
+
+// Governance actions require a written decision note before executing.
+const RUN_NOTE_REQUIRED: WorkflowRunAction[] = ["approve", "block", "request_approval"];
+
+function runActionsForStatus(status: string | null): WorkflowRunAction[] {
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === "queued") return ["start", "request_approval", "block"];
+  if (normalized === "in progress") return ["request_approval", "done", "block"];
+  if (normalized === "needs approval") return ["approve", "block"];
+  if (normalized === "blocked") return ["start"];
+  return [];
+}
+
+const RUN_ACTION_LABELS: Record<WorkflowRunAction, string> = {
+  start: "Start",
+  request_approval: "Request approval",
+  approve: "Approve",
+  block: "Block",
+  done: "Done",
+};
+
 function WorkflowRunOperationsSection({
   record,
   catalog,
@@ -823,6 +853,10 @@ function WorkflowRunOperationsSection({
   record: WorkspaceDatabaseModel["records"][number];
   catalog: WorkspaceDatabaseCatalogEntry[];
 }) {
+  const queryClient = useQueryClient();
+  const [pendingAction, setPendingAction] = useState<WorkflowRunAction | null>(null);
+  const [actionNote, setActionNote] = useState("");
+  const [isRunningAction, setIsRunningAction] = useState(false);
   const status = fieldText(record[WORKFLOW_RUN_FIELD_IDS.status]);
   const actor = fieldText(record[WORKFLOW_RUN_FIELD_IDS.actor]);
   const ownerRole = fieldText(record[WORKFLOW_RUN_FIELD_IDS.ownerRole]);
@@ -836,6 +870,75 @@ function WorkflowRunOperationsSection({
   const sourceRecordIds = splitLines(fieldText(record[WORKFLOW_RUN_FIELD_IDS.sourceRecords]));
   const context = formatRunContext(fieldText(record[WORKFLOW_RUN_FIELD_IDS.context]));
   const timelineEntries = parseWorkflowRunTimeline(record._body, receipt, record._updatedAt);
+  const runName = fieldText(record[WORKFLOW_RUN_FIELD_IDS.name]) ?? record.id;
+  const availableActions = runActionsForStatus(status);
+
+  function handleActionClick(action: WorkflowRunAction) {
+    if (isRunningAction) return;
+    if (RUN_NOTE_REQUIRED.includes(action)) {
+      setPendingAction((current) => (current === action ? null : action));
+      setActionNote("");
+      return;
+    }
+    void executeAction(action);
+  }
+
+  async function executeAction(action: WorkflowRunAction, note?: string) {
+    try {
+      setIsRunningAction(true);
+      if (action === "approve") {
+        await resolveWorkflowApproval({
+          workflowRunId: record.id,
+          decision: "approved",
+          decisionSummary: note ?? "",
+          decidedBy: OPERATOR_ACTOR,
+          confirmWrite: true,
+        });
+      } else if (action === "request_approval") {
+        await requestWorkflowApproval({
+          workflowRunId: record.id,
+          requestedBy: OPERATOR_ACTOR,
+          approvalNeeded: note ?? "",
+          confirmWrite: true,
+        });
+      } else if (action === "block") {
+        await updateWorkflowRun({
+          workflowRunId: record.id,
+          actor: OPERATOR_ACTOR,
+          status: "Blocked",
+          currentStep: "Blocked from record panel",
+          summary: `Blocked ${runName}: ${note ?? "no reason recorded"}`,
+          actionsTaken: ["Blocked workflow run from record panel"],
+          blockedItems: [note ?? "Blocked from record panel"],
+          nextStep: "Review blocker and decide next action",
+          confirmWrite: true,
+        });
+      } else {
+        const isStart = action === "start";
+        await updateWorkflowRun({
+          workflowRunId: record.id,
+          actor: OPERATOR_ACTOR,
+          status: isStart ? "In progress" : "Done",
+          currentStep: isStart ? "Execution underway" : "Completed from record panel",
+          summary: isStart ? `Started ${runName} from the record panel.` : `Marked ${runName} done from the record panel.`,
+          actionsTaken: [isStart ? "Started workflow run from record panel" : "Marked workflow run done from record panel"],
+          nextStep: isStart ? "Execute the registered workflow steps" : "Review receipt and archive if appropriate",
+          confirmWrite: true,
+        });
+      }
+      setPendingAction(null);
+      setActionNote("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflow-runs"] }),
+      ]);
+      toast.success("Workflow run updated", { description: `${runName}` });
+    } catch (actionError) {
+      toastError("Workflow update failed", actionError);
+    } finally {
+      setIsRunningAction(false);
+    }
+  }
 
   return (
     <section className="db-record-section db-workflow-run-ops px-6 py-3">
@@ -847,6 +950,58 @@ function WorkflowRunOperationsSection({
           </span>
         ) : null}
       </div>
+
+      {availableActions.length > 0 ? (
+        <div className="mb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {availableActions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                className={action === "block" ? "db-btn db-btn-danger" : action === "approve" || action === "done" ? "db-btn db-btn-primary" : "db-btn"}
+                onClick={() => handleActionClick(action)}
+                disabled={isRunningAction}
+              >
+                {isRunningAction ? "…" : RUN_ACTION_LABELS[action]}
+              </button>
+            ))}
+          </div>
+          {pendingAction ? (
+            <div className="mt-2 space-y-1.5">
+              <label className="font-ui text-[10.5px] font-medium text-[var(--subtext-0)]">
+                {pendingAction === "approve" ? "Decision note (required)" : pendingAction === "block" ? "Blocker reason (required)" : "Decision needed (required)"}
+              </label>
+              <textarea
+                className="db-input w-full resize-none"
+                rows={2}
+                autoFocus
+                value={actionNote}
+                onChange={(event) => setActionNote(event.target.value)}
+                placeholder={
+                  pendingAction === "approve"
+                    ? "What is being approved and on what basis?"
+                    : pendingAction === "block"
+                      ? "What is blocking this run?"
+                      : "What decision or permission is needed?"
+                }
+              />
+              <div className="flex items-center justify-end gap-1.5">
+                <button type="button" className="db-btn" onClick={() => { setPendingAction(null); setActionNote(""); }}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={pendingAction === "block" ? "db-btn db-btn-danger" : "db-btn db-btn-primary"}
+                  disabled={!actionNote.trim() || isRunningAction}
+                  onClick={() => void executeAction(pendingAction, actionNote.trim())}
+                >
+                  Confirm {RUN_ACTION_LABELS[pendingAction].toLowerCase()}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="db-workflow-run-routing">
         <div className="db-workflow-run-routing-card db-workflow-run-routing-card-primary">

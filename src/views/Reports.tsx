@@ -103,6 +103,9 @@ export function ReportsView() {
   const [isSavingBrief, setIsSavingBrief] = useState(false);
   const [isSavingReflectionDigest, setIsSavingReflectionDigest] = useState(false);
   const [reportMode, setReportMode] = useState<OperatingReportMode>("weekly");
+  // Operating reports are generated on explicit request, never as the
+  // default landing surface (2026-07-02 surface governance).
+  const [showOperatingReport, setShowOperatingReport] = useState(false);
   const { isCramped } = useWindowSize();
   const latestFileContentRef = useRef<string | null>(null);
   const hydratedSelectionKeyRef = useRef<string | null>(null);
@@ -177,7 +180,7 @@ export function ReportsView() {
         }),
       };
     },
-    refetchInterval: 60_000,
+    enabled: showOperatingReport,
   });
   const weeklyBrief = operatingReports?.weeklyBrief ?? null;
   const reflectionDigest = operatingReports?.reflectionDigest ?? null;
@@ -774,7 +777,7 @@ export function ReportsView() {
                 { key: "Created", value: fmtDate(selectedInvestigation.created_at) },
               ]}
             />
-          ) : (
+          ) : showOperatingReport ? (
             <OperatingReportPanel
               report={activeOperatingReport}
               mode={reportMode}
@@ -784,7 +787,37 @@ export function ReportsView() {
               onModeChange={setReportMode}
               onRefresh={() => void refetchOperatingReports()}
               onSave={handleSaveOperatingReport}
+              onClose={() => setShowOperatingReport(false)}
             />
+          ) : (
+            <div className="flex min-h-full flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+              <p className="font-ui text-[14px] font-medium text-[var(--subtext-0)]">No document selected</p>
+              <p className="max-w-md font-ui text-[12px] leading-relaxed text-[var(--overlay-1)]">
+                Pick a report or vault document from the sidebar, or generate an operating report from live state.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportMode("weekly");
+                    setShowOperatingReport(true);
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                >
+                  Generate weekly brief
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportMode("reflection");
+                    setShowOperatingReport(true);
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                >
+                  Generate reflection digest
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -801,6 +834,7 @@ function OperatingReportPanel({
   onModeChange,
   onRefresh,
   onSave,
+  onClose,
 }: {
   report: WeeklyOperatingBrief | ReceiptReflectionDigest | null;
   mode: OperatingReportMode;
@@ -810,15 +844,26 @@ function OperatingReportPanel({
   onModeChange: (mode: OperatingReportMode) => void;
   onRefresh: () => void;
   onSave: (report: WeeklyOperatingBrief | ReceiptReflectionDigest) => void;
+  onClose: () => void;
 }) {
   const isWeekly = mode === "weekly";
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 px-5 py-6 lg:px-10 lg:py-8">
       <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
-            {isWeekly ? "Weekly operating brief" : "Receipt reflection digest"}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+              {isWeekly ? "Weekly operating brief" : "Receipt reflection digest"}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close report"
+              className="inline-flex h-5 items-center rounded border border-[var(--border)] px-1.5 font-ui text-[10px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            >
+              Close
+            </button>
+          </div>
           <h1 className="mt-1 text-[24px] font-semibold leading-tight text-[var(--text)]">
             {report?.title ?? (isWeekly ? "Weekly Operating Brief" : "Receipt Reflection Digest")}
           </h1>

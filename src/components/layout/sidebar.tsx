@@ -6,26 +6,24 @@ import {
   FileText,
   FolderOpen,
   House,
-  Inbox,
   LayoutGrid,
   Network,
-  Rss,
   Search,
   Spline,
   type LucideIcon,
 } from "lucide-react";
 
-import { getPendingFionaInboxCount, getUnreadSignalCount } from "@/lib/data";
 import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
+// Inbox and Monitors are demoted from primary navigation (2026-07-02):
+// collection runs agentically via Fiona/monitor workflows. The /inbox and
+// /monitors routes remain deep-linkable for diagnostics.
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
-  { label: "Inbox", to: "/inbox", key: "inbox", icon: Inbox },
-  { label: "Monitors", to: "/monitors", key: "monitors", icon: Rss },
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Operations", to: "/projects", key: "projects", icon: FolderOpen },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
@@ -49,16 +47,6 @@ function readCollapsed(): boolean {
 }
 
 export function Sidebar() {
-  const { data: unreadCount } = useQuery({
-    queryKey: ["signals", "unread-count"],
-    queryFn: getUnreadSignalCount,
-    staleTime: 30_000,
-  });
-  const { data: fionaPendingCount } = useQuery({
-    queryKey: ["fiona-inbox", "pending-count"],
-    queryFn: getPendingFionaInboxCount,
-    staleTime: 30_000,
-  });
   const { data: databases = [] } = useQuery({
     queryKey: ["workspace-databases"],
     queryFn: listWorkspaceDatabases,
@@ -138,12 +126,7 @@ export function Sidebar() {
         )}
       >
         {NAV_ITEMS.map((item) => {
-          const showCount =
-            item.key === "inbox"
-              ? (unreadCount ?? 0) + (fionaPendingCount ?? 0)
-              : item.key === "databases"
-                ? databases.length
-                : 0;
+          const showCount = item.key === "databases" ? databases.length : 0;
           const Icon = item.icon;
           return (
             <NavLink

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CheckCircle2, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
+import { Bot, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
@@ -11,12 +10,9 @@ import {
   listWorkflowRuns,
   listWorkflows,
   OPERATOR_ACTOR,
-  requestWorkflowApproval,
-  resolveWorkflowApproval,
-  updateWorkflowRun,
   WORKFLOW_RUN_VIEW_IDS,
 } from "@/lib/data";
-import type { FionaInboxItem, WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
+import type { FionaInboxItem, WorkflowRunItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -37,10 +33,8 @@ const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
 const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
 
-type RunAction = "start" | "request_approval" | "approve" | "block" | "done";
-// Approve/block/request-approval change governance state, so they require a
-// written decision note before they execute.
-const NOTE_REQUIRED_ACTIONS: RunAction[] = ["approve", "block", "request_approval"];
+// Run/approval actions live in the Databases-native Workflow Run views and
+// record peek panels; the panel only surfaces counts and deep links.
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -103,71 +97,8 @@ function formatRunTime(value: string | null) {
   }).format(date);
 }
 
-function statusTone(status: string | null) {
-  const normalized = status?.trim().toLowerCase();
-  if (normalized === "needs approval") return "border-[color-mix(in_srgb,var(--caution)_42%,transparent)] text-[var(--caution)]";
-  if (normalized === "blocked") return "border-[color-mix(in_srgb,var(--danger)_38%,transparent)] text-[var(--danger)]";
-  if (normalized === "done") return "border-[color-mix(in_srgb,var(--success)_38%,transparent)] text-[var(--success)]";
-  if (normalized === "in progress") return "border-[color-mix(in_srgb,var(--info)_38%,transparent)] text-[var(--info)]";
-  return "border-[var(--border)] text-[var(--subtext-0)]";
-}
-
 function runTitle(run: WorkflowRunItem) {
   return run.name.trim() || "Untitled workflow run";
-}
-
-function actionLabel(action: RunAction) {
-  if (action === "start") return "Start";
-  if (action === "request_approval") return "Approval";
-  if (action === "approve") return "Approve";
-  if (action === "block") return "Block";
-  return "Done";
-}
-
-function statusUpdateConfig(action: "start" | "done" | "block", run: WorkflowRunItem, note?: string): {
-  status: WorkflowRunStatus;
-  currentStep: string;
-  summary: string;
-  actionsTaken: string[];
-  blockedItems?: string[];
-  nextStep?: string | null;
-} {
-  const title = runTitle(run);
-  if (action === "start") {
-    return {
-      status: "In progress",
-      currentStep: "Execution underway",
-      summary: `Started ${title} from the Agent Panel.`,
-      actionsTaken: ["Started workflow run from Agent Panel"],
-      nextStep: "Execute the registered workflow steps",
-    };
-  }
-  if (action === "block") {
-    return {
-      status: "Blocked",
-      currentStep: "Blocked from Agent Panel",
-      summary: `Blocked ${title}: ${note ?? "no reason recorded"}`,
-      actionsTaken: ["Blocked workflow run from Agent Panel"],
-      blockedItems: [note ?? "Blocked from Agent Panel"],
-      nextStep: "Review blocker and decide next action",
-    };
-  }
-  return {
-    status: "Done",
-    currentStep: "Completed from Agent Panel",
-    summary: `Marked ${title} done from the Agent Panel.`,
-    actionsTaken: ["Marked workflow run done from Agent Panel"],
-    nextStep: "Review receipt and archive if appropriate",
-  };
-}
-
-function actionsForRun(run: WorkflowRunItem): RunAction[] {
-  const status = run.status?.trim().toLowerCase();
-  if (status === "queued") return ["start", "request_approval", "block"];
-  if (status === "in progress") return ["request_approval", "done", "block"];
-  if (status === "needs approval") return ["approve", "block"];
-  if (status === "blocked") return ["start"];
-  return [];
 }
 
 function buildVoiceBrief(approvals: WorkflowRunItem[], runs: WorkflowRunItem[]) {
@@ -220,9 +151,6 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
-  const [updatingRunId, setUpdatingRunId] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<{ runId: string; action: RunAction } | null>(null);
-  const [actionNote, setActionNote] = useState("");
   const [voiceDraft, setVoiceDraft] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -625,115 +553,6 @@ export function AgentPanel() {
     }
   }
 
-  function handleRunAction(run: WorkflowRunItem, action: RunAction) {
-    if (updatingRunId) return;
-    if (NOTE_REQUIRED_ACTIONS.includes(action)) {
-      // Governance actions pause for a written decision note instead of
-      // executing on a bare click.
-      setPendingAction((current) =>
-        current?.runId === run.id && current.action === action ? null : { runId: run.id, action },
-      );
-      setActionNote("");
-      return;
-    }
-    void executeRunAction(run, action);
-  }
-
-  async function executeRunAction(run: WorkflowRunItem, action: RunAction, note?: string) {
-    try {
-      setUpdatingRunId(run.id);
-      let result;
-      if (action === "approve") {
-        result = await resolveWorkflowApproval({
-          workflowRunId: run.id,
-          decision: "approved",
-          decisionSummary: note ?? "",
-          decidedBy: OPERATOR_ACTOR,
-          confirmWrite: true,
-        });
-      } else if (action === "request_approval") {
-        result = await requestWorkflowApproval({
-          workflowRunId: run.id,
-          requestedBy: OPERATOR_ACTOR,
-          approvalNeeded: note ?? "",
-          confirmWrite: true,
-        });
-      } else {
-        const config = statusUpdateConfig(action, run, note);
-        result = await updateWorkflowRun({
-          workflowRunId: run.id,
-          actor: OPERATOR_ACTOR,
-          status: config.status,
-          currentStep: config.currentStep,
-          summary: config.summary,
-          actionsTaken: config.actionsTaken,
-          verification: ["Updated from IntelliZen Agent Panel"],
-          blockedItems: config.blockedItems,
-          nextStep: config.nextStep,
-          confirmWrite: true,
-        });
-      }
-      setPendingAction(null);
-      setActionNote("");
-      await refresh();
-      const updatedRun = "run" in result ? result.run : null;
-      toast.success("Workflow run updated", {
-        description: updatedRun ? `${updatedRun.name}: ${updatedRun.status}` : runTitle(run),
-      });
-    } catch (actionError) {
-      toastError("Workflow update failed", actionError);
-    } finally {
-      setUpdatingRunId(null);
-    }
-  }
-
-  function renderNoteEditor(run: WorkflowRunItem) {
-    if (!pendingAction || pendingAction.runId !== run.id) return null;
-    const action = pendingAction.action;
-    const label =
-      action === "approve" ? "Decision note (required)" : action === "block" ? "Blocker reason (required)" : "Decision needed (required)";
-    const confirmLabel = action === "approve" ? "Confirm approve" : action === "block" ? "Confirm block" : "Request approval";
-    return (
-      <div className="mt-2 space-y-1.5 border-t border-[var(--border-subtle)] pt-2">
-        <label className="font-ui text-[10.5px] font-medium text-[var(--subtext-0)]">{label}</label>
-        <textarea
-          value={actionNote}
-          onChange={(event) => setActionNote(event.target.value)}
-          rows={2}
-          autoFocus
-          placeholder={
-            action === "approve"
-              ? "What is being approved and on what basis?"
-              : action === "block"
-                ? "What is blocking this run?"
-                : "What decision or permission is needed?"
-          }
-          className="w-full resize-none rounded border border-[var(--border)] bg-[var(--mantle)] px-2 py-1.5 font-ui text-[11px] leading-snug text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
-        />
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              setPendingAction(null);
-              setActionNote("");
-            }}
-            className="inline-flex h-6 items-center justify-center rounded border border-[var(--border)] px-2 font-ui text-[10.5px] font-medium text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void executeRunAction(run, action, actionNote.trim())}
-            disabled={!actionNote.trim() || updatingRunId === run.id}
-            className="inline-flex h-6 items-center justify-center rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (collapsed || isCramped) {
     return (
       <aside className="flex h-dvh w-12 shrink-0 flex-col items-center border-l border-[var(--border)] bg-[var(--mantle)] py-3">
@@ -991,153 +810,61 @@ export function AgentPanel() {
         </section>
 
         <section className="space-y-2">
-          <PanelSectionHeader
-            label="Approvals"
-            count={approvals.length}
-            to={APPROVAL_QUEUE_URL}
-          />
-          {approvals.length > 0 ? (
-            approvals.map((run) => (
-              <RunCard
-                key={run.id}
-                run={run}
-                approval
-                updating={updatingRunId === run.id}
-                onAction={handleRunAction}
-                noteEditor={pendingAction?.runId === run.id ? renderNoteEditor(run) : null}
-              />
-            ))
-          ) : (
-            <EmptyState label="No pending approvals" icon={<CheckCircle2 className="h-4 w-4" />} />
-          )}
+          <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Operations</h2>
+          <div className="overflow-hidden rounded-md border border-[var(--border)] bg-[var(--base)]">
+            <CountRow
+              label="Approvals"
+              count={approvals.length}
+              to={APPROVAL_QUEUE_URL}
+              tone={approvals.length > 0 ? "caution" : "neutral"}
+            />
+            <div className="border-t border-[var(--border-subtle)]" />
+            <CountRow
+              label="Active runs"
+              count={visibleRuns.length}
+              to={RUN_BOARD_URL}
+              tone="neutral"
+              loading={isFetching}
+            />
+          </div>
         </section>
-
-        <section className="mt-5 space-y-2">
-          <PanelSectionHeader
-            label="Active Runs"
-            count={visibleRuns.length}
-            to={RUN_BOARD_URL}
-          />
-          {visibleRuns.length > 0 ? (
-            visibleRuns.map((run) => (
-              <RunCard
-                key={run.id}
-                run={run}
-                updating={updatingRunId === run.id}
-                onAction={handleRunAction}
-                noteEditor={pendingAction?.runId === run.id ? renderNoteEditor(run) : null}
-              />
-            ))
-          ) : (
-            <EmptyState label={isFetching ? "Loading runs" : "No active runs"} icon={<RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />} />
-          )}
-        </section>
-      </div>
-
-      <div className="shrink-0 border-t border-[var(--border)] p-3">
-        <Link
-          to={RUN_BOARD_URL}
-          className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-transparent px-3 font-ui text-xs font-medium text-[var(--text)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Workflow Runs
-        </Link>
       </div>
     </aside>
   );
 }
 
-function PanelSectionHeader({ label, count, to }: { label: string; count: number; to: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">{label}</h2>
-        <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--subtext-0)]">
-          {count}
-        </span>
-      </div>
-      <Link
-        to={to}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-        aria-label={`${label} view`}
-        title={label}
-      >
-        <ExternalLink className="h-3.5 w-3.5" />
-      </Link>
-    </div>
-  );
-}
-
-function RunCard({
-  run,
-  approval = false,
-  updating = false,
-  onAction,
-  noteEditor = null,
+function CountRow({
+  label,
+  count,
+  to,
+  tone,
+  loading = false,
 }: {
-  run: WorkflowRunItem;
-  approval?: boolean;
-  updating?: boolean;
-  onAction?: (run: WorkflowRunItem, action: RunAction) => void;
-  noteEditor?: ReactNode;
+  label: string;
+  count: number;
+  to: string;
+  tone: "caution" | "neutral";
+  loading?: boolean;
 }) {
-  const actions = actionsForRun(run);
   return (
-    <article className="rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="line-clamp-2 min-w-0 font-ui text-[12px] font-medium leading-snug text-[var(--text)]">
-          {runTitle(run)}
-        </p>
-        <span className={cn("shrink-0 rounded-full border px-1.5 py-0.5 font-ui text-[10px] font-medium", statusTone(run.status))}>
-          {run.status ?? "No status"}
+    <Link
+      to={to}
+      className="flex items-center justify-between gap-2 px-3 py-2 transition-colors hover:bg-[var(--surface-wash)]"
+    >
+      <span className="font-ui text-[12px] font-medium text-[var(--text)]">{label}</span>
+      <span className="flex items-center gap-1.5">
+        <span
+          className={cn(
+            "rounded-full border px-1.5 py-0.5 font-mono text-[10px]",
+            tone === "caution" && count > 0
+              ? "border-[color-mix(in_srgb,var(--caution)_42%,transparent)] text-[var(--caution)]"
+              : "border-[var(--border)] text-[var(--subtext-0)]",
+          )}
+        >
+          {loading ? "…" : count}
         </span>
-      </div>
-      <div className="mt-2 space-y-1">
-        {run.current_step ? (
-          <p className="line-clamp-2 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">{run.current_step}</p>
-        ) : null}
-        <div className="flex items-center justify-between gap-2 font-ui text-[10.5px] text-[var(--overlay-1)]">
-          <span className="truncate">{run.actor ?? run.owner_role ?? "Unassigned"}</span>
-          <span className="shrink-0">{formatRunTime(run.updated_at)}</span>
-        </div>
-      </div>
-      {approval ? (
-        <div className="mt-2 border-t border-[var(--border-subtle)] pt-2 font-ui text-[10.5px] text-[var(--caution)]">
-          {run.receipt || run.body_preview || "Approval required"}
-        </div>
-      ) : null}
-      {onAction && actions.length > 0 ? (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[var(--border-subtle)] pt-2">
-          {actions.map((action) => (
-            <button
-              key={action}
-              type="button"
-              onClick={() => onAction(run, action)}
-              disabled={updating}
-              className={cn(
-                "inline-flex h-6 items-center justify-center rounded border px-2 font-ui text-[10.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
-                action === "block"
-                  ? "border-[color-mix(in_srgb,var(--danger)_34%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
-                  : action === "done" || action === "approve"
-                    ? "border-[color-mix(in_srgb,var(--success)_34%,transparent)] text-[var(--success)] hover:bg-[color-mix(in_srgb,var(--success)_10%,transparent)]"
-                    : "border-[var(--accent-border)] text-[var(--accent)] hover:bg-[var(--accent-soft)]",
-              )}
-            >
-              {updating ? "..." : actionLabel(action)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {noteEditor}
-    </article>
-  );
-}
-
-function EmptyState({ label, icon }: { label: string; icon: ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
-      {icon}
-      <span>{label}</span>
-    </div>
+        <ExternalLink className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
+      </span>
+    </Link>
   );
 }

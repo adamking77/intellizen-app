@@ -2,6 +2,8 @@
 
 Design system refresh for the 7-screen Tauri build. This is the authoritative design reference; `src/index.css`, component primitives, and per-screen work derive from it.
 
+> **Binding status (2026-07-02):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are removed from the sidebar (2026-07-02 product decision — collection runs agentically via Fiona).
+
 ## Principles
 
 1. **Precision instrumentation, not cockpit costume.** Refined intel dashboard as the chassis. HUD language applied only where it earns its place (monitoring data rails, graph canvas, phase telemetry).
@@ -177,18 +179,19 @@ Replace the current `.card-intel`, `.panel-hud`, `.btn-accent` with flat, glow-f
   - Section header: Satoshi 10px 600, `--overlay-1`, uppercase, tracking-[0.18em], 16px top padding, 8px bottom padding
   - Nav items: Satoshi 13px 500, 8px vertical padding, 16px horizontal padding, 4px radius
 
-**Groups and order**
+**Groups and order** *(2026-07-02: Inbox/Monitors demoted — routes remain deep-linkable; collection is agentic)*
 ```
-MONITORING
-  Inbox            [12]   ← count chip, Accent color, Geist Mono 10px
-  Monitors
+HOME
+  Home
 
 SEARCH
   Search
 
 ORGANIZE
-  Projects
+  Operations
+  Databases
   Graph
+  Canvas
 
 ANALYSE
   Investigate
@@ -285,3 +288,33 @@ No screen moves forward without sign-off.
 - Theming / light mode. Dark-only, Catppuccin Mocha only.
 - Accessibility beyond keyboard navigation and sensible focus outlines. Single-user app, no a11y audit for V1.
 - shadcn/ui migration. Hand-rolled primitives continue.
+
+---
+
+## Agent Surfaces & Review Gate (added 2026-07-02)
+
+These rules bind all UI work by agents (Claude, Codex, or any future actor) and extend the system above to the agent-era surfaces (Agent Panel, Databases, Home operating views, Workflow Run panels).
+
+### Agent-surface rules
+
+- **Agent UI uses the same tokens as everything else.** No "AI feature" styling: no purple/indigo gradients, no glow, no sparkle icons. An agent surface should be visually indistinguishable in material from a database table.
+- **Anatomy consistency:** section headers are `font-ui 11px 600 uppercase --overlay-1`; counts are mono pills (`font-mono 10px` in a `--border` ring); data values are Geist Mono; interface text stays in the 10–13px band. Match the adjacent surface's density exactly.
+- **Three states required** on every data surface: loading (static skeleton or spinner consistent with neighbors), empty (dashed `--border` box, icon + one-line label), error (`--danger`-mixed border box with the message). Mobile width (390px) renders without horizontal overflow.
+- **Semantic color at reduced strength** via `color-mix(in srgb, var(--tone) N%, transparent)` — never new rgba literals.
+- **lucide icons only**, 3.5–4 (14–16px) sizes; no emoji as icons.
+
+### Banned (AI-slop list)
+
+Default Tailwind palette classes (`gray-*`, `slate-*`, `blue-*`…) · hardcoded hex outside `index.css` · gradient heroes/glassmorphism · `shadow-xl` + `rounded-2xl` card soup · marketing-scale typography inside the shell · placeholder copy · entrance animations on data · new one-off spacing or radius scales.
+
+### Surface governance (mirrors PRD)
+
+No agent may add a route, sidebar item, default view, or persistent surface without Adam's approval. Agents **propose** views (pinnable, dismissible); Adam **pins**. Generated/operating views must be source-backed and use existing components.
+
+### Review gate — run before any UI slice lands
+
+1. Tokens-only audit: `grep -nE '#[0-9a-fA-F]{3,8}|(gray|slate|zinc|neutral|stone|indigo|violet|purple)-[0-9]' <changed files>` → zero hits outside `index.css`.
+2. Loading/empty/error states present.
+3. 390px width: no horizontal overflow, no console errors.
+4. Density/anatomy matches the adjacent surface (compare side-by-side).
+5. Screenshot evidence captured for the receipt/changelog.

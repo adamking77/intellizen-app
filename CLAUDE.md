@@ -162,6 +162,8 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 ## Key engineering rules
 
+- **UI changes are gated by [DESIGN.md](DESIGN.md)** — tokens only, required states, density/anatomy match, and the review gate at the end of that file. No new routes, sidebar items, or default surfaces without Adam's approval: agents propose views, Adam pins.
+
 - Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
 - Preserve `raw_payload` on signals so Exa response evolution doesn't force schema churn.
 - Build for resilience around partial data, null publish dates, sparse Deep Research output.
