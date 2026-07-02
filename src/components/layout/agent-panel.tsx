@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import { parseAgentChatResult, type AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
 
 import {
@@ -34,6 +35,11 @@ import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice"
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
 const HERMES_SESSION_KEY = "intelizen:hermes-session-id";
+const SPEAK_REPLIES_KEY = "intelizen:agent-panel-speak-replies";
+const CHAT_CLEARED_KEY = "intelizen:chat-cleared-at";
+const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
+const PANEL_MIN_WIDTH = 300;
+const PANEL_MAX_WIDTH = 560;
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -203,6 +209,19 @@ export function AgentPanel() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
+  const [speakReplies, setSpeakReplies] = useState(() => {
+    try { return window.localStorage.getItem(SPEAK_REPLIES_KEY) === "1"; } catch { return false; }
+  });
+  const [clearedAt, setClearedAt] = useState<string | null>(() => {
+    try { return window.localStorage.getItem(CHAT_CLEARED_KEY); } catch { return null; }
+  });
+  const [panelWidth, setPanelWidth] = useState(() => {
+    try {
+      const stored = Number(window.localStorage.getItem(PANEL_WIDTH_KEY));
+      return Number.isFinite(stored) && stored >= PANEL_MIN_WIDTH ? Math.min(stored, PANEL_MAX_WIDTH) : 336;
+    } catch { return 336; }
+  });
+  const abortRef = useRef<AbortController | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
   const dictationRef = useRef<BrowserDictationSession | null>(null);
@@ -324,8 +343,12 @@ export function AgentPanel() {
     return activeRuns.filter((run) => !approvalIds.has(run.id)).slice(0, 5);
   }, [activeRuns, approvals]);
   const routedChatEntries = useMemo(
-    () => (agentChatQuery.data ?? []).filter(isChatInboxItem).map(inboxItemToChatEntry),
-    [agentChatQuery.data],
+    () =>
+      (agentChatQuery.data ?? [])
+        .filter(isChatInboxItem)
+        .map(inboxItemToChatEntry)
+        .filter((entry) => !clearedAt || entry.createdAt > clearedAt),
+    [agentChatQuery.data, clearedAt],
   );
   // Thread: request/response rows flattened into chronological message turns.
   // Server rows win over local optimistic entries carrying the same message
@@ -427,18 +450,28 @@ export function AgentPanel() {
         { id: entryId, message, targetAgent, status: "submitted" as ChatEntryStatus, detail: "hermes api", createdAt: sentAt },
         ...current,
       ].slice(0, 8));
+      let accumulated = "";
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
-        const sessionId = window.localStorage.getItem(HERMES_SESSION_KEY);
+        // Stateless continuity: replay the visible thread as history
+        // (custom session headers are CORS-blocked by Hermes today).
+        const history = chatTurns
+          .filter((turn) => Boolean(turn.text))
+          .slice(-12)
+          .map((turn) => ({
+            role: turn.role === "user" ? ("user" as const) : ("assistant" as const),
+            content: turn.text ?? "",
+          }));
         const result = await streamHermesChat({
           message,
-          sessionId,
-          onDelta: (delta) => setStreamingReply((current) => (current ?? "") + delta),
+          history,
+          signal: controller.signal,
+          onDelta: (delta) => {
+            accumulated += delta;
+            setStreamingReply((current) => (current ?? "") + delta);
+          },
         });
-        if (result.sessionId) {
-          try {
-            window.localStorage.setItem(HERMES_SESSION_KEY, result.sessionId);
-          } catch { /* ignore */ }
-        }
         setChatEntries((current) =>
           current.map((entry) =>
             entry.id === entryId
@@ -446,16 +479,24 @@ export function AgentPanel() {
               : entry,
           ),
         );
+        if (speakReplies && result.text && voiceOutputProvider) {
+          setIsSpeaking(true);
+          void speakWithProvider(result.text, voiceOutputProvider.id).catch(() => setIsSpeaking(false));
+        }
       } catch (streamError) {
+        const stopped = streamError instanceof DOMException && streamError.name === "AbortError";
         setChatEntries((current) =>
           current.map((entry) =>
             entry.id === entryId
-              ? { ...entry, status: "failed" as ChatEntryStatus, detail: streamError instanceof Error ? streamError.message : "Stream failed" }
+              ? stopped
+                ? { ...entry, reply: accumulated || null, repliedAt: new Date().toISOString(), detail: "stopped" }
+                : { ...entry, status: "failed" as ChatEntryStatus, detail: streamError instanceof Error ? streamError.message : "Stream failed" }
               : entry,
           ),
         );
-        toastError("Hermes chat failed", streamError);
+        if (!stopped) toastError("Hermes chat failed", streamError);
       } finally {
+        abortRef.current = null;
         setStreamingReply(null);
         setIsSendingChat(false);
       }
@@ -631,6 +672,30 @@ export function AgentPanel() {
     startBrowserVoiceDraft();
   }
 
+  function startNewSession() {
+    const now = new Date().toISOString();
+    try {
+      window.localStorage.removeItem(HERMES_SESSION_KEY);
+      window.localStorage.setItem(CHAT_CLEARED_KEY, now);
+      window.localStorage.removeItem(CHAT_HISTORY_KEY);
+    } catch { /* ignore */ }
+    setClearedAt(now);
+    setChatEntries([]);
+    setPlusMenuOpen(false);
+    toast.success("New chat session started");
+  }
+
+  function toggleSpeakReplies() {
+    setSpeakReplies((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SPEAK_REPLIES_KEY, next ? "1" : "0");
+      } catch { /* ignore */ }
+      return next;
+    });
+    setPlusMenuOpen(false);
+  }
+
   function stopSpeaking() {
     audioRef.current?.pause();
     audioRef.current = null;
@@ -737,8 +802,38 @@ export function AgentPanel() {
 
   // Chat-first surface: full-height thread, slim ops strip, and a single
   // composer frame at the bottom carrying all controls (agent-native anatomy).
+  function startPanelResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const onMove = (move: PointerEvent) => {
+      const next = Math.min(Math.max(window.innerWidth - move.clientX, PANEL_MIN_WIDTH), PANEL_MAX_WIDTH);
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setPanelWidth((current) => {
+        try {
+          window.localStorage.setItem(PANEL_WIDTH_KEY, String(current));
+        } catch { /* ignore */ }
+        return current;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   return (
-    <aside className="flex h-dvh w-[336px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]">
+    <aside
+      className="relative flex h-dvh shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]"
+      style={{ width: panelWidth }}
+    >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize agent panel"
+        onPointerDown={startPanelResize}
+        className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-border)]"
+      />
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
@@ -826,7 +921,7 @@ export function AgentPanel() {
                         <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{turn.speaker}</span>
                       ) : null}
                       {turn.text ? (
-                        <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
+                        <MarkdownBody content={turn.text} className="agent-chat-markdown" />
                       ) : null}
                       {turn.widget ? <AgentChatWidget widget={turn.widget} /> : null}
                     </div>
@@ -839,13 +934,17 @@ export function AgentPanel() {
         {streamingReply !== null ? (
           <div className="mt-3 px-2.5">
             <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{targetAgent}</span>
-            <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{streamingReply || "…"}</p>
+            {streamingReply ? (
+              <MarkdownBody content={streamingReply} className="agent-chat-markdown" />
+            ) : (
+              <p className="font-ui text-[12px] italic text-[var(--overlay-1)]">Thinking…</p>
+            )}
           </div>
         ) : null}
       </div>
 
       <div className="shrink-0 px-3 pb-3 pt-1">
-        <div className="relative rounded-lg border border-[var(--border)] bg-[var(--base)] transition-colors focus-within:border-[var(--accent-border)]">
+        <div className="relative rounded-lg bg-[var(--base)]">
           {plusMenuOpen ? (
             <>
               <button
@@ -898,6 +997,22 @@ export function AgentPanel() {
                 >
                   <Volume2 className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
                   Speak status brief
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleSpeakReplies}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                >
+                  <Volume2 className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
+                  {speakReplies ? "Speak replies: on" : "Speak replies: off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={startNewSession}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                >
+                  <RefreshCw className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
+                  New chat session
                 </button>
               </div>
             </>
@@ -976,16 +1091,28 @@ export function AgentPanel() {
                 <Square className="h-4 w-4" />
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void sendChatMessage()}
-              disabled={!chatDraft.trim() || isSendingChat}
-              aria-label="Send message"
-              title="Send (Enter)"
-              className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-            >
-              {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            </button>
+            {isSendingChat && streamingReply !== null ? (
+              <button
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+                aria-label="Stop response"
+                title="Stop response"
+                className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--danger)_34%,transparent)] text-[var(--danger)] transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              >
+                <Square className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void sendChatMessage()}
+                disabled={!chatDraft.trim() || isSendingChat}
+                aria-label="Send message"
+                title="Send (Enter)"
+                className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              >
+                {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              </button>
+            )}
           </div>
         </div>
       </div>

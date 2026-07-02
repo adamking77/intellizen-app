@@ -81,13 +81,20 @@ export interface HermesStreamResult {
   sessionId: string | null;
 }
 
+export interface HermesChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 /**
  * Stream a chat turn from Hermes over /v1/chat/completions (SSE).
- * Session continuity via X-Hermes-Session-Id; deltas arrive on onDelta.
+ * Continuity is stateless via the messages array (the X-Hermes-Session-Id
+ * header is not in the server's CORS allow-list, so browsers cannot send it
+ * — upstream Hermes gap; revisit when Access-Control-Allow-Headers grows).
  */
 export async function streamHermesChat(input: {
   message: string;
-  sessionId?: string | null;
+  history?: HermesChatTurn[];
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }): Promise<HermesStreamResult> {
@@ -97,7 +104,6 @@ export async function streamHermesChat(input: {
     "Content-Type": "application/json",
     Authorization: `Bearer ${hermesApiKey}`,
   };
-  if (input.sessionId) headers["X-Hermes-Session-Id"] = input.sessionId;
 
   const res = await fetch(`${hermesApiUrl}/v1/chat/completions`, {
     method: "POST",
@@ -106,7 +112,7 @@ export async function streamHermesChat(input: {
     body: JSON.stringify({
       model: "hermes-agent",
       stream: true,
-      messages: [{ role: "user", content: input.message }],
+      messages: [...(input.history ?? []), { role: "user", content: input.message }],
     }),
   });
   if (!res.ok || !res.body) {
@@ -305,8 +311,38 @@ function dispatchErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Dispatch a workflow through the API server run queue (/v1/runs). */
+async function submitHermesRun(payload: Record<string, unknown>): Promise<string> {
+  if (!hermesApiUrl || !hermesApiKey) throw new Error("Hermes API is not configured.");
+  const res = await fetch(`${hermesApiUrl}/v1/runs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${hermesApiKey}`,
+    },
+    signal: AbortSignal.timeout(8_000),
+    body: JSON.stringify({
+      input: `IntelliZen workflow dispatch. Follow the payload's prompt and context; keep writes bounded to the referenced workflow_run_id and linked records; append receipts for every state change; request approval before anything external-facing or irreversible.\n\nPayload:\n${JSON.stringify(payload, null, 2)}`,
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Hermes run submit failed (${res.status}): ${detail || res.statusText}`);
+  }
+  const body = (await res.json()) as { run_id?: string; id?: string };
+  return body.run_id ?? body.id ?? "run-accepted";
+}
+
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {
   const payload = workflowPayload(input);
+  // Preferred transport: API server run queue (has CORS + receipts via
+  // Fiona's runtime). Webhook second, durable inbox last.
+  try {
+    const runId = await submitHermesRun(payload);
+    return { status: "submitted", messageId: runId };
+  } catch (apiError) {
+    console.warn(`Hermes /v1/runs dispatch unavailable, trying webhook: ${dispatchErrorMessage(apiError)}`);
+  }
   try {
     const result = await submitHermesPayload({ event: "intellizen.workflow", payload });
     return {
