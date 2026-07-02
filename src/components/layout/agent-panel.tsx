@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
+import { Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { parseAgentChatResult, type AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
@@ -18,7 +18,7 @@ import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { checkHermesGateway, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat } from "@/services/agent";
+import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat, streamHermesChat } from "@/services/agent";
 // Run/approval surfaces live in Databases-native views; the panel is chat only.
 import {
   getPreferredVoiceInputProvider,
@@ -33,6 +33,7 @@ import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice"
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
+const HERMES_SESSION_KEY = "intelizen:hermes-session-id";
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -201,6 +202,7 @@ export function AgentPanel() {
   const [chatDraft, setChatDraft] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
+  const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
   const dictationRef = useRef<BrowserDictationSession | null>(null);
@@ -232,11 +234,11 @@ export function AgentPanel() {
     staleTime: 20_000,
   });
   const queryClient = useQueryClient();
-  // Direct Hermes connection: the gateway preflight is the health check
-  // (that's the transport chat uses); the dashboard adds the profile catalog.
-  const gatewayQuery = useQuery({
-    queryKey: ["hermes-gateway-health"],
-    queryFn: checkHermesGateway,
+  // Direct Hermes connection: the API server health check is the source of
+  // truth (it has CORS for the app origin); the dashboard adds the catalog.
+  const apiQuery = useQuery({
+    queryKey: ["hermes-api-health"],
+    queryFn: checkHermesApi,
     refetchInterval: expanded ? 60_000 : false,
     staleTime: 30_000,
     enabled: expanded,
@@ -290,7 +292,8 @@ export function AgentPanel() {
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
   const canListen = Boolean(voiceInputProvider);
   const canSpeak = Boolean(voiceOutputProvider);
-  const hermesConnected = gatewayQuery.data === true;
+  const hermesApiLive = apiQuery.data === true;
+  const hermesConnected = hermesApiLive;
   // Profile catalog from the dashboard when it's up; otherwise the running
   // gateway's own profile. Static actors are the fully-offline fallback
   // (messages then queue via the durable inbox).
@@ -325,9 +328,16 @@ export function AgentPanel() {
     [agentChatQuery.data],
   );
   // Thread: request/response rows flattened into chronological message turns.
+  // Server rows win over local optimistic entries carrying the same message
+  // (direct dispatches get their durable row when the agent writes back).
   const chatTurns = useMemo(() => {
+    const routedMessages = new Set(routedChatEntries.map((entry) => entry.message.trim()));
     const entriesById = new Map<string, AgentChatEntry>();
-    for (const entry of [...chatEntries, ...routedChatEntries]) {
+    for (const entry of chatEntries) {
+      if (routedMessages.has(entry.message.trim())) continue;
+      entriesById.set(entry.id, entry);
+    }
+    for (const entry of routedChatEntries) {
       entriesById.set(entry.id, entry);
     }
     return entriesToTurns(Array.from(entriesById.values()));
@@ -347,7 +357,7 @@ export function AgentPanel() {
   useEffect(() => {
     const thread = threadRef.current;
     if (thread) thread.scrollTop = thread.scrollHeight;
-  }, [chatTurns.length, isSendingChat]);
+  }, [chatTurns.length, isSendingChat, streamingReply]);
 
   useEffect(() => {
     return () => {
@@ -405,6 +415,52 @@ export function AgentPanel() {
   async function sendChatMessage() {
     const message = chatDraft.trim();
     if (!message || isSendingChat) return;
+
+    // Streaming path: direct conversation over the Hermes API server.
+    if (hermesApiLive) {
+      const entryId = `api-${Date.now()}`;
+      const sentAt = new Date().toISOString();
+      setChatDraft("");
+      setIsSendingChat(true);
+      setStreamingReply("");
+      setChatEntries((current) => [
+        { id: entryId, message, targetAgent, status: "submitted" as ChatEntryStatus, detail: "hermes api", createdAt: sentAt },
+        ...current,
+      ].slice(0, 8));
+      try {
+        const sessionId = window.localStorage.getItem(HERMES_SESSION_KEY);
+        const result = await streamHermesChat({
+          message,
+          sessionId,
+          onDelta: (delta) => setStreamingReply((current) => (current ?? "") + delta),
+        });
+        if (result.sessionId) {
+          try {
+            window.localStorage.setItem(HERMES_SESSION_KEY, result.sessionId);
+          } catch { /* ignore */ }
+        }
+        setChatEntries((current) =>
+          current.map((entry) =>
+            entry.id === entryId
+              ? { ...entry, reply: result.text || null, repliedAt: new Date().toISOString() }
+              : entry,
+          ),
+        );
+      } catch (streamError) {
+        setChatEntries((current) =>
+          current.map((entry) =>
+            entry.id === entryId
+              ? { ...entry, status: "failed" as ChatEntryStatus, detail: streamError instanceof Error ? streamError.message : "Stream failed" }
+              : entry,
+          ),
+        );
+        toastError("Hermes chat failed", streamError);
+      } finally {
+        setStreamingReply(null);
+        setIsSendingChat(false);
+      }
+      return;
+    }
 
     try {
       setIsSendingChat(true);
@@ -670,16 +726,11 @@ export function AgentPanel() {
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--accent)]">
-            <Bot className="h-4 w-4" />
+        {approvals.length > 0 ? (
+          <span className="mt-4 rounded-full border border-[color-mix(in_srgb,var(--caution)_42%,transparent)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--caution)]">
+            {approvals.length}
           </span>
-          {approvals.length > 0 ? (
-            <span className="rounded-full border border-[color-mix(in_srgb,var(--caution)_42%,transparent)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--caution)]">
-              {approvals.length}
-            </span>
-          ) : null}
-        </div>
+        ) : null}
       </aside>
     );
   }
@@ -690,9 +741,6 @@ export function AgentPanel() {
     <aside className="flex h-dvh w-[336px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--accent)]">
-            <Bot className="h-4 w-4" />
-          </span>
           <div className="min-w-0">
             <p className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">Agent Panel</p>
             <p className="flex items-center gap-1.5 truncate font-ui text-[11px] text-[var(--overlay-1)]">
@@ -742,7 +790,6 @@ export function AgentPanel() {
 
         {chatTurns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-            <MessageSquare className="h-5 w-5 text-[var(--overlay-1)]" />
             <p className="font-ui text-[12px] text-[var(--subtext-0)]">Message an agent to get started.</p>
             <p className="font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
               Route context travels with every message. Use + for workflows and actions.
@@ -789,9 +836,15 @@ export function AgentPanel() {
             })}
           </div>
         )}
+        {streamingReply !== null ? (
+          <div className="mt-3 px-2.5">
+            <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{targetAgent}</span>
+            <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{streamingReply || "…"}</p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="shrink-0 border-t border-[var(--border)] px-3 pb-3 pt-2">
+      <div className="shrink-0 px-3 pb-3 pt-1">
         <div className="relative rounded-lg border border-[var(--border)] bg-[var(--base)] transition-colors focus-within:border-[var(--accent-border)]">
           {plusMenuOpen ? (
             <>

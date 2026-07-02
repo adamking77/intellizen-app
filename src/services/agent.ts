@@ -60,6 +60,93 @@ export interface HermesProfile {
 // used as the known profile when the dashboard (profile catalog) is offline.
 export const DEFAULT_HERMES_PROFILE = "fiona";
 
+// ── Hermes API server (OpenAI-compatible, streaming) ───────────────────────
+
+const hermesApiUrl = import.meta.env.VITE_HERMES_API_URL?.replace(/\/$/, "") || null;
+const hermesApiKey = import.meta.env.VITE_HERMES_API_KEY || "";
+
+/** True when the streaming chat API is configured and reachable. */
+export async function checkHermesApi(): Promise<boolean> {
+  if (!hermesApiUrl || !hermesApiKey) return false;
+  try {
+    const res = await fetch(`${hermesApiUrl}/health`, { signal: AbortSignal.timeout(2_500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface HermesStreamResult {
+  text: string;
+  sessionId: string | null;
+}
+
+/**
+ * Stream a chat turn from Hermes over /v1/chat/completions (SSE).
+ * Session continuity via X-Hermes-Session-Id; deltas arrive on onDelta.
+ */
+export async function streamHermesChat(input: {
+  message: string;
+  sessionId?: string | null;
+  onDelta: (text: string) => void;
+  signal?: AbortSignal;
+}): Promise<HermesStreamResult> {
+  if (!hermesApiUrl || !hermesApiKey) throw new Error("Hermes API is not configured.");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${hermesApiKey}`,
+  };
+  if (input.sessionId) headers["X-Hermes-Session-Id"] = input.sessionId;
+
+  const res = await fetch(`${hermesApiUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers,
+    signal: input.signal,
+    body: JSON.stringify({
+      model: "hermes-agent",
+      stream: true,
+      messages: [{ role: "user", content: input.message }],
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Hermes chat failed (${res.status}): ${detail || res.statusText}`);
+  }
+
+  const sessionId = res.headers.get("X-Hermes-Session-Id");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const chunk = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (delta) {
+          text += delta;
+          input.onDelta(delta);
+        }
+      } catch {
+        /* keep-alive or non-JSON frame */
+      }
+    }
+  }
+
+  return { text, sessionId };
+}
+
 /**
  * Health-check the Hermes webhook gateway — the transport chat actually
  * uses. A 2xx on the CORS preflight means direct dispatch will succeed.
