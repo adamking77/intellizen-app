@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 
 import { runSandboxQuery, type SandboxQueryInput } from "@/lib/data";
+
+/**
+ * Inside Tauri the shell comes from the custom genui: protocol — Tauri
+ * injects the app CSP into every HTML asset in dist at build time, which
+ * would re-block the sandbox's inline scripts; protocol responses bypass
+ * that injection. In a plain browser (QA) vite serves the same file.
+ */
+const FRAME_SRC = isTauri() ? "genui://localhost/frame.html" : "/genui-frame.html";
 
 /**
  * Tier-2 GenUI: agent-authored HTML rendered in a hard sandbox.
@@ -63,7 +72,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
       ref={iframeRef}
       title={title ?? "Agent-generated view"}
       sandbox="allow-scripts"
-      src="/genui-frame.html"
+      src={FRAME_SRC}
       style={{ height }}
       className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--base)]"
     />

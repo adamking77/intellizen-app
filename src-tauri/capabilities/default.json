@@ -12,6 +12,12 @@
         { "path": "$HOME/vault/**" }
       ]
     },
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://127.0.0.1:9119/*" }
+      ]
+    },
     "fs:default",
     "fs:allow-read-dir",
     "fs:allow-read-file",

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { hermesDashboardConfigured, hermesDashboardFetch } from "@/services/voice";
 import type { GraphEntityType } from "@/lib/types";
 
 export interface AgentContext {
@@ -44,8 +45,6 @@ const hermesGatewayUrl =
   import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") || null;
 const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
 const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
-const hermesDashboardUrl =
-  import.meta.env.VITE_HERMES_VOICE_URL?.replace(/\/$/, "") || null;
 
 export interface HermesProfile {
   name: string;
@@ -180,8 +179,8 @@ export async function checkHermesGateway(): Promise<boolean> {
  * unconfigured) means the panel falls back to the running gateway profile.
  */
 export async function fetchHermesProfiles(): Promise<HermesProfile[]> {
-  if (!hermesDashboardUrl) throw new Error("Hermes dashboard URL is not configured.");
-  const res = await fetch(`${hermesDashboardUrl}/api/profiles`, { credentials: "include" });
+  if (!hermesDashboardConfigured()) throw new Error("Hermes dashboard URL is not configured.");
+  const res = await hermesDashboardFetch("/api/profiles");
   if (!res.ok) throw new Error(`Hermes profiles failed (${res.status})`);
   const payload = (await res.json()) as { profiles?: Array<Record<string, unknown>> };
   return (payload.profiles ?? [])

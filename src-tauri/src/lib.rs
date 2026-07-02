@@ -476,11 +476,24 @@ fn strip_wrapping_quotes(value: &str) -> &str {
         .unwrap_or(value)
 }
 
+/// GenUI sandbox frame shell. Served via a custom protocol because Tauri
+/// injects the app CSP into every HTML asset in dist at build time, which
+/// would re-block the sandbox's inline scripts (the shell must carry ONLY
+/// its own no-network CSP). Protocol responses bypass that injection.
+const GENUI_FRAME_HTML: &str = include_str!("../../public/genui-frame.html");
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
+        .register_uri_scheme_protocol("genui", |_ctx, _request| {
+            tauri::http::Response::builder()
+                .header("Content-Type", "text/html; charset=utf-8")
+                .body(GENUI_FRAME_HTML.as_bytes().to_vec())
+                .expect("genui frame response")
+        })
         .invoke_handler(tauri::generate_handler![run_exa_search])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
