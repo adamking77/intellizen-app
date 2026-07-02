@@ -4449,42 +4449,49 @@ pre {
   --legend-track: oklch(0.274 0.006 286.033);
 }
 
-/* Compact markdown for Agent Panel chat replies */
-.agent-chat-markdown {
+/* Compact markdown for Agent Panel chat replies. MarkdownBody applies the
+   document-scale .intelizen-doc-markdown rules (with !important); these
+   chat-scoped rules out-specific them back to chat scale. */
+.intelizen-doc-markdown.agent-chat-markdown {
   font-family: var(--font-ui);
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--text);
 }
-.agent-chat-markdown p { margin: 0 0 6px; }
-.agent-chat-markdown p:last-child { margin-bottom: 0; }
-.agent-chat-markdown ul,
-.agent-chat-markdown ol { margin: 0 0 6px; padding-left: 18px; }
-.agent-chat-markdown li { margin: 2px 0; }
-.agent-chat-markdown h1,
-.agent-chat-markdown h2,
-.agent-chat-markdown h3,
-.agent-chat-markdown h4 { margin: 8px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--text); }
-.agent-chat-markdown code {
+.intelizen-doc-markdown.agent-chat-markdown > * + * {
+  margin-top: 6px;
+}
+.intelizen-doc-markdown.agent-chat-markdown .md-paragraph {
+  font-size: 12.5px !important;
+  line-height: 1.6 !important;
+  color: var(--text);
+  margin: 0;
+}
+.intelizen-doc-markdown.agent-chat-markdown .md-heading-1,
+.intelizen-doc-markdown.agent-chat-markdown .md-heading-2,
+.intelizen-doc-markdown.agent-chat-markdown .md-heading-3 {
+  margin: 8px 0 2px;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--text);
+}
+.intelizen-doc-markdown.agent-chat-markdown ul,
+.intelizen-doc-markdown.agent-chat-markdown ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px !important;
+  line-height: 1.6 !important;
+}
+.intelizen-doc-markdown.agent-chat-markdown li {
+  margin: 2px 0;
+  font-size: 12.5px !important;
+}
+.intelizen-doc-markdown.agent-chat-markdown code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 11px !important;
   background: var(--surface-wash);
   border-radius: 4px;
   padding: 1px 4px;
-}
-.agent-chat-markdown pre {
-  margin: 6px 0;
-  padding: 8px;
-  background: var(--crust);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  overflow-x: auto;
-}
-.agent-chat-markdown pre code { background: transparent; padding: 0; }
-.agent-chat-markdown a { color: var(--accent); }
-.agent-chat-markdown blockquote {
-  margin: 6px 0;
-  padding-left: 8px;
-  border-left: 2px solid var(--border-strong);
-  color: var(--subtext-0);
 }
