@@ -157,11 +157,19 @@ const PROJECTS_DB_FIELDS = {
 
 let operationalWorkspaceSyncPromise: Promise<void> | null = null;
 let operationalWorkspaceLastSyncedAt = 0;
-let operationalWorkspaceSyncDirty = true;
+let operationalWorkspaceSyncDirty = false;
 
-const OPERATIONAL_WORKSPACE_SYNC_MAX_AGE_MS = 60_000;
+const OPERATIONAL_WORKSPACE_SYNC_MAX_AGE_MS = 10 * 60_000;
+const WORKSPACE_CATALOG_RECORD_LIMIT = 500;
+const WORKSPACE_BUNDLE_RECORD_LIMIT = 250;
+const WORKSPACE_FILTER_PREFETCH_LIMIT = 250;
 
 type OperationalSystemKind = keyof typeof SYSTEM_WORKSPACE_DATABASE_ICONS;
+
+function workspaceFilteredReadEnd(rowLimit: number) {
+  const serverLimit = Math.min(Math.max(rowLimit * 3, rowLimit), WORKSPACE_FILTER_PREFETCH_LIMIT);
+  return Math.max(serverLimit, 1) - 1;
+}
 
 function markOperationalWorkspaceSyncDirty() {
   operationalWorkspaceSyncDirty = true;
@@ -262,7 +270,7 @@ export async function listSignals() {
 export async function getUnreadSignalCount() {
   const { count, error } = await supabase
     .schema("intel").from("signals")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("status", "new");
 
   if (error) throw error;
@@ -282,7 +290,7 @@ export async function listFionaInboxItems() {
 export async function getPendingFionaInboxCount() {
   const { count, error } = await supabase
     .schema("comms").from("fiona_inbox")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("status", "pending");
 
   if (error) throw error;
@@ -482,8 +490,8 @@ export async function removeSignalFromProject(projectSignalId: number) {
 
 export async function dismissSignal(signalId: number) {
   const [{ count: pCount }, { count: iCount }] = await Promise.all([
-    supabase.schema("intel").from("project_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
-    supabase.schema("intel").from("investigation_signals").select("*", { count: "exact", head: true }).eq("signal_id", signalId),
+    supabase.schema("intel").from("project_signals").select("id", { count: "exact", head: true }).eq("signal_id", signalId),
+    supabase.schema("intel").from("investigation_signals").select("id", { count: "exact", head: true }).eq("signal_id", signalId),
   ]);
   if ((pCount ?? 0) > 0 || (iCount ?? 0) > 0) return;
 
@@ -2511,7 +2519,6 @@ export async function syncOperationalWorkspaceDatabases(options?: { force?: bool
 }
 
 export async function listWorkspaceDatabases() {
-  await syncOperationalWorkspaceDatabases();
   const { data, error } = await supabase
     .schema("workspace").from("databases")
     .select("id, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
@@ -2523,7 +2530,6 @@ export async function listWorkspaceDatabases() {
 }
 
 export async function listWorkspaceDatabaseCatalog() {
-  await syncOperationalWorkspaceDatabases();
   const [
     { data: databaseRows, error: databaseError },
     { data: recordRows, error: recordError },
@@ -2538,7 +2544,8 @@ export async function listWorkspaceDatabaseCatalog() {
         .schema("workspace").from("records")
         .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
         .order("created_at", { ascending: true })
-        .order("id", { ascending: true }),
+        .order("id", { ascending: true })
+        .range(0, WORKSPACE_CATALOG_RECORD_LIMIT - 1),
       supabase
         .schema("workspace").from("views")
         .select("id, database_id, name, type, config, position, created_at, updated_at")
@@ -2602,7 +2609,8 @@ async function fetchWorkspaceDatabaseBundleRows(id: string) {
       .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
       .eq("database_id", id)
       .order("created_at", { ascending: true })
-      .order("id", { ascending: true }),
+      .order("id", { ascending: true })
+      .range(0, WORKSPACE_BUNDLE_RECORD_LIMIT - 1),
   ]);
 
   if (databaseError) throw databaseError;
@@ -3302,11 +3310,13 @@ export async function listAgentProjects(input: {
   includeDone?: boolean;
   limit?: number;
 } = {}) {
+  const rowLimit = Math.max(input.limit ?? 50, 1);
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.bizOps)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(0, workspaceFilteredReadEnd(rowLimit));
 
   if (error) throw error;
   const rows = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
@@ -3327,7 +3337,7 @@ export async function listAgentProjects(input: {
   });
 
   return filtered
-    .slice(0, Math.max(input.limit ?? 50, 1))
+    .slice(0, rowLimit)
     .map((record) => toAgentProjectItem(record));
 }
 
@@ -3361,11 +3371,13 @@ export async function listAgentWork(input: {
   includeDone?: boolean;
   limit?: number;
 } = {}) {
+  const rowLimit = Math.max(input.limit ?? 50, 1);
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(0, workspaceFilteredReadEnd(rowLimit));
 
   if (error) throw error;
   const rows = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
@@ -3397,7 +3409,7 @@ export async function listAgentWork(input: {
 
     return true;
   });
-  const limited = filtered.slice(0, Math.max(input.limit ?? 50, 1));
+  const limited = filtered.slice(0, rowLimit);
 
   return limited.map((record) => toAgentWorkItem(record, initiativeMeta));
 }
@@ -3819,11 +3831,13 @@ export async function listWorkflowRuns(input: {
   includeCompleted?: boolean;
   limit?: number;
 } = {}) {
+  const rowLimit = Math.max(input.limit ?? 50, 1);
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(0, workspaceFilteredReadEnd(rowLimit));
 
   if (error) throw error;
   const workflowRecordId = input.workflowId ? await resolveWorkflowRecordId(input.workflowId) : null;
@@ -3839,7 +3853,7 @@ export async function listWorkflowRuns(input: {
       if (input.bizOpsId && !asStringArray(record.fields[WORKFLOW_RUN_FIELDS.bizOps]).includes(input.bizOpsId)) return false;
       return true;
     })
-    .slice(0, Math.max(input.limit ?? 50, 1))
+    .slice(0, rowLimit)
     .map(toWorkflowRunItem);
 }
 
@@ -3966,11 +3980,13 @@ export async function listWorkflows(input: {
   includeInactive?: boolean;
   limit?: number;
 } = {}) {
+  const rowLimit = Math.max(input.limit ?? 50, 1);
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .range(0, workspaceFilteredReadEnd(rowLimit));
 
   if (error) throw error;
   const records = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
@@ -3985,7 +4001,7 @@ export async function listWorkflows(input: {
       }
       return true;
     })
-    .slice(0, Math.max(input.limit ?? 50, 1))
+    .slice(0, rowLimit)
     .map(toWorkflowTemplateItem);
 }
 
