@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 type MdBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "list"; items: string[]; ordered: boolean }
+  | { type: "code"; text: string }
   | { type: "para"; text: string };
 
 function parseMarkdownish(content: string): MdBlock[] {
@@ -25,8 +26,26 @@ function parseMarkdownish(content: string): MdBlock[] {
     inList = false;
   };
 
+  let inFence = false;
+  let fenceBuffer: string[] = [];
   for (const raw of lines) {
     const line = raw.trimEnd();
+    if (line.trim().startsWith("```")) {
+      if (inFence) {
+        blocks.push({ type: "code", text: fenceBuffer.join("\n") });
+        fenceBuffer = [];
+        inFence = false;
+      } else {
+        flushPara();
+        flushList();
+        inFence = true;
+      }
+      continue;
+    }
+    if (inFence) {
+      fenceBuffer.push(raw);
+      continue;
+    }
     if (line.trim() === "") {
       flushPara();
       flushList();
@@ -58,6 +77,9 @@ function parseMarkdownish(content: string): MdBlock[] {
   }
   flushPara();
   flushList();
+  if (inFence && fenceBuffer.length > 0) {
+    blocks.push({ type: "code", text: fenceBuffer.join("\n") });
+  }
   return blocks;
 }
 
@@ -90,6 +112,13 @@ export function MarkdownBody({ content, className }: MarkdownBodyProps) {
             <h4 key={i} className="md-heading-3">
               {block.text}
             </h4>
+          );
+        }
+        if (block.type === "code") {
+          return (
+            <pre key={i} className="md-codeblock">
+              <code>{block.text}</code>
+            </pre>
           );
         }
         if (block.type === "list") {

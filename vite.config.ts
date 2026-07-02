@@ -1,8 +1,74 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { visualizer } from "rollup-plugin-visualizer";
 import path from "node:path";
+
+const HERMES_DASHBOARD_ORIGIN = "http://127.0.0.1:9119";
+
+/**
+ * Authenticated same-origin proxy for the Hermes dashboard (voice/TTS +
+ * profile catalog). The dashboard has no CORS and gates /api behind a
+ * per-boot session token injected into its SPA HTML — this middleware
+ * scrapes the token server-side (refreshing on 401), so it never reaches
+ * the browser bundle. Dev-mode transport; the packaged app needs the
+ * Tauri HTTP plugin for the same paths.
+ */
+function hermesDashboardProxy(): Plugin {
+  let cachedToken: string | null = null;
+
+  async function fetchToken(): Promise<string | null> {
+    try {
+      const html = await (await fetch(`${HERMES_DASHBOARD_ORIGIN}/`)).text();
+      cachedToken = /SESSION_TOKEN__\s*=\s*"([^"]+)"/.exec(html)?.[1] ?? null;
+    } catch {
+      cachedToken = null;
+    }
+    return cachedToken;
+  }
+
+  return {
+    name: "hermes-dashboard-proxy",
+    configureServer(server) {
+      server.middlewares.use("/hermes-dash", (req, res) => {
+        const chunks: Buffer[] = [];
+        req.on("data", (chunk: Buffer) => chunks.push(chunk));
+        req.on("end", () => {
+          void (async () => {
+            const method = req.method ?? "GET";
+            const body = ["GET", "HEAD"].includes(method) ? undefined : Buffer.concat(chunks);
+            const upstreamUrl = `${HERMES_DASHBOARD_ORIGIN}${req.url ?? "/"}`;
+
+            async function forward(token: string | null) {
+              return fetch(upstreamUrl, {
+                method,
+                headers: {
+                  "Content-Type": String(req.headers["content-type"] ?? "application/json"),
+                  ...(token ? { "X-Hermes-Session-Token": token } : {}),
+                },
+                body,
+              });
+            }
+
+            try {
+              let upstream = await forward(cachedToken ?? (await fetchToken()));
+              if (upstream.status === 401) {
+                upstream = await forward(await fetchToken());
+              }
+              res.statusCode = upstream.status;
+              res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+              res.end(Buffer.from(await upstream.arrayBuffer()));
+            } catch (error) {
+              res.statusCode = 502;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: `Hermes dashboard unreachable: ${String(error)}` }));
+            }
+          })();
+        });
+      });
+    },
+  };
+}
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -16,6 +82,7 @@ export default defineConfig(async () => ({
       fastRefresh: !isTauriRuntime,
     }),
     tailwindcss(),
+    hermesDashboardProxy(),
     ...(analyzeBundle
       ? [
           visualizer({

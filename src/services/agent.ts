@@ -95,6 +95,7 @@ export interface HermesChatTurn {
 export async function streamHermesChat(input: {
   message: string;
   history?: HermesChatTurn[];
+  systemPrompt?: string;
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }): Promise<HermesStreamResult> {
@@ -112,7 +113,11 @@ export async function streamHermesChat(input: {
     body: JSON.stringify({
       model: "hermes-agent",
       stream: true,
-      messages: [...(input.history ?? []), { role: "user", content: input.message }],
+      messages: [
+        ...(input.systemPrompt ? [{ role: "system", content: input.systemPrompt }] : []),
+        ...(input.history ?? []),
+        { role: "user", content: input.message },
+      ],
     }),
   });
   if (!res.ok || !res.body) {

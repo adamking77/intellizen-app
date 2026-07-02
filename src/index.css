@@ -4495,3 +4495,23 @@ pre {
   border-radius: 4px;
   padding: 1px 4px;
 }
+
+/* Fenced code blocks in MarkdownBody */
+.intelizen-doc-markdown .md-codeblock {
+  margin: 0.75rem 0;
+  padding: 10px 12px;
+  background: var(--crust);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--subtext-1);
+}
+.intelizen-doc-markdown.agent-chat-markdown .md-codeblock {
+  margin: 6px 0;
+  padding: 8px;
+  font-size: 11px !important;
+  border-radius: 6px;
+}

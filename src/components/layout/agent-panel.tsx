@@ -4,7 +4,13 @@ import { Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Se
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { MarkdownBody } from "@/components/ui/markdown-body";
-import { parseAgentChatResult, type AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
+import {
+  extractGenuiBlocks,
+  GENUI_SYSTEM_PROMPT,
+  parseAgentChatResult,
+  stripGenuiForStreaming,
+  type AgentChatWidget as AgentChatWidgetModel,
+} from "@/lib/agent-widgets";
 
 import {
   createVoiceDraftTask,
@@ -466,22 +472,29 @@ export function AgentPanel() {
         const result = await streamHermesChat({
           message,
           history,
+          systemPrompt: GENUI_SYSTEM_PROMPT,
           signal: controller.signal,
           onDelta: (delta) => {
             accumulated += delta;
             setStreamingReply((current) => (current ?? "") + delta);
           },
         });
+        const { text: cleanReply, widgets } = extractGenuiBlocks(result.text);
         setChatEntries((current) =>
           current.map((entry) =>
             entry.id === entryId
-              ? { ...entry, reply: result.text || null, repliedAt: new Date().toISOString() }
+              ? {
+                  ...entry,
+                  reply: cleanReply || null,
+                  widget: widgets[0] ?? null,
+                  repliedAt: new Date().toISOString(),
+                }
               : entry,
           ),
         );
-        if (speakReplies && result.text && voiceOutputProvider) {
+        if (speakReplies && cleanReply && voiceOutputProvider) {
           setIsSpeaking(true);
-          void speakWithProvider(result.text, voiceOutputProvider.id).catch(() => setIsSpeaking(false));
+          void speakWithProvider(cleanReply, voiceOutputProvider.id).catch(() => setIsSpeaking(false));
         }
       } catch (streamError) {
         const stopped = streamError instanceof DOMException && streamError.name === "AbortError";
@@ -934,8 +947,10 @@ export function AgentPanel() {
         {streamingReply !== null ? (
           <div className="mt-3 px-2.5">
             <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{targetAgent}</span>
-            {streamingReply ? (
-              <MarkdownBody content={streamingReply} className="agent-chat-markdown" />
+            {stripGenuiForStreaming(streamingReply) ? (
+              <MarkdownBody content={stripGenuiForStreaming(streamingReply)} className="agent-chat-markdown" />
+            ) : streamingReply ? (
+              <p className="font-ui text-[12px] italic text-[var(--overlay-1)]">Rendering…</p>
             ) : (
               <p className="font-ui text-[12px] italic text-[var(--overlay-1)]">Thinking…</p>
             )}

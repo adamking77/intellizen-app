@@ -98,6 +98,49 @@ export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
   return null;
 }
 
+/**
+ * System prompt fragment teaching streamed-chat agents the widget contract.
+ * Fenced ```genui blocks are extracted client-side and rendered natively.
+ */
+export const GENUI_SYSTEM_PROMPT = `You are replying inside the IntelliZen Agent Panel (a compact chat sidebar). Reply in plain conversational markdown.
+
+When a table, chart, or metric list genuinely communicates better than prose, emit it as a fenced block exactly like this:
+
+\`\`\`genui
+{"kind": "data-chart", "title": "...", "chart": {"type": "bar", "xKey": "label", "series": [{"key": "value", "label": "..."}], "data": [{"label": "...", "value": 1}]}}
+\`\`\`
+
+Supported kinds: "data-table" ({"table": {"columns": [{"key", "label"}], "rows": [...]}}), "data-chart" (bar), "data-insights" ({"insights": ["..."]}). One JSON object per genui block. The app renders these as native charts/tables.
+
+NEVER draw charts with unicode block characters, ASCII art, or markdown tables of bars — always use a genui block instead.`;
+
+const GENUI_FENCE_RE = /```genui\s*\n([\s\S]*?)```/g;
+
+/** Extract genui widget blocks out of streamed reply text. */
+export function extractGenuiBlocks(text: string): { text: string; widgets: AgentChatWidget[] } {
+  const widgets: AgentChatWidget[] = [];
+  const cleaned = text
+    .replace(GENUI_FENCE_RE, (_match, json: string) => {
+      try {
+        const widget = parseAgentChatWidget(JSON.parse(json.trim()));
+        if (widget) widgets.push(widget);
+      } catch {
+        /* malformed widget JSON — drop the block rather than show raw JSON */
+      }
+      return "";
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text: cleaned, widgets };
+}
+
+/** Streaming display: hide completed genui blocks and any unterminated tail. */
+export function stripGenuiForStreaming(text: string): string {
+  const withoutComplete = text.replace(GENUI_FENCE_RE, "").trimEnd();
+  const openFence = withoutComplete.lastIndexOf("```genui");
+  return (openFence === -1 ? withoutComplete : withoutComplete.slice(0, openFence)).trimEnd();
+}
+
 export interface AgentChatResult {
   reply: string | null;
   widget: AgentChatWidget | null;
