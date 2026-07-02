@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -19,6 +19,7 @@ import type { FionaInboxItem, WorkflowRunItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { sendToAgentChat } from "@/services/agent";
 import {
@@ -47,10 +48,55 @@ interface AgentChatEntry {
   status: ChatEntryStatus;
   detail: string;
   createdAt: string;
+  /** When the agent's reply landed (inbox row updated_at). */
+  repliedAt?: string | null;
   /** Agent reply text parsed from the completed inbox result. */
   reply?: string | null;
   /** In-chat GenUI widget (agent-native data-widget contract). */
   widget?: AgentChatWidgetModel | null;
+}
+
+/** One rendered message in the thread: a user turn or an agent turn. */
+interface ChatTurn {
+  id: string;
+  role: "user" | "agent";
+  speaker: string;
+  text: string | null;
+  widget?: AgentChatWidgetModel | null;
+  status?: ChatEntryStatus;
+  detail?: string;
+  ts: string;
+}
+
+const TIME_DIVIDER_GAP_MS = 15 * 60_000;
+
+/** Flatten request/response rows into a chronological message stream. */
+function entriesToTurns(entries: AgentChatEntry[]): ChatTurn[] {
+  const turns: ChatTurn[] = [];
+  for (const entry of entries) {
+    turns.push({
+      id: `${entry.id}-user`,
+      role: "user",
+      speaker: "You",
+      text: entry.message,
+      status: entry.status,
+      detail: entry.detail,
+      ts: entry.createdAt,
+    });
+    if (entry.reply || entry.widget) {
+      turns.push({
+        id: `${entry.id}-agent`,
+        role: "agent",
+        speaker: entry.targetAgent,
+        text: entry.reply ?? null,
+        widget: entry.widget,
+        ts: entry.repliedAt ?? entry.createdAt,
+      });
+    }
+  }
+  return turns
+    .sort((left, right) => new Date(left.ts).getTime() - new Date(right.ts).getTime())
+    .slice(-40);
 }
 
 interface ChatPayloadContext {
@@ -152,7 +198,8 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
     targetAgent,
     status,
     detail: item.status,
-    createdAt: item.updated_at ?? item.created_at,
+    createdAt: item.created_at,
+    repliedAt: item.updated_at ?? null,
     reply,
     widget,
   };
@@ -197,16 +244,38 @@ export function AgentPanel() {
     refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
   });
+  const queryClient = useQueryClient();
   const agentChatQuery = useQuery({
     queryKey: ["agent-panel", "chat-receipts"],
-    queryFn: () => listFionaInboxItems({ limit: 8 }),
+    queryFn: () => listFionaInboxItems({ limit: 15 }),
+    // Realtime pushes updates; polling is only a safety net, tightened while
+    // a message is awaiting its reply.
     refetchInterval: expanded ? 60_000 : false,
-    staleTime: 20_000,
+    staleTime: 5_000,
     enabled: expanded,
   });
   const { isStartingWorkflow, start: startWorkflowFromPanel } = useStartWorkflow({
     onStarted: () => refresh(),
   });
+
+  // Near-instant replies: subscribe to inbox inserts/updates and refetch the
+  // thread the moment the agent writes.
+  useEffect(() => {
+    if (!expanded) return;
+    const channel = supabase
+      .channel("agent-panel-chat")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "comms", table: "fiona_inbox" },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["agent-panel", "chat-receipts"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [expanded, queryClient]);
 
   const activeRuns = activeRunsQuery.data ?? [];
   const approvals = approvalsQuery.data ?? [];
@@ -238,22 +307,30 @@ export function AgentPanel() {
     () => (agentChatQuery.data ?? []).filter(isChatInboxItem).map(inboxItemToChatEntry),
     [agentChatQuery.data],
   );
-  // Thread order: chronological, newest at the bottom, like any chat surface.
-  const visibleChatEntries = useMemo(() => {
+  // Thread: request/response rows flattened into chronological message turns.
+  const chatTurns = useMemo(() => {
     const entriesById = new Map<string, AgentChatEntry>();
     for (const entry of [...chatEntries, ...routedChatEntries]) {
       entriesById.set(entry.id, entry);
     }
-    return Array.from(entriesById.values())
-      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
-      .slice(-20);
+    return entriesToTurns(Array.from(entriesById.values()));
   }, [chatEntries, routedChatEntries]);
+  const awaitingReply = chatTurns.some((turn) => turn.role === "user" && turn.status === "queued");
+
+  // Tighten the poll safety net while a reply is outstanding.
+  useEffect(() => {
+    if (!expanded || !awaitingReply) return;
+    const interval = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ["agent-panel", "chat-receipts"] });
+    }, 3_000);
+    return () => window.clearInterval(interval);
+  }, [expanded, awaitingReply, queryClient]);
 
   // Keep the thread pinned to the newest message.
   useEffect(() => {
     const thread = threadRef.current;
     if (thread) thread.scrollTop = thread.scrollHeight;
-  }, [visibleChatEntries.length, isSendingChat]);
+  }, [chatTurns.length, isSendingChat]);
 
   useEffect(() => {
     return () => {
@@ -635,7 +712,7 @@ export function AgentPanel() {
           </div>
         ) : null}
 
-        {visibleChatEntries.length === 0 ? (
+        {chatTurns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
             <MessageSquare className="h-5 w-5 text-[var(--overlay-1)]" />
             <p className="font-ui text-[12px] text-[var(--subtext-0)]">Message an agent to get started.</p>
@@ -644,43 +721,44 @@ export function AgentPanel() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {visibleChatEntries.map((entry) => (
-              <div key={entry.id}>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--overlay-1)]">
-                    You → {entry.targetAgent}
-                  </span>
-                  <span className="shrink-0 font-mono text-[9.5px] text-[var(--overlay-1)]">{formatRunTime(entry.createdAt)}</span>
+          <div className="space-y-1.5">
+            {chatTurns.map((turn, index) => {
+              const previous = chatTurns[index - 1];
+              const gapMs = previous ? new Date(turn.ts).getTime() - new Date(previous.ts).getTime() : Infinity;
+              const showDivider = gapMs > TIME_DIVIDER_GAP_MS;
+              const speakerChanged = !previous || previous.speaker !== turn.speaker || showDivider;
+              return (
+                <div key={turn.id}>
+                  {showDivider ? (
+                    <p className="py-2 text-center font-mono text-[9.5px] text-[var(--overlay-1)]">{formatRunTime(turn.ts)}</p>
+                  ) : null}
+                  {turn.role === "user" ? (
+                    <div className="flex flex-col items-end">
+                      <div className="max-w-[85%] rounded-lg rounded-br-sm border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1.5">
+                        <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
+                      </div>
+                      {turn.status === "queued" ? (
+                        <p className="mt-0.5 font-ui text-[10px] italic text-[var(--overlay-1)]">{turn.speaker === "You" ? "Waiting for agent…" : turn.detail}</p>
+                      ) : turn.status === "failed" ? (
+                        <p className="mt-0.5 font-ui text-[10px] text-[var(--danger)]">Failed — {turn.detail}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start">
+                      {speakerChanged ? (
+                        <span className="mb-0.5 font-ui text-[10px] font-medium text-[var(--overlay-1)]">{turn.speaker}</span>
+                      ) : null}
+                      <div className="max-w-[92%]">
+                        {turn.text ? (
+                          <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
+                        ) : null}
+                        {turn.widget ? <AgentChatWidget widget={turn.widget} /> : null}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2">
-                  <p className="whitespace-pre-wrap font-ui text-[12px] leading-relaxed text-[var(--text)]">{entry.message}</p>
-                </div>
-                {entry.status !== "submitted" ? (
-                  <p
-                    className={cn(
-                      "mt-1 font-mono text-[9.5px]",
-                      entry.status === "failed" ? "text-[var(--danger)]" : "text-[var(--overlay-1)]",
-                    )}
-                  >
-                    {entry.status === "failed" ? `failed — ${entry.detail}` : "queued for agent"}
-                  </p>
-                ) : null}
-                {entry.reply ? (
-                  <div className="mt-2 border-l-2 border-[var(--accent-border)] pl-2.5">
-                    <span className="font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
-                      {entry.targetAgent}
-                    </span>
-                    <p className="mt-0.5 whitespace-pre-wrap font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">{entry.reply}</p>
-                    {entry.widget ? <AgentChatWidget widget={entry.widget} /> : null}
-                  </div>
-                ) : entry.widget ? (
-                  <div className="mt-2 border-l-2 border-[var(--accent-border)] pl-2.5">
-                    <AgentChatWidget widget={entry.widget} />
-                  </div>
-                ) : null}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
