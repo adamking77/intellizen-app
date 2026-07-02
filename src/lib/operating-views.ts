@@ -57,6 +57,35 @@ export interface WeeklyOperatingBrief {
   sourceRecords: string[];
 }
 
+export interface ReceiptReflectionDigest {
+  title: string;
+  sourcePath: string;
+  generatedAt: string;
+  markdown: string;
+  metrics: {
+    recordsReviewed: number;
+    receipts: number;
+    approvals: number;
+    blockers: number;
+    followUps: number;
+  };
+  sourceRecords: string[];
+}
+
+interface ReceiptReflectionEntry {
+  id: string;
+  kind: "work" | "run";
+  title: string;
+  status: string | null;
+  owner: string | null;
+  priority: string | null;
+  currentStep: string | null;
+  updatedAt: string;
+  receipt: string | null;
+  approvalNeeded: string | null;
+  nextStep: string | null;
+}
+
 const GZS_DISTRIBUTION_TERMS = [
   "genzen solutions",
   "distribution",
@@ -131,6 +160,48 @@ function summarizeRun(run: WorkflowRunItem) {
 function latestReceiptSummary(item: AgentWorkItem) {
   if (!item.latest_receipt) return null;
   return `**${item.title}** — ${item.latest_receipt.replace(/\s+/g, " ").slice(0, 220)}`;
+}
+
+function compactReceipt(value: string | null | undefined, maxLength = 280) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
+}
+
+function isApprovalStatus(value: string | null | undefined) {
+  return lower(value) === "needs approval";
+}
+
+function isBlockedStatus(value: string | null | undefined) {
+  return lower(value) === "blocked";
+}
+
+function hasBlockerLanguage(value: string | null | undefined) {
+  const text = lower(value);
+  return ["blocked", "blocker", "failed", "failure", "error", "unreachable"].some((term) => text.includes(term));
+}
+
+function hasApprovalLanguage(value: string | null | undefined) {
+  const text = lower(value);
+  return ["approval", "approve", "review needed", "needs adam"].some((term) => text.includes(term));
+}
+
+function followUpSignals(entry: ReceiptReflectionEntry) {
+  const text = [entry.receipt, entry.approvalNeeded, entry.nextStep, entry.currentStep].filter(Boolean).join("\n");
+  return text
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^[-*#\s]+/, "").trim())
+    .filter((item) => item.length > 0)
+    .filter((item) => matchesAnyTerm(item, ["next step", "follow up", "follow-up", "blocked", "approval", "current step", "todo"]))
+    .slice(0, 3);
+}
+
+function summarizeReflectionEntry(entry: ReceiptReflectionEntry) {
+  const owner = entry.owner ?? "unassigned";
+  const status = line(entry.status, "No status");
+  const priority = entry.priority ? ` / ${entry.priority}` : "";
+  const receipt = compactReceipt(entry.receipt ?? entry.nextStep ?? entry.currentStep);
+  return `**${entry.title}** - ${status}${priority} / ${owner}${receipt ? ` - ${receipt}` : ""}`;
 }
 
 function workflowMatchesGzs(workflow: WorkflowTemplateItem) {
@@ -340,6 +411,121 @@ ${bulletList(sourceRecords)}
       blocked: blocked.length,
       activeRuns: activeRuns.length,
       activeWorkflows: activeWorkflows.length,
+    },
+    sourceRecords,
+  };
+}
+
+export function buildReceiptReflectionDigest(input: {
+  workItems: AgentWorkItem[];
+  workflowRuns: WorkflowRunItem[];
+  generatedAt?: Date;
+}): ReceiptReflectionDigest {
+  const generatedAt = input.generatedAt ?? new Date();
+  const dateKey = formatDate(generatedAt);
+
+  const workEntries: ReceiptReflectionEntry[] = input.workItems
+    .filter(
+      (item) =>
+        Boolean(item.latest_receipt) ||
+        isApprovalStatus(item.status) ||
+        isBlockedStatus(item.status) ||
+        Boolean(item.approval_needed),
+    )
+    .map((item) => ({
+      id: item.id,
+      kind: "work",
+      title: item.title,
+      status: item.status,
+      owner: item.current_actor ?? (Array.isArray(item.assignee) ? item.assignee.join(", ") : item.assignee),
+      priority: item.priority,
+      currentStep: item.stage,
+      updatedAt: item.updated_at,
+      receipt: item.latest_receipt ?? null,
+      approvalNeeded: item.approval_needed ?? null,
+      nextStep: item.next_step ?? null,
+    }));
+
+  const runEntries: ReceiptReflectionEntry[] = input.workflowRuns
+    .filter((run) => Boolean(run.receipt) || isApprovalStatus(run.status) || isBlockedStatus(run.status))
+    .map((run) => ({
+      id: run.id,
+      kind: "run",
+      title: run.name,
+      status: run.status,
+      owner: run.actor,
+      priority: null,
+      currentStep: run.current_step,
+      updatedAt: run.updated_at,
+      receipt: run.receipt,
+      approvalNeeded: isApprovalStatus(run.status) ? run.current_step : null,
+      nextStep: run.current_step,
+    }));
+
+  const entries = [...workEntries, ...runEntries].sort((left, right) => {
+    const leftPriority = left.kind === "work" ? priorityRank(left.priority) : 0;
+    const rightPriority = right.kind === "work" ? priorityRank(right.priority) : 0;
+    return rightPriority - leftPriority || new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+
+  const entriesWithReceipts = entries.filter((entry) => Boolean(entry.receipt));
+  const approvalEntries = entries.filter(
+    (entry) => isApprovalStatus(entry.status) || Boolean(entry.approvalNeeded) || hasApprovalLanguage(entry.receipt),
+  );
+  const blockerEntries = entries.filter((entry) => isBlockedStatus(entry.status) || hasBlockerLanguage(entry.receipt));
+  const followUpEntries = entries
+    .map((entry) => ({ entry, signals: followUpSignals(entry) }))
+    .filter((item) => item.signals.length > 0);
+
+  const sourceRecords = Array.from(new Set(entries.slice(0, 30).map((entry) => entry.id)));
+  const decisionEntries = entriesWithReceipts.length > 0 ? entriesWithReceipts : entries;
+
+  const markdown = `# Receipt Reflection Digest - ${dateKey}
+
+Generated: ${generatedAt.toISOString()}
+
+## Reflection Inputs
+
+- Records reviewed: ${entries.length}
+- Receipts found: ${entriesWithReceipts.length}
+- Approval memory records: ${approvalEntries.length}
+- Blocker memory records: ${blockerEntries.length}
+- Follow-up signal records: ${followUpEntries.length}
+
+## Decisions And State Changes
+
+${bulletList(decisionEntries.slice(0, 10).map(summarizeReflectionEntry))}
+
+## Approval Memory
+
+${bulletList(approvalEntries.slice(0, 8).map(summarizeReflectionEntry))}
+
+## Blocker Memory
+
+${bulletList(blockerEntries.slice(0, 8).map(summarizeReflectionEntry))}
+
+## Follow-Up Signals
+
+${bulletList(
+  followUpEntries.slice(0, 10).map(({ entry, signals }) => `**${entry.title}** - ${signals.join("; ")}`),
+)}
+
+## Source Record IDs
+
+${bulletList(sourceRecords)}
+`;
+
+  return {
+    title: `Receipt Reflection Digest - ${dateKey}`,
+    sourcePath: `operating-briefs/reflections/${dateKey}-receipt-reflection-digest.md`,
+    generatedAt: generatedAt.toISOString(),
+    markdown,
+    metrics: {
+      recordsReviewed: entries.length,
+      receipts: entriesWithReceipts.length,
+      approvals: approvalEntries.length,
+      blockers: blockerEntries.length,
+      followUps: followUpEntries.length,
     },
     sourceRecords,
   };

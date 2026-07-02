@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWeeklyOperatingBrief } from "@/lib/operating-views";
+import { buildReceiptReflectionDigest, buildWeeklyOperatingBrief } from "@/lib/operating-views";
 import type { AgentProjectItem, AgentWorkItem, WorkflowRunItem, WorkflowTemplateItem } from "@/lib/types";
 
 const baseWork = {
@@ -134,5 +134,77 @@ describe("operating-views", () => {
     expect(brief.markdown).toContain("Publish distribution page");
     expect(brief.markdown).toContain("## Recent Receipts");
     expect(brief.sourceRecords).toEqual(expect.arrayContaining(["task-approval", "task-blocked", "run-1"]));
+  });
+
+  it("builds a receipt reflection digest from work receipts and workflow run receipts", () => {
+    const workItems: AgentWorkItem[] = [
+      {
+        ...baseWork,
+        id: "task-approval",
+        title: "Review homepage proof section",
+        status: "Needs approval",
+        stage: "Review",
+        priority: "High",
+        current_actor: "Adam",
+        approval_needed: "Approve proof section before publishing.",
+        next_step: "Next step: Adam approval.",
+        latest_receipt: "Summary: Proof section is ready. Approval needed before publish.",
+      },
+      {
+        ...baseWork,
+        id: "task-blocked",
+        title: "Publish distribution page",
+        status: "Blocked",
+        stage: "Doing",
+        priority: "Critical",
+        current_actor: "Codex",
+        latest_receipt: "Summary: Publish failed because the DNS path is blocked.",
+      },
+    ];
+    const workflowRuns: WorkflowRunItem[] = [
+      {
+        id: "run-1",
+        name: "GZS Expertise Page Build",
+        status: "In progress",
+        workflow_record_id: "workflow-1",
+        task_id: "task-approval",
+        biz_ops_id: "project-1",
+        entity_scope: "GenZen Solutions",
+        owner_role: "Distribution Operator",
+        actor: "Steve",
+        trigger_source: "ui",
+        current_step: "Current step: Draft introduction.",
+        source_documents: ["1600"],
+        source_records: "task-approval",
+        context: null,
+        receipt: "Actions taken: Drafted intro. Follow up: attach final screenshot.",
+        started_at: "2026-07-01T12:00:00.000Z",
+        completed_at: null,
+        body_preview: "",
+        updated_at: "2026-07-01T13:00:00.000Z",
+      },
+    ];
+
+    const digest = buildReceiptReflectionDigest({
+      workItems,
+      workflowRuns,
+      generatedAt: new Date("2026-07-02T08:00:00.000Z"),
+    });
+
+    expect(digest.title).toBe("Receipt Reflection Digest - 2026-07-02");
+    expect(digest.sourcePath).toBe("operating-briefs/reflections/2026-07-02-receipt-reflection-digest.md");
+    expect(digest.metrics).toMatchObject({
+      recordsReviewed: 3,
+      receipts: 3,
+      approvals: 1,
+      blockers: 1,
+      followUps: 3,
+    });
+    expect(digest.markdown).toContain("## Approval Memory");
+    expect(digest.markdown).toContain("Review homepage proof section");
+    expect(digest.markdown).toContain("## Blocker Memory");
+    expect(digest.markdown).toContain("Publish distribution page");
+    expect(digest.markdown).toContain("## Follow-Up Signals");
+    expect(digest.sourceRecords).toEqual(expect.arrayContaining(["task-approval", "task-blocked", "run-1"]));
   });
 });

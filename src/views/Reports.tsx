@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
+  History,
   FileText,
   FolderOpen,
   FolderPlus,
@@ -39,7 +40,12 @@ import {
   updateVaultDocumentContent,
   updateVaultFileContent,
 } from "@/lib/data";
-import { buildWeeklyOperatingBrief, type WeeklyOperatingBrief } from "@/lib/operating-views";
+import {
+  buildReceiptReflectionDigest,
+  buildWeeklyOperatingBrief,
+  type ReceiptReflectionDigest,
+  type WeeklyOperatingBrief,
+} from "@/lib/operating-views";
 import type { Investigation, Project, VaultDocument, VaultFile, WorkspaceNodeSummary } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -54,6 +60,7 @@ type Selection =
   | null;
 
 type ReportSaveStatus = "idle" | "dirty" | "saving" | "error";
+type OperatingReportMode = "weekly" | "reflection";
 
 type PathTreeNode =
   | {
@@ -94,6 +101,8 @@ export function ReportsView() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
   const [isSavingBrief, setIsSavingBrief] = useState(false);
+  const [isSavingReflectionDigest, setIsSavingReflectionDigest] = useState(false);
+  const [reportMode, setReportMode] = useState<OperatingReportMode>("weekly");
   const { isCramped } = useWindowSize();
   const latestFileContentRef = useRef<string | null>(null);
   const hydratedSelectionKeyRef = useRef<string | null>(null);
@@ -142,12 +151,12 @@ export function ReportsView() {
     queryFn: listInvestigations,
   });
   const {
-    data: weeklyBrief,
-    isLoading: loadingWeeklyBrief,
-    isFetching: fetchingWeeklyBrief,
-    refetch: refetchWeeklyBrief,
+    data: operatingReports,
+    isLoading: loadingOperatingReports,
+    isFetching: fetchingOperatingReports,
+    refetch: refetchOperatingReports,
   } = useQuery({
-    queryKey: ["reports", "weekly-operating-brief"],
+    queryKey: ["reports", "operating-reports"],
     queryFn: async () => {
       const [agentProjects, agentWork, workflows, workflowRuns] = await Promise.all([
         listAgentProjects({ includeDone: false, limit: 120 }),
@@ -155,15 +164,25 @@ export function ReportsView() {
         listWorkflows({ includeInactive: false, limit: 120 }),
         listWorkflowRuns({ includeCompleted: false, limit: 120 }),
       ]);
-      return buildWeeklyOperatingBrief({
-        projects: agentProjects,
-        workItems: agentWork,
-        workflows,
-        workflowRuns,
-      });
+      return {
+        weeklyBrief: buildWeeklyOperatingBrief({
+          projects: agentProjects,
+          workItems: agentWork,
+          workflows,
+          workflowRuns,
+        }),
+        reflectionDigest: buildReceiptReflectionDigest({
+          workItems: agentWork,
+          workflowRuns,
+        }),
+      };
     },
     refetchInterval: 60_000,
   });
+  const weeklyBrief = operatingReports?.weeklyBrief ?? null;
+  const reflectionDigest = operatingReports?.reflectionDigest ?? null;
+  const activeOperatingReport = reportMode === "weekly" ? weeklyBrief : reflectionDigest;
+  const activeOperatingReportSaving = reportMode === "weekly" ? isSavingBrief : isSavingReflectionDigest;
 
   const isLoading = loadingDocs || loadingFiles || loadingWorkspace;
 
@@ -464,6 +483,53 @@ export function ReportsView() {
     }
   }
 
+  async function handleSaveReflectionDigest(digest: ReceiptReflectionDigest) {
+    if (isSavingReflectionDigest) return;
+    try {
+      setIsSavingReflectionDigest(true);
+      const existing = vaultDocs.find((doc) => doc.source_path === digest.sourcePath);
+      if (existing) {
+        const updated = await updateVaultDocumentContent(existing.id, digest.markdown);
+        queryClient.setQueryData(["vault-document", existing.id], updated);
+        await queryClient.invalidateQueries({ queryKey: ["vault-documents"] });
+        setSelection({ kind: "doc", id: existing.id });
+        toast.success("Reflection digest updated");
+        return;
+      }
+
+      const created = await createVaultDocument({
+        title: digest.title,
+        sourcePath: digest.sourcePath,
+        content: digest.markdown,
+        documentType: "operations",
+        domain: "internal",
+        metadata: {
+          generated_at: digest.generatedAt,
+          source: "intellizen_reports_receipt_reflection_digest",
+          object_type: "receipt_reflection_digest",
+          source_records: digest.sourceRecords,
+          metrics: digest.metrics,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["vault-documents"] });
+      queryClient.setQueryData(["vault-document", created.id], created);
+      setSelection({ kind: "doc", id: created.id });
+      toast.success("Reflection digest saved");
+    } catch (error) {
+      toastError("Couldn't save reflection digest", error);
+    } finally {
+      setIsSavingReflectionDigest(false);
+    }
+  }
+
+  function handleSaveOperatingReport(report: WeeklyOperatingBrief | ReceiptReflectionDigest) {
+    if (reportMode === "weekly") {
+      void handleSaveWeeklyBrief(report as WeeklyOperatingBrief);
+      return;
+    }
+    void handleSaveReflectionDigest(report as ReceiptReflectionDigest);
+  }
+
   return (
     <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--base)]">
       <aside
@@ -709,13 +775,15 @@ export function ReportsView() {
               ]}
             />
           ) : (
-            <WeeklyOperatingBriefPanel
-              brief={weeklyBrief ?? null}
-              loading={loadingWeeklyBrief}
-              fetching={fetchingWeeklyBrief}
-              saving={isSavingBrief}
-              onRefresh={() => void refetchWeeklyBrief()}
-              onSave={(brief) => void handleSaveWeeklyBrief(brief)}
+            <OperatingReportPanel
+              report={activeOperatingReport}
+              mode={reportMode}
+              loading={loadingOperatingReports}
+              fetching={fetchingOperatingReports}
+              saving={activeOperatingReportSaving}
+              onModeChange={setReportMode}
+              onRefresh={() => void refetchOperatingReports()}
+              onSave={handleSaveOperatingReport}
             />
           )}
         </div>
@@ -724,36 +792,67 @@ export function ReportsView() {
   );
 }
 
-function WeeklyOperatingBriefPanel({
-  brief,
+function OperatingReportPanel({
+  report,
+  mode,
   loading,
   fetching,
   saving,
+  onModeChange,
   onRefresh,
   onSave,
 }: {
-  brief: WeeklyOperatingBrief | null;
+  report: WeeklyOperatingBrief | ReceiptReflectionDigest | null;
+  mode: OperatingReportMode;
   loading: boolean;
   fetching: boolean;
   saving: boolean;
+  onModeChange: (mode: OperatingReportMode) => void;
   onRefresh: () => void;
-  onSave: (brief: WeeklyOperatingBrief) => void;
+  onSave: (report: WeeklyOperatingBrief | ReceiptReflectionDigest) => void;
 }) {
+  const isWeekly = mode === "weekly";
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 px-5 py-6 lg:px-10 lg:py-8">
       <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
-            Weekly operating brief
+            {isWeekly ? "Weekly operating brief" : "Receipt reflection digest"}
           </p>
           <h1 className="mt-1 text-[24px] font-semibold leading-tight text-[var(--text)]">
-            {brief?.title ?? "Weekly Operating Brief"}
+            {report?.title ?? (isWeekly ? "Weekly Operating Brief" : "Receipt Reflection Digest")}
           </h1>
           <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--subtext-0)]">
-            Live workspace state, workflow runs, approval gates, blockers, receipts, and source records.
+            {isWeekly
+              ? "Live workspace state, workflow runs, approval gates, blockers, receipts, and source records."
+              : "Durable memory from current receipts, approval gates, blocker records, and follow-up signals."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <div className="flex h-9 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)]">
+            <button
+              type="button"
+              onClick={() => onModeChange("weekly")}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 text-[12px] transition-colors",
+                isWeekly ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--subtext-1)] hover:text-[var(--text)]",
+              )}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Weekly
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange("reflection")}
+              className={cn(
+                "inline-flex items-center gap-1.5 border-l border-[var(--border)] px-3 text-[12px] transition-colors",
+                !isWeekly ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--subtext-1)] hover:text-[var(--text)]",
+              )}
+            >
+              <History className="h-3.5 w-3.5" />
+              Reflection
+            </button>
+          </div>
           <button
             type="button"
             onClick={onRefresh}
@@ -765,8 +864,8 @@ function WeeklyOperatingBriefPanel({
           </button>
           <button
             type="button"
-            onClick={() => brief && onSave(brief)}
-            disabled={!brief || saving}
+            onClick={() => report && onSave(report)}
+            disabled={!report || saving}
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-[12px] font-medium text-[var(--crust)] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-3.5 w-3.5" />
@@ -786,31 +885,57 @@ function WeeklyOperatingBriefPanel({
         <div className="flex min-h-[320px] items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
           <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
         </div>
-      ) : brief ? (
+      ) : report ? (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <BriefMetric label="Open work" value={brief.metrics.openWork} />
-            <BriefMetric label="Approvals" value={brief.metrics.approvals} tone="warning" />
-            <BriefMetric label="Blocked" value={brief.metrics.blocked} tone="danger" />
-            <BriefMetric label="Runs" value={brief.metrics.activeRuns} tone="success" />
-            <BriefMetric label="Workflows" value={brief.metrics.activeWorkflows} />
-          </div>
+          <OperatingReportMetrics report={report} mode={mode} />
 
           <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
             <div className="mb-4 flex flex-col gap-1 border-b border-[var(--border)] pb-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Preview
               </span>
-              <span className="font-mono text-[10px] text-[var(--overlay-1)]">{brief.sourceRecords.length} source records</span>
+              <span className="font-mono text-[10px] text-[var(--overlay-1)]">{report.sourceRecords.length} source records</span>
             </div>
-            <MarkdownBody content={brief.markdown} />
+            <MarkdownBody content={report.markdown} />
           </div>
         </>
       ) : (
         <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-10 text-center text-[13px] text-[var(--subtext-0)]">
-          Operating brief unavailable.
+          Operating report unavailable.
         </div>
       )}
+    </div>
+  );
+}
+
+function OperatingReportMetrics({
+  report,
+  mode,
+}: {
+  report: WeeklyOperatingBrief | ReceiptReflectionDigest;
+  mode: OperatingReportMode;
+}) {
+  if (mode === "weekly") {
+    const brief = report as WeeklyOperatingBrief;
+    return (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <BriefMetric label="Open work" value={brief.metrics.openWork} />
+        <BriefMetric label="Approvals" value={brief.metrics.approvals} tone="warning" />
+        <BriefMetric label="Blocked" value={brief.metrics.blocked} tone="danger" />
+        <BriefMetric label="Runs" value={brief.metrics.activeRuns} tone="success" />
+        <BriefMetric label="Workflows" value={brief.metrics.activeWorkflows} />
+      </div>
+    );
+  }
+
+  const digest = report as ReceiptReflectionDigest;
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <BriefMetric label="Reviewed" value={digest.metrics.recordsReviewed} />
+      <BriefMetric label="Receipts" value={digest.metrics.receipts} tone="success" />
+      <BriefMetric label="Approvals" value={digest.metrics.approvals} tone="warning" />
+      <BriefMetric label="Blocked" value={digest.metrics.blockers} tone="danger" />
+      <BriefMetric label="Follow-ups" value={digest.metrics.followUps} />
     </div>
   );
 }
