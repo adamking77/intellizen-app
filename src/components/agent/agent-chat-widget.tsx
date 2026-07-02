@@ -12,7 +12,7 @@ export function AgentChatWidget({ widget }: { widget: AgentChatWidgetModel }) {
   return (
     <div className="mt-1.5 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)]">
       {widget.title ? (
-        <div className="border-b border-[var(--border-subtle)] px-2 py-1 font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">
+        <div className="border-b border-[var(--border-subtle)] px-2 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {widget.title}
         </div>
       ) : null}
@@ -44,7 +44,7 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
               <th
                 key={column.key}
                 className={cn(
-                  "px-2 py-1 font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]",
+                  "px-2 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]",
                   column.align === "right" ? "text-right" : "text-left",
                 )}
               >

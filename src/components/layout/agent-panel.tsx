@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { parseAgentChatResult, type AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
 
 import {
   createVoiceDraftTask,
-  GENZEN_WORKSPACE_DATABASE_IDS,
   listFionaInboxItems,
   listWorkflowRuns,
   listWorkflows,
   OPERATOR_ACTOR,
-  WORKFLOW_RUN_VIEW_IDS,
 } from "@/lib/data";
 import type { FionaInboxItem, WorkflowRunItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
@@ -21,7 +18,8 @@ import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { sendToAgentChat } from "@/services/agent";
+import { checkHermesGateway, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat } from "@/services/agent";
+// Run/approval surfaces live in Databases-native views; the panel is chat only.
 import {
   getPreferredVoiceInputProvider,
   getPreferredVoiceOutputProvider,
@@ -35,10 +33,6 @@ import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice"
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
-const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
-
-// Run/approval actions live in the Databases-native Workflow Run views and
-// record peek panels; the panel only surfaces counts and deep links.
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -130,13 +124,6 @@ function readChatHistory() {
     return [];
   }
 }
-
-function workflowRunsUrl(viewId: string) {
-  return `/databases?database=${WORKFLOW_RUNS_DATABASE_ID}&view=${viewId}`;
-}
-
-const RUN_BOARD_URL = workflowRunsUrl(WORKFLOW_RUN_VIEW_IDS.runBoard);
-const APPROVAL_QUEUE_URL = workflowRunsUrl(WORKFLOW_RUN_VIEW_IDS.approvalQueue);
 
 function formatRunTime(value: string | null) {
   if (!value) return "No timestamp";
@@ -245,6 +232,22 @@ export function AgentPanel() {
     staleTime: 20_000,
   });
   const queryClient = useQueryClient();
+  // Direct Hermes connection: the gateway preflight is the health check
+  // (that's the transport chat uses); the dashboard adds the profile catalog.
+  const gatewayQuery = useQuery({
+    queryKey: ["hermes-gateway-health"],
+    queryFn: checkHermesGateway,
+    refetchInterval: expanded ? 60_000 : false,
+    staleTime: 30_000,
+    enabled: expanded,
+  });
+  const profilesQuery = useQuery({
+    queryKey: ["hermes-profiles"],
+    queryFn: fetchHermesProfiles,
+    staleTime: 60_000,
+    retry: 1,
+    enabled: expanded,
+  });
   const agentChatQuery = useQuery({
     queryKey: ["agent-panel", "chat-receipts"],
     queryFn: () => listFionaInboxItems({ limit: 15 }),
@@ -287,17 +290,31 @@ export function AgentPanel() {
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
   const canListen = Boolean(voiceInputProvider);
   const canSpeak = Boolean(voiceOutputProvider);
+  const hermesConnected = gatewayQuery.data === true;
+  // Profile catalog from the dashboard when it's up; otherwise the running
+  // gateway's own profile. Static actors are the fully-offline fallback
+  // (messages then queue via the durable inbox).
+  const hermesProfiles = useMemo(() => {
+    if (profilesQuery.isSuccess && (profilesQuery.data?.length ?? 0) > 0) return profilesQuery.data ?? [];
+    if (hermesConnected) {
+      return [{
+        name: DEFAULT_HERMES_PROFILE,
+        isDefault: true,
+        model: null,
+        provider: null,
+        gatewayRunning: true,
+        description: "Running gateway profile",
+      }];
+    }
+    return [];
+  }, [profilesQuery.isSuccess, profilesQuery.data, hermesConnected]);
   const agentOptions = useMemo(() => {
-    const values = [
-      "Fiona/Hermes",
-      "Steve/Claude",
-      "Keel/Codex",
-      ...workflows.map((workflow) => workflow.default_actor),
-      ...workflows.map((workflow) => workflow.owner_role),
-    ];
-    return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
-  }, [workflows]);
-  const targetAgent = selectedAgent || agentOptions[0] || "Fiona/Hermes";
+    if (hermesProfiles.length > 0) return hermesProfiles.map((profile) => profile.name);
+    return ["Fiona/Hermes", "Steve/Claude", "Keel/Codex"];
+  }, [hermesProfiles]);
+  const defaultAgent = hermesProfiles.find((profile) => profile.isDefault)?.name ?? hermesProfiles[0]?.name ?? "Fiona/Hermes";
+  const targetAgent = selectedAgent && agentOptions.includes(selectedAgent) ? selectedAgent : defaultAgent;
+  const targetProfile = hermesConnected ? hermesProfiles.find((profile) => profile.name === targetAgent) ?? null : null;
 
   const visibleRuns = useMemo(() => {
     const approvalIds = new Set(approvals.map((run) => run.id));
@@ -394,6 +411,7 @@ export function AgentPanel() {
       const result = await sendToAgentChat({
         message,
         targetAgent,
+        profile: targetProfile?.name ?? null,
         context: {
           type: "agent_panel_chat",
           route: typeof window === "undefined" ? undefined : window.location.pathname,
@@ -648,7 +666,7 @@ export function AgentPanel() {
           onClick={toggleCollapsed}
           aria-label="Expand agent panel"
           title="Expand agent panel"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
@@ -677,7 +695,17 @@ export function AgentPanel() {
           </span>
           <div className="min-w-0">
             <p className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">Agent Panel</p>
-            <p className="truncate font-ui text-[11px] text-[var(--overlay-1)]">{targetAgent}</p>
+            <p className="flex items-center gap-1.5 truncate font-ui text-[11px] text-[var(--overlay-1)]">
+              <span
+                className={cn(
+                  "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+                  hermesConnected ? "bg-[var(--success)]" : "bg-[var(--overlay-0)]",
+                )}
+              />
+              {hermesConnected
+                ? `Hermes · ${targetProfile?.model ?? targetAgent}`
+                : "Hermes offline · queuing via inbox"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -686,7 +714,7 @@ export function AgentPanel() {
             onClick={refresh}
             aria-label="Refresh agent panel"
             title="Refresh"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </button>
@@ -695,7 +723,7 @@ export function AgentPanel() {
             onClick={toggleCollapsed}
             aria-label="Collapse agent panel"
             title="Collapse agent panel"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
             <PanelRightClose className="h-4 w-4" />
           </button>
@@ -721,7 +749,7 @@ export function AgentPanel() {
             </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-3">
             {chatTurns.map((turn, index) => {
               const previous = chatTurns[index - 1];
               const gapMs = previous ? new Date(turn.ts).getTime() - new Date(previous.ts).getTime() : Infinity;
@@ -730,30 +758,30 @@ export function AgentPanel() {
               return (
                 <div key={turn.id}>
                   {showDivider ? (
-                    <p className="py-2 text-center font-mono text-[9.5px] text-[var(--overlay-1)]">{formatRunTime(turn.ts)}</p>
+                    <p className="py-1.5 text-center font-mono text-[9.5px] text-[var(--overlay-1)]">{formatRunTime(turn.ts)}</p>
                   ) : null}
+                  {/* VS Code-style turns: full-width blocks, speaker label, no bubbles. */}
                   {turn.role === "user" ? (
-                    <div className="flex flex-col items-end">
-                      <div className="max-w-[85%] rounded-lg rounded-br-sm border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1.5">
-                        <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
-                      </div>
+                    <div className="rounded-md bg-[var(--surface-wash)] px-2.5 py-2">
+                      {speakerChanged ? (
+                        <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--subtext-0)]">You</span>
+                      ) : null}
+                      <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
                       {turn.status === "queued" ? (
-                        <p className="mt-0.5 font-ui text-[10px] italic text-[var(--overlay-1)]">{turn.speaker === "You" ? "Waiting for agent…" : turn.detail}</p>
+                        <p className="mt-1 font-ui text-[10px] italic text-[var(--overlay-1)]">Waiting for agent…</p>
                       ) : turn.status === "failed" ? (
-                        <p className="mt-0.5 font-ui text-[10px] text-[var(--danger)]">Failed — {turn.detail}</p>
+                        <p className="mt-1 font-ui text-[10px] text-[var(--danger)]">Failed — {turn.detail}</p>
                       ) : null}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-start">
+                    <div className="px-2.5">
                       {speakerChanged ? (
-                        <span className="mb-0.5 font-ui text-[10px] font-medium text-[var(--overlay-1)]">{turn.speaker}</span>
+                        <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{turn.speaker}</span>
                       ) : null}
-                      <div className="max-w-[92%]">
-                        {turn.text ? (
-                          <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
-                        ) : null}
-                        {turn.widget ? <AgentChatWidget widget={turn.widget} /> : null}
-                      </div>
+                      {turn.text ? (
+                        <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
+                      ) : null}
+                      {turn.widget ? <AgentChatWidget widget={turn.widget} /> : null}
                     </div>
                   )}
                 </div>
@@ -761,21 +789,6 @@ export function AgentPanel() {
             })}
           </div>
         )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--border-subtle)] px-4 py-1.5">
-        <Link
-          to={APPROVAL_QUEUE_URL}
-          className={cn(
-            "font-ui text-[10.5px] transition-colors hover:text-[var(--text)]",
-            approvals.length > 0 ? "text-[var(--caution)]" : "text-[var(--overlay-1)]",
-          )}
-        >
-          Approvals <span className="font-mono">{approvals.length}</span>
-        </Link>
-        <Link to={RUN_BOARD_URL} className="font-ui text-[10.5px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]">
-          Active runs <span className="font-mono">{visibleRuns.length}</span>
-        </Link>
       </div>
 
       <div className="shrink-0 border-t border-[var(--border)] px-3 pb-3 pt-2">
@@ -801,7 +814,7 @@ export function AgentPanel() {
                       type="button"
                       disabled={isStartingWorkflow}
                       onClick={() => void handleStartWorkflow(workflow.workflow_id)}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                     >
                       <Play className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
                       <span className="truncate">{workflow.name}</span>
@@ -816,7 +829,7 @@ export function AgentPanel() {
                   type="button"
                   disabled={!chatDraft.trim() || isCreatingVoiceTask}
                   onClick={() => void createTaskFromComposer()}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   <Plus className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
                   {isCreatingVoiceTask ? "Creating task…" : "Create task from message"}
@@ -828,7 +841,7 @@ export function AgentPanel() {
                     setPlusMenuOpen(false);
                     void speakBrief();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   <Volume2 className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
                   Speak status brief
@@ -863,7 +876,7 @@ export function AgentPanel() {
               aria-label="Workflows and actions"
               title="Workflows and actions"
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
                 plusMenuOpen
                   ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                   : "text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -891,7 +904,7 @@ export function AgentPanel() {
               aria-label={isListening ? "Stop dictation" : "Dictate"}
               title={isListening ? "Stop dictation" : "Dictate"}
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40",
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
                 isListening
                   ? "bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]"
                   : "text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -916,7 +929,7 @@ export function AgentPanel() {
               disabled={!chatDraft.trim() || isSendingChat}
               aria-label="Send message"
               title="Send (Enter)"
-              className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40"
+              className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
             >
               {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             </button>

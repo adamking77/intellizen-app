@@ -998,6 +998,11 @@ pre {
 }
 
 /* ─── Buttons ───────────────────────────────────────────── */
+.db-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
 .db-btn {
   display: inline-flex;
   align-items: center;

@@ -802,7 +802,7 @@ export function ReportsView() {
                     setReportMode("weekly");
                     setShowOperatingReport(true);
                   }}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   Generate weekly brief
                 </button>
@@ -812,7 +812,7 @@ export function ReportsView() {
                     setReportMode("reflection");
                     setShowOperatingReport(true);
                   }}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   Generate reflection digest
                 </button>
@@ -859,7 +859,7 @@ function OperatingReportPanel({
               type="button"
               onClick={onClose}
               title="Close report"
-              className="inline-flex h-5 items-center rounded border border-[var(--border)] px-1.5 font-ui text-[10px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-5 items-center rounded border border-[var(--border)] px-1.5 font-ui text-[10px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
             >
               Close
             </button>

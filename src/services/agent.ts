@@ -20,6 +20,8 @@ export interface AgentWorkflowInput {
 export interface AgentChatInput {
   message: string;
   targetAgent: string;
+  /** Hermes profile to route through (profile-scoped webhook). */
+  profile?: string | null;
   context: AgentContext;
   submit?: boolean;
   priority?: "low" | "normal" | "high" | "urgent";
@@ -42,6 +44,59 @@ const hermesGatewayUrl =
   import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") || null;
 const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
 const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
+const hermesDashboardUrl =
+  import.meta.env.VITE_HERMES_VOICE_URL?.replace(/\/$/, "") || null;
+
+export interface HermesProfile {
+  name: string;
+  isDefault: boolean;
+  model: string | null;
+  provider: string | null;
+  gatewayRunning: boolean;
+  description: string;
+}
+
+// The webhook gateway currently running is Fiona's profile-scoped instance;
+// used as the known profile when the dashboard (profile catalog) is offline.
+export const DEFAULT_HERMES_PROFILE = "fiona";
+
+/**
+ * Health-check the Hermes webhook gateway — the transport chat actually
+ * uses. A 2xx on the CORS preflight means direct dispatch will succeed.
+ */
+export async function checkHermesGateway(): Promise<boolean> {
+  if (!hermesGatewayUrl) return false;
+  try {
+    const res = await fetch(`${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`, {
+      method: "OPTIONS",
+      signal: AbortSignal.timeout(2_500),
+    });
+    return res.ok || res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List Hermes profiles from the local dashboard. Throwing (unreachable or
+ * unconfigured) means the panel falls back to the running gateway profile.
+ */
+export async function fetchHermesProfiles(): Promise<HermesProfile[]> {
+  if (!hermesDashboardUrl) throw new Error("Hermes dashboard URL is not configured.");
+  const res = await fetch(`${hermesDashboardUrl}/api/profiles`, { credentials: "include" });
+  if (!res.ok) throw new Error(`Hermes profiles failed (${res.status})`);
+  const payload = (await res.json()) as { profiles?: Array<Record<string, unknown>> };
+  return (payload.profiles ?? [])
+    .filter((profile) => typeof profile.name === "string" && profile.name)
+    .map((profile) => ({
+      name: profile.name as string,
+      isDefault: profile.is_default === true,
+      model: typeof profile.model === "string" ? profile.model : null,
+      provider: typeof profile.provider === "string" ? profile.provider : null,
+      gatewayRunning: profile.gateway_running === true,
+      description: typeof profile.description === "string" ? profile.description : "",
+    }));
+}
 
 function randomDeliveryId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -82,6 +137,7 @@ function agentChatPayload(input: AgentChatInput & { message: string }) {
     kind: "chat_message",
     action: "send_message",
     target_agent: input.targetAgent,
+    profile: input.profile ?? null,
     message: input.message,
     submit: input.submit ?? true,
     context: input.context,
@@ -115,6 +171,7 @@ async function enqueueFionaInbox(input: {
 async function submitHermesPayload(input: {
   event: "intellizen.workflow" | "intellizen.chat";
   payload: Record<string, unknown>;
+  profile?: string | null;
 }) {
   if (!hermesGatewayUrl) {
     throw new Error("Hermes gateway URL is not configured.");
@@ -130,8 +187,13 @@ async function submitHermesPayload(input: {
     headers["X-Hub-Signature-256"] = `sha256=${await hmacSha256Hex(hermesWebhookSecret, body)}`;
   }
 
+  // Profile-scoped route when a Hermes profile is selected; default route
+  // otherwise. Both are supported by the Hermes webhook adapter.
+  const routePath = input.profile
+    ? `/p/${encodeURIComponent(input.profile)}/webhooks/${encodeURIComponent(hermesWebhookName)}`
+    : `/webhooks/${encodeURIComponent(hermesWebhookName)}`;
   const res = await fetch(
-    `${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`,
+    `${hermesGatewayUrl}${routePath}`,
     {
       method: "POST",
       headers,
@@ -185,7 +247,7 @@ export async function sendToAgentChat(input: AgentChatInput): Promise<AgentSubmi
 
   const payload = agentChatPayload({ ...input, message });
   try {
-    const result = await submitHermesPayload({ event: "intellizen.chat", payload });
+    const result = await submitHermesPayload({ event: "intellizen.chat", payload, profile: input.profile });
     return {
       status: "submitted",
       messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
