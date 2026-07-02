@@ -4,8 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { Bot, CheckCircle2, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { createVoiceDraftTask, GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, startWorkflow, updateWorkflowRun } from "@/lib/data";
-import type { WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
+import {
+  createVoiceDraftTask,
+  GENZEN_WORKSPACE_DATABASE_IDS,
+  listFionaInboxItems,
+  listWorkflowRuns,
+  listWorkflows,
+  startWorkflow,
+  updateWorkflowRun,
+} from "@/lib/data";
+import type { FionaInboxItem, WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -20,6 +28,7 @@ import {
 import type { VoiceProviderId } from "@/services/voice";
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
+const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
 const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
 const RUN_BOARD_VIEW_ID = "c2000000-0000-0000-0000-000000000102";
 const APPROVAL_QUEUE_VIEW_ID = "c2000000-0000-0000-0000-000000000103";
@@ -34,6 +43,12 @@ interface AgentChatEntry {
   status: ChatEntryStatus;
   detail: string;
   createdAt: string;
+}
+
+interface ChatPayloadContext {
+  kind?: unknown;
+  target_agent?: unknown;
+  message?: unknown;
 }
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
@@ -67,6 +82,27 @@ interface VoiceWindow extends Window {
 function readCollapsed() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(STORAGE_KEY) === "1";
+}
+
+function readChatHistory() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is AgentChatEntry =>
+        Boolean(entry) &&
+        typeof entry.id === "string" &&
+        typeof entry.message === "string" &&
+        typeof entry.targetAgent === "string" &&
+        typeof entry.status === "string" &&
+        typeof entry.detail === "string" &&
+        typeof entry.createdAt === "string",
+      )
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
 }
 
 function workflowRunsUrl(viewId: string) {
@@ -206,6 +242,30 @@ function buildVoiceBrief(approvals: WorkflowRunItem[], runs: WorkflowRunItem[]) 
   return lines.join(" ");
 }
 
+function isChatInboxItem(item: FionaInboxItem) {
+  const context = item.context as ChatPayloadContext | null;
+  return context?.kind === "chat_message" || item.task.startsWith("Direct chat message for ");
+}
+
+function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
+  const context = item.context as ChatPayloadContext | null;
+  const message = typeof context?.message === "string" ? context.message : item.task;
+  const targetAgent =
+    typeof context?.target_agent === "string"
+      ? context.target_agent
+      : item.task.replace(/^Direct chat message for\s+/, "").split(":")[0]?.trim() || "Fiona/Hermes";
+  const status: ChatEntryStatus =
+    item.status === "blocked" ? "failed" : item.status === "pending" || item.status === "in_progress" ? "queued" : "submitted";
+  return {
+    id: item.id,
+    message,
+    targetAgent,
+    status,
+    detail: item.status,
+    createdAt: item.updated_at ?? item.created_at,
+  };
+}
+
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
@@ -218,7 +278,7 @@ export function AgentPanel() {
   const [chatDraft, setChatDraft] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
-  const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>([]);
+  const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -242,13 +302,19 @@ export function AgentPanel() {
     refetchInterval: 60_000,
     staleTime: 20_000,
   });
+  const agentChatQuery = useQuery({
+    queryKey: ["agent-panel", "chat-receipts"],
+    queryFn: () => listFionaInboxItems({ limit: 8 }),
+    refetchInterval: 60_000,
+    staleTime: 20_000,
+  });
 
   const activeRuns = activeRunsQuery.data ?? [];
   const approvals = approvalsQuery.data ?? [];
   const workflows = workflowsQuery.data ?? [];
   const selectedWorkflow = workflows.find((workflow) => workflow.workflow_id === selectedWorkflowId) ?? workflows[0] ?? null;
   const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
-  const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching;
+  const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching || agentChatQuery.isFetching;
   const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
   const voiceProviders = getVoiceProviderStatus();
   const voiceInputProvider = getPreferredVoiceInputProvider();
@@ -276,6 +342,19 @@ export function AgentPanel() {
     const approvalIds = new Set(approvals.map((run) => run.id));
     return activeRuns.filter((run) => !approvalIds.has(run.id)).slice(0, 5);
   }, [activeRuns, approvals]);
+  const routedChatEntries = useMemo(
+    () => (agentChatQuery.data ?? []).filter(isChatInboxItem).map(inboxItemToChatEntry),
+    [agentChatQuery.data],
+  );
+  const visibleChatEntries = useMemo(() => {
+    const entriesById = new Map<string, AgentChatEntry>();
+    for (const entry of [...chatEntries, ...routedChatEntries]) {
+      entriesById.set(entry.id, entry);
+    }
+    return Array.from(entriesById.values())
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .slice(0, 4);
+  }, [chatEntries, routedChatEntries]);
 
   useEffect(() => {
     return () => {
@@ -285,6 +364,14 @@ export function AgentPanel() {
       if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatEntries.slice(0, 8)));
+    } catch {
+      /* ignore */
+    }
+  }, [chatEntries]);
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -353,6 +440,15 @@ export function AgentPanel() {
             selected_workflow_name: selectedWorkflow?.name ?? null,
             active_run_count: visibleRuns.length,
             pending_approval_count: approvals.length,
+            voice_input_provider: voiceInputProvider?.id ?? null,
+            voice_output_provider: voiceOutputProvider?.id ?? null,
+            voice_transcript: voiceDraft.replace(/\s+\[[^\]]+\]$/, "").trim() || null,
+            voice_providers: voiceProviders.map((provider) => ({
+              id: provider.id,
+              configured: provider.configured,
+              can_transcribe: provider.canTranscribe,
+              can_speak: provider.canSpeak,
+            })),
             available_actions: [
               "send_message",
               "start_workflow",
@@ -375,7 +471,7 @@ export function AgentPanel() {
           createdAt: new Date().toISOString(),
         },
         ...current,
-      ].slice(0, 4));
+      ].slice(0, 8));
       setChatDraft("");
       toast.success(status === "submitted" ? "Message sent to agent" : "Message queued for agent", {
         description: result.messageId ?? result.inboxItemId,
@@ -392,7 +488,7 @@ export function AgentPanel() {
           createdAt: new Date().toISOString(),
         },
         ...current,
-      ].slice(0, 4));
+      ].slice(0, 8));
       toastError("Agent chat failed", chatError);
     } finally {
       setIsSendingChat(false);
@@ -738,7 +834,7 @@ export function AgentPanel() {
             />
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="min-w-0 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
-                Sends context for this route
+                Route, workflow, and voice state
               </span>
               <button
                 type="button"
@@ -750,19 +846,20 @@ export function AgentPanel() {
                 Send
               </button>
             </div>
-            {chatEntries.length > 0 ? (
+            {visibleChatEntries.length > 0 ? (
               <div className="mt-2 space-y-1.5 border-t border-[var(--border-subtle)] pt-2">
-                {chatEntries.map((entry) => (
+                {visibleChatEntries.map((entry) => (
                   <div key={entry.id} className="rounded border border-[var(--border-subtle)] px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate font-ui text-[10px] font-medium text-[var(--subtext-0)]">
-                        {entry.status === "submitted" ? "Sent" : entry.status === "queued" ? "Queued" : "Failed"}
+                        {entry.targetAgent} / {entry.status === "submitted" ? "Sent" : entry.status === "queued" ? "Queued" : "Failed"}
                       </span>
                       <span className="shrink-0 font-ui text-[10px] text-[var(--overlay-1)]">
                         {formatRunTime(entry.createdAt)}
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--text)]">{entry.message}</p>
+                    <p className="mt-1 truncate font-mono text-[9.5px] text-[var(--overlay-1)]">{entry.detail}</p>
                   </div>
                 ))}
               </div>

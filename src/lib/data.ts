@@ -277,11 +277,18 @@ export async function getUnreadSignalCount() {
   return count ?? 0;
 }
 
-export async function listFionaInboxItems() {
-  const { data, error } = await supabase
+export async function listFionaInboxItems(input?: { limit?: number; statuses?: string[] }) {
+  let query = supabase
     .schema("comms").from("fiona_inbox")
     .select("id, from_agent, task, context, priority, status, result, created_at, updated_at")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(input?.limit ?? 50);
+
+  if (input?.statuses?.length) {
+    query = query.in("status", input.statuses);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []) as FionaInboxItem[];

@@ -70,7 +70,7 @@ export interface IntelSignal {
   updated_at: string;
 }
 
-export type FionaInboxStatus = "pending" | "in_progress" | "completed" | "failed" | "archived" | string;
+export type FionaInboxStatus = "pending" | "in_progress" | "complete" | "blocked" | string;
 export type FionaInboxPriority = "low" | "normal" | "high" | "urgent" | string;
 
 export interface FionaInboxItem {
