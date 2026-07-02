@@ -66,6 +66,29 @@ export interface ActiveApprovalsView {
   approvals: ActiveApprovalItem[];
 }
 
+export interface RoleWorkloadLane {
+  id: string;
+  label: string;
+  role: string;
+  count: number;
+  highPriority: number;
+  blocked: number;
+  needsApproval: number;
+  work: AgentWorkItem[];
+}
+
+export interface AgentRoleWorkloadView {
+  spec: NativeOperatingViewSpec;
+  metrics: {
+    openWork: number;
+    actors: number;
+    highPriority: number;
+    blocked: number;
+    unassigned: number;
+  };
+  lanes: RoleWorkloadLane[];
+}
+
 export interface WeeklyOperatingBrief {
   title: string;
   sourcePath: string;
@@ -413,6 +436,76 @@ export function buildActiveApprovalsView(input: {
       stale,
     },
     approvals,
+  };
+}
+
+export function buildAgentRoleWorkloadView(input: {
+  workItems: AgentWorkItem[];
+}): AgentRoleWorkloadView {
+  const openWork = input.workItems.filter((item) => item.status !== "Done");
+  const groups = new Map<string, AgentWorkItem[]>();
+
+  for (const item of openWork) {
+    const assignee = Array.isArray(item.assignee) ? item.assignee.join(", ") : item.assignee;
+    const actor = line(item.current_actor ?? assignee ?? item.durable_role ?? item.functional_lane, "Unassigned");
+    const current = groups.get(actor) ?? [];
+    current.push(item);
+    groups.set(actor, current);
+  }
+
+  const lanes = Array.from(groups.entries())
+    .map(([actor, work]) => {
+      const role =
+        work.find((item) => item.durable_role)?.durable_role ??
+        work.find((item) => item.functional_lane)?.functional_lane ??
+        "No role";
+      const sortedWork = work.slice().sort(sortWork);
+      return {
+        id: actor.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unassigned",
+        label: actor,
+        role,
+        count: work.length,
+        highPriority: work.filter((item) => priorityRank(item.priority) >= 3).length,
+        blocked: work.filter((item) => item.status === "Blocked").length,
+        needsApproval: work.filter((item) => item.status === "Needs approval" || Boolean(item.approval_needed)).length,
+        work: sortedWork.slice(0, 4),
+      } satisfies RoleWorkloadLane;
+    })
+    .sort((left, right) => right.highPriority - left.highPriority || right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, 8);
+
+  const sourceRecords = Array.from(new Set(lanes.flatMap((lane) => lane.work.map((item) => item.id))));
+
+  return {
+    spec: {
+      view_id: "ops.agent_role_workload",
+      title: "Agent work by role",
+      entity_scope: "GenZen OS",
+      purpose: "Show who owns visible work, where load is concentrated, and which role lanes need attention.",
+      source_tables: ["workspace.records / Tasks"],
+      source_records: sourceRecords,
+      filters: ["Tasks where status is not Done", "group by current_actor, assignee, durable_role, or functional_lane"],
+      layout: "Home operating snapshot with workload metrics, role lanes, and visible source/policy metadata.",
+      components: ["metrics", "role_lanes", "source_spec"],
+      fields: ["title", "status", "priority", "current_actor", "assignee", "durable_role", "functional_lane", "updated_at"],
+      sort: "high priority desc, lane count desc, title asc",
+      grouping: "current actor / assignee / durable role",
+      actions: ["open Tasks database", "open Agent Work support route"],
+      permissions: ["read workspace.records", "no write path", "no external action"],
+      freshness: "React Query refetches every 60 seconds.",
+      save_policy: "Native typed view spec in code; no generated React or second state store.",
+    },
+    metrics: {
+      openWork: openWork.length,
+      actors: lanes.length,
+      highPriority: openWork.filter((item) => priorityRank(item.priority) >= 3).length,
+      blocked: openWork.filter((item) => item.status === "Blocked").length,
+      unassigned: openWork.filter((item) => {
+        const assignee = Array.isArray(item.assignee) ? item.assignee.join(", ") : item.assignee;
+        return !item.current_actor && !assignee && !item.durable_role && !item.functional_lane;
+      }).length,
+    },
+    lanes,
   };
 }
 

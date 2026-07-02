@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildActiveApprovalsView, buildReceiptReflectionDigest, buildWeeklyOperatingBrief } from "@/lib/operating-views";
+import {
+  buildActiveApprovalsView,
+  buildAgentRoleWorkloadView,
+  buildReceiptReflectionDigest,
+  buildWeeklyOperatingBrief,
+} from "@/lib/operating-views";
 import type { AgentProjectItem, AgentWorkItem, WorkflowRunItem, WorkflowTemplateItem } from "@/lib/types";
 
 const baseWork = {
@@ -274,5 +279,56 @@ describe("operating-views", () => {
     expect(view.approvals[0].id).toBe("task-approval");
     expect(view.approvals.map((item) => item.id)).toEqual(expect.arrayContaining(["task-approval", "task-low", "run-approval"]));
     expect(view.spec.source_records).toEqual(expect.arrayContaining(["task-approval", "task-low", "run-approval"]));
+  });
+
+  it("builds an agent role workload view grouped by actor and role", () => {
+    const workItems: AgentWorkItem[] = [
+      {
+        ...baseWork,
+        id: "task-codex",
+        title: "Build active approvals view",
+        status: "In progress",
+        stage: "Build",
+        priority: "High",
+        current_actor: "Codex",
+        durable_role: "App Builder",
+      },
+      {
+        ...baseWork,
+        id: "task-codex-approval",
+        title: "Review copy",
+        status: "Needs approval",
+        stage: "Review",
+        priority: "Medium",
+        current_actor: "Codex",
+        durable_role: "App Builder",
+      },
+      {
+        ...baseWork,
+        id: "task-unassigned",
+        title: "Triage inbox",
+        status: "Blocked",
+        stage: "Triage",
+        priority: "Critical",
+        current_actor: null,
+        durable_role: null,
+        functional_lane: null,
+      },
+    ];
+
+    const view = buildAgentRoleWorkloadView({ workItems });
+
+    expect(view.spec.view_id).toBe("ops.agent_role_workload");
+    expect(view.metrics).toMatchObject({
+      openWork: 3,
+      actors: 2,
+      highPriority: 2,
+      blocked: 1,
+      unassigned: 1,
+    });
+    expect(view.lanes.map((lane) => lane.label)).toEqual(expect.arrayContaining(["Codex", "Unassigned"]));
+    expect(view.lanes.find((lane) => lane.label === "Codex")).toMatchObject({ count: 2, needsApproval: 1 });
+    expect(view.lanes.find((lane) => lane.label === "Unassigned")).toMatchObject({ count: 1, blocked: 1 });
+    expect(view.spec.source_records).toEqual(expect.arrayContaining(["task-codex", "task-codex-approval", "task-unassigned"]));
   });
 });

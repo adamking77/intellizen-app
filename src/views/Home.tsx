@@ -29,9 +29,11 @@ import {
 } from "@/lib/data";
 import {
   buildActiveApprovalsView,
+  buildAgentRoleWorkloadView,
   buildGzsDistributionHealthView,
   type ActiveApprovalItem,
   type ActiveApprovalsView,
+  type AgentRoleWorkloadView,
   type GzsDistributionHealthView,
 } from "@/lib/operating-views";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
@@ -45,7 +47,7 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Slack: "var(--lavender)",
 };
 
-type OperatingViewMode = "distribution" | "approvals";
+type OperatingViewMode = "distribution" | "approvals" | "roles";
 
 function OperatingMetric({
   label,
@@ -117,10 +119,12 @@ function ApprovalDecisionRow({ item }: { item: ActiveApprovalItem }) {
 function OperatingViewTabs({
   mode,
   approvalsCount,
+  roleCount,
   onChange,
 }: {
   mode: OperatingViewMode;
   approvalsCount: number;
+  roleCount: number;
   onChange: (mode: OperatingViewMode) => void;
 }) {
   return (
@@ -151,6 +155,20 @@ function OperatingViewTabs({
         <CircleAlert className="h-3.5 w-3.5" />
         Approvals
         <span className="font-mono text-[10px] text-current">{approvalsCount}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("roles")}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 font-ui text-[12px] transition-colors",
+          mode === "roles"
+            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+            : "border-[var(--border)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border-strong)] hover:text-[var(--text)]",
+        )}
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Roles
+        <span className="font-mono text-[10px] text-current">{roleCount}</span>
       </button>
     </div>
   );
@@ -378,6 +396,107 @@ function ActiveApprovalsPanel({
   );
 }
 
+function AgentRoleWorkloadPanel({
+  view,
+  isFetching,
+  onRefresh,
+}: {
+  view: AgentRoleWorkloadView;
+  isFetching: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="mb-5 rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
+      <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-label">{view.spec.title}</span>
+            <Badge variant="outline">{view.spec.view_id}</Badge>
+          </div>
+          <p className="mt-1 max-w-3xl font-ui text-[12px] leading-relaxed text-[var(--overlay-1)]">{view.spec.purpose}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onRefresh} disabled={isFetching} className="gap-1.5">
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            Refresh
+          </Button>
+          <Link to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.tasks}`} className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "gap-1.5")}>
+            Tasks
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 2xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-5">
+            <OperatingMetric label="Open work" value={view.metrics.openWork} />
+            <OperatingMetric label="Actors" value={view.metrics.actors} tone="success" />
+            <OperatingMetric label="High priority" value={view.metrics.highPriority} tone="warning" />
+            <OperatingMetric label="Blocked" value={view.metrics.blocked} tone="danger" />
+            <OperatingMetric label="Unassigned" value={view.metrics.unassigned} tone="warning" />
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            {view.lanes.length > 0 ? (
+              view.lanes.map((lane) => (
+                <div key={lane.id} className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-ui text-[12px] font-semibold text-[var(--text)]">{lane.label}</div>
+                      <div className="mt-1 truncate font-ui text-[11px] text-[var(--overlay-1)]">{lane.role}</div>
+                    </div>
+                    <Badge variant={lane.blocked > 0 ? "destructive" : lane.needsApproval > 0 ? "warning" : "outline"}>{lane.count}</Badge>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Badge variant="neutral">{lane.highPriority} high</Badge>
+                    <Badge variant={lane.blocked > 0 ? "destructive" : "secondary"}>{lane.blocked} blocked</Badge>
+                    <Badge variant={lane.needsApproval > 0 ? "warning" : "secondary"}>{lane.needsApproval} approvals</Badge>
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {lane.work.map((item) => (
+                      <p key={item.id} className="line-clamp-2 font-ui text-[12px] leading-snug text-[var(--subtext-0)]">{item.title}</p>
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-4 font-ui text-[12px] text-[var(--overlay-1)]">
+                No active role workload is currently visible.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <aside className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Native view spec</div>
+            <p className="mt-1 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+              {view.spec.entity_scope} · {view.spec.layout}
+            </p>
+          </div>
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Sources</div>
+            <ul className="mt-1 space-y-1 font-ui text-[12px] text-[var(--subtext-0)]">
+              {view.spec.source_tables.map((source) => <li key={source}>{source}</li>)}
+            </ul>
+          </div>
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Policy</div>
+            <ul className="mt-1 space-y-1 font-ui text-[12px] text-[var(--subtext-0)]">
+              {view.spec.permissions.map((permission) => <li key={permission}>{permission}</li>)}
+            </ul>
+          </div>
+          <div>
+            <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Records sampled</div>
+            <p className="mt-1 font-mono text-[11px] text-[var(--overlay-1)]">{view.spec.source_records.length} live records</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 export function HomeView() {
   const navigate = useNavigate();
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
@@ -405,6 +524,7 @@ export function HomeView() {
       return {
         distribution: buildGzsDistributionHealthView({ projects, workItems, workflows, workflowRuns }),
         approvals: buildActiveApprovalsView({ workItems, workflowRuns }),
+        roles: buildAgentRoleWorkloadView({ workItems }),
       };
     },
     refetchInterval: 60_000,
@@ -515,6 +635,7 @@ export function HomeView() {
               <OperatingViewTabs
                 mode={operatingViewMode}
                 approvalsCount={operatingViewQuery.data.approvals.metrics.total}
+                roleCount={operatingViewQuery.data.roles.metrics.actors}
                 onChange={setOperatingViewMode}
               />
               {operatingViewMode === "distribution" ? (
@@ -523,9 +644,15 @@ export function HomeView() {
                   isFetching={operatingViewQuery.isFetching}
                   onRefresh={() => void operatingViewQuery.refetch()}
                 />
-              ) : (
+              ) : operatingViewMode === "approvals" ? (
                 <ActiveApprovalsPanel
                   view={operatingViewQuery.data.approvals}
+                  isFetching={operatingViewQuery.isFetching}
+                  onRefresh={() => void operatingViewQuery.refetch()}
+                />
+              ) : (
+                <AgentRoleWorkloadPanel
+                  view={operatingViewQuery.data.roles}
                   isFetching={operatingViewQuery.isFetching}
                   onRefresh={() => void operatingViewQuery.refetch()}
                 />
