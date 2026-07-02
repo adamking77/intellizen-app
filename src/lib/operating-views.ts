@@ -42,6 +42,21 @@ export interface GzsDistributionHealthView {
   workflowRuns: WorkflowRunItem[];
 }
 
+export interface WeeklyOperatingBrief {
+  title: string;
+  sourcePath: string;
+  generatedAt: string;
+  markdown: string;
+  metrics: {
+    openWork: number;
+    approvals: number;
+    blocked: number;
+    activeRuns: number;
+    activeWorkflows: number;
+  };
+  sourceRecords: string[];
+}
+
 const GZS_DISTRIBUTION_TERMS = [
   "genzen solutions",
   "distribution",
@@ -85,6 +100,37 @@ function updatedTime(item: { updated_at: string }) {
 
 function sortWork(left: AgentWorkItem, right: AgentWorkItem) {
   return priorityRank(right.priority) - priorityRank(left.priority) || updatedTime(right) - updatedTime(left);
+}
+
+function sortRuns(left: WorkflowRunItem, right: WorkflowRunItem) {
+  return updatedTime(right) - updatedTime(left);
+}
+
+function formatDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function line(value: string | null | undefined, fallback = "unassigned") {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function bulletList(items: string[]) {
+  return items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : "- None visible.";
+}
+
+function summarizeWork(item: AgentWorkItem) {
+  const owner = item.current_actor ?? (Array.isArray(item.assignee) ? item.assignee.join(", ") : item.assignee);
+  return `**${item.title}** — ${line(item.status, "No status")} / ${line(item.priority, "No priority")} / ${line(owner)}`;
+}
+
+function summarizeRun(run: WorkflowRunItem) {
+  return `**${run.name}** — ${line(run.status, "No status")} / ${line(run.actor)} / ${line(run.current_step, "No current step")}`;
+}
+
+function latestReceiptSummary(item: AgentWorkItem) {
+  if (!item.latest_receipt) return null;
+  return `**${item.title}** — ${item.latest_receipt.replace(/\s+/g, " ").slice(0, 220)}`;
 }
 
 function workflowMatchesGzs(workflow: WorkflowTemplateItem) {
@@ -196,5 +242,105 @@ export function buildGzsDistributionHealthView(input: {
       .slice(0, 6),
     workflowTemplates,
     workflowRuns,
+  };
+}
+
+export function buildWeeklyOperatingBrief(input: {
+  projects: AgentProjectItem[];
+  workItems: AgentWorkItem[];
+  workflows: WorkflowTemplateItem[];
+  workflowRuns: WorkflowRunItem[];
+  generatedAt?: Date;
+}): WeeklyOperatingBrief {
+  const generatedAt = input.generatedAt ?? new Date();
+  const dateKey = formatDate(generatedAt);
+  const openWork = input.workItems.filter((item) => item.status !== "Done");
+  const approvals = openWork.filter((item) => item.status === "Needs approval" || Boolean(item.approval_needed));
+  const blocked = openWork.filter((item) => item.status === "Blocked");
+  const activeRuns = input.workflowRuns.filter((run) => !["Done", "Deferred"].includes(run.status ?? ""));
+  const activeWorkflows = input.workflows.filter((workflow) => workflow.status === "Active");
+  const topWork = openWork.slice().sort(sortWork).slice(0, 8);
+  const recentRuns = activeRuns.slice().sort(sortRuns).slice(0, 6);
+  const recentReceipts = openWork
+    .slice()
+    .sort((left, right) => updatedTime(right) - updatedTime(left))
+    .map(latestReceiptSummary)
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 5);
+  const gzsView = buildGzsDistributionHealthView({
+    projects: input.projects,
+    workItems: input.workItems,
+    workflows: input.workflows,
+    workflowRuns: input.workflowRuns,
+  });
+
+  const sourceRecords = Array.from(
+    new Set([
+      ...topWork.map((item) => item.id),
+      ...approvals.slice(0, 6).map((item) => item.id),
+      ...blocked.slice(0, 6).map((item) => item.id),
+      ...recentRuns.map((run) => run.id),
+      ...gzsView.spec.source_records,
+    ]),
+  );
+
+  const markdown = `# Weekly Operating Brief - ${dateKey}
+
+Generated: ${generatedAt.toISOString()}
+
+## Executive State
+
+- Open work: ${openWork.length}
+- Approval gates: ${approvals.length}
+- Blocked items: ${blocked.length}
+- Active workflow runs: ${activeRuns.length}
+- Active workflow templates: ${activeWorkflows.length}
+
+## Needs Adam
+
+${bulletList(approvals.slice().sort(sortWork).slice(0, 8).map(summarizeWork))}
+
+## Blockers
+
+${bulletList(blocked.slice().sort(sortWork).slice(0, 8).map(summarizeWork))}
+
+## Priority Work
+
+${bulletList(topWork.map(summarizeWork))}
+
+## Active Workflow Runs
+
+${bulletList(recentRuns.map(summarizeRun))}
+
+## GZS Distribution Snapshot
+
+- Open distribution work: ${gzsView.metrics.openWork}
+- Approval gates: ${gzsView.metrics.needsApproval}
+- Blocked: ${gzsView.metrics.blocked}
+- Active runs: ${gzsView.metrics.activeRuns}
+- Workflow templates: ${gzsView.metrics.workflowTemplates}
+
+## Recent Receipts
+
+${bulletList(recentReceipts)}
+
+## Source Record IDs
+
+${bulletList(sourceRecords)}
+`;
+
+  return {
+    title: `Weekly Operating Brief - ${dateKey}`,
+    sourcePath: `operating-briefs/weekly/${dateKey}-weekly-operating-brief.md`,
+    generatedAt: generatedAt.toISOString(),
+    markdown,
+    metrics: {
+      openWork: openWork.length,
+      approvals: approvals.length,
+      blocked: blocked.length,
+      activeRuns: activeRuns.length,
+      activeWorkflows: activeWorkflows.length,
+    },
+    sourceRecords,
   };
 }

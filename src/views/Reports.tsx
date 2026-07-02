@@ -1,6 +1,7 @@
 import { lazy, Suspense, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -8,8 +9,11 @@ import {
   FolderPlus,
   Loader2,
   Plus,
+  RefreshCw,
+  Save,
   Trash2,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { ContextMenu } from "@/components/ui/context-menu";
 import { MarkdownBody } from "@/components/ui/markdown-body";
@@ -22,15 +26,20 @@ import {
   getWorkspaceNode,
   getVaultDocument,
   getVaultFile,
+  listAgentProjects,
+  listAgentWork,
   listAllVaultFiles,
   listInvestigations,
   listProjects,
   listVaultDocuments,
+  listWorkflowRuns,
+  listWorkflows,
   listWorkspaceNodes,
   updateWorkspaceFileContent,
   updateVaultDocumentContent,
   updateVaultFileContent,
 } from "@/lib/data";
+import { buildWeeklyOperatingBrief, type WeeklyOperatingBrief } from "@/lib/operating-views";
 import type { Investigation, Project, VaultDocument, VaultFile, WorkspaceNodeSummary } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -84,6 +93,7 @@ export function ReportsView() {
   const [createName, setCreateName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
+  const [isSavingBrief, setIsSavingBrief] = useState(false);
   const { isCramped } = useWindowSize();
   const latestFileContentRef = useRef<string | null>(null);
   const hydratedSelectionKeyRef = useRef<string | null>(null);
@@ -130,6 +140,29 @@ export function ReportsView() {
   const { data: investigations = [] } = useQuery({
     queryKey: ["investigations"],
     queryFn: listInvestigations,
+  });
+  const {
+    data: weeklyBrief,
+    isLoading: loadingWeeklyBrief,
+    isFetching: fetchingWeeklyBrief,
+    refetch: refetchWeeklyBrief,
+  } = useQuery({
+    queryKey: ["reports", "weekly-operating-brief"],
+    queryFn: async () => {
+      const [agentProjects, agentWork, workflows, workflowRuns] = await Promise.all([
+        listAgentProjects({ includeDone: false, limit: 120 }),
+        listAgentWork({ includeDone: false, limit: 220 }),
+        listWorkflows({ includeInactive: false, limit: 120 }),
+        listWorkflowRuns({ includeCompleted: false, limit: 120 }),
+      ]);
+      return buildWeeklyOperatingBrief({
+        projects: agentProjects,
+        workItems: agentWork,
+        workflows,
+        workflowRuns,
+      });
+    },
+    refetchInterval: 60_000,
   });
 
   const isLoading = loadingDocs || loadingFiles || loadingWorkspace;
@@ -392,6 +425,45 @@ export function ReportsView() {
     }
   }
 
+  async function handleSaveWeeklyBrief(brief: WeeklyOperatingBrief) {
+    if (isSavingBrief) return;
+    try {
+      setIsSavingBrief(true);
+      const existing = vaultDocs.find((doc) => doc.source_path === brief.sourcePath);
+      if (existing) {
+        const updated = await updateVaultDocumentContent(existing.id, brief.markdown);
+        queryClient.setQueryData(["vault-document", existing.id], updated);
+        await queryClient.invalidateQueries({ queryKey: ["vault-documents"] });
+        setSelection({ kind: "doc", id: existing.id });
+        toast.success("Operating brief updated");
+        return;
+      }
+
+      const created = await createVaultDocument({
+        title: brief.title,
+        sourcePath: brief.sourcePath,
+        content: brief.markdown,
+        documentType: "operations",
+        domain: "internal",
+        metadata: {
+          generated_at: brief.generatedAt,
+          source: "intellizen_reports_weekly_operating_brief",
+          object_type: "operating_brief",
+          source_records: brief.sourceRecords,
+          metrics: brief.metrics,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["vault-documents"] });
+      queryClient.setQueryData(["vault-document", created.id], created);
+      setSelection({ kind: "doc", id: created.id });
+      toast.success("Operating brief saved");
+    } catch (error) {
+      toastError("Couldn't save operating brief", error);
+    } finally {
+      setIsSavingBrief(false);
+    }
+  }
+
   return (
     <div className="relative flex h-[calc(100dvh)] w-full overflow-hidden bg-[var(--base)]">
       <aside
@@ -637,12 +709,133 @@ export function ReportsView() {
               ]}
             />
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-sm text-[var(--subtext-0)]">
-              Select a document to open it.
-            </div>
+            <WeeklyOperatingBriefPanel
+              brief={weeklyBrief ?? null}
+              loading={loadingWeeklyBrief}
+              fetching={fetchingWeeklyBrief}
+              saving={isSavingBrief}
+              onRefresh={() => void refetchWeeklyBrief()}
+              onSave={(brief) => void handleSaveWeeklyBrief(brief)}
+            />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WeeklyOperatingBriefPanel({
+  brief,
+  loading,
+  fetching,
+  saving,
+  onRefresh,
+  onSave,
+}: {
+  brief: WeeklyOperatingBrief | null;
+  loading: boolean;
+  fetching: boolean;
+  saving: boolean;
+  onRefresh: () => void;
+  onSave: (brief: WeeklyOperatingBrief) => void;
+}) {
+  return (
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 px-5 py-6 lg:px-10 lg:py-8">
+      <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+            Weekly operating brief
+          </p>
+          <h1 className="mt-1 text-[24px] font-semibold leading-tight text-[var(--text)]">
+            {brief?.title ?? "Weekly Operating Brief"}
+          </h1>
+          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--subtext-0)]">
+            Live workspace state, workflow runs, approval gates, blockers, receipts, and source records.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={fetching}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 text-[12px] text-[var(--subtext-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", fetching && "animate-spin")} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => brief && onSave(brief)}
+            disabled={!brief || saving}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-[12px] font-medium text-[var(--crust)] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <Link
+            to="/home"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 text-[12px] text-[var(--subtext-1)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+          >
+            Home
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex min-h-[320px] items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+        </div>
+      ) : brief ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <BriefMetric label="Open work" value={brief.metrics.openWork} />
+            <BriefMetric label="Approvals" value={brief.metrics.approvals} tone="warning" />
+            <BriefMetric label="Blocked" value={brief.metrics.blocked} tone="danger" />
+            <BriefMetric label="Runs" value={brief.metrics.activeRuns} tone="success" />
+            <BriefMetric label="Workflows" value={brief.metrics.activeWorkflows} />
+          </div>
+
+          <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+            <div className="mb-4 flex flex-col gap-1 border-b border-[var(--border)] pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                Preview
+              </span>
+              <span className="font-mono text-[10px] text-[var(--overlay-1)]">{brief.sourceRecords.length} source records</span>
+            </div>
+            <MarkdownBody content={brief.markdown} />
+          </div>
+        </>
+      ) : (
+        <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-10 text-center text-[13px] text-[var(--subtext-0)]">
+          Operating brief unavailable.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BriefMetric({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "warning" | "danger" | "success";
+}) {
+  const toneClass =
+    tone === "warning"
+      ? "text-[var(--warning)]"
+      : tone === "danger"
+        ? "text-[var(--danger)]"
+        : tone === "success"
+          ? "text-[var(--success)]"
+          : "text-[var(--text)]";
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
+      <div className={cn("font-mono text-[22px] leading-none", toneClass)}>{value}</div>
+      <div className="mt-1 font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">{label}</div>
     </div>
   );
 }
