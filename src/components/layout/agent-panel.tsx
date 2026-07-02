@@ -233,6 +233,8 @@ export function AgentPanel() {
   const dictationRef = useRef<BrowserDictationSession | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const hermesPreviewBusyRef = useRef(false);
+  const hermesPreviewDirtyRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const { isCramped } = useWindowSize();
@@ -593,16 +595,40 @@ export function AgentPanel() {
   async function transcribeHermesRecording(audio: Blob) {
     try {
       const result = await transcribeWithHermes(audio);
+      setInterimTranscript("");
       if (!result.transcript) {
         toast.error("No speech detected");
         return;
       }
       appendVoiceDraft(result.transcript);
-      toast.success("Transcript added", {
-        description: result.provider,
-      });
     } catch (transcribeError) {
+      setInterimTranscript("");
       toastError("Hermes transcription failed", transcribeError);
+    }
+  }
+
+  // Live preview while the mic is on: every recorder timeslice, transcribe
+  // the audio-so-far (chunks concatenated from the start form a valid file)
+  // and show it as interim text. Self-throttles — while one preview request
+  // is in flight new chunks only mark it dirty. The final on-stop pass is
+  // authoritative and replaces the preview.
+  async function previewHermesTranscript(mimeType: string) {
+    if (hermesPreviewBusyRef.current) {
+      hermesPreviewDirtyRef.current = true;
+      return;
+    }
+    hermesPreviewBusyRef.current = true;
+    try {
+      do {
+        hermesPreviewDirtyRef.current = false;
+        const audio = new Blob(recordedChunksRef.current, { type: mimeType });
+        if (audio.size === 0) return;
+        const result = await transcribeWithHermes(audio).catch(() => null);
+        if (recorderRef.current?.state !== "recording") return;
+        if (result?.transcript) setInterimTranscript(result.transcript);
+      } while (hermesPreviewDirtyRef.current && recorderRef.current?.state === "recording");
+    } finally {
+      hermesPreviewBusyRef.current = false;
     }
   }
 
@@ -623,10 +649,16 @@ export function AgentPanel() {
       recordedChunksRef.current = [];
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+          if (recorder.state === "recording") {
+            void previewHermesTranscript(recorder.mimeType || "audio/webm");
+          }
+        }
       };
       recorder.onerror = () => {
         setIsListening(false);
+        setInterimTranscript("");
         toast.error("Audio recording stopped");
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -637,10 +669,13 @@ export function AgentPanel() {
           type: recorder.mimeType || "audio/webm",
         });
         recordedChunksRef.current = [];
+        // Keep the interim preview visible while the final pass runs;
+        // transcribeHermesRecording clears it when the draft is committed.
         if (audio.size > 0) void transcribeHermesRecording(audio);
+        else setInterimTranscript("");
       };
       recorderRef.current = recorder;
-      recorder.start();
+      recorder.start(2000);
       setIsListening(true);
     } catch (recordError) {
       setIsListening(false);
