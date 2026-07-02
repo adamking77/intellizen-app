@@ -31,10 +31,25 @@ export interface AgentDataChartWidget {
   data: Array<Record<string, unknown>>;
 }
 
+export interface AgentMetricItem {
+  label: string;
+  value: string | number;
+  delta?: { value: string | number; direction: "up" | "down" | "flat" };
+}
+
+export interface AgentRecordLink {
+  label: string;
+  /** In-app route, e.g. /databases/<db-id>?record=<id> or /investigate. */
+  to: string;
+  status?: string;
+}
+
 export type AgentChatWidget =
   | { kind: "data-table"; title?: string; table: AgentDataTableWidget }
   | { kind: "data-chart"; title?: string; chart: AgentDataChartWidget }
-  | { kind: "data-insights"; title?: string; insights: string[] };
+  | { kind: "data-insights"; title?: string; insights: string[] }
+  | { kind: "data-metrics"; title?: string; metrics: AgentMetricItem[] }
+  | { kind: "record-links"; title?: string; links: AgentRecordLink[] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -95,6 +110,24 @@ export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
     const insights = asStringList(value.insights);
     return insights.length > 0 ? { kind: "data-insights", title, insights } : null;
   }
+  if (value.kind === "data-metrics" || Array.isArray(value.metrics)) {
+    const metrics = (Array.isArray(value.metrics) ? value.metrics : [])
+      .filter(
+        (item): item is AgentMetricItem =>
+          isRecord(item) && typeof item.label === "string" &&
+          (typeof item.value === "string" || typeof item.value === "number"),
+      );
+    return metrics.length > 0 ? { kind: "data-metrics", title, metrics } : null;
+  }
+  if (value.kind === "record-links" || Array.isArray(value.links)) {
+    const links = (Array.isArray(value.links) ? value.links : [])
+      .filter(
+        (item): item is AgentRecordLink =>
+          isRecord(item) && typeof item.label === "string" &&
+          typeof item.to === "string" && item.to.startsWith("/"),
+      );
+    return links.length > 0 ? { kind: "record-links", title, links } : null;
+  }
   return null;
 }
 
@@ -110,7 +143,14 @@ When a table, chart, or metric list genuinely communicates better than prose, em
 {"kind": "data-chart", "title": "...", "chart": {"type": "bar", "xKey": "label", "series": [{"key": "value", "label": "..."}], "data": [{"label": "...", "value": 1}]}}
 \`\`\`
 
-Supported kinds: "data-table" ({"table": {"columns": [{"key", "label"}], "rows": [...]}}), "data-chart" (bar), "data-insights" ({"insights": ["..."]}). One JSON object per genui block. The app renders these as native charts/tables.
+Supported kinds:
+- "data-table": {"table": {"columns": [{"key", "label"}], "rows": [...]}}
+- "data-chart": bar charts as shown above
+- "data-insights": {"insights": ["..."]}
+- "data-metrics": {"metrics": [{"label": "Open work", "value": 12, "delta": {"value": "+3", "direction": "up"}}]} — renders as the app's native metric cells; use for KPI/stat readouts
+- "record-links": {"links": [{"label": "Task name", "to": "/databases/<database-id>?record=<record-id>", "status": "In progress"}]} — renders as clickable in-app links; use when referencing IntelliZen records, workflows, or routes you know the ids for
+
+One JSON object per genui block. The app renders these with its own native components.
 
 NEVER draw charts with unicode block characters, ASCII art, or markdown tables of bars — always use a genui block instead.`;
 

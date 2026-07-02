@@ -1,4 +1,8 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+
+import { MetricCell } from "@/components/ui/metric-cell";
+import { Badge } from "@/components/ui/badge";
 
 import type { AgentChatWidget as AgentChatWidgetModel, AgentDataChartWidget } from "@/lib/agent-widgets";
 import { cn } from "@/lib/utils";
@@ -24,6 +28,34 @@ export function AgentChatWidget({ widget }: { widget: AgentChatWidgetModel }) {
             <li key={index} className="flex gap-1.5 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">
               <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-[var(--accent)]" />
               <span>{insight}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {widget.kind === "data-metrics" ? (
+        <div className="grid grid-cols-2 gap-3 px-2.5 py-2">
+          {widget.metrics.slice(0, 6).map((metric, index) => (
+            <MetricCell
+              key={index}
+              label={metric.label}
+              value={metric.value}
+              delta={metric.delta}
+              className="[&_.text-metric]:text-[20px]"
+            />
+          ))}
+        </div>
+      ) : null}
+      {widget.kind === "record-links" ? (
+        <ul className="py-1">
+          {widget.links.slice(0, 8).map((link, index) => (
+            <li key={index}>
+              <Link
+                to={link.to}
+                className="flex items-center justify-between gap-2 px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              >
+                <span className="min-w-0 truncate font-ui text-[11.5px] text-[var(--text)]">{link.label}</span>
+                {link.status ? <Badge variant="outline">{link.status}</Badge> : null}
+              </Link>
             </li>
           ))}
         </ul>
