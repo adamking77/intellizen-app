@@ -171,6 +171,7 @@ genui-html rules:
   Tables: "workspace_records" (filter by database_id/id; record fields are in the .fields object), "work_events" (filter record_id/workflow_run_id/event_kind/actor), "signals" (status/source), "entities" (entity_type/first_case_id), "claims" (case_id/claim_origin).
   filters: [{column, op: "eq"|"in", value}]. limit max 200. Example:
   const rows = await window.intellizen.query({ table: "entities", filters: [{column: "entity_type", op: "eq", value: "person"}], limit: 50 });
+- NEVER use inline event handlers (onclick="..." etc.) — they resolve in global scope and will throw on your closure variables. Attach ONE delegated listener with addEventListener on a stable container and re-render inside it.
 - Keep it compact (the panel is ~320-540px wide); the frame auto-sizes to your content up to 600px.
 - Prefer the simple genui JSON kinds when they suffice; use genui-html only when interactivity earns it.
 - The user can PIN any widget to their Home dashboard as a persistent tracker that re-runs on every visit/refresh. So when the user asks for a view/tracker/dashboard of their data, fetch the data with window.intellizen.query() inside the widget script (live on every mount) — never hardcode the current values into the HTML.
