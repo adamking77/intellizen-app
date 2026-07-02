@@ -851,6 +851,191 @@ ${returnPath}`;
   };
 }
 
+// ── OSINT entity layer (intel.entities / intel.claims) ─────────────────────
+
+const INTEL_ENTITY_SELECT =
+  "id, entity_type, name, aliases, external_ids, summary, confidence, first_case_id, created_at, updated_at";
+const INTEL_CLAIM_SELECT =
+  "id, case_id, claim, entity_ids, source_reliability, info_credibility, claim_origin, event_date, supporting_signal_ids, contradicting_signal_ids, recorded_by, created_at";
+
+async function listIntelEntities(input: { case_id?: string; search?: string; limit?: number }) {
+  const limit = input.limit ?? 50;
+  if (input.case_id) {
+    const { data: links, error: linksError } = await supabase
+      .schema("intel").from("entity_signals")
+      .select("entity_id")
+      .eq("case_id", input.case_id)
+      .limit(500);
+    if (linksError) throw new Error(linksError.message);
+    const linkedIds = Array.from(new Set(((links ?? []) as Array<{ entity_id: string }>).map((row) => row.entity_id)));
+    let query = supabase
+      .schema("intel").from("entities")
+      .select(INTEL_ENTITY_SELECT)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    query = linkedIds.length
+      ? query.or(`id.in.(${linkedIds.join(",")}),first_case_id.eq.${input.case_id}`)
+      : query.eq("first_case_id", input.case_id);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  }
+  let query = supabase
+    .schema("intel").from("entities")
+    .select(INTEL_ENTITY_SELECT)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (input.search?.trim()) query = query.ilike("name", `%${input.search.trim()}%`);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+async function upsertIntelEntity(input: {
+  entity_type: "person" | "organization" | "object" | "location" | "event";
+  name: string;
+  aliases?: string[];
+  external_ids?: Record<string, unknown>;
+  summary?: string | null;
+  confidence?: "confirmed" | "probable" | "possible" | "doubtful" | null;
+  case_id?: string | null;
+  signal_ids?: number[];
+  confirm_write?: boolean;
+}) {
+  const name = input.name.trim();
+  if (!name) throw new Error("Entity name is required.");
+
+  const { data: existing, error: existingError } = await supabase
+    .schema("intel").from("entities")
+    .select(INTEL_ENTITY_SELECT)
+    .eq("entity_type", input.entity_type)
+    .ilike("name", name)
+    .limit(1);
+  if (existingError) throw new Error(existingError.message);
+  const match = (existing ?? [])[0] as Record<string, unknown> | undefined;
+
+  if (!input.confirm_write) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirm_write: true to write the entity.",
+      action: match ? "merge_into_existing" : "create",
+      existing_entity: match ?? null,
+    };
+  }
+
+  let entity: Record<string, unknown>;
+  if (match) {
+    const mergedAliases = Array.from(new Set([...((match.aliases as string[]) ?? []), ...(input.aliases ?? [])]));
+    const { data, error } = await supabase
+      .schema("intel").from("entities")
+      .update({
+        aliases: mergedAliases,
+        external_ids: { ...((match.external_ids as Record<string, unknown>) ?? {}), ...(input.external_ids ?? {}) },
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
+      })
+      .eq("id", match.id as string)
+      .select(INTEL_ENTITY_SELECT)
+      .single();
+    if (error) throw new Error(error.message);
+    entity = data as Record<string, unknown>;
+  } else {
+    const { data, error } = await supabase
+      .schema("intel").from("entities")
+      .insert([
+        {
+          entity_type: input.entity_type,
+          name,
+          aliases: input.aliases ?? [],
+          external_ids: input.external_ids ?? {},
+          summary: input.summary ?? null,
+          confidence: input.confidence ?? null,
+          first_case_id: input.case_id ?? null,
+        },
+      ])
+      .select(INTEL_ENTITY_SELECT)
+      .single();
+    if (error) throw new Error(error.message);
+    entity = data as Record<string, unknown>;
+  }
+
+  if (input.signal_ids?.length) {
+    const { error: linkError } = await supabase
+      .schema("intel").from("entity_signals")
+      .upsert(
+        input.signal_ids.map((signalId) => ({
+          entity_id: entity.id as string,
+          signal_id: signalId,
+          case_id: input.case_id ?? null,
+        })),
+        { onConflict: "entity_id,signal_id" },
+      );
+    if (linkError) throw new Error(linkError.message);
+  }
+
+  return { dry_run: false, created: !match, entity };
+}
+
+async function recordIntelClaim(input: {
+  claim: string;
+  recorded_by: string;
+  case_id?: string | null;
+  entity_ids?: string[];
+  source_reliability?: "A" | "B" | "C" | "D" | "E" | "F" | null;
+  info_credibility?: number | null;
+  claim_origin?: "osint" | "humint" | "analysis" | null;
+  event_date?: string | null;
+  supporting_signal_ids?: number[];
+  contradicting_signal_ids?: number[];
+  confirm_write?: boolean;
+}) {
+  const claim = input.claim.trim();
+  if (!claim) throw new Error("Claim text is required.");
+  if (!input.recorded_by?.trim()) throw new Error("recorded_by is required: claims must name their recorder.");
+
+  if (!input.confirm_write) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirm_write: true to record the claim (append-only).",
+      next_claim: { claim, grade: `${input.source_reliability ?? "?"}${input.info_credibility ?? "?"}` },
+    };
+  }
+
+  const { data, error } = await supabase
+    .schema("intel").from("claims")
+    .insert([
+      {
+        claim,
+        recorded_by: input.recorded_by.trim(),
+        case_id: input.case_id ?? null,
+        entity_ids: input.entity_ids ?? [],
+        source_reliability: input.source_reliability ?? null,
+        info_credibility: input.info_credibility ?? null,
+        claim_origin: input.claim_origin ?? null,
+        event_date: input.event_date ?? null,
+        supporting_signal_ids: input.supporting_signal_ids ?? [],
+        contradicting_signal_ids: input.contradicting_signal_ids ?? [],
+      },
+    ])
+    .select(INTEL_CLAIM_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  return { dry_run: false, claim: data };
+}
+
+async function listIntelClaims(input: { case_id?: string; entity_id?: string; limit?: number }) {
+  let query = supabase
+    .schema("intel").from("claims")
+    .select(INTEL_CLAIM_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(input.limit ?? 50);
+  if (input.case_id) query = query.eq("case_id", input.case_id);
+  if (input.entity_id) query = query.contains("entity_ids", [input.entity_id]);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
   return {
     id: record.id,
@@ -1635,6 +1820,72 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "list_entities",
+      description: "List canonical OSINT entities (POLE model), optionally scoped to a case or name search.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          case_id: { type: "string", description: "Investigation case id to scope by signal provenance." },
+          search: { type: "string", description: "Case-insensitive name search." },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: "upsert_entity",
+      description:
+        "Create or merge a canonical OSINT entity (matched by type + case-insensitive name; aliases merge). Optionally links provenance signals. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          entity_type: { type: "string", enum: ["person", "organization", "object", "location", "event"] },
+          name: { type: "string" },
+          aliases: { type: "array", items: { type: "string" } },
+          external_ids: { type: "object", description: "Registry identifiers, e.g. {companies_house: \"...\", lei: \"...\"}." },
+          summary: { type: "string" },
+          confidence: { type: "string", enum: ["confirmed", "probable", "possible", "doubtful"] },
+          case_id: { type: "string" },
+          signal_ids: { type: "array", items: { type: "number" }, description: "intel signal ids to link as provenance." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["entity_type", "name"],
+      },
+    },
+    {
+      name: "record_claim",
+      description:
+        "Record an Admiralty-graded claim (append-only; supersede with a new claim). recorded_by is required. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          claim: { type: "string", description: "The discrete assertion." },
+          recorded_by: { type: "string", description: "Actor recording the claim. Required." },
+          case_id: { type: "string" },
+          entity_ids: { type: "array", items: { type: "string" }, description: "intel.entities uuids this claim concerns." },
+          source_reliability: { type: "string", enum: ["A", "B", "C", "D", "E", "F"], description: "Admiralty source reliability." },
+          info_credibility: { type: "number", description: "Admiralty information credibility 1-6." },
+          claim_origin: { type: "string", enum: ["osint", "humint", "analysis"] },
+          event_date: { type: "string", description: "ISO timestamp the claimed event occurred (UTC)." },
+          supporting_signal_ids: { type: "array", items: { type: "number" } },
+          contradicting_signal_ids: { type: "array", items: { type: "number" } },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["claim", "recorded_by"],
+      },
+    },
+    {
+      name: "list_claims",
+      description: "List Admiralty-graded claims, optionally scoped to a case or entity.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          case_id: { type: "string" },
+          entity_id: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
       name: "list_workflows",
       description:
         "List Workflow Registry templates from IntelliZen Databases. Filters by entity, owner role, status, and active/inactive state.",
@@ -2364,6 +2615,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       receipt_required?: boolean;
       confirm_write?: boolean;
     });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── OSINT entity layer ──────────────────────────────────────────────────
+  if (name === "list_entities") {
+    const result = await listIntelEntities((args ?? {}) as { case_id?: string; search?: string; limit?: number });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "upsert_entity") {
+    const result = await upsertIntelEntity((args ?? {}) as Parameters<typeof upsertIntelEntity>[0]);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "record_claim") {
+    const result = await recordIntelClaim((args ?? {}) as Parameters<typeof recordIntelClaim>[0]);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "list_claims") {
+    const result = await listIntelClaims((args ?? {}) as { case_id?: string; entity_id?: string; limit?: number });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 

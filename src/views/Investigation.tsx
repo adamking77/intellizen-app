@@ -17,6 +17,7 @@ import {
   Zap,
 } from "lucide-react";
 
+import { CaseIntelPanel } from "@/components/investigations/case-intel-panel";
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
 import { VaultFileRow } from "@/components/vault/vault-file-row";
 import { Button } from "@/components/ui/button";
@@ -1159,6 +1160,12 @@ export function InvestigationView() {
                 )}
               </div>
               )}
+
+              {/* Case intelligence: entities, graded claims, 6-phase OSINT */}
+              <CaseIntelPanel
+                caseId={selectedInvestigation.case_id}
+                subject={selectedInvestigation.subject_definition ?? selectedInvestigation.name}
+              />
 
               {/* Vault files */}
               {(vaultFiles ?? []).length > 0 && (

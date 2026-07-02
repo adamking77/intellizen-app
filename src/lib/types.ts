@@ -479,6 +479,39 @@ export interface WorkspaceNode extends WorkspaceNodeSummary {
   content: string | null;
 }
 
+// ── OSINT entity layer (intel schema) ──────────────────────────────────────
+
+export type IntelEntityType = "person" | "organization" | "object" | "location" | "event";
+export type AdmiraltyReliability = "A" | "B" | "C" | "D" | "E" | "F";
+
+export interface IntelEntity {
+  id: string;
+  entity_type: IntelEntityType;
+  name: string;
+  aliases: string[];
+  external_ids: Record<string, unknown>;
+  summary: string | null;
+  confidence: "confirmed" | "probable" | "possible" | "doubtful" | null;
+  first_case_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntelClaim {
+  id: string;
+  case_id: string | null;
+  claim: string;
+  entity_ids: string[];
+  source_reliability: AdmiraltyReliability | null;
+  info_credibility: number | null;
+  claim_origin: "osint" | "humint" | "analysis" | null;
+  event_date: string | null;
+  supporting_signal_ids: number[];
+  contradicting_signal_ids: number[];
+  recorded_by: string;
+  created_at: string;
+}
+
 export type WorkspaceDatabaseFieldType =
   | "text"
   | "number"
