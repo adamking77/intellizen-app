@@ -297,6 +297,7 @@ These rules bind all UI work by agents (Claude, Codex, or any future actor) and 
 
 ### Agent-surface rules
 
+- **The Agent Panel is a chat surface, not a form.** Its anatomy is fixed (agent-native reference): a full-height conversation thread (messages, agent replies, GenUI widgets, chronological, pinned to newest), a slim status strip, and **one composer frame at the bottom** — textarea on top, controls row inside the frame (plus-menu for workflows/actions, agent picker, dictation mic, send). Never stacked form sections; never a separate "voice box" (dictation types into the composer); never data panels the Databases surfaces already provide.
 - **Agent UI uses the same tokens as everything else.** No "AI feature" styling: no purple/indigo gradients, no glow, no sparkle icons. An agent surface should be visually indistinguishable in material from a database table.
 - **Anatomy consistency:** section headers are `font-ui 11px 600 uppercase --overlay-1`; counts are mono pills (`font-mono 10px` in a `--border` ring); data values are Geist Mono; interface text stays in the 10–13px band. Match the adjacent surface's density exactly.
 - **Three states required** on every data surface: loading (static skeleton or spinner consistent with neighbors), empty (dashed `--border` box, icon + one-line label), error (`--danger`-mixed border box with the message). Mobile width (390px) renders without horizontal overflow.
@@ -313,8 +314,9 @@ No agent may add a route, sidebar item, default view, or persistent surface with
 
 ### Review gate — run before any UI slice lands
 
-1. Tokens-only audit: `grep -nE '#[0-9a-fA-F]{3,8}|(gray|slate|zinc|neutral|stone|indigo|violet|purple)-[0-9]' <changed files>` → zero hits outside `index.css`.
-2. Loading/empty/error states present.
-3. 390px width: no horizontal overflow, no console errors.
-4. Density/anatomy matches the adjacent surface (compare side-by-side).
-5. Screenshot evidence captured for the receipt/changelog.
+1. **Interaction paradigm check:** name the pattern the surface implements (chat surface, table, board, peek panel, stepper…) and confirm the implementation matches how that pattern behaves in reference tools (VS Code agent chat, Notion, Linear) — not just what content it shows. A chat is a thread + bottom composer; a form is not a chat.
+2. Tokens-only audit: `grep -nE '#[0-9a-fA-F]{3,8}|(gray|slate|zinc|neutral|stone|indigo|violet|purple)-[0-9]' <changed files>` → zero hits outside `index.css`.
+3. Loading/empty/error states present.
+4. 390px width: no horizontal overflow, no console errors.
+5. Density/anatomy matches the adjacent surface (compare side-by-side).
+6. Screenshot evidence captured for the receipt/changelog.

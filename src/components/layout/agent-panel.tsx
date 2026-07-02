@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ExternalLink, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
+import { Bot, MessageSquare, Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
@@ -160,8 +160,6 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
 
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
-  const [voiceDraft, setVoiceDraft] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -169,11 +167,13 @@ export function AgentPanel() {
   const [chatDraft, setChatDraft] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
   const dictationRef = useRef<BrowserDictationSession | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const { isCramped } = useWindowSize();
   // Rail mode keeps the approvals badge alive but stops background polling.
   const expanded = !collapsed && !isCramped;
@@ -211,8 +211,6 @@ export function AgentPanel() {
   const activeRuns = activeRunsQuery.data ?? [];
   const approvals = approvalsQuery.data ?? [];
   const workflows = workflowsQuery.data ?? [];
-  const selectedWorkflow = workflows.find((workflow) => workflow.workflow_id === selectedWorkflowId) ?? workflows[0] ?? null;
-  const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
   const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching || agentChatQuery.isFetching;
   const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
   const voiceProviders = getVoiceProviderStatus();
@@ -220,21 +218,16 @@ export function AgentPanel() {
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
   const canListen = Boolean(voiceInputProvider);
   const canSpeak = Boolean(voiceOutputProvider);
-  const voiceProviderLabel = voiceProviders.find((provider) => provider.id === "hermes" && (provider.canTranscribe || provider.canSpeak))?.label ??
-    voiceProviders.find((provider) => provider.id === "browser" && (provider.canTranscribe || provider.canSpeak))?.label ??
-    "Voice unavailable";
   const agentOptions = useMemo(() => {
     const values = [
-      selectedWorkflow?.default_actor,
-      selectedWorkflow?.owner_role,
-      ...workflows.map((workflow) => workflow.default_actor),
-      ...workflows.map((workflow) => workflow.owner_role),
       "Fiona/Hermes",
       "Steve/Claude",
       "Keel/Codex",
+      ...workflows.map((workflow) => workflow.default_actor),
+      ...workflows.map((workflow) => workflow.owner_role),
     ];
     return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
-  }, [selectedWorkflow?.default_actor, selectedWorkflow?.owner_role, workflows]);
+  }, [workflows]);
   const targetAgent = selectedAgent || agentOptions[0] || "Fiona/Hermes";
 
   const visibleRuns = useMemo(() => {
@@ -245,15 +238,22 @@ export function AgentPanel() {
     () => (agentChatQuery.data ?? []).filter(isChatInboxItem).map(inboxItemToChatEntry),
     [agentChatQuery.data],
   );
+  // Thread order: chronological, newest at the bottom, like any chat surface.
   const visibleChatEntries = useMemo(() => {
     const entriesById = new Map<string, AgentChatEntry>();
     for (const entry of [...chatEntries, ...routedChatEntries]) {
       entriesById.set(entry.id, entry);
     }
     return Array.from(entriesById.values())
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-      .slice(0, 4);
+      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+      .slice(-20);
   }, [chatEntries, routedChatEntries]);
+
+  // Keep the thread pinned to the newest message.
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (thread) thread.scrollTop = thread.scrollHeight;
+  }, [visibleChatEntries.length, isSendingChat]);
 
   useEffect(() => {
     return () => {
@@ -292,17 +292,18 @@ export function AgentPanel() {
     ]);
   }
 
-  async function handleStartWorkflow() {
-    if (!activeWorkflowId) return;
+  async function handleStartWorkflow(workflowId: string) {
+    const workflow = workflows.find((candidate) => candidate.workflow_id === workflowId);
+    if (!workflow) return;
+    setPlusMenuOpen(false);
     await startWorkflowFromPanel({
-      workflowId: activeWorkflowId,
+      workflowId,
       triggerSource: "ui",
-      entityScope: selectedWorkflow?.entity ?? undefined,
+      entityScope: workflow.entity ?? undefined,
       context: {
         route: typeof window === "undefined" ? null : window.location.pathname,
-        source: voiceDraft.trim() ? "agent_panel_voice_intake" : "agent_panel",
-        voice_provider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
-        voice_transcript: voiceDraft.trim() || null,
+        source: "agent_panel",
+        composer_note: chatDraft.trim() || null,
       },
     });
   }
@@ -321,13 +322,10 @@ export function AgentPanel() {
           route: typeof window === "undefined" ? undefined : window.location.pathname,
           payload: {
             target_agent: targetAgent,
-            selected_workflow_id: activeWorkflowId || null,
-            selected_workflow_name: selectedWorkflow?.name ?? null,
             active_run_count: visibleRuns.length,
             pending_approval_count: approvals.length,
             voice_input_provider: voiceInputProvider?.id ?? null,
             voice_output_provider: voiceOutputProvider?.id ?? null,
-            voice_transcript: voiceDraft.trim() || null,
             voice_providers: voiceProviders.map((provider) => ({
               id: provider.id,
               configured: provider.configured,
@@ -380,10 +378,11 @@ export function AgentPanel() {
     }
   }
 
+  // Dictation types into the composer, exactly like typing.
   function appendVoiceDraft(text: string) {
     const normalized = text.trim();
     if (!normalized) return;
-    setVoiceDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${normalized}`);
+    setChatDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${normalized}`);
   }
 
   async function transcribeHermesRecording(audio: Blob) {
@@ -539,12 +538,13 @@ export function AgentPanel() {
     }
   }
 
-  async function createTaskFromVoiceDraft() {
-    const transcript = voiceDraft.trim();
+  async function createTaskFromComposer() {
+    const transcript = chatDraft.trim();
     if (!transcript || isCreatingVoiceTask) return;
 
     try {
       setIsCreatingVoiceTask(true);
+      setPlusMenuOpen(false);
       const result = await createVoiceDraftTask({
         transcript,
         requestedBy: OPERATOR_ACTOR,
@@ -552,12 +552,12 @@ export function AgentPanel() {
         sourceProvider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
         confirmWrite: true,
       });
-      toast.success("Voice task created", {
+      toast.success("Task created from message", {
         description: result.task?.title ?? result.task_id,
       });
-      setVoiceDraft("");
+      setChatDraft("");
     } catch (createError) {
-      toastError("Voice task creation failed", createError);
+      toastError("Task creation failed", createError);
     } finally {
       setIsCreatingVoiceTask(false);
     }
@@ -589,6 +589,8 @@ export function AgentPanel() {
     );
   }
 
+  // Chat-first surface: full-height thread, slim ops strip, and a single
+  // composer frame at the bottom carrying all controls (agent-native anatomy).
   return (
     <aside className="flex h-dvh w-[336px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
@@ -598,7 +600,7 @@ export function AgentPanel() {
           </span>
           <div className="min-w-0">
             <p className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">Agent Panel</p>
-            <p className="truncate font-ui text-[11px] text-[var(--overlay-1)]">Workflow Runs</p>
+            <p className="truncate font-ui text-[11px] text-[var(--overlay-1)]">{targetAgent}</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -623,24 +625,179 @@ export function AgentPanel() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+      <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {error ? (
-          <div className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3">
-            <p className="font-ui text-[12px] font-medium text-[var(--danger)]">Workflow Runs unavailable</p>
+          <div className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3">
+            <p className="font-ui text-[12px] font-medium text-[var(--danger)]">Agent state unavailable</p>
             <p className="mt-1 line-clamp-3 font-ui text-[11px] text-[var(--subtext-0)]">
               {error instanceof Error ? error.message : "Refresh failed."}
             </p>
           </div>
         ) : null}
 
-        <section className="mb-5 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Chat</h2>
+        {visibleChatEntries.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+            <MessageSquare className="h-5 w-5 text-[var(--overlay-1)]" />
+            <p className="font-ui text-[12px] text-[var(--subtext-0)]">Message an agent to get started.</p>
+            <p className="font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
+              Route context travels with every message. Use + for workflows and actions.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {visibleChatEntries.map((entry) => (
+              <div key={entry.id}>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="truncate font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--overlay-1)]">
+                    You → {entry.targetAgent}
+                  </span>
+                  <span className="shrink-0 font-mono text-[9.5px] text-[var(--overlay-1)]">{formatRunTime(entry.createdAt)}</span>
+                </div>
+                <div className="rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2">
+                  <p className="whitespace-pre-wrap font-ui text-[12px] leading-relaxed text-[var(--text)]">{entry.message}</p>
+                </div>
+                {entry.status !== "submitted" ? (
+                  <p
+                    className={cn(
+                      "mt-1 font-mono text-[9.5px]",
+                      entry.status === "failed" ? "text-[var(--danger)]" : "text-[var(--overlay-1)]",
+                    )}
+                  >
+                    {entry.status === "failed" ? `failed — ${entry.detail}` : "queued for agent"}
+                  </p>
+                ) : null}
+                {entry.reply ? (
+                  <div className="mt-2 border-l-2 border-[var(--accent-border)] pl-2.5">
+                    <span className="font-ui text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
+                      {entry.targetAgent}
+                    </span>
+                    <p className="mt-0.5 whitespace-pre-wrap font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">{entry.reply}</p>
+                    {entry.widget ? <AgentChatWidget widget={entry.widget} /> : null}
+                  </div>
+                ) : entry.widget ? (
+                  <div className="mt-2 border-l-2 border-[var(--accent-border)] pl-2.5">
+                    <AgentChatWidget widget={entry.widget} />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--border-subtle)] px-4 py-1.5">
+        <Link
+          to={APPROVAL_QUEUE_URL}
+          className={cn(
+            "font-ui text-[10.5px] transition-colors hover:text-[var(--text)]",
+            approvals.length > 0 ? "text-[var(--caution)]" : "text-[var(--overlay-1)]",
+          )}
+        >
+          Approvals <span className="font-mono">{approvals.length}</span>
+        </Link>
+        <Link to={RUN_BOARD_URL} className="font-ui text-[10.5px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]">
+          Active runs <span className="font-mono">{visibleRuns.length}</span>
+        </Link>
+      </div>
+
+      <div className="shrink-0 border-t border-[var(--border)] px-3 pb-3 pt-2">
+        <div className="relative rounded-lg border border-[var(--border)] bg-[var(--base)] transition-colors focus-within:border-[var(--accent-border)]">
+          {plusMenuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="fixed inset-0 z-30 cursor-default"
+                onClick={() => setPlusMenuOpen(false)}
+              />
+              <div className="absolute bottom-full left-0 z-40 mb-2 max-h-72 w-[280px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[var(--shadow-elevated)]">
+                <p className="px-3 py-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Run workflow
+                </p>
+                {workflows.length === 0 ? (
+                  <p className="px-3 py-1.5 font-ui text-[11px] text-[var(--overlay-1)]">No active workflows.</p>
+                ) : (
+                  workflows.map((workflow) => (
+                    <button
+                      key={workflow.workflow_id}
+                      type="button"
+                      disabled={isStartingWorkflow}
+                      onClick={() => void handleStartWorkflow(workflow.workflow_id)}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <Play className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
+                      <span className="truncate">{workflow.name}</span>
+                    </button>
+                  ))
+                )}
+                <div className="my-1 border-t border-[var(--border-subtle)]" />
+                <p className="px-3 py-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  Actions
+                </p>
+                <button
+                  type="button"
+                  disabled={!chatDraft.trim() || isCreatingVoiceTask}
+                  onClick={() => void createTaskFromComposer()}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Plus className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
+                  {isCreatingVoiceTask ? "Creating task…" : "Create task from message"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canSpeak}
+                  onClick={() => {
+                    setPlusMenuOpen(false);
+                    void speakBrief();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Volume2 className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
+                  Speak status brief
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          <textarea
+            value={chatDraft}
+            onChange={(event) => setChatDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendChatMessage();
+              }
+            }}
+            rows={3}
+            placeholder={`Message ${targetAgent}…`}
+            className="max-h-40 min-h-[64px] w-full resize-none bg-transparent px-3 pt-2.5 font-ui text-[12.5px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
+          />
+          {interimTranscript ? (
+            <p className="px-3 font-ui text-[11px] italic leading-snug text-[var(--overlay-1)]" aria-live="polite">
+              {interimTranscript}…
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-1 px-2 pb-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setPlusMenuOpen((open) => !open)}
+              aria-label="Workflows and actions"
+              title="Workflows and actions"
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                plusMenuOpen
+                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                  : "text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+              )}
+            >
+              {isStartingWorkflow ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            </button>
             <select
               value={targetAgent}
               onChange={(event) => setSelectedAgent(event.target.value)}
-              aria-label="Agent chat target"
-              className="h-6 max-w-[158px] rounded border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[10.5px] text-[var(--subtext-0)] outline-none transition-colors focus:border-[var(--accent-border)]"
+              aria-label="Agent"
+              className="h-7 max-w-[132px] rounded-md border border-transparent bg-transparent px-1 font-ui text-[11px] text-[var(--subtext-0)] outline-none transition-colors hover:border-[var(--border)] focus:border-[var(--accent-border)]"
             >
               {agentOptions.map((agent) => (
                 <option key={agent} value={agent}>
@@ -648,239 +805,47 @@ export function AgentPanel() {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="rounded-md border border-[var(--border)] bg-[var(--base)] p-2.5">
-            <div className="mb-2 flex items-center gap-2 text-[var(--overlay-1)]">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate font-ui text-[10.5px]">
-                Same agent runtime as workflows
-              </span>
-            </div>
-            <textarea
-              value={chatDraft}
-              onChange={(event) => setChatDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  void sendChatMessage();
-                }
-              }}
-              rows={3}
-              placeholder="Message the loaded agent"
-              className="min-h-[72px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
-                Route, workflow, and voice state
-              </span>
-              <button
-                type="button"
-                onClick={() => void sendChatMessage()}
-                disabled={!chatDraft.trim() || isSendingChat}
-                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
-              >
-                {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Send
-              </button>
-            </div>
-            {visibleChatEntries.length > 0 ? (
-              <div className="mt-2 space-y-1.5 border-t border-[var(--border-subtle)] pt-2">
-                {visibleChatEntries.map((entry) => (
-                  <div key={entry.id} className="rounded border border-[var(--border-subtle)] px-2 py-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-ui text-[10px] font-medium text-[var(--subtext-0)]">
-                        {entry.targetAgent} / {entry.status === "submitted" ? "Sent" : entry.status === "queued" ? "Queued" : "Failed"}
-                      </span>
-                      <span className="shrink-0 font-ui text-[10px] text-[var(--overlay-1)]">
-                        {formatRunTime(entry.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--text)]">{entry.message}</p>
-                    {entry.reply ? (
-                      <p className="mt-1.5 border-l-2 border-[var(--accent-border)] pl-2 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">
-                        {entry.reply}
-                      </p>
-                    ) : null}
-                    {entry.widget ? <AgentChatWidget widget={entry.widget} /> : null}
-                    <p className="mt-1 truncate font-mono text-[9.5px] text-[var(--overlay-1)]">{entry.detail}</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="mb-5 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Start Workflow</h2>
-            <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--subtext-0)]">
-              {workflows.length}
-            </span>
-          </div>
-          <div className="rounded-md border border-[var(--border)] bg-[var(--base)] p-2.5">
-            <select
-              value={activeWorkflowId}
-              onChange={(event) => setSelectedWorkflowId(event.target.value)}
-              disabled={workflows.length === 0 || isStartingWorkflow}
-              aria-label="Workflow"
-              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] outline-none transition-colors focus:border-[var(--accent-border)] disabled:opacity-50"
-            >
-              {workflows.length === 0 ? (
-                <option value="">No workflows</option>
-              ) : (
-                workflows.map((workflow) => (
-                  <option key={workflow.id} value={workflow.workflow_id}>
-                    {workflow.name}
-                  </option>
-                ))
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={startVoiceDraft}
+              disabled={!canListen}
+              aria-label={isListening ? "Stop dictation" : "Dictate"}
+              title={isListening ? "Stop dictation" : "Dictate"}
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40",
+                isListening
+                  ? "bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]"
+                  : "text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
               )}
-            </select>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate font-ui text-[10.5px] text-[var(--overlay-1)]">
-                {selectedWorkflow?.default_actor ?? selectedWorkflow?.owner_role ?? "No actor"}
-              </span>
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+            {isSpeaking ? (
               <button
                 type="button"
-                onClick={handleStartWorkflow}
-                disabled={!activeWorkflowId || isStartingWorkflow}
-                className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
+                onClick={stopSpeaking}
+                aria-label="Stop speaking"
+                title="Stop speaking"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)] transition-colors"
               >
-                {isStartingWorkflow ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                Start
+                <Square className="h-4 w-4" />
               </button>
-            </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void sendChatMessage()}
+              disabled={!chatDraft.trim() || isSendingChat}
+              aria-label="Send message"
+              title="Send (Enter)"
+              className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40"
+            >
+              {isSendingChat ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </button>
           </div>
-        </section>
-
-        <section className="mb-5 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Voice</h2>
-            <div className="flex items-center gap-1">
-              <span className="mr-1 max-w-[92px] truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-ui text-[10px] text-[var(--subtext-0)]">
-                {voiceProviderLabel}
-              </span>
-              <button
-                type="button"
-                onClick={startVoiceDraft}
-                disabled={!canListen}
-                aria-label={isListening ? "Stop dictation" : "Start dictation"}
-                title={isListening ? "Stop dictation" : "Start dictation"}
-                className={cn(
-                  "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40",
-                  isListening
-                    ? "border-[color-mix(in_srgb,var(--danger)_34%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
-                    : "border-[var(--border)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                )}
-              >
-                {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-              </button>
-              <button
-                type="button"
-                onClick={speakBrief}
-                disabled={!canSpeak}
-                aria-label={isSpeaking ? "Stop speaking" : "Speak brief"}
-                title={isSpeaking ? "Stop speaking" : "Speak brief"}
-                className={cn(
-                  "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40",
-                  isSpeaking
-                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "border-[var(--border)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                )}
-              >
-                {isSpeaking ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-          </div>
-          <textarea
-            value={voiceDraft}
-            onChange={(event) => setVoiceDraft(event.target.value)}
-            rows={3}
-            placeholder="Dictated context"
-            className="min-h-[76px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
-          />
-          {interimTranscript ? (
-            <p className="font-ui text-[11px] italic leading-snug text-[var(--overlay-1)]" aria-live="polite">
-              {interimTranscript}…
-            </p>
-          ) : null}
-          {voiceDraft.trim() ? (
-            <div className="flex justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={createTaskFromVoiceDraft}
-                disabled={isCreatingVoiceTask}
-                className="inline-flex h-6 items-center justify-center gap-1 rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
-              >
-                {isCreatingVoiceTask ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                Create task
-              </button>
-              <button
-                type="button"
-                onClick={() => setVoiceDraft("")}
-                className="inline-flex h-6 items-center justify-center rounded border border-[var(--border)] px-2 font-ui text-[10.5px] font-medium text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              >
-                Clear
-              </button>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Operations</h2>
-          <div className="overflow-hidden rounded-md border border-[var(--border)] bg-[var(--base)]">
-            <CountRow
-              label="Approvals"
-              count={approvals.length}
-              to={APPROVAL_QUEUE_URL}
-              tone={approvals.length > 0 ? "caution" : "neutral"}
-            />
-            <div className="border-t border-[var(--border-subtle)]" />
-            <CountRow
-              label="Active runs"
-              count={visibleRuns.length}
-              to={RUN_BOARD_URL}
-              tone="neutral"
-              loading={isFetching}
-            />
-          </div>
-        </section>
+        </div>
       </div>
     </aside>
   );
 }
 
-function CountRow({
-  label,
-  count,
-  to,
-  tone,
-  loading = false,
-}: {
-  label: string;
-  count: number;
-  to: string;
-  tone: "caution" | "neutral";
-  loading?: boolean;
-}) {
-  return (
-    <Link
-      to={to}
-      className="flex items-center justify-between gap-2 px-3 py-2 transition-colors hover:bg-[var(--surface-wash)]"
-    >
-      <span className="font-ui text-[12px] font-medium text-[var(--text)]">{label}</span>
-      <span className="flex items-center gap-1.5">
-        <span
-          className={cn(
-            "rounded-full border px-1.5 py-0.5 font-mono text-[10px]",
-            tone === "caution" && count > 0
-              ? "border-[color-mix(in_srgb,var(--caution)_42%,transparent)] text-[var(--caution)]"
-              : "border-[var(--border)] text-[var(--subtext-0)]",
-          )}
-        >
-          {loading ? "…" : count}
-        </span>
-        <ExternalLink className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
-      </span>
-    </Link>
-  );
-}
