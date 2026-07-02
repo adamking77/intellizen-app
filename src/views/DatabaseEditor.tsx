@@ -10,6 +10,7 @@ import { DatabaseGalleryView } from "@/components/database/DatabaseGalleryView";
 import { DatabaseKanbanView } from "@/components/database/DatabaseKanbanView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
 import { DatabasePeekPanel } from "@/components/database/DatabasePeekPanel";
+import { DatabaseTrashPanel } from "@/components/database/RecordInsightSections";
 import { DatabaseSchemaEditor } from "@/components/database/DatabaseSchemaEditor";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { ViewTabBar } from "@/components/database/ViewTabBar";
@@ -118,6 +119,7 @@ export function DatabaseEditorView({
   const [activePeek, setActivePeek] = useState<{ databaseId: string; recordId: string } | null>(null);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [taxonomyEditorOpen, setTaxonomyEditorOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [taxonomyDraft, setTaxonomyDraft] = useState(() => taxonomyDraftFromMetadata(null));
   const [taxonomySaving, setTaxonomySaving] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
@@ -1365,17 +1367,34 @@ export function DatabaseEditorView({
               </span>
             ))}
           </div>
-          {!isSystemDatabase ? (
+          <div className="flex items-center gap-1.5">
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => setTaxonomyEditorOpen((open) => !open)}
+              onClick={() => setTrashOpen((open) => !open)}
             >
-              {taxonomyEditorOpen ? "Close taxonomy" : "Edit taxonomy"}
+              {trashOpen ? "Close trash" : "Trash"}
             </Button>
-          ) : null}
+            {!isSystemDatabase ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setTaxonomyEditorOpen((open) => !open)}
+              >
+                {taxonomyEditorOpen ? "Close taxonomy" : "Edit taxonomy"}
+              </Button>
+            ) : null}
+          </div>
         </div>
+        {trashOpen ? (
+          <DatabaseTrashPanel
+            databaseId={bundle.database.id}
+            schema={database.schema}
+            onClose={() => setTrashOpen(false)}
+          />
+        ) : null}
         {taxonomyEditorOpen && !isSystemDatabase ? (
           <div className="mb-4 grid max-w-2xl gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
             <TaxonomyFields value={taxonomyDraft} onChange={setTaxonomyDraft} />

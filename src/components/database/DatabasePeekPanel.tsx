@@ -17,6 +17,11 @@ import {
 } from "lucide-react";
 
 import { TaskRelationsSection } from "@/components/database/primitives/TaskRelationsSection";
+import {
+  RecordActivitySection,
+  RecordBacklinksSection,
+  RecordHistorySection,
+} from "@/components/database/RecordInsightSections";
 import { DatabaseRichTextEditor } from "@/components/database/primitives/DatabaseRichTextEditor";
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
@@ -24,11 +29,13 @@ import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
+  createRecordFromTemplate,
   GENZEN_WORKSPACE_DATABASE_IDS,
   listWorkflows,
   OPERATOR_ACTOR,
   requestWorkflowApproval,
   resolveWorkflowApproval,
+  saveRecordAsTemplate,
   updateWorkflowRun,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
@@ -138,7 +145,37 @@ export function DatabasePeekPanel({
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [isTemplateActionRunning, setIsTemplateActionRunning] = useState(false);
   const queryClient = useQueryClient();
+
+  async function handleSaveAsTemplate() {
+    if (!record || isTemplateActionRunning) return;
+    try {
+      setIsTemplateActionRunning(true);
+      await saveRecordAsTemplate(record.id);
+      await queryClient.invalidateQueries({ queryKey: ["workspace-database"] });
+      toast.success("Template saved", { description: "A template copy of this record was created." });
+    } catch (templateError) {
+      toastError("Template save failed", templateError);
+    } finally {
+      setIsTemplateActionRunning(false);
+    }
+  }
+
+  async function handleCreateFromTemplate() {
+    if (!record || isTemplateActionRunning) return;
+    try {
+      setIsTemplateActionRunning(true);
+      const created = await createRecordFromTemplate(record.id);
+      await queryClient.invalidateQueries({ queryKey: ["workspace-database"] });
+      toast.success("Record created from template");
+      onOpenRecord(created.database_id, created.id);
+    } catch (templateError) {
+      toastError("Create from template failed", templateError);
+    } finally {
+      setIsTemplateActionRunning(false);
+    }
+  }
   const { isStartingWorkflow, start: startRecordWorkflow } = useStartWorkflow({
     onStarted: () =>
       Promise.all([
@@ -728,6 +765,24 @@ export function DatabasePeekPanel({
             })
             .map(renderRelationSection)}
 
+          {record ? (
+            <RecordBacklinksSection
+              recordId={record.id}
+              databaseId={database.id}
+              catalog={catalog}
+              onOpenRecord={onOpenRecord}
+            />
+          ) : null}
+
+          {record ? (
+            <RecordActivitySection
+              recordId={record.id}
+              isWorkflowRun={database.id === GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}
+            />
+          ) : null}
+
+          {record ? <RecordHistorySection recordId={record.id} /> : null}
+
           <div className="db-record-section px-6 pb-6">
             <div className="db-record-section-head db-record-notes-head">
               <div className="db-record-notes-meta">
@@ -757,8 +812,29 @@ export function DatabasePeekPanel({
           <button className="db-btn db-btn-danger" onClick={() => setConfirmDelete(true)}>
             Delete
           </button>
+          {record?._isTemplate ? (
+            <button
+              className="db-btn db-btn-primary"
+              disabled={isTemplateActionRunning}
+              onClick={() => void handleCreateFromTemplate()}
+              title="Create a new record from this template"
+            >
+              {isTemplateActionRunning ? "Creating…" : "New from template"}
+            </button>
+          ) : (
+            <button
+              className="db-btn"
+              disabled={isTemplateActionRunning}
+              onClick={() => void handleSaveAsTemplate()}
+              title="Duplicate this record as a reusable template"
+            >
+              {isTemplateActionRunning ? "Saving…" : "Save as template"}
+            </button>
+          )}
           <span className="db-toolbar-spacer" />
-          <span className="db-record-footer-note">Changes save automatically</span>
+          <span className="db-record-footer-note">
+            {record?._isTemplate ? "Template record" : "Changes save automatically"}
+          </span>
         </div>
       </div>
 

@@ -772,7 +772,7 @@ function ViewSettingsModal({
 
   const coverCandidates = database.schema.filter((field) => field.type === "url" || field.type === "text");
   const chartType = activeView.chartType ?? "bar";
-  const groupCandidates = activeView.type === "kanban"
+  const groupCandidates = activeView.type === "kanban" || activeView.type === "table"
     ? database.schema.filter((field) => field.type === "status" || field.type === "select")
     : activeView.type === "calendar"
       ? database.schema.filter((field) => field.type === "date")

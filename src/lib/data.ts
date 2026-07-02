@@ -1796,6 +1796,7 @@ function hydrateWorkspaceDatabaseRecord(record: WorkspaceDatabaseRecord): Worksp
     _body: record.body ?? undefined,
     _createdAt: record.created_at,
     _updatedAt: record.updated_at,
+    _isTemplate: record.taxonomy?.is_template === true || undefined,
     ...(record.fields ?? {}),
   };
 }
@@ -3404,12 +3405,21 @@ export async function listAgentWork(input: {
   limit?: number;
 } = {}) {
   const rowLimit = Math.max(input.limit ?? 50, 1);
-  const { data, error } = await supabase
+  let query = supabase
     .schema("workspace").from("records")
     .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
     .order("updated_at", { ascending: false })
     .range(0, workspaceFilteredReadEnd(rowLimit));
+  // Server-side push-down (GIN-indexed jsonb): exact status filters and the
+  // done-exclusion run in Postgres instead of over-fetching for client trims.
+  if (input.statuses?.length) {
+    query = query.in(`fields->>${AGENT_TASK_FIELDS.status}`, input.statuses);
+  } else if (!input.includeDone) {
+    // Keep null-status rows (SQL != drops them), matching client semantics.
+    query = query.or(`fields->>${AGENT_TASK_FIELDS.status}.neq.Done,fields->>${AGENT_TASK_FIELDS.status}.is.null`);
+  }
+  const { data, error } = await query;
 
   if (error) throw error;
   const rows = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
@@ -4444,6 +4454,143 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     current_step: fieldString(created.fields[WORKFLOW_RUN_FIELDS.currentStep]),
     run: toWorkflowRunItem(created),
   };
+}
+
+// ============================
+// Record activity, history, and templates (Phase B)
+// ============================
+
+export interface WorkEventItem {
+  id: string;
+  record_id: string | null;
+  workflow_run_id: string | null;
+  event_kind: string;
+  actor: string;
+  durable_role: string | null;
+  decision_role: string | null;
+  summary: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; limit?: number }) {
+  let query = supabase
+    .schema("workspace").from("work_events")
+    .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, created_at")
+    .order("created_at", { ascending: false })
+    .limit(input.limit ?? 30);
+  if (input.recordId && input.workflowRunId) {
+    query = query.or(`record_id.eq.${input.recordId},workflow_run_id.eq.${input.workflowRunId}`);
+  } else if (input.recordId) {
+    query = query.eq("record_id", input.recordId);
+  } else if (input.workflowRunId) {
+    query = query.eq("workflow_run_id", input.workflowRunId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as WorkEventItem[];
+}
+
+export interface RecordRevisionItem {
+  id: string;
+  record_id: string;
+  database_id: string;
+  fields: Record<string, WorkspaceDatabaseFieldValue>;
+  body: string | null;
+  taxonomy: TaxonomyMetadata;
+  op: "update" | "delete";
+  revised_at: string;
+}
+
+export async function listRecordRevisions(recordId: string, limit = 20) {
+  const { data, error } = await supabase
+    .schema("workspace").from("record_revisions")
+    .select("id, record_id, database_id, fields, body, taxonomy, op, revised_at")
+    .eq("record_id", recordId)
+    .order("revised_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as RecordRevisionItem[];
+}
+
+/** Restore a record to a prior revision. The restore itself is captured as a new revision. */
+export async function restoreRecordRevision(revision: RecordRevisionItem) {
+  return updateWorkspaceRecord(
+    revision.record_id,
+    { fields: revision.fields, body: revision.body ?? "", taxonomy: revision.taxonomy },
+    true,
+  );
+}
+
+/** Latest delete-revision per record that no longer exists (the trash). */
+export async function listDeletedRecords(databaseId: string, limit = 25) {
+  const { data, error } = await supabase
+    .schema("workspace").from("record_revisions")
+    .select("id, record_id, database_id, fields, body, taxonomy, op, revised_at")
+    .eq("database_id", databaseId)
+    .eq("op", "delete")
+    .order("revised_at", { ascending: false })
+    .limit(limit * 3);
+  if (error) throw error;
+  const revisions = (data ?? []) as RecordRevisionItem[];
+  const latestByRecord = new Map<string, RecordRevisionItem>();
+  for (const revision of revisions) {
+    if (!latestByRecord.has(revision.record_id)) latestByRecord.set(revision.record_id, revision);
+  }
+  const candidates = Array.from(latestByRecord.values()).slice(0, limit);
+  if (candidates.length === 0) return [];
+  const { data: living, error: livingError } = await supabase
+    .schema("workspace").from("records")
+    .select("id")
+    .in("id", candidates.map((candidate) => candidate.record_id));
+  if (livingError) throw livingError;
+  const livingIds = new Set(((living ?? []) as Array<{ id: string }>).map((row) => row.id));
+  return candidates.filter((candidate) => !livingIds.has(candidate.record_id));
+}
+
+/** Re-insert a deleted record from its trash revision, keeping the original id. */
+export async function restoreDeletedRecord(revision: RecordRevisionItem) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .insert([
+      {
+        id: revision.record_id,
+        database_id: revision.database_id,
+        fields: revision.fields,
+        body: revision.body,
+        taxonomy: revision.taxonomy,
+      },
+    ])
+    .select("id, database_id, fields, body, taxonomy, created_at, updated_at")
+    .single();
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+}
+
+/** Duplicate a record as a reusable template (taxonomy.is_template = true). */
+export async function saveRecordAsTemplate(recordId: string) {
+  const record = await getWorkspaceRecord(recordId);
+  return createWorkspaceRecord({
+    databaseId: record.database_id,
+    fields: record.fields,
+    body: record.body,
+    taxonomy: { ...(record.taxonomy ?? {}), is_template: true },
+    skipSystemSync: true,
+  });
+}
+
+/** Create a fresh record from a template record (clears the template flag). */
+export async function createRecordFromTemplate(templateRecordId: string) {
+  const template = await getWorkspaceRecord(templateRecordId);
+  const taxonomy = { ...(template.taxonomy ?? {}) };
+  delete taxonomy.is_template;
+  return createWorkspaceRecord({
+    databaseId: template.database_id,
+    fields: template.fields,
+    body: template.body,
+    taxonomy,
+    skipSystemSync: true,
+  });
 }
 
 export async function deleteWorkspaceRecord(id: string, skipSystemSync = false) {

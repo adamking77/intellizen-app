@@ -223,6 +223,36 @@ export function DatabaseTableView({
       })
     : sorted;
 
+  // Grouped table rendering: sections per select/status option (view.groupBy).
+  const groupField =
+    view.groupBy != null
+      ? database.schema.find(
+          (field) => field.id === view.groupBy && (field.type === "select" || field.type === "status"),
+        )
+      : undefined;
+  const groupedRecords = useMemo(() => {
+    if (!groupField) return null;
+    const groups = new Map<string, typeof records>();
+    for (const record of records) {
+      const raw = record[groupField.id];
+      const key = typeof raw === "string" && raw.trim() ? raw : `No ${groupField.name}`;
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(record);
+      else groups.set(key, [record]);
+    }
+    const optionOrder = groupField.type === "status" ? STATUS_OPTIONS.slice() : groupField.options ?? [];
+    const ordered: Array<{ key: string; rows: typeof records }> = [];
+    for (const option of optionOrder) {
+      const rows = groups.get(option);
+      if (rows) {
+        ordered.push({ key: option, rows });
+        groups.delete(option);
+      }
+    }
+    for (const [key, rows] of groups) ordered.push({ key, rows });
+    return ordered;
+  }, [groupField, records]);
+
   // All records currently visible in the table: top-level + any sub-records
   // whose parent row is expanded. Used for selection state so sub-record
   // checkboxes contribute to the bulk-action count.
@@ -715,7 +745,24 @@ export function DatabaseTableView({
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => renderRowGroup(record))}
+            {groupedRecords
+              ? groupedRecords.map((group) => (
+                  <Fragment key={group.key}>
+                    <tr>
+                      <td
+                        colSpan={visibleFields.length + 2}
+                        className="border-b border-[var(--border-subtle)] bg-[var(--surface-wash)] px-3 py-1.5"
+                      >
+                        <span className="font-ui text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          {group.key}
+                        </span>
+                        <span className="ml-2 font-mono text-[10px] text-[var(--subtext-0)]">{group.rows.length}</span>
+                      </td>
+                    </tr>
+                    {group.rows.map((record) => renderRowGroup(record))}
+                  </Fragment>
+                ))
+              : records.map((record) => renderRowGroup(record))}
             {!embedded ? (
               <tr className="db-add-row">
                 <td colSpan={visibleFields.length + 2}>

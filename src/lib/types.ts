@@ -622,6 +622,8 @@ export interface WorkspaceDatabaseRecordModel {
   _body?: string;
   _createdAt?: string;
   _updatedAt?: string;
+  /** True when taxonomy.is_template is set — reusable record template. */
+  _isTemplate?: boolean;
   [fieldId: string]: WorkspaceDatabaseFieldValue;
 }
 
