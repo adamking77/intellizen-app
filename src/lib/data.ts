@@ -3,6 +3,13 @@ import {
   signalDraftFromDeepResearch,
   signalDraftFromSearchResult,
 } from "@/lib/exa";
+import {
+  appendMarkdownSection,
+  formatAgentWorkTimestamp,
+  latestBodyField,
+  latestMarkdownSection,
+  markdownList,
+} from "@/lib/agent-work-text";
 import { resolveStatusColor } from "@/lib/database-colors";
 import type {
   CanvasDocument,
@@ -70,6 +77,16 @@ export const GENZEN_WORKSPACE_DATABASE_IDS = {
   workflowRegistry: "c1000000-0000-0000-0000-000000000001",
   workflowRuns: "c1000000-0000-0000-0000-000000000002",
 } as const;
+
+export const WORKFLOW_RUN_VIEW_IDS = {
+  runBoard: "c2000000-0000-0000-0000-000000000102",
+  approvalQueue: "c2000000-0000-0000-0000-000000000103",
+} as const;
+
+// Single-user desktop identity: UI-originated actions are attributed to the
+// operator. Replace with a real session identity when IntelliZen gains one.
+export const OPERATOR_ACTOR = "Adam";
+export const FOUNDER_APPROVAL_ROLE = "founder_approval_authority";
 
 const AGENT_TASK_FIELDS = {
   name: "task_name",
@@ -3158,10 +3175,6 @@ export async function updateWorkspaceRecord(
   return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body, input.taxonomy);
 }
 
-function formatAgentWorkTimestamp(date = new Date()) {
-  return date.toISOString().replace("T", " ").slice(0, 16);
-}
-
 function asStringArray(value: WorkspaceDatabaseFieldValue): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
   return typeof value === "string" && value ? [value] : [];
@@ -3173,47 +3186,59 @@ function fieldString(value: WorkspaceDatabaseFieldValue): string | null {
   return null;
 }
 
-function appendMarkdownSection(body: string | null | undefined, section: string) {
-  const trimmedBody = (body ?? "").trimEnd();
-  return trimmedBody ? `${trimmedBody}\n\n${section}` : section;
-}
-
 function newRecordId(prefix = "delegation") {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function markdownList(items?: string[]) {
-  if (!items?.length) return "none";
-  return items.map((item) => `- ${item}`).join("\n");
+/**
+ * Atomically append a markdown section to a record body (and optionally merge
+ * a partial fields patch) through the workspace.append_record_section RPC.
+ * Concurrent appends serialize server-side instead of clobbering each other.
+ */
+async function appendRecordSectionAtomic(
+  recordId: string,
+  section: string,
+  fieldsPatch?: Record<string, WorkspaceDatabaseFieldValue>,
+) {
+  const { data, error } = await supabase.schema("workspace").rpc("append_record_section", {
+    p_record_id: recordId,
+    p_section: section,
+    p_fields_patch: fieldsPatch ?? null,
+  });
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
-function latestBodyField(body: string | null | undefined, labels: string[]) {
-  const source = body ?? "";
-  let latest: string | null = null;
-  for (const label of labels) {
-    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matches = source.matchAll(new RegExp(`^${escaped}:\\s*(.+)$`, "gim"));
-    for (const match of matches) {
-      const value = match[1]?.trim();
-      if (value && value !== "none") latest = value;
-    }
-  }
-  return latest;
+interface WorkEventInput {
+  recordId?: string | null;
+  workflowRunId?: string | null;
+  eventKind: string;
+  actor: string;
+  durableRole?: string | null;
+  decisionRole?: string | null;
+  summary?: string | null;
+  payload?: Record<string, unknown>;
 }
 
-function latestMarkdownSection(body: string | null | undefined, headings: string[]) {
-  const source = (body ?? "").trim();
-  if (!source) return null;
-  const sections = source.split(/\n(?=##\s+)/g);
-  for (let index = sections.length - 1; index >= 0; index -= 1) {
-    const section = sections[index]?.trim();
-    if (!section) continue;
-    const firstLine = section.split("\n", 1)[0]?.replace(/^##\s*/, "") ?? "";
-    if (headings.some((heading) => firstLine.startsWith(heading))) {
-      return section.slice(0, 900);
-    }
-  }
-  return null;
+/**
+ * Insert into the append-only workspace.work_events audit log. Best-effort:
+ * the body-section receipt remains the primary record, so an audit failure
+ * warns instead of failing the operation.
+ */
+async function recordWorkEvent(input: WorkEventInput) {
+  const { error } = await supabase.schema("workspace").from("work_events").insert([
+    {
+      record_id: input.recordId ?? null,
+      workflow_run_id: input.workflowRunId ?? null,
+      event_kind: input.eventKind,
+      actor: input.actor,
+      durable_role: input.durableRole ?? null,
+      decision_role: input.decisionRole ?? null,
+      summary: input.summary ?? null,
+      payload: input.payload ?? {},
+    },
+  ]);
+  if (error) console.warn(`work_events insert failed (${input.eventKind}):`, error.message);
 }
 
 function firstRelationId(value: WorkspaceDatabaseFieldValue) {
@@ -3489,6 +3514,17 @@ Review, assign, or attach this draft to a registered workflow.`;
     skipSystemSync: true,
   });
 
+  await recordWorkEvent({
+    recordId: record.id,
+    eventKind: "voice_intake",
+    actor: input.requestedBy,
+    summary: input.transcript.slice(0, 300),
+    payload: {
+      source_route: input.sourceRoute ?? null,
+      source_provider: input.sourceProvider ?? null,
+    },
+  });
+
   return {
     dry_run: false,
     task_id: record.id,
@@ -3516,15 +3552,13 @@ export async function claimAgentWork(input: {
 }) {
   const record = await getWorkspaceRecord(input.workItemId);
   const currentAssignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
-  const nextFields = {
-    ...record.fields,
+  const fieldsPatch: Record<string, WorkspaceDatabaseFieldValue> = {
     [AGENT_TASK_FIELDS.status]: "In progress",
     [AGENT_TASK_FIELDS.stage]: "Doing",
-    [AGENT_TASK_FIELDS.assignee]:
-      currentAssignees.length === 0 || input.reassign
-        ? input.claimedByActor
-        : record.fields[AGENT_TASK_FIELDS.assignee],
   };
+  if (currentAssignees.length === 0 || input.reassign) {
+    fieldsPatch[AGENT_TASK_FIELDS.assignee] = input.claimedByActor;
+  }
   const section = `## Agent Claim - ${formatAgentWorkTimestamp()}
 
 Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
@@ -3537,11 +3571,21 @@ Sources checked:
 ${markdownList(input.sourcesChecked)}
 Approval needed before: ${input.approvalNeededBefore ?? "none"}`;
 
-  const updated = await updateWorkspaceRecord(
-    record.id,
-    { fields: nextFields, body: appendMarkdownSection(record.body, section) },
-    true,
-  );
+  const updated = await appendRecordSectionAtomic(record.id, section, fieldsPatch);
+  await recordWorkEvent({
+    recordId: record.id,
+    eventKind: "claim",
+    actor: input.claimedByActor,
+    durableRole: input.durableRole,
+    summary: input.reason,
+    payload: {
+      functional_lane: input.functionalLane,
+      backup_actor: input.backupActor ?? null,
+      sources_checked: input.sourcesChecked ?? [],
+      approval_needed_before: input.approvalNeededBefore ?? null,
+      reassign: Boolean(input.reassign),
+    },
+  });
   return toAgentWorkItem(updated);
 }
 
@@ -3554,7 +3598,6 @@ export async function appendAgentWorkNote(input: {
   sources?: string[];
   openQuestions?: string[];
 }) {
-  const record = await getWorkspaceRecord(input.workItemId);
   const section = `## Agent Note - ${formatAgentWorkTimestamp()}
 
 Actor: ${input.actor}
@@ -3567,11 +3610,19 @@ ${markdownList(input.sources)}
 Open questions:
 ${markdownList(input.openQuestions)}`;
 
-  const updated = await updateWorkspaceRecord(
-    record.id,
-    { body: appendMarkdownSection(record.body, section) },
-    true,
-  );
+  const updated = await appendRecordSectionAtomic(input.workItemId, section);
+  await recordWorkEvent({
+    recordId: input.workItemId,
+    eventKind: "note",
+    actor: input.actor,
+    durableRole: input.durableRole,
+    summary: input.note.slice(0, 300),
+    payload: {
+      functional_lane: input.functionalLane,
+      sources: input.sources ?? [],
+      open_questions: input.openQuestions ?? [],
+    },
+  });
   return toAgentWorkItem(updated);
 }
 
@@ -3599,8 +3650,7 @@ export async function closeAgentWork(input: {
     deferred: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Backlog",
     needs_approval: "Review",
   };
-  const nextFields = {
-    ...record.fields,
+  const fieldsPatch: Record<string, WorkspaceDatabaseFieldValue> = {
     [AGENT_TASK_FIELDS.status]: statusByOutcome[input.outcome],
     [AGENT_TASK_FIELDS.stage]: stageByOutcome[input.outcome],
   };
@@ -3634,11 +3684,19 @@ Next step: ${input.receipt.next_step ?? "none"}
 Summary:
 ${input.receipt.summary}`;
 
-  const updated = await updateWorkspaceRecord(
-    record.id,
-    { fields: nextFields, body: appendMarkdownSection(record.body, section) },
-    true,
-  );
+  const updated = await appendRecordSectionAtomic(record.id, section, fieldsPatch);
+  await recordWorkEvent({
+    recordId: record.id,
+    eventKind: "receipt",
+    actor: input.currentActor ?? input.actor,
+    durableRole: input.durableRole,
+    summary: input.receipt.summary.slice(0, 300),
+    payload: {
+      outcome: input.outcome,
+      functional_lane: input.functionalLane,
+      receipt: input.receipt,
+    },
+  });
   return toAgentWorkItem(updated);
 }
 
@@ -3763,11 +3821,23 @@ Receipt required: ${input.receiptRequired === false ? "no" : "yes"}
 Return path:
 ${returnPath}`;
 
-  const updatedParent = await updateWorkspaceRecord(
-    parent.id,
-    { fields: parent.fields, body: appendMarkdownSection(parent.body, parentSection), taxonomy: parent.taxonomy },
-    true,
-  );
+  const updatedParent = await appendRecordSectionAtomic(parent.id, parentSection);
+  await recordWorkEvent({
+    recordId: parent.id,
+    eventKind: "delegation",
+    actor: input.requestedActor?.trim() || requestedRole,
+    durableRole: requestedRole,
+    summary: reason,
+    payload: {
+      delegation_id: delegationId,
+      child_task_id: child.id,
+      expected_output: expectedOutput,
+      allowed_tools: allowedTools ?? [],
+      approval_limits: approvalLimits ?? [],
+      return_path: returnPath,
+      receipt_required: input.receiptRequired !== false,
+    },
+  });
 
   return {
     dry_run: false,
@@ -3909,8 +3979,8 @@ export async function updateWorkflowRun(input: UpdateWorkflowRunInput) {
   }
 
   const section = workflowRunUpdateSection(input);
-  const nextFields: Record<string, WorkspaceDatabaseFieldValue> = {
-    ...run.fields,
+  const runName = fieldString(run.fields[WORKFLOW_RUN_FIELDS.name]) ?? run.id;
+  const fieldsPatch: Record<string, WorkspaceDatabaseFieldValue> = {
     ...(input.status ? { [WORKFLOW_RUN_FIELDS.status]: input.status } : {}),
     ...(input.currentStep !== undefined ? { [WORKFLOW_RUN_FIELDS.currentStep]: input.currentStep } : {}),
     [WORKFLOW_RUN_FIELDS.receipt]: section,
@@ -3918,17 +3988,32 @@ export async function updateWorkflowRun(input: UpdateWorkflowRunInput) {
       ? { [WORKFLOW_RUN_FIELDS.completedAt]: new Date().toISOString() }
       : {}),
   };
-  const nextBody = appendMarkdownSection(run.body, section);
   const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
   const syncTask = input.syncTask !== false && Boolean(taskId);
   const taskState = taskStateForWorkflowRunStatus(input.status);
+  // Compact pointer for the linked task: keeps the parseable heading without
+  // duplicating the full receipt into a second growing record body.
+  const taskPointerSection = `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Workflow run: ${runName} (${run.id})
+Actor: ${input.actor}
+Status: ${input.status ?? "unchanged"}
+Current step: ${input.currentStep ?? "unchanged"}
+Approval needed: ${input.approvalNeeded ?? "none"}
+Next step: ${input.nextStep ?? "none"}
+Summary: ${input.summary}
+Details: see the Workflow Runs record receipt timeline.`;
 
   if (!input.confirmWrite) {
     return {
       dry_run: true,
       message: "Preview only. Re-run with confirmWrite: true to update the Workflow Runs record.",
       workflow_run_id: run.id,
-      next_run: toWorkflowRunItem({ ...run, fields: nextFields, body: nextBody }),
+      next_run: toWorkflowRunItem({
+        ...run,
+        fields: { ...run.fields, ...fieldsPatch },
+        body: appendMarkdownSection(run.body, section),
+      }),
       task_sync: syncTask
         ? {
             task_id: taskId,
@@ -3941,43 +4026,114 @@ export async function updateWorkflowRun(input: UpdateWorkflowRunInput) {
     };
   }
 
-  const updatedRun = await updateWorkspaceRecord(
-    run.id,
-    {
-      fields: nextFields,
-      body: nextBody,
-      taxonomy: run.taxonomy,
-    },
-    true,
-  );
+  const updatedRun = await appendRecordSectionAtomic(run.id, section, fieldsPatch);
 
   let syncedTask: AgentWorkItem | null = null;
   if (syncTask && taskId) {
-    const task = await getWorkspaceRecord(taskId);
-    const nextTaskFields = taskState
+    const taskPatch: Record<string, WorkspaceDatabaseFieldValue> | undefined = taskState
       ? {
-          ...task.fields,
           [AGENT_TASK_FIELDS.status]: taskState.status,
           [AGENT_TASK_FIELDS.stage]: taskState.stage,
         }
-      : task.fields;
-    const updatedTask = await updateWorkspaceRecord(
-      task.id,
-      {
-        fields: nextTaskFields,
-        body: appendMarkdownSection(task.body, section),
-        taxonomy: task.taxonomy,
-      },
-      true,
-    );
+      : undefined;
+    const updatedTask = await appendRecordSectionAtomic(taskId, taskPointerSection, taskPatch);
     syncedTask = toAgentWorkItem(updatedTask);
   }
+
+  await recordWorkEvent({
+    recordId: taskId ?? run.id,
+    workflowRunId: run.id,
+    eventKind: input.eventKind ?? "workflow_run_update",
+    actor: input.actor,
+    decisionRole: input.decisionRole ?? null,
+    summary: input.summary.slice(0, 300),
+    payload: {
+      status: input.status ?? null,
+      current_step: input.currentStep ?? null,
+      approval_needed: input.approvalNeeded ?? null,
+      blocked_items: input.blockedItems ?? [],
+      verification: input.verification ?? [],
+      actions_taken: input.actionsTaken ?? [],
+      next_step: input.nextStep ?? null,
+      synced_task_id: syncedTask?.id ?? null,
+    },
+  });
 
   return {
     dry_run: false,
     run: toWorkflowRunItem(updatedRun),
     synced_task: syncedTask,
   };
+}
+
+/**
+ * Move a Workflow Run to Needs approval with a concrete decision request.
+ * Same contract as the MCP request_workflow_approval tool.
+ */
+export async function requestWorkflowApproval(input: {
+  workflowRunId: string;
+  requestedBy: string;
+  approvalNeeded: string;
+  approvalType?: string | null;
+  summary?: string | null;
+  confirmWrite?: boolean;
+}) {
+  const approvalNeeded = input.approvalNeeded.trim();
+  if (!approvalNeeded) throw new Error("Approval request needs a concrete decision to make.");
+  const approvalType = input.approvalType?.trim() || "workflow";
+  return updateWorkflowRun({
+    workflowRunId: input.workflowRunId,
+    actor: input.requestedBy,
+    status: "Needs approval",
+    currentStep: `Approval requested: ${approvalNeeded}`,
+    summary: input.summary ?? `${approvalType} approval requested: ${approvalNeeded}`,
+    actionsTaken: [`Requested ${approvalType} approval`],
+    approvalNeeded,
+    nextStep: "Await approval decision",
+    eventKind: "approval_request",
+    confirmWrite: input.confirmWrite,
+  });
+}
+
+export type WorkflowApprovalDecision = "approved" | "rejected" | "changes_requested";
+
+/**
+ * Record an approval decision. decidedBy is required: approval decisions are
+ * never attributed to a default identity.
+ */
+export async function resolveWorkflowApproval(input: {
+  workflowRunId: string;
+  decision: WorkflowApprovalDecision;
+  decisionSummary: string;
+  decidedBy: string;
+  decisionRole?: string;
+  approvalType?: string | null;
+  confirmWrite?: boolean;
+}) {
+  const decidedBy = input.decidedBy.trim();
+  if (!decidedBy) throw new Error("resolveWorkflowApproval requires decidedBy: approval decisions must name the decision maker.");
+  const decisionSummary = input.decisionSummary.trim();
+  if (!decisionSummary) throw new Error("resolveWorkflowApproval requires a decision summary.");
+
+  const approvalType = input.approvalType?.trim() || "workflow";
+  const decisionLabel = input.decision.replace("_", " ");
+  const nextStatus: WorkflowRunStatus =
+    input.decision === "approved" ? "In progress" : input.decision === "changes_requested" ? "Needs approval" : "Blocked";
+
+  return updateWorkflowRun({
+    workflowRunId: input.workflowRunId,
+    actor: decidedBy,
+    status: nextStatus,
+    currentStep: `Approval ${decisionLabel}: ${approvalType}`,
+    summary: `${approvalType} approval ${decisionLabel} by ${decidedBy}: ${decisionSummary}`,
+    actionsTaken: [`Resolved ${approvalType} approval as ${decisionLabel}`],
+    blockedItems: input.decision === "approved" ? undefined : [decisionSummary],
+    approvalNeeded: input.decision === "approved" ? null : decisionSummary,
+    nextStep: input.decision === "approved" ? "Resume workflow execution" : "Revise and return for approval",
+    eventKind: "approval_decision",
+    decisionRole: input.decisionRole ?? FOUNDER_APPROVAL_ROLE,
+    confirmWrite: input.confirmWrite,
+  });
 }
 
 export async function listWorkflows(input: {
@@ -4173,6 +4329,23 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     await appendWorkspaceRecordRelation(input.bizOpsId, AGENT_BIZ_OPS_FIELDS.workflowRuns, created.id);
   }
 
+  await recordWorkEvent({
+    recordId: input.taskId ?? created.id,
+    workflowRunId: created.id,
+    eventKind: "workflow_run_started",
+    actor: input.requestedBy,
+    durableRole: workflowItem.owner_role,
+    summary: runName,
+    payload: {
+      workflow_id: input.workflowId,
+      trigger_source: input.triggerSource,
+      entity_scope: input.entityScope ?? workflowItem.entity ?? null,
+      task_id: input.taskId ?? null,
+      biz_ops_id: input.bizOpsId ?? null,
+      requires_approval: Boolean(input.requiresApproval),
+    },
+  });
+
   if (!input.requiresApproval) {
     try {
       const dispatch = await submitWorkflow({
@@ -4199,8 +4372,10 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         config: {
           confirm_write_required: true,
           sync_task: true,
+          ...(input.config ?? {}),
         },
         prompt:
+          input.dispatchPrompt ??
           "Use the configured IntelliZen workspace tools to continue this Workflow Run. Keep writes bounded to the supplied workflow_run_id and linked records, append receipts for every state change, and request approval before any external-facing artifact or irreversible action.",
       });
       const section = workflowRuntimeDispatchSection({
@@ -4210,23 +4385,28 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         messageId: dispatch.messageId,
         inboxItemId: dispatch.inboxItemId,
       });
-      created = await updateWorkspaceRecord(
-        created.id,
-        {
-          fields: {
-            ...created.fields,
-            [WORKFLOW_RUN_FIELDS.status]: "In progress",
-            [WORKFLOW_RUN_FIELDS.currentStep]: "Dispatched to local runtime",
-            [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
-              fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
-              section,
-            ),
-          },
-          body: appendMarkdownSection(created.body, section),
-          taxonomy: created.taxonomy,
+      created = await appendRecordSectionAtomic(created.id, section, {
+        [WORKFLOW_RUN_FIELDS.status]: "In progress",
+        [WORKFLOW_RUN_FIELDS.currentStep]: "Dispatched to local runtime",
+        [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
+          fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
+          section,
+        ),
+      });
+      await recordWorkEvent({
+        recordId: input.taskId ?? created.id,
+        workflowRunId: created.id,
+        eventKind: "dispatch",
+        actor: input.requestedBy,
+        summary: `Dispatched ${runName} (${dispatch.status})`,
+        payload: {
+          workflow_id: input.workflowId,
+          dispatch_status: dispatch.status,
+          message_id: dispatch.messageId ?? null,
+          inbox_item_id: dispatch.inboxItemId ?? null,
+          dispatch_error: dispatch.dispatchError ?? null,
         },
-        true,
-      );
+      });
     } catch (error) {
       const section = workflowRuntimeDispatchSection({
         status: "failed",
@@ -4234,22 +4414,25 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         workflowRunId: created.id,
         error,
       });
-      created = await updateWorkspaceRecord(
-        created.id,
-        {
-          fields: {
-            ...created.fields,
-            [WORKFLOW_RUN_FIELDS.currentStep]: "Runtime dispatch needs retry",
-            [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
-              fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
-              section,
-            ),
-          },
-          body: appendMarkdownSection(created.body, section),
-          taxonomy: created.taxonomy,
+      created = await appendRecordSectionAtomic(created.id, section, {
+        [WORKFLOW_RUN_FIELDS.currentStep]: "Runtime dispatch needs retry",
+        [WORKFLOW_RUN_FIELDS.receipt]: appendMarkdownSection(
+          fieldString(created.fields[WORKFLOW_RUN_FIELDS.receipt]),
+          section,
+        ),
+      });
+      await recordWorkEvent({
+        recordId: input.taskId ?? created.id,
+        workflowRunId: created.id,
+        eventKind: "dispatch",
+        actor: input.requestedBy,
+        summary: `Dispatch failed for ${runName}`,
+        payload: {
+          workflow_id: input.workflowId,
+          dispatch_status: "failed",
+          dispatch_error: error instanceof Error ? error.message : String(error),
         },
-        true,
-      );
+      });
     }
   }
 

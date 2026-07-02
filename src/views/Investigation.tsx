@@ -37,13 +37,14 @@ import {
   listProjects,
   listSignals,
   listVaultFiles,
+  OPERATOR_ACTOR,
   removeSignalFromInvestigation,
   saveInvestigationBrief,
+  startWorkflow,
   updateInvestigation,
   updateInvestigationPhase,
 } from "@/lib/data";
 import { buildAnalysisPrompt } from "@/lib/shell";
-import { AgentWorkflowQueuedError, queueInvestigationAnalysis } from "@/services/agent";
 import type { Investigation, InvestigationUseCase } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -548,29 +549,36 @@ export function InvestigationView() {
         humintInput: selectedInvestigation.humint_input,
       });
 
-      await queueInvestigationAnalysis({
-        useCase,
-        caseId: selectedInvestigation.case_id,
-        investigationId: selectedInvestigation.id,
-        subject: selectedInvestigation.subject_definition ?? selectedInvestigation.name,
-        prompt,
+      // Dispatch through the registered workflow template so the analysis
+      // produces a durable Workflow Run with receipts, like every other
+      // agent dispatch in the app.
+      await startWorkflow({
+        workflowId: "intel.investigation_scoping_run",
+        triggerSource: "ui",
+        requestedBy: OPERATOR_ACTOR,
+        context: {
+          source: "investigation_route",
+          case_id: selectedInvestigation.case_id,
+          investigation_id: selectedInvestigation.id,
+          use_case: useCase,
+          subject: selectedInvestigation.subject_definition ?? selectedInvestigation.name,
+        },
+        dispatchPrompt: prompt,
+        confirmWrite: true,
       });
+
+      setAnalysisOutput("Analysis dispatched as a Workflow Run. Watching Reports for writeback…");
+      setPendingAnalysisWriteback({
+        caseId: selectedInvestigation.case_id,
+        startedAt: Date.now(),
+        initialFileIds: (vaultFiles ?? []).map((file) => file.id),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["fiona-inbox-pending-count"] });
+      await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
+      await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });
+      await queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "active"] });
+      toast.success("Analysis workflow run started");
     } catch (err) {
-      if (err instanceof AgentWorkflowQueuedError) {
-        const output =
-          "Fiona accepted this analysis request. Watching Reports for writeback…";
-        setAnalysisOutput(output);
-        setPendingAnalysisWriteback({
-          caseId: selectedInvestigation.case_id,
-          startedAt: Date.now(),
-          initialFileIds: (vaultFiles ?? []).map((file) => file.id),
-        });
-        await queryClient.invalidateQueries({ queryKey: ["fiona-inbox-pending-count"] });
-        await queryClient.invalidateQueries({ queryKey: ["vault-files-all"] });
-        await queryClient.invalidateQueries({ queryKey: ["vault-files", selectedInvestigation.case_id] });
-        toast.success("Analysis queued with Fiona");
-        return;
-      }
       const msg = err instanceof Error ? err.message : "Unknown error";
       setAnalysisOutput(`Error: ${msg}`);
       toastError("Analysis failed", err instanceof Error ? err : new Error(msg));

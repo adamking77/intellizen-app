@@ -23,7 +23,8 @@ import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownBody } from "@/components/ui/markdown-body";
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows, startWorkflow } from "@/lib/data";
+import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows } from "@/lib/data";
+import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -39,7 +40,6 @@ import type {
   WorkspaceDatabaseSchemaSaveOptions,
   WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
-import { toast, toastError } from "@/lib/toast";
 import { formatDateTime } from "@/lib/utils";
 
 let lastPanelWidth = 560;
@@ -130,8 +130,18 @@ export function DatabasePeekPanel({
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
-  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const queryClient = useQueryClient();
+  const { isStartingWorkflow, start: startRecordWorkflow } = useStartWorkflow({
+    onStarted: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace-database", database.id] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "active"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "approvals"] }),
+        queryClient.invalidateQueries({ queryKey: ["workflows", "agent-panel", "active"] }),
+      ]),
+  });
   const lastSavedNotesRef = useRef(String(record?._body ?? ""));
   const notesSaveSeqRef = useRef(0);
   const headerPickerRef = useRef<HTMLDivElement | null>(null);
@@ -352,41 +362,20 @@ export function DatabasePeekPanel({
   };
 
   async function handleStartRecordWorkflow() {
-    if (!record || !canStartRecordWorkflow || !activeWorkflowId || isStartingWorkflow) return;
-
-    try {
-      setIsStartingWorkflow(true);
-      const result = await startWorkflow({
-        workflowId: activeWorkflowId,
-        triggerSource: "ui",
-        requestedBy: "Adam",
-        entityScope: selectedWorkflow?.entity ?? undefined,
-        taskId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.tasks ? record.id : undefined,
-        bizOpsId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.bizOps ? record.id : undefined,
-        context: {
-          route: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
-          source: "database_peek_panel",
-          record_database_id: database.id,
-          record_id: record.id,
-        },
-        confirmWrite: true,
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["workspace-database", database.id] }),
-        queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
-        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
-        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "active"] }),
-        queryClient.invalidateQueries({ queryKey: ["workflow-runs", "agent-panel", "approvals"] }),
-        queryClient.invalidateQueries({ queryKey: ["workflows", "agent-panel", "active"] }),
-      ]);
-      toast.success("Workflow run started", {
-        description: result.run?.name ?? result.workflow_run_id,
-      });
-    } catch (startError) {
-      toastError("Workflow start failed", startError);
-    } finally {
-      setIsStartingWorkflow(false);
-    }
+    if (!record || !canStartRecordWorkflow || !activeWorkflowId) return;
+    await startRecordWorkflow({
+      workflowId: activeWorkflowId,
+      triggerSource: "ui",
+      entityScope: selectedWorkflow?.entity ?? undefined,
+      taskId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.tasks ? record.id : undefined,
+      bizOpsId: database.id === GENZEN_WORKSPACE_DATABASE_IDS.bizOps ? record.id : undefined,
+      context: {
+        route: typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`,
+        source: "database_peek_panel",
+        record_database_id: database.id,
+        record_id: record.id,
+      },
+    });
   }
 
   return (

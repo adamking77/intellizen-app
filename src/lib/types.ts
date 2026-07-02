@@ -246,6 +246,8 @@ export interface StartWorkflowInput {
   config?: Record<string, unknown>;
   requiresApproval?: boolean;
   confirmWrite?: boolean;
+  /** Runtime prompt forwarded on dispatch; defaults to the generic run prompt. */
+  dispatchPrompt?: string | null;
 }
 
 export interface UpdateWorkflowRunInput {
@@ -262,6 +264,10 @@ export interface UpdateWorkflowRunInput {
   nextStep?: string | null;
   syncTask?: boolean;
   confirmWrite?: boolean;
+  /** work_events audit kind; defaults to workflow_run_update. */
+  eventKind?: string;
+  /** Recorded on approval decisions, e.g. founder_approval_authority. */
+  decisionRole?: string | null;
 }
 
 export interface Operation {

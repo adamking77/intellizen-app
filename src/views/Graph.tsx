@@ -71,6 +71,8 @@ import {
   listInvestigations,
   listProjectSignals,
   listProjects,
+  OPERATOR_ACTOR,
+  startWorkflow,
   updateGraphEdge,
   updateGraphNode,
   updateGraphNodePosition,
@@ -81,7 +83,6 @@ import {
   writeVaultBinaryFile,
 } from "@/lib/vault";
 import { buildGraphExtractionPrompt } from "@/lib/shell";
-import { AgentWorkflowQueuedError, queueGraphExtraction } from "@/services/agent";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
@@ -1896,22 +1897,29 @@ export function GraphView() {
         }))
         .filter((s) => s.title);
 
-      await queueGraphExtraction({
-        projectId: graphProjectId,
-        prompt: buildGraphExtractionPrompt(signalInputs),
-        signalCount: signalInputs.length,
+      // Dispatch through the registered workflow template so extraction
+      // produces a durable Workflow Run with receipts.
+      await startWorkflow({
+        workflowId: "intel.graph_extraction",
+        triggerSource: "ui",
+        requestedBy: OPERATOR_ACTOR,
+        context: {
+          source: "graph_route",
+          project_id: graphProjectId,
+          signal_count: signalInputs.length,
+        },
+        dispatchPrompt: buildGraphExtractionPrompt(signalInputs),
+        confirmWrite: true,
       });
+
+      setPendingGraphExtraction({
+        projectId: graphProjectId,
+        startedAt: Date.now(),
+        initialNodeCount: nodes.length,
+        initialEdgeCount: edges.length,
+      });
+      setStatusMessage("Graph extraction dispatched as a Workflow Run. Watching for graph writeback…");
     } catch (error) {
-      if (error instanceof AgentWorkflowQueuedError) {
-        setPendingGraphExtraction({
-          projectId: graphProjectId,
-          startedAt: Date.now(),
-          initialNodeCount: nodes.length,
-          initialEdgeCount: edges.length,
-        });
-        setStatusMessage("Fiona accepted graph extraction. Watching for graph writeback…");
-        return;
-      }
       setErrorMessage(error instanceof Error ? error.message : "Failed to auto-generate graph.");
     } finally {
       setIsAutoGenerating(false);

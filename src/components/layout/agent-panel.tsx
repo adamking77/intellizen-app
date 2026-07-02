@@ -10,11 +10,15 @@ import {
   listFionaInboxItems,
   listWorkflowRuns,
   listWorkflows,
-  startWorkflow,
+  OPERATOR_ACTOR,
+  requestWorkflowApproval,
+  resolveWorkflowApproval,
   updateWorkflowRun,
+  WORKFLOW_RUN_VIEW_IDS,
 } from "@/lib/data";
 import type { FionaInboxItem, WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
+import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { sendToAgentChat } from "@/services/agent";
@@ -23,17 +27,20 @@ import {
   getPreferredVoiceOutputProvider,
   getVoiceProviderStatus,
   speakWithHermes,
+  startBrowserDictation,
+  supportsBrowserSpeechSynthesis,
   transcribeWithHermes,
 } from "@/services/voice";
-import type { VoiceProviderId } from "@/services/voice";
+import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice";
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
 const WORKFLOW_RUNS_DATABASE_ID = GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns;
-const RUN_BOARD_VIEW_ID = "c2000000-0000-0000-0000-000000000102";
-const APPROVAL_QUEUE_VIEW_ID = "c2000000-0000-0000-0000-000000000103";
 
 type RunAction = "start" | "request_approval" | "approve" | "block" | "done";
+// Approve/block/request-approval change governance state, so they require a
+// written decision note before they execute.
+const NOTE_REQUIRED_ACTIONS: RunAction[] = ["approve", "block", "request_approval"];
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -49,34 +56,6 @@ interface ChatPayloadContext {
   kind?: unknown;
   target_agent?: unknown;
   message?: unknown;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<{
-    isFinal: boolean;
-    0: {
-      transcript: string;
-    };
-  }>;
-}
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-interface VoiceWindow extends Window {
-  SpeechRecognition?: SpeechRecognitionConstructor;
-  webkitSpeechRecognition?: SpeechRecognitionConstructor;
 }
 
 function readCollapsed() {
@@ -108,6 +87,9 @@ function readChatHistory() {
 function workflowRunsUrl(viewId: string) {
   return `/databases?database=${WORKFLOW_RUNS_DATABASE_ID}&view=${viewId}`;
 }
+
+const RUN_BOARD_URL = workflowRunsUrl(WORKFLOW_RUN_VIEW_IDS.runBoard);
+const APPROVAL_QUEUE_URL = workflowRunsUrl(WORKFLOW_RUN_VIEW_IDS.approvalQueue);
 
 function formatRunTime(value: string | null) {
   if (!value) return "No timestamp";
@@ -142,12 +124,11 @@ function actionLabel(action: RunAction) {
   return "Done";
 }
 
-function actionConfig(action: RunAction, run: WorkflowRunItem): {
+function statusUpdateConfig(action: "start" | "done" | "block", run: WorkflowRunItem, note?: string): {
   status: WorkflowRunStatus;
   currentStep: string;
   summary: string;
   actionsTaken: string[];
-  approvalNeeded?: string | null;
   blockedItems?: string[];
   nextStep?: string | null;
 } {
@@ -161,33 +142,13 @@ function actionConfig(action: RunAction, run: WorkflowRunItem): {
       nextStep: "Execute the registered workflow steps",
     };
   }
-  if (action === "request_approval") {
-    return {
-      status: "Needs approval",
-      currentStep: "Awaiting approval",
-      summary: `Requested approval for ${title} from the Agent Panel.`,
-      actionsTaken: ["Requested approval from Agent Panel"],
-      approvalNeeded: "Approval requested from Agent Panel",
-      nextStep: "Await approval decision",
-    };
-  }
-  if (action === "approve") {
-    return {
-      status: "In progress",
-      currentStep: "Approval granted",
-      summary: `Approved ${title} from the Agent Panel.`,
-      actionsTaken: ["Resolved approval as approved from Agent Panel"],
-      approvalNeeded: null,
-      nextStep: "Resume workflow execution",
-    };
-  }
   if (action === "block") {
     return {
       status: "Blocked",
       currentStep: "Blocked from Agent Panel",
-      summary: `Blocked ${title} from the Agent Panel.`,
+      summary: `Blocked ${title}: ${note ?? "no reason recorded"}`,
       actionsTaken: ["Blocked workflow run from Agent Panel"],
-      blockedItems: ["Blocked from Agent Panel"],
+      blockedItems: [note ?? "Blocked from Agent Panel"],
       nextStep: "Review blocker and decide next action",
     };
   }
@@ -207,16 +168,6 @@ function actionsForRun(run: WorkflowRunItem): RunAction[] {
   if (status === "needs approval") return ["approve", "block"];
   if (status === "blocked") return ["start"];
   return [];
-}
-
-function getSpeechRecognitionConstructor() {
-  if (typeof window === "undefined") return null;
-  const voiceWindow = window as VoiceWindow;
-  return voiceWindow.SpeechRecognition ?? voiceWindow.webkitSpeechRecognition ?? null;
-}
-
-function supportsSpeechSynthesis() {
-  return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 }
 
 function buildVoiceBrief(approvals: WorkflowRunItem[], runs: WorkflowRunItem[]) {
@@ -269,9 +220,11 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
 export function AgentPanel() {
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
-  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [updatingRunId, setUpdatingRunId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ runId: string; action: RunAction } | null>(null);
+  const [actionNote, setActionNote] = useState("");
   const [voiceDraft, setVoiceDraft] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isCreatingVoiceTask, setIsCreatingVoiceTask] = useState(false);
@@ -279,34 +232,42 @@ export function AgentPanel() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const dictationRef = useRef<BrowserDictationSession | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { isCramped } = useWindowSize();
+  // Rail mode keeps the approvals badge alive but stops background polling.
+  const expanded = !collapsed && !isCramped;
 
   const workflowsQuery = useQuery({
     queryKey: ["workflows", "agent-panel", "active"],
     queryFn: () => listWorkflows({ includeInactive: false, limit: 24 }),
     staleTime: 60_000,
+    enabled: expanded,
   });
   const activeRunsQuery = useQuery({
     queryKey: ["workflow-runs", "agent-panel", "active"],
     queryFn: () => listWorkflowRuns({ includeCompleted: false, limit: 8 }),
-    refetchInterval: 60_000,
+    refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
+    enabled: expanded,
   });
   const approvalsQuery = useQuery({
     queryKey: ["workflow-runs", "agent-panel", "approvals"],
     queryFn: () => listWorkflowRuns({ status: "Needs approval", includeCompleted: true, limit: 8 }),
-    refetchInterval: 60_000,
+    refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
   });
   const agentChatQuery = useQuery({
     queryKey: ["agent-panel", "chat-receipts"],
     queryFn: () => listFionaInboxItems({ limit: 8 }),
-    refetchInterval: 60_000,
+    refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
+    enabled: expanded,
+  });
+  const { isStartingWorkflow, start: startWorkflowFromPanel } = useStartWorkflow({
+    onStarted: () => refresh(),
   });
 
   const activeRuns = activeRunsQuery.data ?? [];
@@ -358,10 +319,10 @@ export function AgentPanel() {
 
   useEffect(() => {
     return () => {
-      recognitionRef.current?.stop();
+      dictationRef.current?.stop();
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       audioRef.current?.pause();
-      if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
+      if (supportsBrowserSpeechSynthesis()) window.speechSynthesis.cancel();
     };
   }, []);
 
@@ -394,32 +355,18 @@ export function AgentPanel() {
   }
 
   async function handleStartWorkflow() {
-    if (!activeWorkflowId || isStartingWorkflow) return;
-
-    try {
-      setIsStartingWorkflow(true);
-      const result = await startWorkflow({
-        workflowId: activeWorkflowId,
-        triggerSource: "ui",
-        requestedBy: "Adam",
-        entityScope: selectedWorkflow?.entity ?? undefined,
-        context: {
-          route: typeof window === "undefined" ? null : window.location.pathname,
-          source: voiceDraft.trim() ? "agent_panel_voice_intake" : "agent_panel",
-          voice_provider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
-          voice_transcript: voiceDraft.trim() || null,
-        },
-        confirmWrite: true,
-      });
-      await refresh();
-      toast.success("Workflow run started", {
-        description: result.run?.name ?? result.workflow_run_id,
-      });
-    } catch (startError) {
-      toastError("Workflow start failed", startError);
-    } finally {
-      setIsStartingWorkflow(false);
-    }
+    if (!activeWorkflowId) return;
+    await startWorkflowFromPanel({
+      workflowId: activeWorkflowId,
+      triggerSource: "ui",
+      entityScope: selectedWorkflow?.entity ?? undefined,
+      context: {
+        route: typeof window === "undefined" ? null : window.location.pathname,
+        source: voiceDraft.trim() ? "agent_panel_voice_intake" : "agent_panel",
+        voice_provider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
+        voice_transcript: voiceDraft.trim() || null,
+      },
+    });
   }
 
   async function sendChatMessage() {
@@ -442,7 +389,7 @@ export function AgentPanel() {
             pending_approval_count: approvals.length,
             voice_input_provider: voiceInputProvider?.id ?? null,
             voice_output_provider: voiceOutputProvider?.id ?? null,
-            voice_transcript: voiceDraft.replace(/\s+\[[^\]]+\]$/, "").trim() || null,
+            voice_transcript: voiceDraft.trim() || null,
             voice_providers: voiceProviders.map((provider) => ({
               id: provider.id,
               configured: provider.configured,
@@ -496,9 +443,9 @@ export function AgentPanel() {
   }
 
   function appendVoiceDraft(text: string) {
-    const normalized = text.replace(/\s+\[[^\]]+\]$/, "").trim();
+    const normalized = text.trim();
     if (!normalized) return;
-    setVoiceDraft((current) => `${current.replace(/\s+\[[^\]]+\]$/, "").trim()}${current.trim() ? " " : ""}${normalized}`.trim());
+    setVoiceDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${normalized}`);
   }
 
   async function transcribeHermesRecording(audio: Blob) {
@@ -561,48 +508,30 @@ export function AgentPanel() {
 
   function startBrowserVoiceDraft() {
     if (isListening) {
-      recognitionRef.current?.stop();
+      dictationRef.current?.stop();
       setIsListening(false);
+      setInterimTranscript("");
       return;
     }
 
-    const Recognition = getSpeechRecognitionConstructor();
-    if (!Recognition) {
+    const session = startBrowserDictation({
+      onFinal: appendVoiceDraft,
+      onInterim: setInterimTranscript,
+      onError: (message) => {
+        setIsListening(false);
+        setInterimTranscript("");
+        toast.error("Speech recognition stopped", { description: message });
+      },
+      onEnd: () => {
+        setIsListening(false);
+        setInterimTranscript("");
+      },
+    });
+    if (!session) {
       toast.error("Speech recognition unavailable");
       return;
     }
-
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.onresult = (event) => {
-      let finalText = "";
-      let interimText = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result.isFinal) finalText += result[0].transcript;
-        else interimText += result[0].transcript;
-      }
-      if (finalText.trim()) {
-        appendVoiceDraft(finalText);
-      }
-      if (interimText.trim() && !finalText.trim()) {
-        setVoiceDraft((current) => current.replace(/\s+\[[^\]]+\]$/, "") + ` [${interimText.trim()}]`);
-      }
-    };
-    recognition.onerror = (event) => {
-      setIsListening(false);
-      toast.error("Speech recognition stopped", {
-        description: event.error ?? "Recognition error",
-      });
-    };
-    recognition.onend = () => {
-      setIsListening(false);
-      setVoiceDraft((current) => current.replace(/\s+\[[^\]]+\]$/, "").trim());
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
+    dictationRef.current = session;
     setIsListening(true);
   }
 
@@ -617,7 +546,7 @@ export function AgentPanel() {
   function stopSpeaking() {
     audioRef.current?.pause();
     audioRef.current = null;
-    if (supportsSpeechSynthesis()) window.speechSynthesis.cancel();
+    if (supportsBrowserSpeechSynthesis()) window.speechSynthesis.cancel();
     setIsSpeaking(false);
   }
 
@@ -632,7 +561,7 @@ export function AgentPanel() {
       return;
     }
 
-    if (!supportsSpeechSynthesis()) throw new Error("Speech output unavailable.");
+    if (!supportsBrowserSpeechSynthesis()) throw new Error("Speech output unavailable.");
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.94;
     utterance.onend = () => setIsSpeaking(false);
@@ -656,7 +585,7 @@ export function AgentPanel() {
       setIsSpeaking(true);
       await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), voiceOutputProvider.id);
     } catch (speakError) {
-      if (voiceOutputProvider.id === "hermes" && supportsSpeechSynthesis()) {
+      if (voiceOutputProvider.id === "hermes" && supportsBrowserSpeechSynthesis()) {
         try {
           await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), "browser");
           toast.error("Hermes speech unavailable", {
@@ -673,14 +602,14 @@ export function AgentPanel() {
   }
 
   async function createTaskFromVoiceDraft() {
-    const transcript = voiceDraft.replace(/\s+\[[^\]]+\]$/, "").trim();
+    const transcript = voiceDraft.trim();
     if (!transcript || isCreatingVoiceTask) return;
 
     try {
       setIsCreatingVoiceTask(true);
       const result = await createVoiceDraftTask({
         transcript,
-        requestedBy: "Adam",
+        requestedBy: OPERATOR_ACTOR,
         sourceRoute: typeof window === "undefined" ? null : window.location.pathname,
         sourceProvider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
         confirmWrite: true,
@@ -696,34 +625,113 @@ export function AgentPanel() {
     }
   }
 
-  async function handleRunAction(run: WorkflowRunItem, action: RunAction) {
+  function handleRunAction(run: WorkflowRunItem, action: RunAction) {
     if (updatingRunId) return;
-    const config = actionConfig(action, run);
+    if (NOTE_REQUIRED_ACTIONS.includes(action)) {
+      // Governance actions pause for a written decision note instead of
+      // executing on a bare click.
+      setPendingAction((current) =>
+        current?.runId === run.id && current.action === action ? null : { runId: run.id, action },
+      );
+      setActionNote("");
+      return;
+    }
+    void executeRunAction(run, action);
+  }
 
+  async function executeRunAction(run: WorkflowRunItem, action: RunAction, note?: string) {
     try {
       setUpdatingRunId(run.id);
-      const result = await updateWorkflowRun({
-        workflowRunId: run.id,
-        actor: "Adam",
-        status: config.status,
-        currentStep: config.currentStep,
-        summary: config.summary,
-        actionsTaken: config.actionsTaken,
-        verification: ["Updated from IntelliZen Agent Panel"],
-        blockedItems: config.blockedItems,
-        approvalNeeded: config.approvalNeeded,
-        nextStep: config.nextStep,
-        confirmWrite: true,
-      });
+      let result;
+      if (action === "approve") {
+        result = await resolveWorkflowApproval({
+          workflowRunId: run.id,
+          decision: "approved",
+          decisionSummary: note ?? "",
+          decidedBy: OPERATOR_ACTOR,
+          confirmWrite: true,
+        });
+      } else if (action === "request_approval") {
+        result = await requestWorkflowApproval({
+          workflowRunId: run.id,
+          requestedBy: OPERATOR_ACTOR,
+          approvalNeeded: note ?? "",
+          confirmWrite: true,
+        });
+      } else {
+        const config = statusUpdateConfig(action, run, note);
+        result = await updateWorkflowRun({
+          workflowRunId: run.id,
+          actor: OPERATOR_ACTOR,
+          status: config.status,
+          currentStep: config.currentStep,
+          summary: config.summary,
+          actionsTaken: config.actionsTaken,
+          verification: ["Updated from IntelliZen Agent Panel"],
+          blockedItems: config.blockedItems,
+          nextStep: config.nextStep,
+          confirmWrite: true,
+        });
+      }
+      setPendingAction(null);
+      setActionNote("");
       await refresh();
+      const updatedRun = "run" in result ? result.run : null;
       toast.success("Workflow run updated", {
-        description: result.run ? `${result.run.name}: ${result.run.status}` : runTitle(run),
+        description: updatedRun ? `${updatedRun.name}: ${updatedRun.status}` : runTitle(run),
       });
     } catch (actionError) {
       toastError("Workflow update failed", actionError);
     } finally {
       setUpdatingRunId(null);
     }
+  }
+
+  function renderNoteEditor(run: WorkflowRunItem) {
+    if (!pendingAction || pendingAction.runId !== run.id) return null;
+    const action = pendingAction.action;
+    const label =
+      action === "approve" ? "Decision note (required)" : action === "block" ? "Blocker reason (required)" : "Decision needed (required)";
+    const confirmLabel = action === "approve" ? "Confirm approve" : action === "block" ? "Confirm block" : "Request approval";
+    return (
+      <div className="mt-2 space-y-1.5 border-t border-[var(--border-subtle)] pt-2">
+        <label className="font-ui text-[10.5px] font-medium text-[var(--subtext-0)]">{label}</label>
+        <textarea
+          value={actionNote}
+          onChange={(event) => setActionNote(event.target.value)}
+          rows={2}
+          autoFocus
+          placeholder={
+            action === "approve"
+              ? "What is being approved and on what basis?"
+              : action === "block"
+                ? "What is blocking this run?"
+                : "What decision or permission is needed?"
+          }
+          className="w-full resize-none rounded border border-[var(--border)] bg-[var(--mantle)] px-2 py-1.5 font-ui text-[11px] leading-snug text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
+        />
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setPendingAction(null);
+              setActionNote("");
+            }}
+            className="inline-flex h-6 items-center justify-center rounded border border-[var(--border)] px-2 font-ui text-[10.5px] font-medium text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void executeRunAction(run, action, actionNote.trim())}
+            disabled={!actionNote.trim() || updatingRunId === run.id}
+            className="inline-flex h-6 items-center justify-center rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (collapsed || isCramped) {
@@ -955,6 +963,11 @@ export function AgentPanel() {
             placeholder="Dictated context"
             className="min-h-[76px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 py-2 font-ui text-[12px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
           />
+          {interimTranscript ? (
+            <p className="font-ui text-[11px] italic leading-snug text-[var(--overlay-1)]" aria-live="polite">
+              {interimTranscript}…
+            </p>
+          ) : null}
           {voiceDraft.trim() ? (
             <div className="flex justify-end gap-1.5">
               <button
@@ -981,7 +994,7 @@ export function AgentPanel() {
           <PanelSectionHeader
             label="Approvals"
             count={approvals.length}
-            to={workflowRunsUrl(APPROVAL_QUEUE_VIEW_ID)}
+            to={APPROVAL_QUEUE_URL}
           />
           {approvals.length > 0 ? (
             approvals.map((run) => (
@@ -991,6 +1004,7 @@ export function AgentPanel() {
                 approval
                 updating={updatingRunId === run.id}
                 onAction={handleRunAction}
+                noteEditor={pendingAction?.runId === run.id ? renderNoteEditor(run) : null}
               />
             ))
           ) : (
@@ -1002,7 +1016,7 @@ export function AgentPanel() {
           <PanelSectionHeader
             label="Active Runs"
             count={visibleRuns.length}
-            to={workflowRunsUrl(RUN_BOARD_VIEW_ID)}
+            to={RUN_BOARD_URL}
           />
           {visibleRuns.length > 0 ? (
             visibleRuns.map((run) => (
@@ -1011,6 +1025,7 @@ export function AgentPanel() {
                 run={run}
                 updating={updatingRunId === run.id}
                 onAction={handleRunAction}
+                noteEditor={pendingAction?.runId === run.id ? renderNoteEditor(run) : null}
               />
             ))
           ) : (
@@ -1021,7 +1036,7 @@ export function AgentPanel() {
 
       <div className="shrink-0 border-t border-[var(--border)] p-3">
         <Link
-          to={workflowRunsUrl(RUN_BOARD_VIEW_ID)}
+          to={RUN_BOARD_URL}
           className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-transparent px-3 font-ui text-xs font-medium text-[var(--text)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]"
         >
           <ExternalLink className="h-3.5 w-3.5" />
@@ -1058,11 +1073,13 @@ function RunCard({
   approval = false,
   updating = false,
   onAction,
+  noteEditor = null,
 }: {
   run: WorkflowRunItem;
   approval?: boolean;
   updating?: boolean;
   onAction?: (run: WorkflowRunItem, action: RunAction) => void;
+  noteEditor?: ReactNode;
 }) {
   const actions = actionsForRun(run);
   return (
@@ -1111,6 +1128,7 @@ function RunCard({
           ))}
         </div>
       ) : null}
+      {noteEditor}
     </article>
   );
 }

@@ -105,6 +105,88 @@ export function getPreferredVoiceOutputProvider() {
     null;
 }
 
+// ── Browser dictation ──────────────────────────────────────────────────────
+// SpeechRecognition wrapper so UI components never touch the vendor API or
+// splice interim text into their drafts: final and interim text arrive on
+// separate callbacks.
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string };
+  }>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface VoiceWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
+function getSpeechRecognitionConstructor() {
+  if (typeof window === "undefined") return null;
+  const voiceWindow = window as VoiceWindow;
+  return voiceWindow.SpeechRecognition ?? voiceWindow.webkitSpeechRecognition ?? null;
+}
+
+export interface BrowserDictationHandlers {
+  onFinal: (text: string) => void;
+  onInterim?: (text: string) => void;
+  onError?: (message: string) => void;
+  onEnd?: () => void;
+}
+
+export interface BrowserDictationSession {
+  stop: () => void;
+}
+
+export function startBrowserDictation(handlers: BrowserDictationHandlers): BrowserDictationSession | null {
+  const Recognition = getSpeechRecognitionConstructor();
+  if (!Recognition) return null;
+
+  const recognition = new Recognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+  recognition.onresult = (event) => {
+    let finalText = "";
+    let interimText = "";
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const result = event.results[index];
+      if (result.isFinal) finalText += result[0].transcript;
+      else interimText += result[0].transcript;
+    }
+    if (finalText.trim()) handlers.onFinal(finalText.trim());
+    handlers.onInterim?.(interimText.trim());
+  };
+  recognition.onerror = (event) => {
+    handlers.onError?.(event.error ?? "Recognition error");
+  };
+  recognition.onend = () => {
+    handlers.onInterim?.("");
+    handlers.onEnd?.();
+  };
+  recognition.start();
+  return { stop: () => recognition.stop() };
+}
+
+export function supportsBrowserSpeechSynthesis() {
+  return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
 export async function transcribeWithHermes(audio: Blob) {
   if (!hermesVoiceUrl) throw new Error("Hermes voice URL is not configured.");
 

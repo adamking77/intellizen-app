@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import ExaModule from "exa-js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Exa = (ExaModule as any).Exa ?? ExaModule.default ?? ExaModule;
+import { randomUUID } from "crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
@@ -242,6 +243,54 @@ async function updateWorkspaceTaskRecord(
   return data as WorkspaceRecordRow;
 }
 
+/**
+ * Atomically append a markdown section to a record body (and merge a partial
+ * fields patch) through workspace.append_record_section, so concurrent agent
+ * appends serialize server-side instead of clobbering each other.
+ */
+async function appendRecordSectionAtomic(
+  recordId: string,
+  section: string,
+  fieldsPatch?: Record<string, unknown>,
+): Promise<WorkspaceRecordRow> {
+  const { data, error } = await supabase.schema("workspace").rpc("append_record_section", {
+    p_record_id: recordId,
+    p_section: section,
+    p_fields_patch: fieldsPatch ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as WorkspaceRecordRow;
+}
+
+/**
+ * Insert into the append-only workspace.work_events audit log. Best-effort:
+ * the body-section receipt remains the primary record.
+ */
+async function recordWorkEvent(input: {
+  record_id?: string | null;
+  workflow_run_id?: string | null;
+  event_kind: string;
+  actor: string;
+  durable_role?: string | null;
+  decision_role?: string | null;
+  summary?: string | null;
+  payload?: Record<string, unknown>;
+}) {
+  const { error } = await supabase.schema("workspace").from("work_events").insert([
+    {
+      record_id: input.record_id ?? null,
+      workflow_run_id: input.workflow_run_id ?? null,
+      event_kind: input.event_kind,
+      actor: input.actor,
+      durable_role: input.durable_role ?? null,
+      decision_role: input.decision_role ?? null,
+      summary: input.summary ?? null,
+      payload: input.payload ?? {},
+    },
+  ]);
+  if (error) console.error(`work_events insert failed (${input.event_kind}): ${error.message}`);
+}
+
 async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, relatedRecordId: string) {
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -471,15 +520,14 @@ async function claimAgentWork(input: {
 }) {
   const record = await getWorkspaceTaskRecord(input.work_item_id);
   const currentAssignees = asStringArray(record.fields[AGENT_TASK_FIELDS.assignee]);
-  const nextFields = {
-    ...record.fields,
+  const fieldsPatch: Record<string, unknown> = {
     [AGENT_TASK_FIELDS.status]: "In progress",
     [AGENT_TASK_FIELDS.stage]: "Doing",
-    [AGENT_TASK_FIELDS.assignee]:
-      currentAssignees.length === 0 || input.reassign
-        ? input.actor
-        : record.fields[AGENT_TASK_FIELDS.assignee],
   };
+  if (currentAssignees.length === 0 || input.reassign) {
+    fieldsPatch[AGENT_TASK_FIELDS.assignee] = input.actor;
+  }
+  const nextFields = { ...record.fields, ...fieldsPatch };
   const section = `## Agent Claim - ${formatAgentWorkTimestamp()}
 
 Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
@@ -497,7 +545,21 @@ Approval needed before: ${input.approval_needed_before ?? "none"}`;
     return agentWritePreview("claim_agent_work", record, nextFields, nextBody, { appended_section: section });
   }
 
-  const updated = await updateWorkspaceTaskRecord(record.id, { fields: nextFields, body: nextBody });
+  const updated = await appendRecordSectionAtomic(record.id, section, fieldsPatch);
+  await recordWorkEvent({
+    record_id: record.id,
+    event_kind: "claim",
+    actor: input.actor,
+    durable_role: input.durable_role,
+    summary: input.reason,
+    payload: {
+      functional_lane: input.functional_lane,
+      backup_actor: input.backup_actor ?? null,
+      sources_checked: input.sources_checked ?? [],
+      approval_needed_before: input.approval_needed_before ?? null,
+      reassign: Boolean(input.reassign),
+    },
+  });
   return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
 }
 
@@ -529,7 +591,19 @@ ${markdownList(input.open_questions)}`;
     return agentWritePreview("append_agent_work_note", record, undefined, nextBody, { appended_section: section });
   }
 
-  const updated = await updateWorkspaceTaskRecord(record.id, { body: nextBody });
+  const updated = await appendRecordSectionAtomic(record.id, section);
+  await recordWorkEvent({
+    record_id: record.id,
+    event_kind: "note",
+    actor: input.actor,
+    durable_role: input.durable_role,
+    summary: input.note.slice(0, 300),
+    payload: {
+      functional_lane: input.functional_lane,
+      sources: input.sources ?? [],
+      open_questions: input.open_questions ?? [],
+    },
+  });
   return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
 }
 
@@ -571,11 +645,11 @@ async function closeAgentWork(input: {
     deferred: fieldString(record.fields[AGENT_TASK_FIELDS.stage]) ?? "Backlog",
     needs_approval: "Review",
   };
-  const nextFields = {
-    ...record.fields,
+  const fieldsPatch: Record<string, unknown> = {
     [AGENT_TASK_FIELDS.status]: statusByOutcome[input.outcome],
     [AGENT_TASK_FIELDS.stage]: stageByOutcome[input.outcome],
   };
+  const nextFields = { ...record.fields, ...fieldsPatch };
   const section = `## Agent Receipt - ${formatAgentWorkTimestamp()}
 
 Task: ${fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id}
@@ -611,8 +685,170 @@ ${input.summary}`;
     return agentWritePreview("close_agent_work", record, nextFields, nextBody, { appended_section: section });
   }
 
-  const updated = await updateWorkspaceTaskRecord(record.id, { fields: nextFields, body: nextBody });
+  const updated = await appendRecordSectionAtomic(record.id, section, fieldsPatch);
+  await recordWorkEvent({
+    record_id: record.id,
+    event_kind: "receipt",
+    actor: input.current_actor ?? input.actor,
+    durable_role: input.durable_role,
+    summary: input.summary.slice(0, 300),
+    payload: {
+      outcome: input.outcome,
+      functional_lane: input.functional_lane,
+      actions_taken: input.actions_taken ?? [],
+      verification: input.verification ?? [],
+      artifacts_created: input.artifacts_created ?? [],
+      blocked_items: input.blocked_items ?? [],
+      next_step: input.next_step ?? null,
+    },
+  });
   return { dry_run: false, updated: await agentWorkItemForRecord(updated) };
+}
+
+async function delegateAgentWork(input: {
+  parent_work_item_id: string;
+  requested_role: string;
+  requested_actor?: string | null;
+  reason: string;
+  source_records?: string[];
+  source_documents?: string[];
+  source_artifacts?: string[];
+  expected_output: string;
+  allowed_tools?: string[];
+  approval_limits?: string[];
+  return_path: string;
+  receipt_required?: boolean;
+  confirm_write?: boolean;
+}) {
+  const requestedRole = input.requested_role.trim();
+  const reason = input.reason.trim();
+  const expectedOutput = input.expected_output.trim();
+  const returnPath = input.return_path.trim();
+  if (!requestedRole) throw new Error("requested_role is required.");
+  if (!reason) throw new Error("reason is required.");
+  if (!expectedOutput) throw new Error("expected_output is required.");
+  if (!returnPath) throw new Error("return_path is required.");
+
+  const parent = await getWorkspaceTaskRecord(input.parent_work_item_id);
+  const delegationId = randomUUID();
+  const parentTitle = fieldString(parent.fields[AGENT_TASK_FIELDS.name]) ?? parent.id;
+  const sourceRecords = Array.from(new Set([parent.id, ...(input.source_records ?? [])].filter(Boolean)));
+  const childTitle =
+    expectedOutput.length > 86 ? `Delegated: ${expectedOutput.slice(0, 75).trim()}...` : `Delegated: ${expectedOutput}`;
+  const parentPriority = fieldString(parent.fields[AGENT_TASK_FIELDS.priority]) ?? "Medium";
+
+  const childFields: Record<string, unknown> = {
+    [AGENT_TASK_FIELDS.name]: childTitle,
+    [AGENT_TASK_FIELDS.status]: "Not started",
+    [AGENT_TASK_FIELDS.stage]: "Backlog",
+    [AGENT_TASK_FIELDS.priority]: parentPriority,
+    [AGENT_TASK_FIELDS.area]: requestedRole,
+  };
+  if (input.requested_actor?.trim()) childFields[AGENT_TASK_FIELDS.assignee] = input.requested_actor.trim();
+  const parentProject = parent.fields[AGENT_TASK_FIELDS.project];
+  if (parentProject !== null && parentProject !== undefined) childFields[AGENT_TASK_FIELDS.project] = parentProject;
+
+  const childBody = `## Agent Delegation - ${formatAgentWorkTimestamp()}
+
+Delegation ID: ${delegationId}
+Parent task: ${parentTitle}
+Parent task ID: ${parent.id}
+Requested role: ${requestedRole}
+Requested actor: ${input.requested_actor?.trim() || "unassigned"}
+Reason:
+${reason}
+
+Source records:
+${markdownList(sourceRecords)}
+Source documents:
+${markdownList(input.source_documents)}
+Source artifacts:
+${markdownList(input.source_artifacts)}
+Expected output:
+${expectedOutput}
+Allowed tools:
+${markdownList(input.allowed_tools)}
+Approval limits:
+${markdownList(input.approval_limits)}
+Receipt required: ${input.receipt_required === false ? "no" : "yes"}
+Return path:
+${returnPath}`;
+
+  if (!input.confirm_write) {
+    return {
+      dry_run: true,
+      message: "Preview only. Re-run with confirm_write: true to create the delegated child task.",
+      delegation_id: delegationId,
+      parent_work_item_id: parent.id,
+      child_preview: { title: childTitle, fields: childFields, body: childBody },
+    };
+  }
+
+  const { data: child, error: childError } = await supabase
+    .schema("workspace").from("records")
+    .insert([
+      {
+        database_id: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+        fields: childFields,
+        body: childBody,
+        taxonomy: {
+          entity: "genzen",
+          source: "agent_delegation",
+          object_type: "task",
+          tags: ["delegation", requestedRole],
+        },
+      },
+    ])
+    .select("id, database_id, fields, body, updated_at")
+    .single();
+  if (childError) throw new Error(childError.message);
+  const childRecord = child as WorkspaceRecordRow;
+
+  const parentSection = `## Agent Delegation - ${formatAgentWorkTimestamp()}
+
+Delegation ID: ${delegationId}
+Parent task: ${parentTitle}
+Child task: ${childTitle}
+Child task ID: ${childRecord.id}
+Requested role: ${requestedRole}
+Requested actor: ${input.requested_actor?.trim() || "unassigned"}
+Reason:
+${reason}
+Expected output:
+${expectedOutput}
+Allowed tools:
+${markdownList(input.allowed_tools)}
+Approval limits:
+${markdownList(input.approval_limits)}
+Receipt required: ${input.receipt_required === false ? "no" : "yes"}
+Return path:
+${returnPath}`;
+
+  const updatedParent = await appendRecordSectionAtomic(parent.id, parentSection);
+  await recordWorkEvent({
+    record_id: parent.id,
+    event_kind: "delegation",
+    actor: input.requested_actor?.trim() || requestedRole,
+    durable_role: requestedRole,
+    summary: reason,
+    payload: {
+      delegation_id: delegationId,
+      child_task_id: childRecord.id,
+      expected_output: expectedOutput,
+      allowed_tools: input.allowed_tools ?? [],
+      approval_limits: input.approval_limits ?? [],
+      return_path: returnPath,
+      receipt_required: input.receipt_required !== false,
+    },
+  });
+
+  return {
+    dry_run: false,
+    delegation_id: delegationId,
+    child_work_item_id: childRecord.id,
+    child_work_item: await agentWorkItemForRecord(childRecord),
+    parent_work_item: await agentWorkItemForRecord(updatedParent),
+  };
 }
 
 function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
@@ -768,11 +1004,13 @@ async function updateWorkflowRun(input: {
   next_step?: string | null;
   sync_task?: boolean;
   confirm_write?: boolean;
+  event_kind?: string;
+  decision_role?: string | null;
 }) {
   const run = await getWorkflowRunRecord(input.workflow_run_id);
   const section = workflowRunUpdateSection(input);
-  const nextFields: Record<string, unknown> = {
-    ...run.fields,
+  const runName = fieldString(run.fields[WORKFLOW_RUN_FIELDS.name]) ?? run.id;
+  const fieldsPatch: Record<string, unknown> = {
     ...(input.status ? { [WORKFLOW_RUN_FIELDS.status]: input.status } : {}),
     ...(input.current_step !== undefined ? { [WORKFLOW_RUN_FIELDS.currentStep]: input.current_step } : {}),
     [WORKFLOW_RUN_FIELDS.receipt]: section,
@@ -780,10 +1018,23 @@ async function updateWorkflowRun(input: {
       ? { [WORKFLOW_RUN_FIELDS.completedAt]: new Date().toISOString() }
       : {}),
   };
+  const nextFields = { ...run.fields, ...fieldsPatch };
   const nextBody = appendMarkdownSection(run.body, section);
   const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
   const syncTask = input.sync_task !== false && Boolean(taskId);
   const taskState = taskStateForWorkflowRunStatus(input.status);
+  // Compact pointer for the linked task: keeps the parseable heading without
+  // duplicating the full receipt into a second growing record body.
+  const taskPointerSection = `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Workflow run: ${runName} (${run.id})
+Actor: ${input.actor}
+Status: ${input.status ?? "unchanged"}
+Current step: ${input.current_step ?? "unchanged"}
+Approval needed: ${input.approval_needed ?? "none"}
+Next step: ${input.next_step ?? "none"}
+Summary: ${input.summary}
+Details: see the Workflow Runs record receipt timeline.`;
 
   if (!input.confirm_write) {
     return {
@@ -803,39 +1054,42 @@ async function updateWorkflowRun(input: {
     };
   }
 
-  const { data, error } = await supabase
-    .schema("workspace").from("records")
-    .update({
-      fields: nextFields,
-      body: nextBody,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", run.id)
-    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
-    .select("id, database_id, fields, body, updated_at")
-    .single();
+  const updatedRun = await appendRecordSectionAtomic(run.id, section, fieldsPatch);
 
-  if (error) throw new Error(error.message);
   let syncedTask = null;
   if (syncTask && taskId) {
-    const task = await getWorkspaceTaskRecord(taskId);
-    const nextTaskFields = taskState
+    const taskPatch = taskState
       ? {
-          ...task.fields,
           [AGENT_TASK_FIELDS.status]: taskState.status,
           [AGENT_TASK_FIELDS.stage]: taskState.stage,
         }
-      : task.fields;
-    const updatedTask = await updateWorkspaceTaskRecord(task.id, {
-      fields: nextTaskFields,
-      body: appendMarkdownSection(task.body, section),
-    });
+      : undefined;
+    const updatedTask = await appendRecordSectionAtomic(taskId, taskPointerSection, taskPatch);
     syncedTask = await agentWorkItemForRecord(updatedTask);
   }
 
+  await recordWorkEvent({
+    record_id: taskId ?? run.id,
+    workflow_run_id: run.id,
+    event_kind: input.event_kind ?? "workflow_run_update",
+    actor: input.actor,
+    decision_role: input.decision_role ?? null,
+    summary: input.summary.slice(0, 300),
+    payload: {
+      status: input.status ?? null,
+      current_step: input.current_step ?? null,
+      approval_needed: input.approval_needed ?? null,
+      blocked_items: input.blocked_items ?? [],
+      verification: input.verification ?? [],
+      actions_taken: input.actions_taken ?? [],
+      next_step: input.next_step ?? null,
+      synced_task_id: syncTask ? taskId : null,
+    },
+  });
+
   return {
     dry_run: false,
-    run: toWorkflowRunItem(data as WorkspaceRecordRow),
+    run: toWorkflowRunItem(updatedRun),
     synced_task: syncedTask,
   };
 }
@@ -873,6 +1127,7 @@ async function requestWorkflowApproval(input: {
     next_step: input.next_step ?? "Await approval decision",
     sync_task: input.sync_task,
     confirm_write: input.confirm_write,
+    event_kind: "approval_request",
   });
 }
 
@@ -886,7 +1141,8 @@ async function resolveWorkflowApproval(input: {
   workflow_run_id: string;
   decision: WorkflowApprovalDecision;
   decision_summary: string;
-  decided_by?: string | null;
+  decided_by: string;
+  decision_role?: string | null;
   approval_type?: string | null;
   next_status?: WorkflowRunStatus;
   current_step?: string | null;
@@ -898,6 +1154,13 @@ async function resolveWorkflowApproval(input: {
   sync_task?: boolean;
   confirm_write?: boolean;
 }) {
+  // Approval decisions must name the decision maker. Never default this:
+  // an agent resolving an approval without identity would otherwise record
+  // a founder-level decision it did not have.
+  const decidedBy = typeof input.decided_by === "string" ? input.decided_by.trim() : "";
+  if (!decidedBy) {
+    throw new Error("resolve_workflow_approval requires decided_by: name the actor recording this decision.");
+  }
   const approvalType = input.approval_type?.trim() || "workflow";
   const decisionSummary = input.decision_summary.trim();
   const decisionLabel = input.decision.replace("_", " ");
@@ -905,14 +1168,14 @@ async function resolveWorkflowApproval(input: {
 
   return updateWorkflowRun({
     workflow_run_id: input.workflow_run_id,
-    actor: input.decided_by?.trim() || "Adam",
+    actor: decidedBy,
     status: nextStatus,
     current_step: input.current_step ?? (
       input.decision === "approved"
         ? `Approval approved: ${approvalType}`
         : `Approval ${decisionLabel}: ${approvalType}`
     ),
-    summary: `${approvalType} approval ${decisionLabel}: ${decisionSummary}`,
+    summary: `${approvalType} approval ${decisionLabel} by ${decidedBy}: ${decisionSummary}`,
     sources: input.sources,
     actions_taken: [
       `Resolved ${approvalType} approval as ${decisionLabel}`,
@@ -928,6 +1191,8 @@ async function resolveWorkflowApproval(input: {
     ),
     sync_task: input.sync_task,
     confirm_write: input.confirm_write,
+    event_kind: "approval_decision",
+    decision_role: input.decision_role ?? "founder_approval_authority",
   });
 }
 
@@ -1346,6 +1611,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "delegate_work",
+      description:
+        "Create a bounded child task delegated from a parent task, with source context, expected output, tool and approval limits, and a return path. Appends an Agent Delegation receipt to the parent. Defaults to dry-run; set confirm_write true to write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          parent_work_item_id: { type: "string", description: "Parent Task record UUID." },
+          requested_role: { type: "string", description: "Durable role the child work routes to." },
+          requested_actor: { type: "string", description: "Optional specific actor for the child task." },
+          reason: { type: "string", description: "Why this work is being delegated." },
+          source_records: { type: "array", items: { type: "string" }, description: "Workspace record IDs the child needs." },
+          source_documents: { type: "array", items: { type: "string" }, description: "Knowledge document IDs the child needs." },
+          source_artifacts: { type: "array", items: { type: "string" }, description: "Artifact paths or IDs the child needs." },
+          expected_output: { type: "string", description: "Concrete definition of done for the child task." },
+          allowed_tools: { type: "array", items: { type: "string" } },
+          approval_limits: { type: "array", items: { type: "string" } },
+          return_path: { type: "string", description: "Where and how results return to the parent." },
+          receipt_required: { type: "boolean", description: "Defaults true." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["parent_work_item_id", "requested_role", "reason", "expected_output", "return_path"],
+      },
+    },
+    {
       name: "list_workflows",
       description:
         "List Workflow Registry templates from IntelliZen Databases. Filters by entity, owner role, status, and active/inactive state.",
@@ -1470,7 +1759,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             enum: ["approved", "rejected", "changes_requested"],
           },
           decision_summary: { type: "string", description: "Decision record, condition, rejection reason, or requested change." },
-          decided_by: { type: "string", description: "Decision actor. Defaults to Adam." },
+          decided_by: { type: "string", description: "Actor recording this decision (e.g. Adam). Required; never defaulted." },
+          decision_role: { type: "string", description: "Authority role for the decision. Defaults to founder_approval_authority." },
           approval_type: {
             type: "string",
             enum: ["publish", "send", "contact", "spend", "delete", "schema", "identity", "reputational_risk", "other"],
@@ -1489,7 +1779,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           sync_task: { type: "boolean", description: "Append the same receipt to the linked Task and sync task state. Defaults true when linked task exists." },
           confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
         },
-        required: ["workflow_run_id", "decision", "decision_summary"],
+        required: ["workflow_run_id", "decision", "decision_summary", "decided_by"],
       },
     },
     {
@@ -2057,6 +2347,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
+  // ── delegate_work ─────────────────────────────────────────────────────────
+  if (name === "delegate_work") {
+    const result = await delegateAgentWork((args ?? {}) as {
+      parent_work_item_id: string;
+      requested_role: string;
+      requested_actor?: string | null;
+      reason: string;
+      source_records?: string[];
+      source_documents?: string[];
+      source_artifacts?: string[];
+      expected_output: string;
+      allowed_tools?: string[];
+      approval_limits?: string[];
+      return_path: string;
+      receipt_required?: boolean;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
   // ── list_workflows ────────────────────────────────────────────────────────
   if (name === "list_workflows") {
     const result = await listWorkflows((args ?? {}) as {
@@ -2147,7 +2457,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       workflow_run_id: string;
       decision: WorkflowApprovalDecision;
       decision_summary: string;
-      decided_by?: string | null;
+      decided_by: string;
+      decision_role?: string | null;
       approval_type?: string | null;
       next_status?: WorkflowRunStatus;
       current_step?: string | null;

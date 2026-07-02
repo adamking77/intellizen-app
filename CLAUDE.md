@@ -49,7 +49,11 @@ VITE_EXA_API_KEY=<in .env.local>
 VITE_ANTHROPIC_API_KEY=<in .env.local>
 ```
 
-These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project and do not alter Brain tables (`documents`, `chunks`, `cases`, `decisions`, `config`, `taste_preferences`).
+These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project.
+
+Brain-table contract (updated for GenZen OS): the app legitimately **writes additive rows** to `knowledge.documents`/`knowledge.chunks` — vault docs, operating briefs (`document_type = operations`), reflection digests, and investigation artifacts live there by design. Still off-limits: schema changes or bulk destructive operations on Brain tables, and any writes to `cases`, `decisions`, `config`, or `taste_preferences`.
+
+Agent coordination state lives in `workspace.records` (Tasks, Biz Ops, Workflow Registry, Workflow Runs) plus the append-only audit log `workspace.work_events`. Body-section appends must go through the `workspace.append_record_section` RPC — never read-modify-write a record body client-side; concurrent agents will clobber each other's receipts.
 
 ## Stack
 
