@@ -235,6 +235,8 @@ export function AgentPanel() {
   const recordedChunksRef = useRef<Blob[]>([]);
   const hermesPreviewBusyRef = useRef(false);
   const hermesPreviewDirtyRef = useRef(false);
+  /** Draft text present when dictation started; live transcript appends after it. */
+  const dictationBaseDraftRef = useRef("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const { isCramped } = useWindowSize();
@@ -592,26 +594,32 @@ export function AgentPanel() {
     setChatDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${normalized}`);
   }
 
+  function joinDraft(base: string, addition: string) {
+    return `${base}${base && addition ? " " : ""}${addition.trim()}`;
+  }
+
   async function transcribeHermesRecording(audio: Blob) {
+    const base = dictationBaseDraftRef.current;
     try {
       const result = await transcribeWithHermes(audio);
-      setInterimTranscript("");
       if (!result.transcript) {
+        setChatDraft(base);
         toast.error("No speech detected");
         return;
       }
-      appendVoiceDraft(result.transcript);
+      setChatDraft(joinDraft(base, result.transcript));
     } catch (transcribeError) {
-      setInterimTranscript("");
+      setChatDraft(base);
       toastError("Hermes transcription failed", transcribeError);
     }
   }
 
-  // Live preview while the mic is on: every recorder timeslice, transcribe
+  // Live dictation into the composer: every recorder timeslice, transcribe
   // the audio-so-far (chunks concatenated from the start form a valid file)
-  // and show it as interim text. Self-throttles — while one preview request
-  // is in flight new chunks only mark it dirty. The final on-stop pass is
-  // authoritative and replaces the preview.
+  // and write it straight into the draft after whatever was already typed.
+  // Self-throttles — while one preview request is in flight new chunks only
+  // mark it dirty. The final on-stop pass is authoritative and replaces the
+  // preview text.
   async function previewHermesTranscript(mimeType: string) {
     if (hermesPreviewBusyRef.current) {
       hermesPreviewDirtyRef.current = true;
@@ -625,7 +633,7 @@ export function AgentPanel() {
         if (audio.size === 0) return;
         const result = await transcribeWithHermes(audio).catch(() => null);
         if (recorderRef.current?.state !== "recording") return;
-        if (result?.transcript) setInterimTranscript(result.transcript);
+        if (result?.transcript) setChatDraft(joinDraft(dictationBaseDraftRef.current, result.transcript));
       } while (hermesPreviewDirtyRef.current && recorderRef.current?.state === "recording");
     } finally {
       hermesPreviewBusyRef.current = false;
@@ -647,6 +655,7 @@ export function AgentPanel() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordedChunksRef.current = [];
+      dictationBaseDraftRef.current = chatDraft.trim();
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -658,7 +667,6 @@ export function AgentPanel() {
       };
       recorder.onerror = () => {
         setIsListening(false);
-        setInterimTranscript("");
         toast.error("Audio recording stopped");
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -669,10 +677,9 @@ export function AgentPanel() {
           type: recorder.mimeType || "audio/webm",
         });
         recordedChunksRef.current = [];
-        // Keep the interim preview visible while the final pass runs;
-        // transcribeHermesRecording clears it when the draft is committed.
+        // The live preview stays in the draft while the authoritative
+        // final pass runs; transcribeHermesRecording replaces it.
         if (audio.size > 0) void transcribeHermesRecording(audio);
-        else setInterimTranscript("");
       };
       recorderRef.current = recorder;
       recorder.start(2000);

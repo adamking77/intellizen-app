@@ -219,11 +219,15 @@ a {
   text-decoration: none;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
+/* Layered so Tailwind utilities (text-[...], font-*) win on form elements;
+   un-layered, this reset silently overrode every button font utility. */
+@layer base {
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
 }
 
 pre,
