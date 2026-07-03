@@ -46,11 +46,13 @@ Never upload a DMG unless the app bundle inside the mounted DMG passes `codesign
 
 ```
 VITE_SUPABASE_URL=https://jicrdrwtwubveyvzyyrh.supabase.co
-VITE_SUPABASE_SERVICE_ROLE_KEY=<in .env.local>
-SUPABASE_SERVICE_ROLE_KEY=<in .env.local>
+VITE_SUPABASE_ANON_KEY=<in .env.local>          # app client key — safe to inline in builds
+SUPABASE_SERVICE_ROLE_KEY=<in .env.local>       # scripts/MCP only — never VITE_-prefixed
 VITE_EXA_API_KEY=<in .env.local>
 VITE_ANTHROPIC_API_KEY=<in .env.local>
 ```
+
+The app connects with the **anon key** (since 2026-07-03, audit F-01). Anon access is scoped server-side by the `anon_personal_app_access_v2_scoped` migration to the 22 tables the app touches; `agent.*` and `system.*` remain service-role-only. Do not reintroduce a `VITE_`-prefixed service-role key — the vite build guard will refuse, by design.
 
 These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project.
 

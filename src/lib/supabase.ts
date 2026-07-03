@@ -1,12 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Anon key by design (audit F-01): Vite inlines every VITE_* value into the
+// shipped bundle, so the client must never hold the service-role key. Anon
+// access is scoped server-side by the anon_personal_app_access_v2_scoped
+// migration (22 app tables; agent/system schemas stay service-role-only).
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
+if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    "Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_SERVICE_ROLE_KEY for the local desktop app.",
+    "Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for the local desktop app.",
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
