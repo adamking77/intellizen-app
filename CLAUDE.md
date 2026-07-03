@@ -25,8 +25,11 @@ Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post 
 
 InteliZen DMGs are shipped as **unsigned Apple Silicon builds**. Do not assume Developer ID signing or App Store notarization unless Adam explicitly changes the release model.
 
+**Credential gate (audit F-01, mandatory before any publish):** Vite inlines every `VITE_*` value into `dist/` — a build made with `VITE_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` embeds a full RLS-bypassing production credential in the artifact. `vite.config.ts` refuses production builds when that key is present unless `ALLOW_SERVICE_KEY_BUILD=1` (personal, never-published builds only). Publishable builds must use the anon key. After every build, run `scripts/check-bundle-secrets.sh dist` — **the dist/ scan is the authoritative check** (Tauri compresses embedded assets, so string-scanning the .app/.dmg can false-negative). Never upload an artifact whose dist/ scan fails.
+
 The correct unsigned release flow is:
 
+0. Verify no service-role key will be embedded: build must pass the vite guard, then `scripts/check-bundle-secrets.sh dist` must print ✅.
 1. Build the `.app` with signing disabled: `pnpm tauri build --bundles app --no-sign`.
 2. Re-sign the finished app bundle ad-hoc so its resources are sealed correctly:
    `codesign --force --deep --sign - src-tauri/target/release/bundle/macos/IntelliZen.app`.
@@ -63,15 +66,11 @@ Tauri plugins: `opener`, `fs` (scoped to `$HOME/vault/**`), `shell` (whitelisted
 
 ## Database
 
-Five additive migrations in `supabase/migrations/`:
+The shared GenZen Brain Supabase project has grown far beyond this app's original five migrations: **85+ applied migrations across 9 namespaced schemas** (`agent`, `knowledge`, `workspace`, `intel`, `ingest`, `anchors`, `system`, `comms`, plus `public` bridge views). The IntelliZen tables live mainly in `intel`, `workspace`, and `ingest` (post-Phase-9 namespacing; e.g. `intel_signals` → `intel.signals`).
 
-1. `init_intellizen_v1_schema` — `intel_signals`, `projects`, `project_signals`, `monitors` + `update_updated_at()` trigger fn.
-2. `add_graph_tables` — `graph_nodes`, `graph_edges`.
-3. `dedupe_intel_signals_and_enforce_unique_urls` — collapses duplicate URLs and adds `intel_signals_url_uidx`.
-4. `add_standalone_graph_mode` — nullable `project_id` on graph tables so graphs can exist outside a project.
-5. `add_investigations_schema` — `investigations`, `investigation_signals`, `vault_files`.
+`supabase/migrations/` in this repo holds only the app-local subset (~30 files) — it can NOT rebuild the full database. The authoritative record is the remote migration table; a synced inventory lives in [supabase/MIGRATIONS.md](supabase/MIGRATIONS.md) (regenerate via the Supabase MCP `list_migrations` tool after applying new migrations).
 
-RLS is disabled on InteliZen tables (single user, local desktop).
+RLS is enabled with service-role-only access on coordination tables; the app connects with the service-role key (single user, local desktop) — see the release-safety note in the DMG section below.
 
 ## Investigation + Reports integration
 

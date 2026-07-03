@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -76,7 +76,22 @@ const analyzeBundle = process.env.ANALYZE_BUNDLE === "1";
 const isTauriRuntime = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_DEV_HOST);
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ command, mode }) => {
+  // Release-safety guard (audit F-01): Vite inlines every VITE_* value into
+  // the shipped JS bundle. A production build with the service-role key
+  // embeds a full RLS-bypassing credential in a public artifact. Personal,
+  // never-published builds must opt in explicitly.
+  const env = loadEnv(mode, __dirname, "VITE_");
+  if (command === "build" && env.VITE_SUPABASE_SERVICE_ROLE_KEY && process.env.ALLOW_SERVICE_KEY_BUILD !== "1") {
+    throw new Error(
+      "REFUSING TO BUILD: VITE_SUPABASE_SERVICE_ROLE_KEY would be inlined into the bundle.\n" +
+        "  - For a personal, NEVER-published build: ALLOW_SERVICE_KEY_BUILD=1 pnpm tauri build ...\n" +
+        "  - For a publishable build: remove the VITE_-prefixed service key and use the anon key.\n" +
+        "  - Always verify artifacts with scripts/check-bundle-secrets.sh before uploading.",
+    );
+  }
+
+  return {
   plugins: [
     react({
       fastRefresh: !isTauriRuntime,
@@ -201,4 +216,5 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+  };
+});
