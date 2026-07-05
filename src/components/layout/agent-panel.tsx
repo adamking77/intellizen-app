@@ -25,6 +25,7 @@ import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat, streamHermesChat } from "@/services/agent";
 // Run/approval surfaces live in Databases-native views; the panel is chat only.
 import {
@@ -206,6 +207,7 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
 }
 
 export function AgentPanel() {
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -244,21 +246,21 @@ export function AgentPanel() {
   const expanded = !collapsed && !isCramped;
 
   const workflowsQuery = useQuery({
-    queryKey: ["workflows", "agent-panel", "active"],
-    queryFn: () => listWorkflows({ includeInactive: false, limit: 24 }),
+    queryKey: ["workflows", "agent-panel", "active", entityFilter],
+    queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: false, limit: 24 }),
     staleTime: 60_000,
     enabled: expanded,
   });
   const activeRunsQuery = useQuery({
-    queryKey: ["workflow-runs", "agent-panel", "active"],
-    queryFn: () => listWorkflowRuns({ includeCompleted: false, limit: 8 }),
+    queryKey: ["workflow-runs", "agent-panel", "active", entityFilter],
+    queryFn: () => listWorkflowRuns({ entity: entityFilter, includeCompleted: false, limit: 8 }),
     refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
     enabled: expanded,
   });
   const approvalsQuery = useQuery({
-    queryKey: ["workflow-runs", "agent-panel", "approvals"],
-    queryFn: () => listWorkflowRuns({ status: "Needs approval", includeCompleted: true, limit: 8 }),
+    queryKey: ["workflow-runs", "agent-panel", "approvals", entityFilter],
+    queryFn: () => listWorkflowRuns({ entity: entityFilter, status: "Needs approval", includeCompleted: true, limit: 8 }),
     refetchInterval: expanded ? 60_000 : false,
     staleTime: 20_000,
   });
@@ -1176,4 +1178,3 @@ export function AgentPanel() {
     </aside>
   );
 }
-

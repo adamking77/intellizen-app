@@ -50,6 +50,7 @@ import type { Investigation, Project, VaultDocument, VaultFile, WorkspaceNodeSum
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
+import { useAppStore } from "@/store";
 
 type Selection =
   | { kind: "doc"; id: number }
@@ -91,6 +92,7 @@ function EditorLoadingFallback() {
 
 export function ReportsView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [selection, setSelection] = useState<Selection>(null);
   const [activeStrategyFolderPath, setActiveStrategyFolderPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -146,12 +148,12 @@ export function ReportsView() {
     queryFn: listAllVaultFiles,
   });
   const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
   });
   const { data: investigations = [] } = useQuery({
-    queryKey: ["investigations"],
-    queryFn: listInvestigations,
+    queryKey: ["investigations", entityFilter],
+    queryFn: () => listInvestigations({ entity: entityFilter }),
   });
   const {
     data: operatingReports,
@@ -159,13 +161,13 @@ export function ReportsView() {
     isFetching: fetchingOperatingReports,
     refetch: refetchOperatingReports,
   } = useQuery({
-    queryKey: ["reports", "operating-reports"],
+    queryKey: ["reports", "operating-reports", entityFilter],
     queryFn: async () => {
       const [agentProjects, agentWork, workflows, workflowRuns] = await Promise.all([
-        listAgentProjects({ includeDone: false, limit: 120 }),
-        listAgentWork({ includeDone: false, limit: 220 }),
-        listWorkflows({ includeInactive: false, limit: 120 }),
-        listWorkflowRuns({ includeCompleted: false, limit: 120 }),
+        listAgentProjects({ entity: entityFilter, includeDone: false, limit: 120 }),
+        listAgentWork({ entity: entityFilter, includeDone: false, limit: 220 }),
+        listWorkflows({ entity: entityFilter, includeInactive: false, limit: 120 }),
+        listWorkflowRuns({ entity: entityFilter, includeCompleted: false, limit: 120 }),
       ]);
       return {
         weeklyBrief: buildWeeklyOperatingBrief({

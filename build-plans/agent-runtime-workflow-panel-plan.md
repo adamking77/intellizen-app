@@ -1,29 +1,39 @@
 # Agent Runtime + Workflow Panel Plan
 
-Reference plan for making Hermes the primary GenZen workflow engine while preserving Claude access through MCP and local advanced mode. This is the canonical plan for the agent panel and workflow runtime. It keeps the intended product surface: workflow buttons, integrated chat, case-aware context injection, tool streams, artifact tracking, and permission cards.
+Reference plan for making Fiona the GenZen Operations Director inside InteliZen, with Hermes as an execution channel and Claude access preserved through MCP and local advanced mode. This is the canonical plan for the agent panel and workflow runtime. It keeps the intended product surface: workflow buttons, integrated chat, case-aware context injection, tool streams, artifact tracking, and permission cards.
 
-Status: Drafted 2026-04-29. Not scheduled.
+Status: Drafted 2026-04-29. Audit-updated 2026-07-05.
+
+## 2026-07-05 Audit Decision
+
+Fiona is the GenZen Operations Director. She has full operational access across all InteliZen workflows and any future GenZen workflows. She can execute workflows directly or delegate them to other agents, model providers, tools, or runtimes according to directives. Hermes is one execution channel for Fiona, not the authority layer.
+
+The current implementation path is local Fiona through Hermes first, not Railway/Kimi first. `src/services/agent.ts` routes Agent Panel chat and workflow dispatch through the local Hermes API, then the Hermes webhook gateway, then the durable `comms.fiona_inbox` fallback. Supabase is still the operational source of truth for workflow visibility through `workspace.records` (`Workflow Runs`) and `workspace.work_events`.
+
+Treat the Railway/Kimi sections below as the earlier target architecture, not proof of current production behavior. The current proof gate is narrower: one Fiona-directed workflow must write an execution receipt, delegation receipt, approval request, or result event back to Supabase so IntelliZen can render what Fiona did, delegated, approved, or escalated from `workspace.records`, `workspace.work_events`, or another approved durable table. Do not create a new agent-session schema or profile model until this existing path fails a concrete workflow test.
+
+Important boundary: `agent.sessions` is not current proof of multi-agent execution. The live table is still Claude-only, so it should be treated as historical/local agent telemetry rather than the canonical workflow-run ledger.
 
 ## Goal
 
-Make InteliZen the control surface for GenZen's operating agent.
+Make InteliZen the control surface for Fiona, GenZen's Operations Director.
 
-Hermes runs workflows on Railway. Kimi K2.6 is the default model for orchestration, drafting, coding/layout-heavy work, and general execution. Claude remains available as a specialist for analytical passes and as a local MCP-enabled advanced mode when Adam wants direct Claude control.
+Fiona owns operational coordination across GenZen workflows. She can run workflows herself or delegate work to Hermes, Claude, Kimi, MCP tools, local scripts, or future agent workers according to directives. Hermes may run workflows locally or remotely. Kimi K2.6 remains a candidate default model for orchestration, drafting, coding/layout-heavy work, and general execution. Claude remains available as a specialist for analytical passes and as a local MCP-enabled advanced mode when Adam wants direct Claude control.
 
 The target mental model:
 
 ```text
 InteliZen desktop app
-  -> Agent Gateway API
-      -> Hermes runtime on Railway
-          -> Kimi K2.6 by default
+  -> Fiona, GenZen Operations Director
+      -> Agent Gateway / Hermes runtime
+          -> direct workflow execution
+          -> delegation to Kimi, Claude, MCP tools, scripts, or future workers
           -> GenZen MCP/tool layer
-          -> optional Claude delegation
   -> Supabase as company state
   -> vault/artifact bridge for local and cloud-readable files
 ```
 
-Hermes does not "drive the UI." Hermes runs tasks, emits events, writes structured results, and creates artifacts. InteliZen starts runs, displays streams, shows approvals, and renders state from Supabase.
+Fiona does not "drive the UI." Fiona directs work. Hermes and other delegated workers run tasks, emit events, write structured results, and create artifacts. InteliZen starts runs, displays streams, shows approvals, and renders state from Supabase.
 
 ## Architecture
 
@@ -45,23 +55,23 @@ Hermes does not "drive the UI." Hermes runs tasks, emits events, writes structur
                                 │ HTTPS/SSE/WebSocket
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ Agent Gateway                                                 │
+│ Fiona / Agent Gateway                                         │
 │                                                              │
 │  Authenticates InteliZen                                      │
-│  Starts/cancels workflow runs                                 │
+│  Starts/cancels Fiona-directed workflow runs                  │
 │  Streams model/tool events                                    │
-│  Records audit events                                         │
+│  Records execution and delegation receipts                    │
 │  Mediates confirmation-required actions                       │
 └───────────────────────────────┬──────────────────────────────┘
                                 │
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ Hermes on Railway                                             │
+│ Hermes runtime / delegated workers                            │
 │                                                              │
-│  Default model: Kimi K2.6                                     │
-│  Specialist: Claude via delegate_to_claude                    │
+│  Direct execution when assigned                               │
+│  Delegates: Kimi, Claude, MCP tools, scripts, future workers   │
 │  Tools: GenZen MCP/tool layer                                 │
-│  Runtime storage: Railway volume plus Supabase state           │
+│  Runtime storage: local/cloud runtime plus Supabase state       │
 └───────────────────────────────┬──────────────────────────────┘
                                 │
           ┌─────────────────────┼─────────────────────┐
@@ -72,31 +82,45 @@ Hermes does not "drive the UI." Hermes runs tasks, emits events, writes structur
 
 ## Core Principles
 
-1. Hermes is the trusted backend operator. Kimi and Claude are reasoning engines inside that operator.
-2. Supabase is the source of truth for company state: projects, operations, workspace databases, investigations, graph, reports, workflow runs, and messages.
-3. Models do not get an unbounded SQL console by default. They operate through named GenZen tools with validation and audit logs.
-4. Claude access is preserved in two forms: cloud delegation from Hermes and local direct Claude/MCP mode from InteliZen.
-5. The UI never hardcodes model-specific behavior. It talks to `src/services/agent.ts`.
-6. Destructive actions require explicit human confirmation.
-7. Existing Brain tables remain protected by convention and tooling: `documents`, `chunks`, `cases`, `decisions`, `config`, `taste_preferences`.
+1. Fiona is the top-level GenZen operations agent. She has full access to InteliZen workflows and can execute or delegate according to directives.
+2. Hermes is an execution channel for Fiona, not the authority layer. Kimi, Claude, MCP tools, scripts, and future workers are delegates inside Fiona-directed workflows.
+3. Supabase is the source of truth for company state: projects, operations, workspace databases, investigations, graph, reports, workflow runs, messages, approvals, and execution receipts.
+4. Models do not get an unbounded SQL console by default. They operate through named GenZen tools with validation and audit logs.
+5. Claude access is preserved in two forms: delegated specialist work and local direct Claude/MCP mode from InteliZen.
+6. The UI never hardcodes model-specific behavior. It talks to `src/services/agent.ts`.
+7. Destructive actions require explicit human confirmation.
+8. Existing Brain tables remain protected by convention and tooling: `documents`, `chunks`, `cases`, `decisions`, `config`, `taste_preferences`.
 
 ## Relationship To Existing Plans
 
 | Existing plan | What carries forward | What changes |
 |---|---|---|
-| `intake-workflow-plan.md` | Intake Processor is first workflow button | Processor runs through Hermes instead of direct Claude shell |
-| `client-deliverables-architecture.md` | Kimi is valuable for templates/layouts, Claude for analytical fidelity | Hermes orchestrates both paths |
-| `huntkit-integration-plan.md` | OSINT/evidence tools belong in InteliZen MCP/tool layer | Hermes calls them remotely |
-| `home-dashboard-plan.md` | Dashboard messages can be written by agent workflows | Hermes gets a `write_dashboard_message` tool |
+| `intake-workflow-plan.md` | Intake Processor is first workflow button | Fiona directs the processor and records receipts; Hermes may execute it |
+| `client-deliverables-architecture.md` | Kimi is valuable for templates/layouts, Claude for analytical fidelity | Fiona delegates to the right worker/model and owns the final operational state |
+| `huntkit-integration-plan.md` | OSINT/evidence tools belong in InteliZen MCP/tool layer | Fiona can invoke them through Hermes or another approved tool bridge |
+| `home-dashboard-plan.md` | Dashboard messages can be written by agent workflows | Fiona gets a `write_dashboard_message` capability with receipts |
 
 ## Runtime Roles
 
+### Fiona
+
+Fiona is GenZen's Operations Director:
+
+- Has full access to InteliZen workflows and future GenZen workflows
+- Executes workflows directly when she is the right operator
+- Delegates subtasks to Hermes, Claude, Kimi, MCP tools, scripts, or future workers
+- Applies Adam's directives and workflow policies
+- Requests approval for destructive, external-facing, or high-risk actions
+- Records execution, delegation, approval, escalation, and completion receipts in Supabase
+- Keeps `workspace.records`, `workspace.work_events`, and approved durable tables aligned with operational reality
+
 ### Hermes
 
-Hermes owns workflow execution:
+Hermes owns execution infrastructure for Fiona-directed work:
 
 - Maintains agent sessions
-- Selects Kimi or specialist tools
+- Runs delegated tasks
+- Selects Kimi or specialist tools when directed by policy
 - Calls GenZen MCP tools
 - Emits stream events
 - Writes artifacts and structured results
@@ -136,7 +160,7 @@ delegate_to_claude({
 })
 ```
 
-The delegation result returns to Hermes. Hermes validates and stores the output.
+The delegation result returns to Fiona's workflow context. Hermes or the active worker validates and stores the output according to the workflow directive.
 
 ### InteliZen
 
@@ -184,7 +208,7 @@ Buttons are contextual. The panel should only enable workflows valid for the cur
 
 ## Chat
 
-Chat goes to Hermes sessions, not directly to model APIs.
+Chat goes to Fiona's operating context through the current runtime adapter, not directly to model APIs.
 
 Each message includes:
 
@@ -206,11 +230,11 @@ Active context:
 - available tools: investigation, signals, graph, vault_artifacts, reports
 ```
 
-Chat and workflow buttons share session context per active object. A user can ask follow-up questions after a workflow run without manually restating what happened.
+Chat and workflow buttons share Fiona's session context per active object. A user can ask follow-up questions after a workflow run without manually restating what happened.
 
 ## Supabase Access Model
 
-Hermes may have privileged backend credentials, but the model loop should use named tools. This gives practical full access without unbounded database mutation.
+Fiona may have privileged operational access, but delegated model/tool loops should use named tools. This gives practical full access without unbounded database mutation.
 
 Access tiers:
 
@@ -225,7 +249,7 @@ No generic `run_sql` tool in v1. If an admin SQL tool is added later, it must be
 
 ## GenZen Tool/MCP Layer
 
-Hermes needs tools across the whole company operating surface.
+Fiona needs tools across the whole company operating surface. Hermes exposes or runs a subset of those tools when it is the active execution channel.
 
 Core tools:
 

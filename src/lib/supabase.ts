@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 // migration (22 app tables; agent/system schemas stay service-role-only).
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const intellizenLocalAccessKey = import.meta.env.VITE_INTELLIZEN_LOCAL_ACCESS_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
@@ -13,4 +14,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    headers: intellizenLocalAccessKey
+      ? { "x-intellizen-local-access": intellizenLocalAccessKey }
+      : {},
+  },
+});

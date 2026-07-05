@@ -18,6 +18,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows } from "@/lib/data";
 import type { WorkflowTemplateItem, WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 type WorkflowStatusFilter = "active" | "inactive" | "all";
 
@@ -112,6 +113,7 @@ function WorkflowCard({
 }
 
 export function WorkflowsView() {
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [statusFilter, setStatusFilter] = useState<WorkflowStatusFilter>("active");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -119,9 +121,10 @@ export function WorkflowsView() {
 
   const includeInactive = statusFilter !== "active";
   const workflowQuery = useQuery({
-    queryKey: ["workflow-registry", "screen", statusFilter, ownerFilter],
+    queryKey: ["workflow-registry", "screen", entityFilter, statusFilter, ownerFilter],
     queryFn: () =>
       listWorkflows({
+        entity: entityFilter,
         includeInactive,
         status: statusFilter === "inactive" ? "Inactive" : null,
         ownerRole: ownerFilter || null,

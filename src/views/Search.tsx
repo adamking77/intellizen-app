@@ -6,10 +6,10 @@ import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
-import { listProjects, saveSearchResultToProject } from "@/lib/data";
+import { listProjects, saveSearchResultToProject, searchWorkspace } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
 import { toast, toastError } from "@/lib/toast";
-import type { DeepResearchResult, SearchMode, SearchResultItem } from "@/lib/types";
+import type { DeepResearchResult, InternalSearchResult, SearchMode, SearchResultItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import { useAppStore } from "@/store";
@@ -23,6 +23,13 @@ type ModeDef = {
 };
 
 const SEARCH_MODES: ModeDef[] = [
+  {
+    value: "internal",
+    label: "Internal",
+    description: "Search workspace records, knowledge, and saved signals",
+    placeholder: "Search IntelliZen memory…",
+    example: "Fiona approval receipts",
+  },
   {
     value: "web",
     label: "Web",
@@ -75,15 +82,29 @@ const SEARCH_MODES: ModeDef[] = [
 ];
 
 type SortKey = "score" | "date";
+type SearchListResult = SearchResultItem | InternalSearchResult;
+type SearchMutationResult = SearchListResult[] | DeepResearchResult;
 
-function sortResults(results: SearchResultItem[], sortKey: SortKey): SearchResultItem[] {
+function isInternalResult(result: SearchListResult): result is InternalSearchResult {
+  return "source_type" in result;
+}
+
+function sortResults(results: SearchListResult[], sortKey: SortKey): SearchListResult[] {
   const copy = [...results];
   if (sortKey === "score") {
-    copy.sort((a, b) => (b.exa_score ?? 0) - (a.exa_score ?? 0));
+    copy.sort((a, b) => {
+      const left = isInternalResult(a) ? a.rank : (a.exa_score ?? 0);
+      const right = isInternalResult(b) ? b.rank : (b.exa_score ?? 0);
+      return right - left;
+    });
   } else {
     copy.sort((a, b) => {
-      const ad = a.published_at ? new Date(a.published_at).getTime() : 0;
-      const bd = b.published_at ? new Date(b.published_at).getTime() : 0;
+      const ad = isInternalResult(a)
+        ? new Date(a.updated_at).getTime()
+        : a.published_at ? new Date(a.published_at).getTime() : 0;
+      const bd = isInternalResult(b)
+        ? new Date(b.updated_at).getTime()
+        : b.published_at ? new Date(b.published_at).getTime() : 0;
       return bd - ad;
     });
   }
@@ -105,10 +126,11 @@ export function SearchView() {
 
   const searchTargetProjectId = useAppStore((state) => state.searchTargetProjectId);
   const setSearchTargetProjectId = useAppStore((state) => state.setSearchTargetProjectId);
+  const entityFilter = useAppStore((state) => state.entityFilter);
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
   });
 
   const targetProject = useMemo(
@@ -117,7 +139,12 @@ export function SearchView() {
   );
 
   const searchMutation = useMutation({
-    mutationFn: () => runExaSearch({ mode, query, startDate }),
+    mutationFn: (): Promise<SearchMutationResult> => {
+      if (mode === "internal") {
+        return searchWorkspace({ query, entity: entityFilter, limit: 30 });
+      }
+      return runExaSearch({ mode, query, startDate });
+    },
     onError: (err) => toastError("Search failed", err),
   });
 
@@ -264,16 +291,20 @@ export function SearchView() {
                       </div>
                     </div>
                     {sortedListResults.map((result) => (
-                      <SignalCard
-                        key={result.url}
-                        title={result.title}
-                        url={result.url}
-                        source={result.source}
-                        publishedAt={result.published_at}
-                        snippet={result.snippet}
-                        score={result.exa_score}
-                        onSave={() => setPendingResult(result)}
-                      />
+                      isInternalResult(result) ? (
+                        <InternalResultCard key={`${result.source_type}:${result.source_id}`} result={result} />
+                      ) : (
+                        <SignalCard
+                          key={result.url}
+                          title={result.title}
+                          url={result.url}
+                          source={result.source}
+                          publishedAt={result.published_at}
+                          snippet={result.snippet}
+                          score={result.exa_score}
+                          onSave={() => setPendingResult(result)}
+                        />
+                      )
                     ))}
                   </>
                 )
@@ -304,7 +335,7 @@ export function SearchView() {
             <div className="mb-6">
               <h1 className="text-display-md">What are you looking for?</h1>
               <p className="mt-2 font-ui text-[14px] text-[var(--subtext-0)]">
-                Pick a mode, enter a query, and InteliZen will fetch results from Exa.
+                Pick a mode, enter a query, and InteliZen will search internal state or fetch from Exa.
               </p>
             </div>
 
@@ -544,6 +575,51 @@ function SearchComposer({
         )}
       </Button>
     </form>
+  );
+}
+
+function InternalResultCard({ result }: { result: InternalSearchResult }) {
+  const updated = result.updated_at ? new Date(result.updated_at).toLocaleDateString() : null;
+  const sourceLabel = result.source_type.replace(/_/g, " ");
+
+  return (
+    <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--mantle)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="rounded-sm bg-[var(--surface-wash)] px-1.5 py-0.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+              {sourceLabel}
+            </span>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+              {result.entity}
+            </span>
+          </div>
+          {result.url ? (
+            <a
+              href={result.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-ui text-[15px] font-semibold text-[var(--text)] hover:text-[var(--accent)]"
+            >
+              {result.title}
+            </a>
+          ) : (
+            <h3 className="font-ui text-[15px] font-semibold text-[var(--text)]">{result.title}</h3>
+          )}
+          {result.subtitle ? (
+            <p className="mt-1 font-ui text-[12px] text-[var(--subtext-0)]">{result.subtitle}</p>
+          ) : null}
+        </div>
+        {updated ? (
+          <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">{updated}</span>
+        ) : null}
+      </div>
+      {result.excerpt ? (
+        <p className="mt-3 line-clamp-3 font-ui text-[13px] leading-6 text-[var(--subtext-1)]">
+          {result.excerpt}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

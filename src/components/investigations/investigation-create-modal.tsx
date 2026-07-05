@@ -8,6 +8,7 @@ import { createInvestigation, listProjects } from "@/lib/data";
 import { toastError } from "@/lib/toast";
 import type { InvestigationUseCase } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 // operationId is passed from context (e.g. opening from an Operation detail pane)
 
@@ -47,14 +48,15 @@ export function InvestigationCreateModal({
   initialName = "",
 }: InvestigationCreateModalProps) {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [name, setName] = useState(initialName);
   const [useCase, setUseCase] = useState<InvestigationUseCase>("scoping");
   const [projectId, setProjectId] = useState<number | null>(initialProjectId);
   const operationId = initialOperationId;
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
     enabled: open,
   });
 
@@ -70,6 +72,7 @@ export function InvestigationCreateModal({
         projectId,
         projectRecordId: linkedProject?.record_id ?? null,
         operationId,
+        taxonomy: { entity: entityFilter ?? "genzen_solutions" },
         useCase,
       }),
     onSuccess: async (investigation) => {

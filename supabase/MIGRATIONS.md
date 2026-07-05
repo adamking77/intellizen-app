@@ -7,7 +7,7 @@ subset and cannot rebuild the full database.
 Regenerate this file with the Supabase MCP `list_migrations` tool after
 applying new migrations.
 
-Snapshot: 2026-07-03 — 85 migrations, 9 schemas.
+Snapshot: 2026-07-05 — 88 remote-applied migrations, 9 schemas.
 
 | Version | Name |
 |---|---|
@@ -95,3 +95,6 @@ Snapshot: 2026-07-03 — 85 migrations, 9 schemas.
 | 20260702123105 | enable_realtime_fiona_inbox_chat |
 | 20260703082222 | security_hardening_audit_f07 |
 | 20260703082435 | prune_unused_indexes_audit_f08 |
+| 20260703083415 | add_memory_summary_audit_f10 |
+| 20260703090922 | anon_personal_app_access_v2_scoped |
+| 20260705093638 | structural_entities_internal_search_relation_rpc |

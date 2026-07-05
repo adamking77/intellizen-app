@@ -10,6 +10,7 @@ import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { cn } from "@/lib/utils";
 import type { ProjectType } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
+import { useAppStore } from "@/store";
 
 type ProjectPickerModalProps = {
   open: boolean;
@@ -25,12 +26,13 @@ export function ProjectPickerModal({
   title = "Attach to project",
 }: ProjectPickerModalProps) {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [name, setName] = useState("");
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
   const [taxonomy, setTaxonomy] = useState(() =>
     taxonomyDraftFromMetadata(null, {
-      entity: "genzen",
+      entity: entityFilter ?? "genzen",
       area: "research_intelligence",
       folder: "",
     }),
@@ -40,8 +42,8 @@ export function ProjectPickerModal({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
     enabled: open,
   });
 
@@ -65,7 +67,7 @@ export function ProjectPickerModal({
       setType("research");
       setWatchDomain("");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen",
+        entity: entityFilter ?? "genzen",
         area: "research_intelligence",
         folder: "",
       }));
@@ -94,7 +96,7 @@ export function ProjectPickerModal({
       setType("research");
       setWatchDomain("");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen",
+        entity: entityFilter ?? "genzen",
         area: "research_intelligence",
         folder: "",
       }));

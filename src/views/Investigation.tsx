@@ -123,6 +123,7 @@ function formatElapsed(iso: string | null | undefined): string {
 export function InvestigationView() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const entityFilter = useAppStore((s) => s.entityFilter);
   const setPendingProjectSelectionId = useAppStore((s) => s.setPendingProjectSelectionId);
 
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -184,8 +185,8 @@ export function InvestigationView() {
   // ─── Queries ───────────────────────────────────────────────────────────────
 
   const { data: investigations, isLoading } = useQuery({
-    queryKey: ["investigations"],
-    queryFn: listInvestigations,
+    queryKey: ["investigations", entityFilter],
+    queryFn: () => listInvestigations({ entity: entityFilter }),
   });
 
   const { data: selectedInvestigation } = useQuery({
@@ -201,9 +202,9 @@ export function InvestigationView() {
   });
 
   const { data: savedSignals } = useQuery({
-    queryKey: ["signals", "saved-for-investigation"],
+    queryKey: ["signals", "saved-for-investigation", entityFilter],
     queryFn: async () => {
-      const all = await listSignals();
+      const all = await listSignals({ entity: entityFilter });
       return all.filter((s) => s.status === "saved");
     },
   });
@@ -215,8 +216,8 @@ export function InvestigationView() {
   });
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
   });
 
   const parentProject = useMemo(

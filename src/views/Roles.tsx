@@ -16,6 +16,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { listAgentProjects, listAgentWork, listWorkflows } from "@/lib/data";
 import type { AgentProjectItem, AgentWorkItem, WorkflowTemplateItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 interface RoleSummary {
   name: string;
@@ -203,22 +204,23 @@ function RoleCard({ role, selected, onSelect }: { role: RoleSummary; selected: b
 }
 
 export function RolesView() {
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [search, setSearch] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
   const workflowsQuery = useQuery({
-    queryKey: ["roles-screen", "workflows"],
-    queryFn: () => listWorkflows({ includeInactive: true, limit: 100 }),
+    queryKey: ["roles-screen", "workflows", entityFilter],
+    queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: true, limit: 100 }),
     refetchInterval: 60_000,
   });
   const workQuery = useQuery({
-    queryKey: ["roles-screen", "work"],
-    queryFn: () => listAgentWork({ includeDone: false, limit: 120 }),
+    queryKey: ["roles-screen", "work", entityFilter],
+    queryFn: () => listAgentWork({ entity: entityFilter, includeDone: false, limit: 120 }),
     refetchInterval: 60_000,
   });
   const projectsQuery = useQuery({
-    queryKey: ["roles-screen", "projects"],
-    queryFn: () => listAgentProjects({ includeDone: false, limit: 60 }),
+    queryKey: ["roles-screen", "projects", entityFilter],
+    queryFn: () => listAgentProjects({ entity: entityFilter, includeDone: false, limit: 60 }),
     refetchInterval: 60_000,
   });
 

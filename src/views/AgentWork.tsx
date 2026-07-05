@@ -22,6 +22,7 @@ import { delegateAgentWork, listAgentProjects, listAgentWork } from "@/lib/data"
 import { toast, toastError } from "@/lib/toast";
 import type { AgentProjectItem, AgentWorkItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 type WorkStatusFilter = "open" | "needs_approval" | "blocked" | "done" | "all";
 
@@ -179,6 +180,7 @@ function ProjectRow({ project }: { project: AgentProjectItem }) {
 
 export function AgentWorkView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>("open");
   const [actorFilter, setActorFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -195,9 +197,10 @@ export function AgentWorkView() {
   const statuses = filterStatuses(statusFilter);
 
   const workQuery = useQuery({
-    queryKey: ["agent-work", "screen", actorFilter, statusFilter],
+    queryKey: ["agent-work", "screen", entityFilter, actorFilter, statusFilter],
     queryFn: () =>
       listAgentWork({
+        entity: entityFilter,
         actor: actorFilter || null,
         statuses,
         includeDone,
@@ -207,9 +210,10 @@ export function AgentWorkView() {
   });
 
   const projectsQuery = useQuery({
-    queryKey: ["agent-projects", "screen", actorFilter],
+    queryKey: ["agent-projects", "screen", entityFilter, actorFilter],
     queryFn: () =>
       listAgentProjects({
+        entity: entityFilter,
         actor: actorFilter || null,
         includeDone: false,
         limit: 40,

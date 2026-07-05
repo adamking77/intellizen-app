@@ -22,6 +22,7 @@ import {
   saveSignalToProject,
 } from "@/lib/data";
 import type { IntelSignal } from "@/lib/types";
+import { useAppStore } from "@/store";
 
 type InboxFilter = "all" | "new" | "saved";
 
@@ -41,6 +42,7 @@ function formatElapsed(iso: string | null | undefined): string {
 
 export function InboxView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [selectedSignal, setSelectedSignal] = useState<IntelSignal | null>(null);
   const [saveTarget, setSaveTarget] = useState<IntelSignal | null>(null);
@@ -93,18 +95,18 @@ export function InboxView() {
   const filterPopoverRef = useRef<HTMLDivElement>(null);
 
   const { data: signals, isLoading } = useQuery({
-    queryKey: ["signals"],
-    queryFn: listSignals,
+    queryKey: ["signals", entityFilter],
+    queryFn: () => listSignals({ entity: entityFilter }),
   });
 
   const { data: investigations } = useQuery({
-    queryKey: ["investigations"],
-    queryFn: listInvestigations,
+    queryKey: ["investigations", entityFilter],
+    queryFn: () => listInvestigations({ entity: entityFilter }),
   });
 
   const { data: monitors } = useQuery({
-    queryKey: ["monitors"],
-    queryFn: listMonitors,
+    queryKey: ["monitors", entityFilter],
+    queryFn: () => listMonitors({ entity: entityFilter }),
     staleTime: 30_000,
   });
 

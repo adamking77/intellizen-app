@@ -90,6 +90,13 @@ export default defineConfig(async ({ command, mode }) => {
         "  - Always verify artifacts with scripts/check-bundle-secrets.sh before uploading.",
     );
   }
+  if (command === "build" && env.VITE_INTELLIZEN_LOCAL_ACCESS_KEY && process.env.ALLOW_LOCAL_ACCESS_KEY_BUILD !== "1") {
+    throw new Error(
+      "REFUSING TO BUILD: VITE_INTELLIZEN_LOCAL_ACCESS_KEY would be inlined into the bundle.\n" +
+        "  - For local-only personal builds: ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm tauri build ...\n" +
+        "  - For publishable builds: omit the local access key and do not point the artifact at the live GenZen OS database.",
+    );
+  }
 
   return {
   plugins: [

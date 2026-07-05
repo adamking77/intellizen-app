@@ -40,6 +40,7 @@ import {
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
+import { useAppStore } from "@/store";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -131,6 +132,7 @@ export function DatabasePeekPanel({
   onDuplicateRecords,
   onSaveHeaderFields,
 }: DatabasePeekPanelProps) {
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [visible, setVisible] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -277,8 +279,8 @@ export function DatabasePeekPanel({
   );
   const canStartRecordWorkflow = isWorkflowSourceDatabase(database.id);
   const workflowsQuery = useQuery({
-    queryKey: ["workflows", "record-peek", "active"],
-    queryFn: () => listWorkflows({ includeInactive: false, limit: 24 }),
+    queryKey: ["workflows", "record-peek", "active", entityFilter],
+    queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: false, limit: 24 }),
     staleTime: 60_000,
     enabled: canStartRecordWorkflow,
   });

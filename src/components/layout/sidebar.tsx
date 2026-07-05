@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 
 import { listWorkspaceDatabases } from "@/lib/data";
+import { TAXONOMY_ENTITY_OPTIONS } from "@/lib/taxonomy";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
@@ -47,9 +49,11 @@ function readCollapsed(): boolean {
 }
 
 export function Sidebar() {
+  const entityFilter = useAppStore((state) => state.entityFilter);
+  const setEntityFilter = useAppStore((state) => state.setEntityFilter);
   const { data: databases = [] } = useQuery({
-    queryKey: ["workspace-databases"],
-    queryFn: listWorkspaceDatabases,
+    queryKey: ["workspace-databases", entityFilter],
+    queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
     staleTime: 30_000,
   });
   const { isCramped } = useWindowSize();
@@ -117,6 +121,22 @@ export function Sidebar() {
           </button>
         )}
       </div>
+
+      {!collapsed ? (
+        <div className="border-y border-[var(--border)] px-3 py-3">
+          <select
+            value={entityFilter ?? ""}
+            onChange={(event) => setEntityFilter(event.target.value || null)}
+            className="h-8 w-full rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            aria-label="Entity scope"
+          >
+            <option value="">All entities</option>
+            {TAXONOMY_ENTITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       {/* Nav */}
       <nav

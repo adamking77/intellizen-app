@@ -18,6 +18,14 @@ export type TaxonomyEntity =
   | "founder_context"
   | "archive";
 
+export interface WorkspaceEntity {
+  slug: TaxonomyEntity | string;
+  label: string;
+  status: "active" | "archived" | string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type TaxonomyArea =
   | "company_hq"
   | "revenue"
@@ -45,6 +53,7 @@ export type ProjectStatus = "active" | "on_hold" | "archived";
 export type MonitorFrequency = "daily" | "weekly";
 export type MonitorStatus = "active" | "paused";
 export type SearchMode =
+  | "internal"
   | "web"
   | "news"
   | "research_papers"
@@ -56,6 +65,7 @@ export type GraphEntityType = "person" | "organisation" | "location" | "event";
 
 export interface IntelSignal {
   id: number;
+  entity?: string;
   monitor_id: number | null;
   title: string;
   url: string;
@@ -273,6 +283,7 @@ export interface UpdateWorkflowRunInput {
 export interface Operation {
   id: number;
   record_id?: string | null;
+  entity?: string;
   name: string;
   description: string | null;
   status: OperationStatus;
@@ -284,6 +295,7 @@ export interface Operation {
 export interface Project {
   id: number;
   record_id?: string | null;
+  entity?: string;
   name: string;
   type: ProjectType;
   watch_domain: string | null;
@@ -298,6 +310,7 @@ export interface Project {
 
 export interface Monitor {
   id: number;
+  entity?: string;
   name: string;
   query: string;
   watch_domain: string;
@@ -330,6 +343,7 @@ export interface SignalDraft {
 }
 
 export interface MonitorInsert {
+  entity?: string;
   name: string;
   query: string;
   watch_domain: string;
@@ -345,6 +359,18 @@ export interface SearchResultItem {
   snippet: string | null;
   exa_score: number | null;
   raw_payload: unknown;
+}
+
+export interface InternalSearchResult {
+  source_type: "workspace_record" | "knowledge_document" | "intel_signal" | string;
+  source_id: string;
+  title: string;
+  subtitle: string | null;
+  entity: string;
+  url: string | null;
+  excerpt: string | null;
+  rank: number;
+  updated_at: string;
 }
 
 export interface DeepResearchResult {
@@ -412,6 +438,7 @@ export type CanvasColor = CanvasColorPreset | string;
 
 export interface Investigation {
   id: number;
+  entity?: string;
   case_id: string;
   operation_id: number | null;
   operation_record_id?: string | null;
@@ -618,6 +645,7 @@ export interface WorkspaceDatabaseSchemaSaveOptions {
 
 export interface WorkspaceDatabaseSummary {
   id: string;
+  entity?: string;
   name: string;
   icon: string | null;
   schema: WorkspaceDatabaseField[];
@@ -643,6 +671,7 @@ export interface WorkspaceDatabaseView {
 export interface WorkspaceDatabaseRecord {
   id: string;
   database_id: string;
+  entity?: string;
   fields: Record<string, WorkspaceDatabaseFieldValue>;
   body: string | null;
   taxonomy?: TaxonomyMetadata;

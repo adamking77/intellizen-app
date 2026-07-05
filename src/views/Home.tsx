@@ -21,6 +21,7 @@ import {
 } from "@/lib/home-dashboard";
 import { listWorkspaceDatabaseCatalog } from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
+import { useAppStore } from "@/store";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -31,6 +32,7 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 
 export function HomeView() {
   const navigate = useNavigate();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [genuiPins, setGenuiPins] = useState<GenuiPin[]>(() => loadGenuiPins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
@@ -40,8 +42,8 @@ export function HomeView() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["workspace-database-catalog"],
-    queryFn: listWorkspaceDatabaseCatalog,
+    queryKey: ["workspace-database-catalog", entityFilter],
+    queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
     refetchInterval: 60_000,
   });
 

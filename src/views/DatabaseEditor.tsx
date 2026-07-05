@@ -67,6 +67,7 @@ import type {
   WorkspaceDatabaseViewType,
 } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
+import { useAppStore } from "@/store";
 
 function toViewConfig(view: WorkspaceDatabaseModel["views"][number]): WorkspaceDatabaseViewConfig {
   return {
@@ -113,6 +114,7 @@ export function DatabaseEditorView({
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const databaseId = databaseIdOverride ?? params.id ?? "";
 
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
@@ -138,8 +140,8 @@ export function DatabaseEditorView({
 
   const database = bundle?.model;
   const { data: catalogData = [] } = useQuery({
-    queryKey: ["workspace-database-catalog"],
-    queryFn: listWorkspaceDatabaseCatalog,
+    queryKey: ["workspace-database-catalog", entityFilter],
+    queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
     enabled: Boolean(database),
   });
   const catalog = useMemo(

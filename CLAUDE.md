@@ -4,16 +4,18 @@ macOS-only Tauri v2 desktop intelligence platform for GenZen. Original V1 spec i
 
 ## Current scope (actual build, not frozen spec)
 
-**7 screens**, grouped as 4 operational layers:
+**14 routes**, grouped as 6 operational layers:
 
 | Layer | Routes |
 |---|---|
+| Command | `/home`, `/agent-work`, `/workflows`, `/roles` |
 | Monitoring | `/inbox`, `/monitors` |
 | Search | `/search` |
-| Organize | `/projects`, `/graph` |
+| Organize | `/projects`, `/databases`, `/databases/:id`, `/graph`, `/canvas` |
 | Analyse | `/investigate`, `/reports` |
+| Diagnostics / deep links | Inbox and Monitors remain routable but are no longer primary sidebar surfaces |
 
-Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors) and Reports were promoted from V2. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 freeze — kept for product-intent context, not implementation contracts.
+Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors), Reports, Home dashboard pins, Agent Work, Workflows, Roles, Databases, and Canvas were promoted beyond the V1 freeze. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 intent — kept for product context, not implementation contracts.
 
 ## Build commands
 
@@ -25,7 +27,7 @@ Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post 
 
 InteliZen DMGs are shipped as **unsigned Apple Silicon builds**. Do not assume Developer ID signing or App Store notarization unless Adam explicitly changes the release model.
 
-**Credential gate (audit F-01, mandatory before any publish):** Vite inlines every `VITE_*` value into `dist/` — a build made with `VITE_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` embeds a full RLS-bypassing production credential in the artifact. `vite.config.ts` refuses production builds when that key is present unless `ALLOW_SERVICE_KEY_BUILD=1` (personal, never-published builds only). Publishable builds must use the anon key. After every build, run `scripts/check-bundle-secrets.sh dist` — **the dist/ scan is the authoritative check** (Tauri compresses embedded assets, so string-scanning the .app/.dmg can false-negative). Never upload an artifact whose dist/ scan fails.
+**Credential gate (audit F-01, mandatory before any publish):** Vite inlines every `VITE_*` value into `dist/` — a build made with `VITE_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` embeds a full RLS-bypassing production credential in the artifact. `vite.config.ts` refuses production builds when that key is present unless `ALLOW_SERVICE_KEY_BUILD=1` (personal, never-published builds only). It also refuses to inline `VITE_INTELLIZEN_LOCAL_ACCESS_KEY` unless `ALLOW_LOCAL_ACCESS_KEY_BUILD=1`; that key is for Adam's local app only. Publishable builds must use the anon key and must not point at the live GenZen OS database unless a non-bundled trust boundary exists. After every build, run `scripts/check-bundle-secrets.sh dist` — **the dist/ scan is the authoritative check** (Tauri compresses embedded assets, so string-scanning the .app/.dmg can false-negative). Never upload an artifact whose dist/ scan fails.
 
 The correct unsigned release flow is:
 
@@ -46,13 +48,14 @@ Never upload a DMG unless the app bundle inside the mounted DMG passes `codesign
 
 ```
 VITE_SUPABASE_URL=https://jicrdrwtwubveyvzyyrh.supabase.co
-VITE_SUPABASE_ANON_KEY=<in .env.local>          # app client key — safe to inline in builds
+VITE_SUPABASE_ANON_KEY=<in .env.local>          # app client key
+VITE_INTELLIZEN_LOCAL_ACCESS_KEY=<in .env.local># local-only header secret; never publish
 SUPABASE_SERVICE_ROLE_KEY=<in .env.local>       # scripts/MCP only — never VITE_-prefixed
 VITE_EXA_API_KEY=<in .env.local>
 VITE_ANTHROPIC_API_KEY=<in .env.local>
 ```
 
-The app connects with the **anon key** (since 2026-07-03, audit F-01). Anon access is scoped server-side by the `anon_personal_app_access_v2_scoped` migration to the 22 tables the app touches; `agent.*` and `system.*` remain service-role-only. Do not reintroduce a `VITE_`-prefixed service-role key — the vite build guard will refuse, by design.
+The app connects with the **anon key** (since 2026-07-03, audit F-01) and sends `x-intellizen-local-access` from `VITE_INTELLIZEN_LOCAL_ACCESS_KEY`. The live RLS policy `personal_app_local_access` requires `system.intellizen_local_access_ok()` on the 22 app tables the desktop app touches; the anon key alone reads zero rows. `agent.*` and most `system.*` remain service-role-only. Do not reintroduce a `VITE_`-prefixed service-role key — the vite build guard will refuse, by design.
 
 These are also in `.env.local`. The Supabase project is the existing GenZen Brain project — do not create a new project.
 
@@ -60,25 +63,27 @@ Brain-table contract (updated for GenZen OS): the app legitimately **writes addi
 
 Agent coordination state lives in `workspace.records` (Tasks, Biz Ops, Workflow Registry, Workflow Runs) plus the append-only audit log `workspace.work_events`. Body-section appends must go through the `workspace.append_record_section` RPC — never read-modify-write a record body client-side; concurrent agents will clobber each other's receipts.
 
+Fiona is GenZen's Operations Director, not just a Hermes profile or chat endpoint. She has full operational access to InteliZen workflows and future GenZen workflows, can execute or delegate them per directives, and must leave durable execution/delegation/approval receipts in Supabase.
+
 ## Stack
 
 Tauri v2 · React 18 + TypeScript + Vite · Tailwind CSS v4 · hand-rolled UI primitives in `src/components/ui/` (follow the shadcn/ui API but are not CLI-initialized) · Zustand · TanStack Query · Supabase JS v2 · Exa JS SDK (`exa-js`) · `react-force-graph-2d` + `d3-force` for the Insight graph view; custom SVG/DOM canvas for Construct mode · pnpm
 
-Tauri plugins: `opener`, `fs` (scoped to `$HOME/vault/**`), `shell` (whitelisted to `claude -p`).
+Tauri plugins: `opener`, `fs` (scoped to `$HOME/vault/**`), `http` for the local Hermes dashboard bridge. The old shell execution path is not the current workflow runtime.
 
 ## Database
 
-The shared GenZen Brain Supabase project has grown far beyond this app's original five migrations: **85+ applied migrations across 9 namespaced schemas** (`agent`, `knowledge`, `workspace`, `intel`, `ingest`, `anchors`, `system`, `comms`, plus `public` bridge views). The IntelliZen tables live mainly in `intel`, `workspace`, and `ingest` (post-Phase-9 namespacing; e.g. `intel_signals` → `intel.signals`).
+The shared GenZen Brain Supabase project has grown far beyond this app's original five migrations: **86+ applied migrations across 9 namespaced schemas** (`agent`, `knowledge`, `workspace`, `intel`, `ingest`, `anchors`, `system`, `comms`, plus `public` bridge views). The IntelliZen tables live mainly in `intel`, `workspace`, and `ingest` (post-Phase-9 namespacing; e.g. `intel_signals` → `intel.signals`).
 
 `supabase/migrations/` in this repo holds only the app-local subset (~30 files) — it can NOT rebuild the full database. The authoritative record is the remote migration table; a synced inventory lives in [supabase/MIGRATIONS.md](supabase/MIGRATIONS.md) (regenerate via the Supabase MCP `list_migrations` tool after applying new migrations).
 
-RLS is enabled with service-role-only access on coordination tables; the app connects with the service-role key (single user, local desktop) — see the release-safety note in the DMG section below.
+RLS is enabled on the app schemas. The desktop app uses anon-key access plus the local access header for the 22 app tables; direct service-role access is reserved for scripts, MCP, and maintenance. `workspace.record_revisions`, `workspace.work_events`, and `intel.claims` are append-only from the app side, and public memory bridge views are read-only to anon.
 
 ## Investigation + Reports integration
 
-- **Claude execution**: [src/lib/shell.ts](src/lib/shell.ts) wraps `Command.create("claude", ...)` via the Tauri shell plugin. Prompts per phase are built in `buildPhasePrompt` / `buildReportPrompt`.
+- **Fiona/Hermes execution**: [src/services/agent.ts](src/services/agent.ts) dispatches workflow runs through the local Hermes run queue, then webhook, then durable `comms.fiona_inbox` fallback. [src/lib/shell.ts](src/lib/shell.ts) is now prompt builders for Fiona/Hermes workflow payloads, not a shell runner.
 - **Vault I/O**: [src/lib/vault.ts](src/lib/vault.ts) wraps the Tauri fs plugin. Reads/writes under `$HOME/vault/intelligence/investigations/<case-id>/`.
-- **Artifact tracking**: every `claude -p` run that produces a file also inserts a row into `vault_files` keyed to `case_id`.
+- **Artifact tracking**: workflow outputs and vault files are tracked in Supabase, with investigation artifacts keyed to `case_id` and agent receipts written to `workspace.records` / `workspace.work_events`.
 
 ## Graph implementation
 

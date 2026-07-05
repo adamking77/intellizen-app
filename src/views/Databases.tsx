@@ -22,12 +22,14 @@ import {
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 const DATABASE_RAIL_STORAGE_KEY = "intelizen:databases-rail-collapsed";
 const DATABASE_RAIL_WIDTH_EXPANDED = 280;
 
 export function DatabasesView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -43,8 +45,8 @@ export function DatabasesView() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["workspace-databases"],
-    queryFn: listWorkspaceDatabases,
+    queryKey: ["workspace-databases", entityFilter],
+    queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
   });
 
   useEffect(() => {
@@ -112,7 +114,9 @@ export function DatabasesView() {
 
     try {
       setIsCreating(true);
-      const created = await createWorkspaceDatabase();
+      const created = await createWorkspaceDatabase({
+        taxonomy: entityFilter ? { entity: entityFilter } : undefined,
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),

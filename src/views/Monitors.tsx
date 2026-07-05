@@ -28,6 +28,7 @@ import {
 } from "@/lib/data";
 import type { Monitor, MonitorFrequency } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
+import { useAppStore } from "@/store";
 
 type StatusFilter = "all" | "active" | "paused";
 
@@ -47,13 +48,14 @@ function formatElapsed(iso: string | null | undefined): string {
 
 export function MonitorsView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMonitor, setEditingMonitor] = useState<Monitor | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const { data: monitors, isLoading, error } = useQuery({
-    queryKey: ["monitors"],
-    queryFn: listMonitors,
+    queryKey: ["monitors", entityFilter],
+    queryFn: () => listMonitors({ entity: entityFilter }),
   });
 
   const seedMutation = useMutation({
@@ -519,6 +521,7 @@ function MonitorFormModal({
   onSaved: () => Promise<void> | void;
   monitor?: Monitor | null;
 }) {
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const isEdit = !!monitor;
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
 
@@ -537,7 +540,7 @@ function MonitorFormModal({
   }, [open, monitor]);
 
   const createMutation = useMutation({
-    mutationFn: () => createMonitor(draft),
+    mutationFn: () => createMonitor({ ...draft, entity: entityFilter ?? "genzen_solutions" }),
     onSuccess: async () => {
       setDraft(EMPTY_DRAFT);
       toast.success("Monitor created");

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createOperation } from "@/lib/data";
 import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { toastError } from "@/lib/toast";
+import { useAppStore } from "@/store";
 
 type OperationCreateModalProps = {
   open: boolean;
@@ -18,11 +19,12 @@ type OperationCreateModalProps = {
 
 export function OperationCreateModal({ open, onClose, onCreated }: OperationCreateModalProps) {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [taxonomy, setTaxonomy] = useState(() =>
     taxonomyDraftFromMetadata(null, {
-      entity: "genzen_solutions",
+      entity: entityFilter ?? "genzen_solutions",
       area: "research_intelligence",
       folder: "",
     }),
@@ -45,7 +47,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       setName("");
       setDescription("");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen_solutions",
+        entity: entityFilter ?? "genzen_solutions",
         area: "research_intelligence",
         folder: "",
       }));
@@ -69,7 +71,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       setName("");
       setDescription("");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen_solutions",
+        entity: entityFilter ?? "genzen_solutions",
         area: "research_intelligence",
         folder: "",
       }));

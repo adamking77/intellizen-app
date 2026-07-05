@@ -178,10 +178,52 @@ interface UpsertedSearchResult {
 type WorkspaceRecordRow = {
   id: string;
   database_id: string;
+  entity?: string | null;
   fields: Record<string, unknown>;
   body: string | null;
+  taxonomy?: Record<string, unknown> | null;
   updated_at: string;
 };
+
+type WorkspaceDatabaseRow = {
+  id: string;
+  entity?: string | null;
+  name: string;
+  icon: string | null;
+  schema: Array<{ id: string; name?: string; type?: string }>;
+  header_field_ids: string[] | null;
+  taxonomy?: Record<string, unknown> | null;
+  updated_at: string;
+};
+
+function normalizeEntitySlug(value?: string | null): string | null {
+  const normalized = value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!normalized) return null;
+  if (normalized === "genzen_hq" || normalized === "intellizen") return "genzen";
+  if (normalized === "gzs") return "genzen_solutions";
+  if (normalized === "gokart") return "gokart_studio";
+  if (normalized === "founder") return "founder_context";
+  return normalized;
+}
+
+function recordTitle(database: WorkspaceDatabaseRow, record: WorkspaceRecordRow): string {
+  for (const fieldId of database.header_field_ids ?? []) {
+    const value = fieldString(record.fields[fieldId]);
+    if (value?.trim()) return value;
+  }
+  for (const field of database.schema ?? []) {
+    if (field.type === "text" || field.type === "title") {
+      const value = fieldString(record.fields[field.id]);
+      if (value?.trim()) return value;
+    }
+  }
+  return record.id;
+}
+
+function bodyPreview(body?: string | null): string | null {
+  const compact = body?.replace(/\s+/g, " ").trim();
+  return compact ? compact.slice(0, 500) : null;
+}
 
 function definedFields<T extends Record<string, unknown>>(fields: T): Partial<T> {
   return Object.fromEntries(
@@ -207,7 +249,7 @@ function firstRelationId(value: unknown): string | null {
 async function listWorkspaceRecords(databaseId: string): Promise<WorkspaceRecordRow[]> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .eq("database_id", databaseId)
     .order("updated_at", { ascending: false });
 
@@ -215,10 +257,100 @@ async function listWorkspaceRecords(databaseId: string): Promise<WorkspaceRecord
   return (data ?? []) as WorkspaceRecordRow[];
 }
 
+async function listDatabases(input: { entity?: string | null; include_schema?: boolean } = {}) {
+  const entity = normalizeEntitySlug(input.entity);
+  let query = supabase
+    .schema("workspace").from("databases")
+    .select("id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at")
+    .order("name", { ascending: true });
+  if (entity) query = query.eq("entity", entity);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as WorkspaceDatabaseRow[]).map((database) => ({
+    id: database.id,
+    name: database.name,
+    entity: database.entity ?? null,
+    icon: database.icon,
+    taxonomy: database.taxonomy ?? {},
+    header_field_ids: database.header_field_ids ?? [],
+    updated_at: database.updated_at,
+    ...(input.include_schema ? { schema: database.schema ?? [] } : { field_count: database.schema?.length ?? 0 }),
+  }));
+}
+
+async function resolveDatabase(input: { database_id?: string; database_name?: string }): Promise<WorkspaceDatabaseRow> {
+  let query = supabase
+    .schema("workspace").from("databases")
+    .select("id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at");
+
+  if (input.database_id) {
+    query = query.eq("id", input.database_id);
+  } else if (input.database_name) {
+    query = query.ilike("name", input.database_name);
+  } else {
+    throw new Error("query_records requires database_id or database_name.");
+  }
+
+  const { data, error } = await query.limit(1).single();
+  if (error) throw new Error(error.message);
+  return data as WorkspaceDatabaseRow;
+}
+
+async function queryRecords(input: {
+  database_id?: string;
+  database_name?: string;
+  entity?: string | null;
+  search?: string | null;
+  limit?: number;
+  include_body?: boolean;
+}) {
+  const database = await resolveDatabase(input);
+  const entity = normalizeEntitySlug(input.entity);
+  const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+  const search = input.search?.trim().toLowerCase();
+
+  let query = supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
+    .eq("database_id", database.id)
+    .order("updated_at", { ascending: false })
+    .limit(search ? Math.min(limit * 4, 200) : limit);
+  if (entity) query = query.eq("entity", entity);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as WorkspaceRecordRow[])
+    .map((record) => ({
+      id: record.id,
+      database_id: record.database_id,
+      database_name: database.name,
+      entity: record.entity ?? database.entity ?? null,
+      title: recordTitle(database, record),
+      fields: record.fields ?? {},
+      body_preview: bodyPreview(record.body),
+      ...(input.include_body ? { body: record.body } : {}),
+      taxonomy: record.taxonomy ?? {},
+      updated_at: record.updated_at,
+    }))
+    .filter((record) => {
+      if (!search) return true;
+      const haystack = [
+        record.title,
+        JSON.stringify(record.fields ?? {}),
+        record.body_preview ?? "",
+      ].join("\n").toLowerCase();
+      return haystack.includes(search);
+    })
+    .slice(0, limit);
+}
+
 async function getWorkspaceTaskRecord(id: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .eq("id", id)
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
     .single();
@@ -236,7 +368,7 @@ async function updateWorkspaceTaskRecord(
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .single();
 
   if (error) throw new Error(error.message);
@@ -799,7 +931,7 @@ ${returnPath}`;
         },
       },
     ])
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .single();
   if (childError) throw new Error(childError.message);
   const childRecord = child as WorkspaceRecordRow;
@@ -1125,7 +1257,7 @@ async function resolveWorkflowRecordId(workflowIdOrRecordId: string) {
 async function getWorkflowRunRecord(id: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .eq("id", id)
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
     .single();
@@ -1407,7 +1539,7 @@ async function listWorkflows(input: {
 async function getWorkflowByWorkflowId(workflowId: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry)
     .eq(`fields->>${WORKFLOW_REGISTRY_FIELDS.workflowId}`, workflowId)
     .single();
@@ -1519,7 +1651,7 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         workflow_id: input.workflow_id,
       },
     })
-    .select("id, database_id, fields, body, updated_at")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
     .single();
 
   if (error) throw new Error(error.message);
@@ -1722,6 +1854,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           include_done: { type: "boolean", description: "Include Done tasks. Defaults to false." },
           limit: { type: "number", description: "Max tasks to return. Defaults to 50." },
+        },
+      },
+    },
+    {
+      name: "list_databases",
+      description: "List IntelliZen workspace databases with optional entity scoping. Read-only; schema is optional.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          entity: { type: "string", description: "Optional entity slug, e.g. genzen, genzen_solutions, gokart_studio." },
+          include_schema: { type: "boolean", description: "Include each database schema. Defaults to false." },
+        },
+      },
+    },
+    {
+      name: "query_records",
+      description:
+        "Query slim workspace records from a selected database by database_id or exact database_name. Read-only; returns fields and body previews, not raw payload blobs.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Workspace database UUID." },
+          database_name: { type: "string", description: "Exact workspace database name when database_id is unknown." },
+          entity: { type: "string", description: "Optional entity slug filter." },
+          search: { type: "string", description: "Optional client-side substring search over title, fields, and body preview." },
+          limit: { type: "number", description: "Max records to return. Defaults to 25, capped at 100." },
+          include_body: { type: "boolean", description: "Include full body markdown. Defaults to false." },
         },
       },
     },
@@ -2536,6 +2695,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       statuses?: string[];
       include_done?: boolean;
       limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── list_databases ────────────────────────────────────────────────────────
+  if (name === "list_databases") {
+    const result = await listDatabases((args ?? {}) as {
+      entity?: string | null;
+      include_schema?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── query_records ─────────────────────────────────────────────────────────
+  if (name === "query_records") {
+    const result = await queryRecords((args ?? {}) as {
+      database_id?: string;
+      database_name?: string;
+      entity?: string | null;
+      search?: string | null;
+      limit?: number;
+      include_body?: boolean;
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }

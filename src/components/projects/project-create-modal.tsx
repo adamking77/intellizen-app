@@ -9,6 +9,7 @@ import { createProject, listOperations } from "@/lib/data";
 import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import type { ProjectType } from "@/lib/types";
 import { WATCH_DOMAINS } from "@/lib/watch-domains";
+import { useAppStore } from "@/store";
 
 type ProjectCreateModalProps = {
   open: boolean;
@@ -19,21 +20,22 @@ type ProjectCreateModalProps = {
 
 export function ProjectCreateModal({ open, onClose, onCreated, initialOperationId = null }: ProjectCreateModalProps) {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [name, setName] = useState("");
   const [type, setType] = useState<ProjectType>("research");
   const [watchDomain, setWatchDomain] = useState<string>("");
   const [operationId, setOperationId] = useState<number | null>(initialOperationId);
   const [taxonomy, setTaxonomy] = useState(() =>
     taxonomyDraftFromMetadata(null, {
-      entity: "genzen",
+      entity: entityFilter ?? "genzen",
       area: "research_intelligence",
       folder: "",
     }),
   );
 
   const { data: operations } = useQuery({
-    queryKey: ["operations"],
-    queryFn: listOperations,
+    queryKey: ["operations", entityFilter],
+    queryFn: () => listOperations({ entity: entityFilter }),
     enabled: open,
   });
 
@@ -64,7 +66,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
       setWatchDomain("");
       setOperationId(null);
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen",
+        entity: entityFilter ?? "genzen",
         area: "research_intelligence",
         folder: "",
       }));
@@ -89,7 +91,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
       setWatchDomain("");
       setOperationId(initialOperationId);
       setTaxonomy(taxonomyDraftFromMetadata(null, {
-        entity: "genzen",
+        entity: entityFilter ?? "genzen",
         area: "research_intelligence",
         folder: "",
       }));

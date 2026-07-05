@@ -82,6 +82,7 @@ import {
   ensureProjectDirectory,
   writeVaultBinaryFile,
 } from "@/lib/vault";
+import { useAppStore } from "@/store";
 import { buildGraphExtractionPrompt } from "@/lib/shell";
 import type {
   GraphEdgeRecord,
@@ -250,6 +251,7 @@ function extractGraphSignalContent(rawPayload: unknown): string | null {
 
 export function GraphView() {
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
@@ -359,13 +361,13 @@ export function GraphView() {
   const worldContainerRef = useRef<HTMLDivElement | null>(null);
 
   const { data: projects } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
   });
 
   const { data: investigations } = useQuery({
-    queryKey: ["investigations"],
-    queryFn: listInvestigations,
+    queryKey: ["investigations", entityFilter],
+    queryFn: () => listInvestigations({ entity: entityFilter }),
   });
 
   // Auto-select first project when switching to project mode

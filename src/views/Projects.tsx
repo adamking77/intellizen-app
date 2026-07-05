@@ -66,6 +66,7 @@ function sortVaultFiles(files: VaultFile[]): VaultFile[] {
 export function ProjectsView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const setSearchTargetProjectId = useAppStore((state) => state.setSearchTargetProjectId);
   const pendingProjectSelectionId = useAppStore((state) => state.pendingProjectSelectionId);
   const setPendingProjectSelectionId = useAppStore((state) => state.setPendingProjectSelectionId);
@@ -119,8 +120,8 @@ export function ProjectsView() {
   };
 
   const { data: operations, error: operationsError, isLoading: operationsLoading } = useQuery({
-    queryKey: ["operations"],
-    queryFn: listOperations,
+    queryKey: ["operations", entityFilter],
+    queryFn: () => listOperations({ entity: entityFilter }),
   });
 
   useQuery({
@@ -133,8 +134,8 @@ export function ProjectsView() {
   });
 
   const { data: projects, error: projectsError, isLoading: projectsLoading } = useQuery({
-    queryKey: ["projects"],
-    queryFn: listProjects,
+    queryKey: ["projects", entityFilter],
+    queryFn: () => listProjects({ entity: entityFilter }),
   });
 
   const { data: signalCounts } = useQuery({
