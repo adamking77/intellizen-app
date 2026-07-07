@@ -10,18 +10,20 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
         "title": "IntelliZen",
         "width": 1500,
         "height": 940,
-        "minWidth": 1200,
-        "minHeight": 760,
+        "minWidth": 900,
+        "minHeight": 620,
         "resizable": true,
         "theme": "Dark",
-        "titleBarStyle": "Transparent",
-        "hiddenTitle": true,
-        "backgroundColor": "#1e1e2e"
+        "decorations": false,
+        "transparent": true,
+        "backgroundColor": "#00000000"
       }
     ],
     "security": {

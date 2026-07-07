@@ -23,6 +23,7 @@ import {
 import type { FionaInboxItem, WorkflowRunItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
+import { PaneResizeEdges } from "@/components/layout/window-chrome";
 import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -115,9 +116,12 @@ interface ChatPayloadContext {
   message?: unknown;
 }
 
-function readCollapsed() {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(STORAGE_KEY) === "1";
+function readCollapsed(): boolean | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return null; // no explicit choice — follow the cramped auto-collapse
 }
 
 function readChatHistory() {
@@ -215,7 +219,7 @@ interface AgentPanelProps {
 
 export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const [collapsed, setCollapsed] = useState(() => readCollapsed());
+  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -250,8 +254,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const threadRef = useRef<HTMLDivElement | null>(null);
   const { isCramped } = useWindowSize();
   const standalone = mode === "standalone";
+  // Explicit user choice wins; otherwise auto-collapse when cramped.
+  const collapsed = userCollapsed ?? isCramped;
   // Rail mode keeps the approvals badge alive but stops background polling.
-  const expanded = standalone || (!collapsed && !isCramped);
+  const expanded = standalone || !collapsed;
 
   const workflowsQuery = useQuery({
     queryKey: ["workflows", "agent-panel", "active", entityFilter],
@@ -421,8 +427,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   function toggleCollapsed() {
     if (standalone) return;
-    setCollapsed((current) => {
-      const next = !current;
+    setUserCollapsed(() => {
+      const next = !collapsed;
       try {
         window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
       } catch {
@@ -858,9 +864,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     }
   }
 
-  if (!standalone && (collapsed || isCramped)) {
+  if (!standalone && collapsed) {
     return (
-      <aside className="flex h-full w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-3">
+      <aside
+        className="flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[28px] border border-[var(--border)] py-3 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)]"
+        style={{ background: "var(--mantle)" }}
+      >
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -903,11 +912,15 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   return (
     <aside
+      style={
+        standalone
+          ? undefined
+          : { width: panelWidth, background: "var(--mantle)" }
+      }
       className={cn(
-        "relative flex shrink-0 flex-col border border-[var(--border)] bg-[var(--mantle)]",
-        standalone ? "h-dvh w-full rounded-none" : "h-full rounded-xl",
+        "relative flex shrink-0 flex-col border border-[var(--border)]",
+        standalone ? "h-full w-full rounded-none border-0 bg-[var(--mantle)]" : "h-full rounded-2xl",
       )}
-      style={{ width: standalone ? undefined : panelWidth }}
     >
       {!standalone ? (
         <div
@@ -1227,6 +1240,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         </div>
       </div>
+      {!standalone ? <PaneResizeEdges east hideLeft /> : null}
     </aside>
   );
 }

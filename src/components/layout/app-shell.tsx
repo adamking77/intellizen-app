@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Toaster } from "sonner";
-import { PanelRightOpen } from "lucide-react";
+import { PanelRightOpen, Undo2 } from "lucide-react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
+import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, TrafficLights, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider } from "./command-palette";
 import { toastError } from "@/lib/toast";
@@ -42,6 +44,18 @@ export function AppShell() {
     };
   }, []);
 
+  // Recover from a stale detached flag (app relaunched while the flag was
+  // set, or the panel window died without an event reaching us).
+  useEffect(() => {
+    if (!isTauriRuntime || !agentPanelDetached) return;
+    void WebviewWindow.getByLabel(AGENT_PANEL_WINDOW_LABEL).then((existing) => {
+      if (!existing) {
+        writeAgentPanelDetached(false);
+        setAgentPanelDetached(false);
+      }
+    });
+  }, [agentPanelDetached]);
+
   async function ejectAgentPanel() {
     try {
       const existing = await WebviewWindow.getByLabel(AGENT_PANEL_WINDOW_LABEL);
@@ -58,11 +72,11 @@ export function AppShell() {
         width: 420,
         height: 820,
         minWidth: 360,
-        minHeight: 640,
+        minHeight: 560,
         resizable: true,
         focus: true,
         alwaysOnTop: true,
-        decorations: true,
+        decorations: false,
         backgroundColor: "#181825",
       });
 
@@ -85,12 +99,43 @@ export function AppShell() {
     }
   }
 
+  const dragWindow = useWindowDrag();
+
   return (
     <CommandPaletteProvider>
-      <div className="flex h-dvh min-h-0 gap-2 bg-[var(--crust)] p-2">
+      {/* Clicks landing on the transparent gutters (this element itself, not
+          a pane) move the window. */}
+      <div
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) dragWindow(event);
+        }}
+        className={cn("flex h-dvh min-h-0 gap-2 p-2", !isTauriRuntime && "bg-[var(--crust)]")}
+        // 1% alpha keeps the gutters hit-testable for window dragging while
+        // staying visually transparent.
+        style={isTauriRuntime ? { background: "rgba(0,0,0,0.01)" } : undefined}
+      >
         <Sidebar />
-        <main className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--base)]">
-          <Outlet />
+        <main
+          className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)]"
+          style={{ background: PANE_BG }}
+        >
+          {/* Window chrome strip: traffic lights + drag surface, sogo-style,
+              inside the main pane. */}
+          <div
+            onMouseDown={dragWindow}
+            onDoubleClick={(event) => {
+              if ((event.target as HTMLElement).closest("button")) return;
+              if (!isTauriRuntime) return;
+              void getCurrentWindow().toggleMaximize();
+            }}
+            className="flex h-9 shrink-0 cursor-default items-center border-b border-[var(--border)]"
+          >
+            <TrafficLights className="pl-4 pr-3" />
+          </div>
+          <div className="min-h-0 flex-1">
+            <Outlet />
+          </div>
+          <PaneResizeEdges west east />
         </main>
         {agentPanelDetached ? (
           <button
@@ -99,9 +144,10 @@ export function AppShell() {
             aria-label="Focus ejected agent panel"
             title="Focus ejected agent panel"
             className={cn(
-              "flex h-full w-12 shrink-0 items-start justify-center rounded-xl border border-[var(--border)] bg-[var(--mantle)] pt-3",
-              "text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+              "flex h-auto w-12 shrink-0 flex-col items-center self-start rounded-[28px] border border-[var(--border)] py-3",
+              "text-[var(--overlay-1)] shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)] transition-colors hover:text-[var(--text)]",
             )}
+            style={{ background: PANE_BG_RAISED }}
           >
             <PanelRightOpen className="h-4 w-4" />
           </button>
@@ -109,6 +155,7 @@ export function AppShell() {
           <AgentPanel onEject={() => void ejectAgentPanel()} />
         )}
       </div>
+      <WindowResizeHandles />
       <Toaster
         position="bottom-right"
         theme="dark"
@@ -129,9 +176,39 @@ export function AppShell() {
 }
 
 export function AgentPanelWindow() {
+  function redock() {
+    writeAgentPanelDetached(false);
+    void getCurrentWindow()
+      .close()
+      .catch((err) => toastError("Could not re-dock panel", err));
+  }
+
+  const dragWindow = useWindowDrag();
+
   return (
-    <>
-      <AgentPanel mode="standalone" />
+    <div className="flex h-dvh min-h-0 flex-col bg-[var(--mantle)]">
+      {/* Frameless floating window: this strip is its title bar. */}
+      <div
+        onMouseDown={dragWindow}
+        className="flex h-9 shrink-0 cursor-default items-center justify-between border-b border-[var(--border)] pl-3 pr-2"
+      >
+        <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--overlay-1)]">
+          Agent Panel
+        </span>
+        <button
+          type="button"
+          onClick={redock}
+          aria-label="Return panel to main window"
+          title="Return to main window"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1">
+        <AgentPanel mode="standalone" />
+      </div>
+      <WindowResizeHandles />
       <Toaster
         position="bottom-right"
         theme="dark"
@@ -147,6 +224,6 @@ export function AgentPanelWindow() {
           className: "intelizen-toast",
         }}
       />
-    </>
+    </div>
   );
 }

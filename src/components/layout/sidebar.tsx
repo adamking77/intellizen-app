@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
 import { listWorkspaceDatabases, listWorkspaceEntities } from "@/lib/data";
 import { TAXONOMY_ENTITY_OPTIONS } from "@/lib/taxonomy";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -38,15 +39,19 @@ const STORAGE_KEY = "intelizen:sidebar-collapsed";
 const WIDTH_EXPANDED = 216;
 const WIDTH_COLLAPSED = 56;
 
-function readCollapsed(): boolean {
+function readCollapsed(): boolean | null {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+    return null; // no explicit choice — follow the cramped auto-collapse
   } catch {
-    return false;
+    return null;
   }
 }
 
 export function Sidebar() {
+  const dragWindow = useWindowDrag();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const setEntityFilter = useAppStore((state) => state.setEntityFilter);
   const { data: databases = [] } = useQuery({
@@ -61,10 +66,12 @@ export function Sidebar() {
   });
   const { isCramped } = useWindowSize();
 
-  const [userCollapsed, setUserCollapsed] = useState<boolean>(() => readCollapsed());
-  const collapsed = userCollapsed || isCramped;
+  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
+  // Explicit user choice wins; otherwise auto-collapse when cramped.
+  const collapsed = userCollapsed ?? isCramped;
 
   useEffect(() => {
+    if (userCollapsed === null) return;
     try {
       localStorage.setItem(STORAGE_KEY, userCollapsed ? "1" : "0");
     } catch {
@@ -72,23 +79,30 @@ export function Sidebar() {
     }
   }, [userCollapsed]);
 
-  const toggle = () => setUserCollapsed((c) => !c);
+  const toggle = () => setUserCollapsed(!collapsed);
   const entityOptions = (workspaceEntities?.filter((entity) => entity.status !== "archived") ?? [])
     .map((entity) => ({ value: entity.slug, label: entity.label }));
   const visibleEntityOptions = entityOptions.length > 0 ? entityOptions : TAXONOMY_ENTITY_OPTIONS;
 
   return (
     <aside
-      style={{ width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED }}
+      style={{
+        width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED,
+        background: "var(--mantle)",
+      }}
       className={cn(
-        "relative z-10 flex h-full shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)]",
+        "relative z-10 flex shrink-0 flex-col overflow-hidden border border-[var(--border)]",
         "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        collapsed
+          ? "h-auto max-h-full self-start rounded-[28px] pb-2 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)]"
+          : "h-full rounded-2xl",
       )}
     >
       {/* Header */}
       <div
+        onMouseDown={dragWindow}
         className={cn(
-          "flex h-14 shrink-0 items-center",
+          "flex h-14 shrink-0 cursor-default items-center",
           collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
@@ -116,7 +130,7 @@ export function Sidebar() {
             </span>
           </div>
         )}
-        {!isCramped && !collapsed && (
+        {!collapsed && (
           <button
             type="button"
             onClick={toggle}
@@ -172,17 +186,17 @@ export function Sidebar() {
                   "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
                   collapsed
-                    ? "h-9 justify-center px-0"
+                    ? "mx-auto h-9 w-9 justify-center rounded-full px-0"
                     : "justify-between px-4 py-2 text-[13px]",
                   isActive
-                    ? "text-[var(--text)]"
+                    ? cn("text-[var(--text)]", collapsed && "bg-[var(--surface-wash)]")
                     : "text-[var(--subtext-0)] hover:text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && (
+                  {isActive && !collapsed && (
                     <span
                       aria-hidden
                       className="absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)]"
@@ -223,8 +237,8 @@ export function Sidebar() {
       {/* Footer */}
       <div
         className={cn(
-          "flex h-10 shrink-0 items-center border-t border-[var(--border)]",
-          collapsed ? "justify-center px-0" : "justify-between px-4",
+          "flex h-10 shrink-0 items-center",
+          collapsed ? "justify-center border-t-0 px-0" : "justify-between border-t border-[var(--border)] px-4",
         )}
       >
         {collapsed ? (
@@ -250,6 +264,7 @@ export function Sidebar() {
           </>
         )}
       </div>
+      <PaneResizeEdges west />
     </aside>
   );
 }

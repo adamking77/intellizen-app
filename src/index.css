@@ -191,7 +191,9 @@ body,
 
 body {
   margin: 0;
-  background: var(--base);
+  /* Transparent so the frameless Tauri window shows floating panes; the
+     shell paints a solid fallback when running in a plain browser. */
+  background: transparent;
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 14px;
