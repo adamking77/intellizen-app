@@ -347,6 +347,263 @@ async function queryRecords(input: {
     .slice(0, limit);
 }
 
+function entityFromRecordInput(database: WorkspaceDatabaseRow, input: {
+  entity?: string | null;
+  taxonomy?: Record<string, unknown> | null;
+}) {
+  const taxonomyEntity = typeof input.taxonomy?.entity === "string"
+    ? normalizeEntitySlug(input.taxonomy.entity)
+    : null;
+  return normalizeEntitySlug(input.entity) ?? taxonomyEntity ?? database.entity ?? "genzen";
+}
+
+function recordWritePreview(action: string, payload: Record<string, unknown>) {
+  return {
+    dry_run: true,
+    action,
+    message: `Preview only. Re-run with confirm_write: true to ${action.replaceAll("_", " ")}.`,
+    ...payload,
+  };
+}
+
+async function createRecord(input: {
+  database_id?: string;
+  database_name?: string;
+  entity?: string | null;
+  fields?: Record<string, unknown>;
+  body?: string | null;
+  taxonomy?: Record<string, unknown> | null;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const database = await resolveDatabase({
+    database_id: input.database_id,
+    database_name: input.database_name,
+  });
+  const fields = input.fields ?? {};
+  const body = input.body ?? null;
+  const taxonomy = input.taxonomy ?? database.taxonomy ?? {};
+  const entity = entityFromRecordInput(database, { entity: input.entity, taxonomy });
+
+  if (!input.confirm_write) {
+    return recordWritePreview("create_record", {
+      database_id: database.id,
+      database_name: database.name,
+      entity,
+      fields,
+      body_preview: bodyPreview(body),
+      taxonomy,
+    });
+  }
+
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .insert([
+      {
+        database_id: database.id,
+        entity,
+        fields,
+        body,
+        taxonomy,
+      },
+    ])
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
+    .single();
+
+  if (error) throw new Error(error.message);
+  const record = data as WorkspaceRecordRow;
+  await recordWorkEvent({
+    record_id: record.id,
+    event_kind: "record.created",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Created ${recordTitle(database, record)}`,
+    payload: {
+      tool: "create_record",
+      database_id: database.id,
+      database_name: database.name,
+      fields,
+      taxonomy,
+    },
+  });
+
+  return {
+    dry_run: false,
+    record: {
+      id: record.id,
+      database_id: record.database_id,
+      database_name: database.name,
+      entity: record.entity,
+      title: recordTitle(database, record),
+      fields: record.fields ?? {},
+      body_preview: bodyPreview(record.body),
+      taxonomy: record.taxonomy ?? {},
+      updated_at: record.updated_at,
+    },
+  };
+}
+
+async function getWorkspaceRecordById(recordId: string): Promise<WorkspaceRecordRow> {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
+    .eq("id", recordId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as WorkspaceRecordRow;
+}
+
+function buildRecordUpdateSection(input: {
+  actor: string;
+  summary?: string | null;
+  body_section?: string | null;
+  fields?: Record<string, unknown>;
+}) {
+  if (input.body_section?.trim()) return input.body_section.trim();
+  const lines = [
+    `## Agent Update - ${new Date().toISOString()}`,
+    "",
+    `Actor: ${input.actor}`,
+    input.summary ? `Summary: ${input.summary}` : null,
+    input.fields && Object.keys(input.fields).length > 0
+      ? `Fields changed: ${Object.keys(input.fields).join(", ")}`
+      : "Fields changed: none",
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+async function updateRecord(input: {
+  record_id: string;
+  fields?: Record<string, unknown>;
+  body_section?: string | null;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const current = await getWorkspaceRecordById(input.record_id);
+  const database = await resolveDatabase({ database_id: current.database_id });
+  const fieldsPatch = input.fields ?? {};
+  const section = buildRecordUpdateSection({
+    actor: input.actor,
+    summary: input.summary,
+    body_section: input.body_section,
+    fields: fieldsPatch,
+  });
+
+  if (!input.confirm_write) {
+    return recordWritePreview("update_record", {
+      record_id: current.id,
+      database_id: current.database_id,
+      database_name: database.name,
+      current_title: recordTitle(database, current),
+      fields_patch: fieldsPatch,
+      appended_section: section,
+    });
+  }
+
+  const updated = await appendRecordSectionAtomic(current.id, section, fieldsPatch);
+  await recordWorkEvent({
+    record_id: updated.id,
+    event_kind: "record.updated",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Updated ${recordTitle(database, updated)}`,
+    payload: {
+      tool: "update_record",
+      database_id: database.id,
+      database_name: database.name,
+      fields_patch: fieldsPatch,
+      appended_section: section,
+    },
+  });
+
+  return {
+    dry_run: false,
+    record: {
+      id: updated.id,
+      database_id: updated.database_id,
+      database_name: database.name,
+      entity: updated.entity,
+      title: recordTitle(database, updated),
+      fields: updated.fields ?? {},
+      body_preview: bodyPreview(updated.body),
+      taxonomy: updated.taxonomy ?? {},
+      updated_at: updated.updated_at,
+    },
+  };
+}
+
+async function linkRecords(input: {
+  database_id?: string;
+  database_name?: string;
+  record_id: string;
+  relation_field_id: string;
+  record_ids: string[];
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const database = await resolveDatabase({
+    database_id: input.database_id,
+    database_name: input.database_name,
+  });
+  const recordIds = Array.from(new Set((input.record_ids ?? []).filter(Boolean)));
+
+  if (!input.confirm_write) {
+    return recordWritePreview("link_records", {
+      database_id: database.id,
+      database_name: database.name,
+      record_id: input.record_id,
+      relation_field_id: input.relation_field_id,
+      record_ids: recordIds,
+    });
+  }
+
+  const { data, error } = await supabase.schema("workspace").rpc("update_relation_links", {
+    p_database_id: database.id,
+    p_record_id: input.record_id,
+    p_relation_field_id: input.relation_field_id,
+    p_record_ids: recordIds,
+  });
+  if (error) throw new Error(error.message);
+  const updated = data as WorkspaceRecordRow;
+
+  await recordWorkEvent({
+    record_id: updated.id,
+    event_kind: "record.linked",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Updated relation ${input.relation_field_id}`,
+    payload: {
+      tool: "link_records",
+      database_id: database.id,
+      database_name: database.name,
+      relation_field_id: input.relation_field_id,
+      record_ids: recordIds,
+    },
+  });
+
+  return {
+    dry_run: false,
+    record: {
+      id: updated.id,
+      database_id: updated.database_id,
+      database_name: database.name,
+      entity: updated.entity,
+      title: recordTitle(database, updated),
+      fields: updated.fields ?? {},
+      body_preview: bodyPreview(updated.body),
+      taxonomy: updated.taxonomy ?? {},
+      updated_at: updated.updated_at,
+    },
+  };
+}
+
 async function getWorkspaceTaskRecord(id: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -1885,6 +2142,65 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "create_record",
+      description:
+        "Preview or create a workspace record in a selected database. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Workspace database UUID." },
+          database_name: { type: "string", description: "Exact workspace database name when database_id is unknown." },
+          entity: { type: "string", description: "Optional entity slug. Falls back to taxonomy.entity or database entity." },
+          fields: { type: "object", description: "Record fields object keyed by field id." },
+          body: { type: "string", description: "Initial markdown body. Optional." },
+          taxonomy: { type: "object", description: "Optional taxonomy metadata." },
+          actor: { type: "string", description: "Actor creating the record; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["actor"],
+      },
+    },
+    {
+      name: "update_record",
+      description:
+        "Preview or update a workspace record by merging fields and appending a body section via workspace.append_record_section. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          record_id: { type: "string", description: "Workspace record UUID." },
+          fields: { type: "object", description: "Partial fields patch keyed by field id." },
+          body_section: { type: "string", description: "Markdown section to append. If omitted, a small receipt section is generated." },
+          actor: { type: "string", description: "Actor updating the record; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["record_id", "actor"],
+      },
+    },
+    {
+      name: "link_records",
+      description:
+        "Preview or replace relation links on one workspace record through workspace.update_relation_links. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Workspace database UUID containing record_id." },
+          database_name: { type: "string", description: "Exact workspace database name when database_id is unknown." },
+          record_id: { type: "string", description: "Workspace record UUID to update." },
+          relation_field_id: { type: "string", description: "Relation field id on the source record." },
+          record_ids: { type: "array", items: { type: "string" }, description: "Complete desired related record id list." },
+          actor: { type: "string", description: "Actor updating the links; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["record_id", "relation_field_id", "record_ids", "actor"],
+      },
+    },
+    {
       name: "claim_agent_work",
       description:
         "Preview or write an Agent Claim section to a Tasks record and move it to In progress/Doing. Defaults to dry-run; set confirm_write true to update.",
@@ -2717,6 +3033,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       search?: string | null;
       limit?: number;
       include_body?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── create_record ────────────────────────────────────────────────────────
+  if (name === "create_record") {
+    const result = await createRecord((args ?? {}) as {
+      database_id?: string;
+      database_name?: string;
+      entity?: string | null;
+      fields?: Record<string, unknown>;
+      body?: string | null;
+      taxonomy?: Record<string, unknown> | null;
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── update_record ────────────────────────────────────────────────────────
+  if (name === "update_record") {
+    const result = await updateRecord((args ?? {}) as {
+      record_id: string;
+      fields?: Record<string, unknown>;
+      body_section?: string | null;
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── link_records ─────────────────────────────────────────────────────────
+  if (name === "link_records") {
+    const result = await linkRecords((args ?? {}) as {
+      database_id?: string;
+      database_name?: string;
+      record_id: string;
+      relation_field_id: string;
+      record_ids: string[];
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }

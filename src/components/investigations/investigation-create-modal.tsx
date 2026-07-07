@@ -129,7 +129,7 @@ export function InvestigationCreateModal({
               Investigate
             </p>
             <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New investigation
+              New case investigation
             </h3>
           </div>
           <button
@@ -207,7 +207,7 @@ export function InvestigationCreateModal({
 
           <label className="grid gap-1.5">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              Parent project{" "}
+              Parent collection{" "}
               <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                 (optional)
               </span>
@@ -217,7 +217,7 @@ export function InvestigationCreateModal({
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">No parent project — Exa collects from seed entities</option>
+              <option value="">No parent collection — Exa collects from seed entities</option>
               {selectableProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -231,11 +231,11 @@ export function InvestigationCreateModal({
               <>
                 Linked to{" "}
                 <span className="font-medium text-[var(--subtext-0)]">{linkedProject.name}</span>.
-                Collect will pull that project's signals.
+                Collect will pull that collection's signals.
               </>
             ) : (
               <>
-                No project — Collect will run Exa searches on your seed entities automatically.
+                No collection — Collect will run Exa searches on your seed entities automatically.
               </>
             )}
           </p>
@@ -249,7 +249,7 @@ export function InvestigationCreateModal({
               Cancel
             </button>
             <Button type="submit" disabled={!name.trim() || createMutation.isPending}>
-              {createMutation.isPending ? "Creating…" : "Create investigation"}
+              {createMutation.isPending ? "Creating…" : "Create case investigation"}
             </Button>
           </div>
         </form>

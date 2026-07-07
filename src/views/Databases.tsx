@@ -19,6 +19,7 @@ import {
   deleteWorkspaceDatabase,
   isOperationalSystemWorkspaceIcon,
   listWorkspaceDatabases,
+  removeHomePinsForWorkspaceDatabase,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -143,9 +144,11 @@ export function DatabasesView() {
       if (pinResult.removed) {
         saveHomePins(pinResult.pins);
       }
+      await removeHomePinsForWorkspaceDatabase(currentDatabase.id);
 
       setCurrentDatabaseId(nextDatabaseId);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["home-pins"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database", currentDatabase.id] }),

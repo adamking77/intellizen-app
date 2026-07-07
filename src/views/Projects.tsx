@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   deleteOperation,
   deleteProject,
+  listInvestigations,
   listOperations,
   listProjectSignalCounts,
   listProjectSignals,
@@ -30,7 +31,7 @@ import {
   updateProject,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
-import type { Operation, Project, ProjectSignal, VaultFile } from "@/lib/types";
+import type { Investigation, Operation, Project, ProjectSignal, VaultFile } from "@/lib/types";
 import { useAppStore } from "@/store";
 
 type StatusFilter = "all" | "active" | "archived";
@@ -142,6 +143,10 @@ export function ProjectsView() {
     queryKey: ["project-signal-counts"],
     queryFn: listProjectSignalCounts,
   });
+  const { data: investigations } = useQuery({
+    queryKey: ["investigations", entityFilter],
+    queryFn: () => listInvestigations({ entity: entityFilter }),
+  });
 
   const filtered = useMemo(() => {
     const src = projects ?? [];
@@ -183,6 +188,14 @@ export function ProjectsView() {
   const operationProjects = useMemo(
     () => (projects ?? []).filter((p) => p.operation_id === selectedOperationId),
     [projects, selectedOperationId],
+  );
+  const selectedProjectCases = useMemo(
+    () => (investigations ?? []).filter((inv) => inv.project_id === selectedProjectId),
+    [investigations, selectedProjectId],
+  );
+  const selectedOperationCases = useMemo(
+    () => (investigations ?? []).filter((inv) => inv.operation_id === selectedOperationId),
+    [investigations, selectedOperationId],
   );
 
   // Handle pending project selection (from store)
@@ -311,10 +324,10 @@ export function ProjectsView() {
     },
     onError: (err, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["projects"], context.previous);
-      toastError("Couldn't update project", err);
+      toastError("Couldn't update collection", err);
     },
     onSuccess: (_, __, context) => {
-      toast.success(context?.nextStatus === "archived" ? "Project archived" : "Project reactivated");
+      toast.success(context?.nextStatus === "archived" ? "Collection archived" : "Collection reactivated");
     },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["projects"] }); },
   });
@@ -373,9 +386,9 @@ export function ProjectsView() {
       setDeleteConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await queryClient.invalidateQueries({ queryKey: ["project-signal-counts"] });
-      toast.success("Project deleted");
+      toast.success("Collection deleted");
     },
-    onError: (err) => toastError("Couldn't delete project", err),
+    onError: (err) => toastError("Couldn't delete collection", err),
   });
 
   const assignOperationMutation = useMutation({
@@ -383,9 +396,9 @@ export function ProjectsView() {
       updateProject(projectId, { operation_id: operationId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Operation updated");
+      toast.success("Intel group updated");
     },
-    onError: (err) => toastError("Couldn't update operation", err),
+    onError: (err) => toastError("Couldn't update intel group", err),
   });
 
   const bulkAssignMutation = useMutation<void, Error, number[]>({
@@ -399,7 +412,7 @@ export function ProjectsView() {
       setAssignProjectsOpen(false);
       toast.success(`${projectIds.length} project${projectIds.length === 1 ? "" : "s"} assigned`);
     },
-    onError: (err) => toastError("Couldn't assign projects", err),
+    onError: (err) => toastError("Couldn't assign collections", err),
   });
 
   const deleteOperationMutation = useMutation({
@@ -409,9 +422,9 @@ export function ProjectsView() {
       setDeleteOperationConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["operations"] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Operation deleted");
+      toast.success("Intel group deleted");
     },
-    onError: (err) => toastError("Couldn't delete operation", err),
+    onError: (err) => toastError("Couldn't delete intel group", err),
   });
 
   // ── Indicators ─────────────────────────────────────────────────────────────
@@ -430,7 +443,7 @@ export function ProjectsView() {
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-          <span className="text-label">Operations unavailable</span>
+          <span className="text-label">Intel unavailable</span>
           <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{loadError.message}</p>
         </div>
       </div>
@@ -478,7 +491,7 @@ export function ProjectsView() {
           <div className="flex min-w-0 items-center gap-2 text-[11px]">
             {indent && (
               <>
-                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--overlay-1)]">Project</span>
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--overlay-1)]">Collection</span>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
               </>
             )}
@@ -508,17 +521,17 @@ export function ProjectsView() {
       {/* Topbar */}
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
-          <span className="text-label">Operations</span>
+          <span className="text-label">Intel</span>
           <IndicatorStrip items={indicators} />
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="primary" onClick={() => setCreateOperationOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
-            New operation
+            New intel group
           </Button>
           <Button size="sm" variant="accent-outline" onClick={() => setCreateProjectOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
-            New project
+            New collection
           </Button>
         </div>
       </div>
@@ -534,22 +547,22 @@ export function ProjectsView() {
             {loadingOperationalData ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
                 <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
-                <p className="text-label">Loading operations</p>
+                <p className="text-label">Loading intel</p>
               </div>
             ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
-                <p className="text-label">No projects</p>
+                <p className="text-label">No collections</p>
                 <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-                  Create an operation to group related research, or add a standalone project.
+                  Create an intel group to organize related research, or add a standalone collection.
                 </p>
                 <Button size="sm" onClick={() => setCreateProjectOpen(true)} className="mt-2 gap-1.5">
                   <Plus className="h-3 w-3" />
-                  New project
+                  New collection
                 </Button>
               </div>
             ) : (
               <>
-                {/* Operations with their projects */}
+                {/* Intel groups with their collections */}
                 {operationGroups.map(({ operation, projects: opProjects }) => {
                   const isOpSelected = selection?.kind === "operation" && selection.id === operation.id;
                   const isCollapsed = collapsedOps.has(operation.id);
@@ -594,7 +607,7 @@ export function ProjectsView() {
                             {operation.name}
                           </span>
                           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--overlay-1)]">
-                            Operation · {opProjects.length} project{opProjects.length === 1 ? "" : "s"}
+                            Intel group · {opProjects.length} collection{opProjects.length === 1 ? "" : "s"}
                           </span>
                         </div>
                         {opProjects.length > 0 && (
@@ -616,7 +629,7 @@ export function ProjectsView() {
                   );
                 })}
 
-                {/* Unassigned projects */}
+                {/* Unassigned collections */}
                 {unassigned.length > 0 && (
                   <div>
                     {(operationGroups.length > 0) && (
@@ -637,7 +650,7 @@ export function ProjectsView() {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize project list"
+            aria-label="Resize collection list"
             onMouseDown={startResize}
             onDoubleClick={() => setRailWidth(320)}
             className="group/resize absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize"
@@ -656,6 +669,7 @@ export function ProjectsView() {
               project={selectedProject}
               operations={operations ?? []}
               projectSignals={projectSignals ?? []}
+              cases={selectedProjectCases}
               vaultFiles={projectVaultFiles}
               signalCounts={signalCounts ?? {}}
               notesDraft={notesDraft}
@@ -670,7 +684,10 @@ export function ProjectsView() {
               onCommitRename={commitRename}
               onCancelRename={() => { setEditingName(false); setNameDraft(selectedProject.name); }}
               onAddFromSearch={() => { setSearchTargetProjectId(selectedProject.id); navigate("/search"); }}
-              onOpenInvestigation={() => setInvestigationModalOpen(true)}
+              onOpenInvestigation={(caseId) => {
+                if (caseId) navigate(`/investigate?case=${encodeURIComponent(caseId)}`);
+                else setInvestigationModalOpen(true);
+              }}
               onToggleStatus={() => toggleStatusMutation.mutate()}
               onDeleteClick={() => setDeleteConfirmOpen(true)}
               onSignalRemove={(id) => removeSignalMutation.mutate(id)}
@@ -681,6 +698,7 @@ export function ProjectsView() {
             <OperationDetailPane
               operation={selectedOperation}
               operationProjects={operationProjects}
+              cases={selectedOperationCases}
               signalCounts={signalCounts ?? {}}
               descDraft={operationDescDraft}
               descStatus={operationDescStatus}
@@ -694,7 +712,10 @@ export function ProjectsView() {
               onCommitRename={commitRename}
               onCancelRename={() => { setEditingName(false); setNameDraft(selectedOperation.name); }}
               onNewProject={() => setCreateProjectOpen(true)}
-              onNewInvestigation={() => setInvestigationModalOpen(true)}
+              onNewInvestigation={(caseId) => {
+                if (caseId) navigate(`/investigate?case=${encodeURIComponent(caseId)}`);
+                else setInvestigationModalOpen(true);
+              }}
               onDeleteClick={() => setDeleteOperationConfirmOpen(true)}
               onSelectProject={(id) => setSelection({ kind: "project", id })}
               allProjects={projects ?? []}
@@ -702,7 +723,7 @@ export function ProjectsView() {
             />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
-              <p className="text-label">Select a project or operation</p>
+              <p className="text-label">Select a collection or intel group</p>
               <p className="font-ui text-[12px] text-[var(--overlay-1)]">
                 Pick one from the list to inspect details.
               </p>
@@ -727,8 +748,8 @@ export function ProjectsView() {
       <DeleteConfirmModal
         open={deleteConfirmOpen && !!selectedProject}
         title={selectedProject?.name ?? ""}
-        label="Delete project"
-        description="Removes the project and its signal associations permanently."
+        label="Delete collection"
+        description="Removes the collection and its signal associations permanently."
         footnote="Source signals are not deleted — they stay in Inbox."
         isPending={deleteProjectMutation.isPending}
         onClose={() => setDeleteConfirmOpen(false)}
@@ -738,9 +759,9 @@ export function ProjectsView() {
       <DeleteConfirmModal
         open={deleteOperationConfirmOpen && !!selectedOperation}
         title={selectedOperation?.name ?? ""}
-        label="Delete operation"
-        description="Removes the operation. Projects in this operation become unassigned."
-        footnote="Projects and their signals are not deleted."
+        label="Delete intel group"
+        description="Removes the intel group. Collections in this group become unassigned."
+        footnote="Collections and their signals are not deleted."
         isPending={deleteOperationMutation.isPending}
         onClose={() => setDeleteOperationConfirmOpen(false)}
         onConfirm={() => { if (selectedOperation) deleteOperationMutation.mutate(selectedOperation.id); }}
@@ -763,9 +784,9 @@ export function ProjectsView() {
         open={investigationModalOpen}
         onClose={() => setInvestigationModalOpen(false)}
         initialProjectId={selectedProject?.id ?? null}
-        initialOperationId={selectedOperationId}
+        initialOperationId={selectedOperationId ?? selectedProject?.operation_id ?? null}
         initialName={selectedProject?.name ?? selectedOperation?.name ?? ""}
-        onCreated={() => { setInvestigationModalOpen(false); navigate("/investigate"); }}
+        onCreated={(caseId) => { setInvestigationModalOpen(false); navigate(`/investigate?case=${encodeURIComponent(caseId)}`); }}
       />
     </div>
   );
@@ -777,6 +798,7 @@ function ProjectDetailPane({
   project,
   operations,
   projectSignals,
+  cases,
   vaultFiles,
   notesDraft,
   notesStatus,
@@ -800,6 +822,7 @@ function ProjectDetailPane({
   project: Project;
   operations: Operation[];
   projectSignals: ProjectSignal[];
+  cases: Investigation[];
   vaultFiles: VaultFile[];
   signalCounts: Record<number, number>;
   notesDraft: string;
@@ -814,20 +837,22 @@ function ProjectDetailPane({
   onCommitRename: () => void;
   onCancelRename: () => void;
   onAddFromSearch: () => void;
-  onOpenInvestigation: () => void;
+  onOpenInvestigation: (caseId?: string) => void;
   onToggleStatus: () => void;
   onDeleteClick: () => void;
   onSignalRemove: (id: number) => void;
   onVaultFileDeleted: () => void;
   onAssignOperation: (operationId: number | null) => void;
 }) {
+  const primaryCase = cases.find((item) => item.status !== "archived") ?? cases[0] ?? null;
+
   return (
     <>
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)]">
-        {/* Project eyebrow */}
+        {/* Collection eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-            IntelliZen Project · {project.type.replace("_", " ")}
+            Intel Collection · {project.type.replace("_", " ")}
           </span>
           <StatusPill variant={project.status === "active" ? "active" : "paused"}>
             {project.status.toUpperCase()}
@@ -868,9 +893,14 @@ function ProjectDetailPane({
               <FolderSearch className="h-3 w-3" />
               Add Search
             </Button>
-            <Button size="sm" variant="primary" className="gap-1.5" onClick={onOpenInvestigation}>
+            <Button
+              size="sm"
+              variant="primary"
+              className="gap-1.5"
+              onClick={() => onOpenInvestigation(primaryCase?.case_id)}
+            >
               <FileSearch className="h-3 w-3" />
-              Run Investigation
+              {primaryCase ? "Open case workspace" : "New case investigation"}
             </Button>
             <Button size="sm" variant="ghost" className="gap-1.5" onClick={onToggleStatus}>
               <Archive className="h-3 w-3" />
@@ -986,6 +1016,7 @@ function ProjectDetailPane({
 function OperationDetailPane({
   operation,
   operationProjects,
+  cases,
   signalCounts,
   descDraft,
   descStatus,
@@ -1007,6 +1038,7 @@ function OperationDetailPane({
 }: {
   operation: Operation;
   operationProjects: Project[];
+  cases: Investigation[];
   signalCounts: Record<number, number>;
   descDraft: string;
   descStatus: "idle" | "dirty" | "saving" | "saved";
@@ -1020,7 +1052,7 @@ function OperationDetailPane({
   onCommitRename: () => void;
   onCancelRename: () => void;
   onNewProject: () => void;
-  onNewInvestigation: () => void;
+  onNewInvestigation: (caseId?: string) => void;
   onDeleteClick: () => void;
   onSelectProject: (id: number) => void;
   allProjects: Project[];
@@ -1030,15 +1062,16 @@ function OperationDetailPane({
   const assignableProjects = allProjects.filter(
     (p) => !operationProjects.some((op) => op.id === p.id) && p.status === "active"
   );
+  const primaryCase = cases.find((item) => item.status !== "archived") ?? cases[0] ?? null;
 
   return (
     <>
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--mantle)]">
-        {/* Operation eyebrow */}
+        {/* Intel group eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <Layers aria-hidden strokeWidth={1.5} className="h-3 w-3 shrink-0 text-[var(--accent)]" />
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-            Operation
+            Intel group
           </span>
           <StatusPill variant={operation.status === "active" ? "active" : "paused"}>
             {operation.status.toUpperCase()}
@@ -1077,11 +1110,16 @@ function OperationDetailPane({
           <div className="flex shrink-0 items-center gap-2">
             <Button size="sm" variant="primary" className="gap-1.5" onClick={onNewProject}>
               <Plus className="h-3 w-3" />
-              Add Project
+              Add collection
             </Button>
-            <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onNewInvestigation}>
+            <Button
+              size="sm"
+              variant="accent-outline"
+              className="gap-1.5"
+              onClick={() => onNewInvestigation(primaryCase?.case_id)}
+            >
               <FileSearch className="h-3 w-3" />
-              Run Investigation
+              {primaryCase ? "Open case workspace" : "New case investigation"}
             </Button>
             <Button
               size="sm" variant="ghost" disabled={deletePending}
@@ -1121,24 +1159,24 @@ function OperationDetailPane({
           />
         </div>
 
-        {/* Projects summary */}
+        {/* Collections summary */}
         <div className="px-5 pt-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Projects</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{operationProjects.length} projects · {totalSignals} signals</span>
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Collections</span>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{operationProjects.length} collection{operationProjects.length === 1 ? "" : "s"} · {totalSignals} signals</span>
           </div>
 
           {assignableProjects.length > 0 && (
             <div className="mb-3">
               <Button size="sm" variant="accent-outline" className="gap-1.5 w-full justify-center" onClick={onAssignProject}>
                 <Plus className="h-3 w-3" />
-                Assign existing project{assignableProjects.length > 1 ? "s" : ""}
+                Assign existing collection{assignableProjects.length > 1 ? "s" : ""}
               </Button>
             </div>
           )}
           {operationProjects.length === 0 ? (
             <div className="mb-5 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No projects yet. Add a project to start collecting signals.
+              No collections yet. Add a collection to start collecting signals.
             </div>
           ) : (
             <div className="mb-5 flex flex-col gap-1">

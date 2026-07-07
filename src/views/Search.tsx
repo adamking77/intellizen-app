@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import { listProjects, saveSearchResultToProject, searchWorkspace } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
+import { runCorporateSearch, runSanctionsSearch } from "@/lib/sensors";
 import { toast, toastError } from "@/lib/toast";
-import type { DeepResearchResult, InternalSearchResult, SearchMode, SearchResultItem } from "@/lib/types";
+import type { AdmiraltyReliability, DeepResearchResult, InternalSearchResult, SearchMode, SearchResultItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import { useAppStore } from "@/store";
@@ -73,6 +74,20 @@ const SEARCH_MODES: ModeDef[] = [
     example: "SEC enforcement actions fiduciary breach",
   },
   {
+    value: "sanctions",
+    label: "Sanctions",
+    description: "Screen OpenSanctions for sanctions and PEP matches",
+    placeholder: "Screen a person or entity…",
+    example: "Glencore",
+  },
+  {
+    value: "corporate",
+    label: "Corporate",
+    description: "Search corporate registries and securities identifiers",
+    placeholder: "Find corporate registry records…",
+    example: "OpenAI",
+  },
+  {
     value: "deep_research",
     label: "Deep",
     description: "Async multi-source research brief (30s+)",
@@ -121,6 +136,8 @@ export function SearchView() {
   const [pendingResult, setPendingResult] = useState<
     SearchResultItem | DeepResearchResult | null
   >(null);
+  const [sourceReliability, setSourceReliability] = useState<AdmiraltyReliability>("B");
+  const [infoCredibility, setInfoCredibility] = useState(2);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +160,12 @@ export function SearchView() {
       if (mode === "internal") {
         return searchWorkspace({ query, entity: entityFilter, limit: 30 });
       }
+      if (mode === "sanctions") {
+        return runSanctionsSearch(query);
+      }
+      if (mode === "corporate") {
+        return runCorporateSearch(query);
+      }
       return runExaSearch({ mode, query, startDate });
     },
     onError: (err) => toastError("Search failed", err),
@@ -164,6 +187,12 @@ export function SearchView() {
   function runSearch() {
     if (!canRunSearch) return;
     searchMutation.mutate();
+  }
+
+  function openCollectionPicker(result: SearchResultItem | DeepResearchResult) {
+    setPendingResult(result);
+    setSourceReliability(result.source_reliability ?? "B");
+    setInfoCredibility(result.info_credibility ?? 2);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -302,7 +331,7 @@ export function SearchView() {
                           publishedAt={result.published_at}
                           snippet={result.snippet}
                           score={result.exa_score}
-                          onSave={() => setPendingResult(result)}
+                          onSave={() => openCollectionPicker(result)}
                         />
                       )
                     ))}
@@ -318,7 +347,7 @@ export function SearchView() {
                         {results.source}
                       </span>
                     </div>
-                    <Button size="sm" onClick={() => setPendingResult(results)}>
+                    <Button size="sm" onClick={() => openCollectionPicker(results)}>
                       Save
                     </Button>
                   </div>
@@ -396,19 +425,83 @@ export function SearchView() {
         onSelect={async (projectId) => {
           if (!pendingResult) return;
           try {
-            await saveSearchResultToProject({ projectId, result: pendingResult });
+            await saveSearchResultToProject({
+              projectId,
+              result: {
+                ...pendingResult,
+                source_reliability: sourceReliability,
+                info_credibility: infoCredibility,
+              },
+            });
             await queryClient.invalidateQueries({ queryKey: ["projects"] });
             await queryClient.invalidateQueries({ queryKey: ["signals"] });
             setSearchTargetProjectId(projectId);
-            toast.success("Saved to project");
+            toast.success("Saved to collection");
           } catch (err) {
             toastError("Couldn't save result", err);
           } finally {
             setPendingResult(null);
           }
         }}
-        title={pendingResult ? `Attach "${pendingResult.title}"` : "Attach to project"}
+        title={pendingResult ? `Attach "${pendingResult.title}"` : "Attach to collection"}
+        detailsSlot={
+          pendingResult ? (
+            <AdmiraltyControls
+              sourceReliability={sourceReliability}
+              onSourceReliability={setSourceReliability}
+              infoCredibility={infoCredibility}
+              onInfoCredibility={setInfoCredibility}
+            />
+          ) : null
+        }
       />
+    </div>
+  );
+}
+
+function AdmiraltyControls({
+  sourceReliability,
+  onSourceReliability,
+  infoCredibility,
+  onInfoCredibility,
+}: {
+  sourceReliability: AdmiraltyReliability;
+  onSourceReliability: (value: AdmiraltyReliability) => void;
+  infoCredibility: number;
+  onInfoCredibility: (value: number) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="grid gap-1.5">
+        <span className="text-label">Source reliability</span>
+        <select
+          value={sourceReliability}
+          onChange={(event) => onSourceReliability(event.target.value as AdmiraltyReliability)}
+          className="h-9 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+        >
+          <option value="A">A - reliable</option>
+          <option value="B">B - usually reliable</option>
+          <option value="C">C - fairly reliable</option>
+          <option value="D">D - not usually reliable</option>
+          <option value="E">E - unreliable</option>
+          <option value="F">F - cannot judge</option>
+        </select>
+      </label>
+      <label className="grid gap-1.5">
+        <span className="text-label">Information credibility</span>
+        <select
+          value={infoCredibility}
+          onChange={(event) => onInfoCredibility(Number(event.target.value))}
+          className="h-9 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+        >
+          <option value={1}>1 - confirmed</option>
+          <option value={2}>2 - probably true</option>
+          <option value={3}>3 - possibly true</option>
+          <option value={4}>4 - doubtful</option>
+          <option value={5}>5 - improbable</option>
+          <option value={6}>6 - cannot judge</option>
+        </select>
+      </label>
     </div>
   );
 }

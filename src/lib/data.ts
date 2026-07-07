@@ -3,6 +3,7 @@ import {
   signalDraftFromDeepResearch,
   signalDraftFromSearchResult,
 } from "@/lib/exa";
+import type { HomePin } from "@/lib/home-pins";
 import {
   appendMarkdownSection,
   formatAgentWorkTimestamp,
@@ -74,6 +75,8 @@ const SYSTEM_WORKSPACE_DATABASE_ICONS = {
   operations: "intel-system:operations",
   projects: "intel-system:projects",
 } as const;
+const DOCUMENTS_WORKSPACE_DATABASE_ICON = "intel-system:documents";
+const HOME_PINS_WORKSPACE_DATABASE_ICON = "intel-system:home-pins";
 
 export const GENZEN_WORKSPACE_DATABASE_IDS = {
   bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
@@ -175,6 +178,31 @@ const PROJECTS_DB_FIELDS = {
   createdAt: "created_at",
   updatedAt: "updated_at",
 } as const;
+
+export const DOCUMENTS_DB_FIELDS = {
+  title: "doc_title",
+  docType: "doc_type",
+  stage: "doc_stage",
+  entity: "doc_entity",
+  vaultPath: "doc_vault_path",
+  linkedCase: "doc_linked_case",
+  linkedEngagement: "doc_linked_engagement",
+  createdAt: "doc_created_at",
+  updatedAt: "doc_updated_at",
+} as const;
+
+const HOME_PIN_DB_FIELDS = {
+  pinId: "home_pin_id",
+  databaseId: "home_pin_database_id",
+  viewId: "home_pin_view_id",
+  x: "home_pin_x",
+  y: "home_pin_y",
+  w: "home_pin_w",
+  h: "home_pin_h",
+} as const;
+
+export const DOCUMENT_STAGE_OPTIONS = ["Draft", "Copy-audit", "Approved", "Published/Sent"] as const;
+export const DOCUMENT_TYPE_OPTIONS = ["report", "brief", "contract", "invoice", "one-pager", "note"] as const;
 
 let operationalWorkspaceSyncPromise: Promise<void> | null = null;
 let operationalWorkspaceLastSyncedAt = 0;
@@ -2173,6 +2201,76 @@ function buildProjectsWorkspaceSchema(operationsDatabaseId?: string): WorkspaceD
   ];
 }
 
+function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
+  return [
+    {
+      id: DOCUMENTS_DB_FIELDS.title,
+      name: "Title",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.stage,
+      name: "Stage",
+      type: "select",
+      options: [...DOCUMENT_STAGE_OPTIONS],
+      optionColors: {
+        Draft: "#89b4fa",
+        "Copy-audit": "#f9e2af",
+        Approved: "#a6e3a1",
+        "Published/Sent": "#cba6f7",
+      },
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.docType,
+      name: "Type",
+      type: "select",
+      options: [...DOCUMENT_TYPE_OPTIONS],
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.entity,
+      name: "Entity",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.vaultPath,
+      name: "Vault path",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.linkedCase,
+      name: "Linked case",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.linkedEngagement,
+      name: "Linked engagement",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.createdAt,
+      name: "Created",
+      type: "date",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.updatedAt,
+      name: "Updated",
+      type: "date",
+    },
+  ];
+}
+
+function buildHomePinsWorkspaceSchema(): WorkspaceDatabaseField[] {
+  return [
+    { id: HOME_PIN_DB_FIELDS.pinId, name: "Pin ID", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.databaseId, name: "Database ID", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.viewId, name: "View ID", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.x, name: "X", type: "number" },
+    { id: HOME_PIN_DB_FIELDS.y, name: "Y", type: "number" },
+    { id: HOME_PIN_DB_FIELDS.w, name: "Width", type: "number" },
+    { id: HOME_PIN_DB_FIELDS.h, name: "Height", type: "number" },
+  ];
+}
+
 function fieldsEqual(
   left: Record<string, WorkspaceDatabaseFieldValue>,
   right: Record<string, WorkspaceDatabaseFieldValue>,
@@ -2599,6 +2697,244 @@ export async function syncOperationalWorkspaceDatabases(options?: { force?: bool
       });
   }
   return operationalWorkspaceSyncPromise;
+}
+
+export async function ensureDocumentsWorkspaceDatabase() {
+  const { data: existingRows, error: existingError } = await supabase
+    .schema("workspace").from("databases")
+    .select("id, entity, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
+    .eq("icon", DOCUMENTS_WORKSPACE_DATABASE_ICON)
+    .limit(1);
+
+  if (existingError) throw existingError;
+  const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
+  if (existing) return toWorkspaceDatabase(existing);
+
+  const created = await createWorkspaceDatabase({
+    name: "Documents",
+    icon: DOCUMENTS_WORKSPACE_DATABASE_ICON,
+    schema: buildDocumentsWorkspaceSchema(),
+    taxonomy: {
+      entity: "genzen",
+      entity_label: "GenZen",
+      area: "internal_ops",
+      area_label: "Internal Ops",
+      folder: "Documents",
+      object_type: "documents_database",
+      routing_rule: "documents_database",
+    },
+  });
+  await updateWorkspaceDatabaseHeaderFields(
+    created.database.id,
+    [DOCUMENTS_DB_FIELDS.title, DOCUMENTS_DB_FIELDS.stage, DOCUMENTS_DB_FIELDS.docType],
+    true,
+  );
+  return created.database;
+}
+
+async function ensureHomePinsWorkspaceDatabase() {
+  const { data: existingRows, error: existingError } = await supabase
+    .schema("workspace").from("databases")
+    .select("id, entity, name, icon, schema, header_field_ids, taxonomy, created_at, updated_at")
+    .eq("icon", HOME_PINS_WORKSPACE_DATABASE_ICON)
+    .limit(1);
+
+  if (existingError) throw existingError;
+  const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
+  if (existing) return toWorkspaceDatabase(existing);
+
+  const created = await createWorkspaceDatabase({
+    name: "Home Pins",
+    icon: HOME_PINS_WORKSPACE_DATABASE_ICON,
+    schema: buildHomePinsWorkspaceSchema(),
+    taxonomy: {
+      entity: "genzen",
+      entity_label: "GenZen",
+      area: "internal_ops",
+      area_label: "Internal Ops",
+      folder: "Home Pins",
+      object_type: "system_database",
+      routing_rule: "home_dashboard_pins",
+    },
+  });
+  await updateWorkspaceDatabaseHeaderFields(created.database.id, [HOME_PIN_DB_FIELDS.pinId], true);
+  await updateWorkspaceView(created.views[0].id, {
+    config: {
+      ...created.views[0].config,
+      hiddenFields: [HOME_PIN_DB_FIELDS.pinId],
+      fieldOrder: Object.values(HOME_PIN_DB_FIELDS),
+    },
+  });
+  return created.database;
+}
+
+function numberField(value: WorkspaceDatabaseFieldValue, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function homePinFromWorkspaceRecord(record: WorkspaceDatabaseRecord): HomePin | null {
+  const pinId = record.fields[HOME_PIN_DB_FIELDS.pinId];
+  const databaseId = record.fields[HOME_PIN_DB_FIELDS.databaseId];
+  const viewId = record.fields[HOME_PIN_DB_FIELDS.viewId];
+  if (typeof pinId !== "string" || typeof databaseId !== "string" || typeof viewId !== "string") {
+    return null;
+  }
+  return {
+    id: pinId,
+    databaseId,
+    viewId,
+    x: numberField(record.fields[HOME_PIN_DB_FIELDS.x], 0),
+    y: numberField(record.fields[HOME_PIN_DB_FIELDS.y], 0),
+    w: numberField(record.fields[HOME_PIN_DB_FIELDS.w], 4),
+    h: numberField(record.fields[HOME_PIN_DB_FIELDS.h], 11),
+  };
+}
+
+function workspaceFieldsFromHomePin(pin: HomePin): Record<string, WorkspaceDatabaseFieldValue> {
+  return {
+    [HOME_PIN_DB_FIELDS.pinId]: pin.id,
+    [HOME_PIN_DB_FIELDS.databaseId]: pin.databaseId,
+    [HOME_PIN_DB_FIELDS.viewId]: pin.viewId,
+    [HOME_PIN_DB_FIELDS.x]: pin.x,
+    [HOME_PIN_DB_FIELDS.y]: pin.y,
+    [HOME_PIN_DB_FIELDS.w]: pin.w,
+    [HOME_PIN_DB_FIELDS.h]: pin.h,
+  };
+}
+
+export async function listHomePinsFromWorkspace() {
+  const database = await ensureHomePinsWorkspaceDatabase();
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, entity, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", database.id)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as WorkspaceDatabaseRecordRow[])
+    .map(toWorkspaceDatabaseRecord)
+    .map(homePinFromWorkspaceRecord)
+    .filter((pin): pin is HomePin => Boolean(pin));
+}
+
+export async function saveHomePinsToWorkspace(pins: HomePin[]) {
+  const database = await ensureHomePinsWorkspaceDatabase();
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, entity, fields, body, taxonomy, created_at, updated_at")
+    .eq("database_id", database.id);
+
+  if (error) throw error;
+
+  const existingRecords = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
+  const existingByPinId = new Map<string, WorkspaceDatabaseRecord>();
+  for (const record of existingRecords) {
+    const pinId = record.fields[HOME_PIN_DB_FIELDS.pinId];
+    if (typeof pinId === "string") {
+      existingByPinId.set(pinId, record);
+    }
+  }
+
+  const nextPinIds = new Set(pins.map((pin) => pin.id));
+  await Promise.all(
+    existingRecords
+      .filter((record) => {
+        const pinId = record.fields[HOME_PIN_DB_FIELDS.pinId];
+        return typeof pinId !== "string" || !nextPinIds.has(pinId);
+      })
+      .map((record) => deleteWorkspaceRecord(record.id, true)),
+  );
+
+  await Promise.all(
+    pins.map((pin) => {
+      const fields = workspaceFieldsFromHomePin(pin);
+      const existing = existingByPinId.get(pin.id);
+      if (existing) {
+        return updateWorkspaceRecord(existing.id, { fields }, true);
+      }
+      return createWorkspaceRecord({
+        databaseId: database.id,
+        fields,
+        taxonomy: {
+          ...defaultRecordTaxonomy(database),
+          object_type: "home_dashboard_pin",
+          routing_rule: "home_dashboard_pins",
+        },
+        skipSystemSync: true,
+      });
+    }),
+  );
+
+  return pins;
+}
+
+export async function removeHomePinsForWorkspaceDatabase(databaseId: string) {
+  const pins = await listHomePinsFromWorkspace();
+  const nextPins = pins.filter((pin) => pin.databaseId !== databaseId);
+  if (nextPins.length !== pins.length) {
+    await saveHomePinsToWorkspace(nextPins);
+  }
+  return { pins: nextPins, removed: nextPins.length !== pins.length };
+}
+
+export async function syncVaultFilesToDocumentRecords() {
+  const database = await ensureDocumentsWorkspaceDatabase();
+  const [bundle, vaultFiles] = await Promise.all([
+    getWorkspaceDatabaseBundle(database.id),
+    listAllVaultFiles(),
+  ]);
+  const existingByPath = new Set(
+    bundle.records
+      .map((record) => record.fields[DOCUMENTS_DB_FIELDS.vaultPath])
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+  const missing = vaultFiles.filter((file) => file.file_path && !existingByPath.has(file.file_path));
+  if (missing.length === 0) return { database, created: 0 };
+
+  await createWorkspaceRecords(
+    missing.map((file) => {
+      const title = file.file_name?.replace(/\.[^.]+$/, "") || file.file_path;
+      const docType =
+        file.report_type === "public" ? "brief" :
+        file.file_type === "analysis" || file.file_type === "report" || file.report_type ? "report" :
+        "note";
+      const taxonomy: TaxonomyMetadata = {
+        ...defaultRecordTaxonomy(database),
+        object_type: "document",
+        routing_rule: "documents_database",
+        entity: "genzen_solutions",
+        entity_label: "GenZen Solutions",
+        area: "research_intelligence",
+        area_label: "Research & Intelligence",
+        folder: "Documents",
+      };
+      return {
+        databaseId: database.id,
+        fields: {
+          [DOCUMENTS_DB_FIELDS.title]: title,
+          [DOCUMENTS_DB_FIELDS.docType]: docType,
+          [DOCUMENTS_DB_FIELDS.stage]: "Draft",
+          [DOCUMENTS_DB_FIELDS.entity]: taxonomy.entity,
+          [DOCUMENTS_DB_FIELDS.vaultPath]: file.file_path,
+          [DOCUMENTS_DB_FIELDS.linkedCase]: file.case_id ?? null,
+          [DOCUMENTS_DB_FIELDS.linkedEngagement]: null,
+          [DOCUMENTS_DB_FIELDS.createdAt]: file.created_at,
+          [DOCUMENTS_DB_FIELDS.updatedAt]: file.created_at,
+        },
+        taxonomy,
+      };
+    }),
+  );
+
+  return { database, created: missing.length };
+}
+
+export async function getDocumentsWorkspaceBundle(options?: { syncVaultFiles?: boolean }) {
+  const database = await ensureDocumentsWorkspaceDatabase();
+  if (options?.syncVaultFiles) {
+    await syncVaultFilesToDocumentRecords();
+  }
+  return getWorkspaceDatabaseBundle(database.id);
 }
 
 export async function listWorkspaceEntities() {

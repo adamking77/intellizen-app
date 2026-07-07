@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Archive,
@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 
 import { CaseIntelPanel } from "@/components/investigations/case-intel-panel";
-import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
 import { VaultFileRow } from "@/components/vault/vault-file-row";
 import { Button } from "@/components/ui/button";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
@@ -123,13 +122,20 @@ function formatElapsed(iso: string | null | undefined): string {
 export function InvestigationView() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const entityFilter = useAppStore((s) => s.entityFilter);
   const setPendingProjectSelectionId = useAppStore((s) => s.setPendingProjectSelectionId);
 
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete" | "archived">("all");
+  const caseParam = searchParams.get("case");
+
+  const selectCase = (caseId: string | null) => {
+    setSelectedCaseId(caseId);
+    if (caseId) setSearchParams({ case: caseId }, { replace: true });
+    else setSearchParams({}, { replace: true });
+  };
 
   // Phase 1 — Brief form state
   const [briefForm, setBriefForm] = useState({
@@ -219,6 +225,12 @@ export function InvestigationView() {
     queryKey: ["projects", entityFilter],
     queryFn: () => listProjects({ entity: entityFilter }),
   });
+
+  useEffect(() => {
+    if (caseParam && caseParam !== selectedCaseId) {
+      setSelectedCaseId(caseParam);
+    }
+  }, [caseParam, selectedCaseId]);
 
   const parentProject = useMemo(
     () =>
@@ -365,7 +377,7 @@ export function InvestigationView() {
 
   useEffect(() => {
     if (selectedCaseId == null && filteredCases.length > 0) {
-      setSelectedCaseId(filteredCases[0].case_id);
+      selectCase(filteredCases[0].case_id);
       return;
     }
     if (
@@ -373,7 +385,7 @@ export function InvestigationView() {
       filteredCases.length > 0 &&
       !filteredCases.some((c) => c.case_id === selectedCaseId)
     ) {
-      setSelectedCaseId(filteredCases[0].case_id);
+      selectCase(filteredCases[0].case_id);
     }
   }, [filteredCases, selectedCaseId]);
 
@@ -434,7 +446,7 @@ export function InvestigationView() {
       return { ...input, ...result };
     },
     onSuccess: async ({ caseId, vaultCleanupError }) => {
-      if (selectedCaseId === caseId) setSelectedCaseId(null);
+      if (selectedCaseId === caseId) selectCase(null);
       await queryClient.invalidateQueries({ queryKey: ["investigations"] });
       await queryClient.invalidateQueries({ queryKey: ["investigation"], exact: false });
       await queryClient.invalidateQueries({ queryKey: ["investigation-signals"], exact: false });
@@ -629,13 +641,13 @@ export function InvestigationView() {
       {/* Topbar */}
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <div className="flex flex-col gap-3">
-          <span className="text-label">Investigate</span>
+          <span className="text-label">Case workspace</span>
           <IndicatorStrip items={indicators} />
         </div>
         <div className="flex items-center">
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+          <Button size="sm" onClick={() => navigate("/intel")} className="gap-1.5">
             <Plus className="h-3 w-3" />
-            New investigation
+            New from Intel
           </Button>
         </div>
       </div>
@@ -656,9 +668,9 @@ export function InvestigationView() {
                   {statusFilter !== "all" ? "Switch the filter to see other cases." : "Start a case to collect and analyse intelligence."}
                 </p>
                 {statusFilter === "all" && (
-                  <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-2 gap-1.5">
+                  <Button size="sm" onClick={() => navigate("/intel")} className="mt-2 gap-1.5">
                     <Plus className="h-3 w-3" />
-                    New investigation
+                    New from Intel
                   </Button>
                 )}
               </div>
@@ -679,7 +691,7 @@ export function InvestigationView() {
                   <button
                     key={inv.case_id}
                     type="button"
-                    onClick={() => setSelectedCaseId(inv.case_id)}
+                    onClick={() => selectCase(inv.case_id)}
                     className={cn(
                       "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left transition-colors duration-150",
                       isSelected ? "bg-[var(--accent-soft)] pl-[13px]" : "pl-4 hover:bg-[var(--surface-wash)]",
@@ -759,7 +771,7 @@ export function InvestigationView() {
                   {parentProject && (
                     <button
                       type="button"
-                      onClick={() => { setPendingProjectSelectionId(parentProject.id); navigate("/projects"); }}
+                      onClick={() => { setPendingProjectSelectionId(parentProject.id); navigate("/intel"); }}
                       className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
                     >
                       <FolderOpen className="h-2.5 w-2.5" />
@@ -1194,20 +1206,14 @@ export function InvestigationView() {
               <p className="max-w-[460px] text-ui text-[var(--subtext-0)]">
                 Three phases — Brief, Collect, Analyse. Each investigation produces a Scoping Brief, Post draft, or Legacy Threat Analysis depending on the use case.
               </p>
-              <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-2 gap-1.5">
+              <Button size="sm" onClick={() => navigate("/intel")} className="mt-2 gap-1.5">
                 <Plus className="h-3 w-3" />
-                New investigation
+                New from Intel
               </Button>
             </div>
           )}
         </section>
       </div>
-
-      <InvestigationCreateModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(caseId) => setSelectedCaseId(caseId)}
-      />
 
       <DeleteInvestigationModal
         open={deleteConfirmOpen && !!selectedInvestigation}

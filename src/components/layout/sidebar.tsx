@@ -4,16 +4,15 @@ import { NavLink } from "react-router-dom";
 import {
   Database,
   FileText,
-  FolderOpen,
   House,
   LayoutGrid,
   Network,
+  Radar,
   Search,
-  Spline,
   type LucideIcon,
 } from "lucide-react";
 
-import { listWorkspaceDatabases } from "@/lib/data";
+import { listWorkspaceDatabases, listWorkspaceEntities } from "@/lib/data";
 import { TAXONOMY_ENTITY_OPTIONS } from "@/lib/taxonomy";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -27,12 +26,11 @@ type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Search", to: "/search", key: "search", icon: Search },
-  { label: "Operations", to: "/projects", key: "projects", icon: FolderOpen },
+  { label: "Intel", to: "/intel", key: "intel", icon: Radar },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
+  { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
-  { label: "Investigate", to: "/investigate", key: "investigate", icon: Spline },
-  { label: "Reports", to: "/reports", key: "reports", icon: FileText },
 ];
 
 const APP_VERSION = "v0.4.0";
@@ -56,6 +54,11 @@ export function Sidebar() {
     queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
     staleTime: 30_000,
   });
+  const { data: workspaceEntities } = useQuery({
+    queryKey: ["workspace-entities"],
+    queryFn: listWorkspaceEntities,
+    staleTime: 10 * 60_000,
+  });
   const { isCramped } = useWindowSize();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => readCollapsed());
@@ -70,6 +73,9 @@ export function Sidebar() {
   }, [userCollapsed]);
 
   const toggle = () => setUserCollapsed((c) => !c);
+  const entityOptions = (workspaceEntities?.filter((entity) => entity.status !== "archived") ?? [])
+    .map((entity) => ({ value: entity.slug, label: entity.label }));
+  const visibleEntityOptions = entityOptions.length > 0 ? entityOptions : TAXONOMY_ENTITY_OPTIONS;
 
   return (
     <aside
@@ -131,7 +137,7 @@ export function Sidebar() {
             aria-label="Entity scope"
           >
             <option value="">All entities</option>
-            {TAXONOMY_ENTITY_OPTIONS.map((option) => (
+            {visibleEntityOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>

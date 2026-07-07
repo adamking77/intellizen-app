@@ -60,7 +60,9 @@ export type SearchMode =
   | "company"
   | "people"
   | "financial_reports"
-  | "deep_research";
+  | "deep_research"
+  | "sanctions"
+  | "corporate";
 export type GraphEntityType = "person" | "organisation" | "location" | "event";
 
 export interface IntelSignal {
@@ -74,6 +76,8 @@ export interface IntelSignal {
   snippet: string | null;
   watch_domain: string | null;
   exa_score: number | null;
+  source_reliability: AdmiraltyReliability | null;
+  info_credibility: number | null;
   raw_payload: unknown;
   status: SignalStatus;
   created_at: string;
@@ -338,6 +342,8 @@ export interface SignalDraft {
   snippet: string | null;
   watch_domain: string;
   exa_score: number | null;
+  source_reliability?: AdmiraltyReliability | null;
+  info_credibility?: number | null;
   raw_payload: unknown;
   status?: SignalStatus;
 }
@@ -358,6 +364,8 @@ export interface SearchResultItem {
   published_at: string | null;
   snippet: string | null;
   exa_score: number | null;
+  source_reliability?: AdmiraltyReliability | null;
+  info_credibility?: number | null;
   raw_payload: unknown;
 }
 
@@ -379,6 +387,8 @@ export interface DeepResearchResult {
   source: string;
   snippet: string;
   content: string;
+  source_reliability?: AdmiraltyReliability | null;
+  info_credibility?: number | null;
   raw_payload: unknown;
 }
 

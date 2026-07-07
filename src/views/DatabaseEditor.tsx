@@ -46,7 +46,9 @@ import {
   deleteWorkspaceView,
   getWorkspaceDatabaseBundle,
   isOperationalSystemWorkspaceIcon,
+  listHomePinsFromWorkspace,
   listWorkspaceDatabaseCatalog,
+  saveHomePinsToWorkspace,
   updateWorkspaceDatabase,
   updateWorkspaceDatabaseHeaderFields,
   updateWorkspaceDatabaseSchema,
@@ -144,6 +146,16 @@ export function DatabaseEditorView({
     queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
     enabled: Boolean(database),
   });
+  const { data: workspaceHomePins } = useQuery({
+    queryKey: ["home-pins"],
+    queryFn: listHomePinsFromWorkspace,
+  });
+
+  useEffect(() => {
+    if (!workspaceHomePins) return;
+    setHomePins(workspaceHomePins);
+    saveHomePins(workspaceHomePins);
+  }, [workspaceHomePins]);
   const catalog = useMemo(
     () =>
       catalogData.length > 0
@@ -905,7 +917,7 @@ export function DatabaseEditorView({
     }
   }
 
-  function handleToggleActiveViewHomePin() {
+  async function handleToggleActiveViewHomePin() {
     if (!database || !activeView) return;
     if (!supportsPinnedHomeView(activeView.type)) return;
 
@@ -917,7 +929,13 @@ export function DatabaseEditorView({
       setHomePins(result.pins);
       saveHomePins(result.pins);
       if (result.removed) {
-        toast.success("View removed from Home");
+        try {
+          await saveHomePinsToWorkspace(result.pins);
+          await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+          toast.success("View removed from Home");
+        } catch (err) {
+          toastError("Home pin update failed", err);
+        }
       }
       return;
     }
@@ -929,9 +947,15 @@ export function DatabaseEditorView({
     setHomePins(result.pins);
     saveHomePins(result.pins);
     if (result.added) {
-      toast.success("View pinned to Home", {
-        action: { label: "Open Home", onClick: () => navigate("/home") },
-      });
+      try {
+        await saveHomePinsToWorkspace(result.pins);
+        await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+        toast.success("View pinned to Home", {
+          action: { label: "Open Home", onClick: () => navigate("/home") },
+        });
+      } catch (err) {
+        toastError("Home pin update failed", err);
+      }
     } else {
       toast.info("View is already pinned to Home", {
         action: { label: "Open Home", onClick: () => navigate("/home") },

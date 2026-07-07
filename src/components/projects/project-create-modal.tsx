@@ -115,16 +115,16 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="New project"
+        aria-label="New collection"
         className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">
             <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Projects
+              Intel
             </p>
             <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New project
+              New collection
             </h3>
           </div>
           <button
@@ -150,7 +150,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
               Name
             </span>
             <Input
-              placeholder="Project name"
+              placeholder="Collection name"
               value={name}
               autoFocus
               onChange={(event) => setName(event.target.value)}
@@ -196,7 +196,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
           {selectableOperations.length > 0 && (
             <label className="grid gap-1.5">
               <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                Operation{" "}
+                Intel group{" "}
                 <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                   (optional)
                 </span>
@@ -206,7 +206,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 value={operationId ?? ""}
                 onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">No operation — standalone project</option>
+                <option value="">No group — standalone collection</option>
                 {selectableOperations.map((op) => (
                   <option key={op.id} value={op.id}>
                     {op.name}
@@ -230,7 +230,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
               type="submit"
               disabled={!name.trim() || createMutation.isPending}
             >
-              {createMutation.isPending ? "Creating…" : "Create project"}
+              {createMutation.isPending ? "Creating…" : "Create collection"}
             </Button>
           </div>
         </form>

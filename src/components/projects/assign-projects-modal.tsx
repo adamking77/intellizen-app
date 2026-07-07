@@ -74,7 +74,7 @@ export function AssignProjectsModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Assign projects to ${operation.name}`}
+        aria-label={`Assign collections to ${operation.name}`}
         className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         {/* Header */}
@@ -84,7 +84,7 @@ export function AssignProjectsModal({
               {operation.name}
             </p>
             <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
-              Assign projects
+              Assign collections
             </h3>
           </div>
           <button
@@ -104,7 +104,7 @@ export function AssignProjectsModal({
             <input
               autoFocus
               type="text"
-              placeholder="Filter projects…"
+              placeholder="Filter collections…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="min-w-0 flex-1 bg-transparent font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:outline-none"
@@ -116,12 +116,12 @@ export function AssignProjectsModal({
         <div className="flex max-h-[320px] flex-col overflow-y-auto">
           {assignableProjects.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-5 py-10 text-center">
-              <p className="font-ui text-[13px] text-[var(--subtext-0)]">All projects already assigned</p>
-              <p className="font-ui text-[11px] text-[var(--overlay-1)]">Create a new project from the operation pane.</p>
+              <p className="font-ui text-[13px] text-[var(--subtext-0)]">All collections already assigned</p>
+              <p className="font-ui text-[11px] text-[var(--overlay-1)]">Create a new collection from the intel group pane.</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-5 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No projects match "{query}"
+              No collections match "{query}"
             </div>
           ) : (
             <>
@@ -211,8 +211,8 @@ export function AssignProjectsModal({
             {isPending
               ? "Assigning…"
               : selected.size === 0
-                ? "Assign projects"
-                : `Assign ${selected.size} project${selected.size === 1 ? "" : "s"}`}
+                ? "Assign collections"
+                : `Assign ${selected.size} collection${selected.size === 1 ? "" : "s"}`}
           </Button>
         </div>
       </div>

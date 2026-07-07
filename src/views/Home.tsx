@@ -19,7 +19,11 @@ import {
   saveHomeDashboardLayout,
   type HomeDashboardLayoutItem,
 } from "@/lib/home-dashboard";
-import { listWorkspaceDatabaseCatalog } from "@/lib/data";
+import {
+  listHomePinsFromWorkspace,
+  listWorkspaceDatabaseCatalog,
+  saveHomePinsToWorkspace,
+} from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
 
@@ -46,6 +50,28 @@ export function HomeView() {
     queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
     refetchInterval: 60_000,
   });
+  const {
+    data: workspacePins,
+    isLoading: isLoadingPins,
+    error: pinsError,
+  } = useQuery({
+    queryKey: ["home-pins"],
+    queryFn: async () => {
+      const remotePins = await listHomePinsFromWorkspace();
+      const localPins = loadHomePins();
+      if (remotePins.length === 0 && localPins.length > 0) {
+        return saveHomePinsToWorkspace(localPins);
+      }
+      return remotePins;
+    },
+    refetchInterval: 60_000,
+  });
+
+  useEffect(() => {
+    if (!workspacePins) return;
+    setPins(workspacePins);
+    saveHomePins(workspacePins);
+  }, [workspacePins]);
 
   useEffect(() => {
     saveHomePins(pins);
@@ -71,13 +97,15 @@ export function HomeView() {
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
 
     if (validIds.size !== pins.length) {
-      setPins((current) => current.filter((pin) => validIds.has(pin.id)));
+      const nextPins = pins.filter((pin) => validIds.has(pin.id));
+      setPins(nextPins);
+      void saveHomePinsToWorkspace(nextPins).catch(() => {});
     }
 
     if (layout.some((item) => !validIds.has(item.id))) {
       setLayout((current) => current.filter((item) => validIds.has(item.id)));
     }
-  }, [layout, pins.length, pinnedWidgets]);
+  }, [layout, pins, pinnedWidgets]);
 
   const gridLayout = useMemo<Layout>(
     () =>
@@ -97,29 +125,41 @@ export function HomeView() {
   );
 
   function commitGridLayout(nextLayout: Layout) {
-    setLayout(
-      nextLayout.map((item) => ({
-        id: item.i,
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      })),
-    );
+    const nextLayoutItems = nextLayout.map((item) => ({
+      id: item.i,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    }));
+    const byId = new Map(nextLayoutItems.map((item) => [item.id, item]));
+    const nextPins = pins.map((pin) => {
+      const next = byId.get(pin.id);
+      return next ? { ...pin, x: next.x, y: next.y, w: next.w, h: next.h } : pin;
+    });
+    setLayout(nextLayoutItems);
+    setPins(nextPins);
+    void saveHomePinsToWorkspace(nextPins).catch(() => {});
   }
 
   function handleRemovePin(pinId: string) {
-    setPins((current) => current.filter((pin) => pin.id !== pinId));
+    const nextPins = pins.filter((pin) => pin.id !== pinId);
+    setPins(nextPins);
     setLayout((current) => current.filter((item) => item.id !== pinId));
+    void saveHomePinsToWorkspace(nextPins).catch(() => {});
   }
 
-  if (error) {
+  if (error || pinsError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
           <span className="text-label">Home unavailable</span>
           <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
-            {error instanceof Error ? error.message : "The dashboard could not be loaded."}
+            {error instanceof Error
+              ? error.message
+              : pinsError instanceof Error
+                ? pinsError.message
+                : "The dashboard could not be loaded."}
           </p>
         </div>
       </div>
@@ -142,7 +182,7 @@ export function HomeView() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <section className="mx-auto flex w-full max-w-[1600px] flex-col">
-          {isLoading ? (
+          {isLoading || isLoadingPins ? (
             <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Loading pinned views...</span>

@@ -8,8 +8,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
+import { searchWorkspace } from "@/lib/data";
+import type { InternalSearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store";
 
 // ============================================================
 // Context + provider
@@ -70,7 +74,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 // Commands
 // ============================================================
 
-type CommandKind = "navigation" | "action";
+type CommandKind = "navigation" | "action" | "workspace";
 
 interface Command {
   id: string;
@@ -82,19 +86,25 @@ interface Command {
 }
 
 const NAV_COMMANDS: Command[] = [
+  { id: "nav:home", label: "Home", kind: "navigation", run: ({ navigate }) => navigate("/home") },
+  { id: "nav:search", label: "Search", kind: "navigation", run: ({ navigate }) => navigate("/search") },
+  { id: "nav:intel", label: "Intel", kind: "navigation", run: ({ navigate }) => navigate("/intel") },
+  { id: "nav:databases", label: "Databases", kind: "navigation", run: ({ navigate }) => navigate("/databases") },
+  { id: "nav:docs", label: "Docs", kind: "navigation", run: ({ navigate }) => navigate("/docs") },
+  { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
+  { id: "nav:canvas", label: "Canvas", kind: "navigation", run: ({ navigate }) => navigate("/canvas") },
   { id: "nav:inbox", label: "Inbox", kind: "navigation", run: ({ navigate }) => navigate("/inbox") },
   { id: "nav:monitors", label: "Monitors", kind: "navigation", run: ({ navigate }) => navigate("/monitors") },
-  { id: "nav:search", label: "Search", kind: "navigation", run: ({ navigate }) => navigate("/search") },
-  { id: "nav:projects", label: "Ops", kind: "navigation", run: ({ navigate }) => navigate("/projects") },
-  { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
-  { id: "nav:investigate", label: "Investigate", kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
-  { id: "nav:reports", label: "Reports", kind: "navigation", run: ({ navigate }) => navigate("/reports") },
+  { id: "nav:agent-work", label: "Agent Work", kind: "navigation", run: ({ navigate }) => navigate("/agent-work") },
+  { id: "nav:workflows", label: "Workflows", kind: "navigation", run: ({ navigate }) => navigate("/workflows") },
+  { id: "nav:roles", label: "Roles", kind: "navigation", run: ({ navigate }) => navigate("/roles") },
+  { id: "nav:investigate", label: "Case workspace", kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
 ];
 
 const ACTION_COMMANDS: Command[] = [
-  { id: "act:new-investigation", label: "New investigation", hint: "Investigate", kind: "action", run: ({ navigate }) => navigate("/investigate") },
+  { id: "act:new-investigation", label: "New case investigation", hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
   { id: "act:new-monitor", label: "New monitor", hint: "Monitors", kind: "action", run: ({ navigate }) => navigate("/monitors") },
-  { id: "act:new-project", label: "New project", hint: "Ops", kind: "action", run: ({ navigate }) => navigate("/projects") },
+  { id: "act:new-collection", label: "New collection", hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
   { id: "act:run-monitor", label: "Run monitor", hint: "Refresh Inbox", kind: "action", run: ({ navigate }) => navigate("/inbox") },
   { id: "act:open-graph", label: "Open Graph", kind: "action", run: ({ navigate }) => navigate("/graph") },
   { id: "act:search-web", label: "Search — Web", hint: "Exa web", kind: "action", run: ({ navigate }) => navigate("/search?mode=web") },
@@ -107,6 +117,28 @@ const SCOPED_COMMANDS: Command[] = [
   { id: "scope:investigate:run-phase", label: "Run active phase", hint: "Investigate", kind: "action", scope: "/investigate", run: () => {} },
   { id: "scope:investigate:open-artifact", label: "Open artifact", hint: "Investigate", kind: "action", scope: "/investigate", run: () => {} },
 ];
+
+function commandFromWorkspaceResult(result: InternalSearchResult): Command {
+  const label = result.title || "Untitled result";
+  const hint = result.subtitle ?? result.source_type.replace("_", " ");
+  return {
+    id: `workspace:${result.source_type}:${result.source_id}`,
+    label,
+    hint,
+    kind: "workspace",
+    run: ({ navigate }) => {
+      if (result.source_type === "intel_signal" && result.url?.startsWith("http")) {
+        window.open(result.url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      if (result.source_type === "knowledge_document") {
+        navigate("/docs");
+        return;
+      }
+      navigate("/databases");
+    },
+  };
+}
 
 // ============================================================
 // Fuzzy match (tiny, deterministic)
@@ -132,9 +164,16 @@ function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();
+  const entityFilter = useAppStore((state) => state.entityFilter);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const workspaceQuery = query.trim();
+  const { data: workspaceResults = [] } = useQuery({
+    queryKey: ["command-palette-workspace-search", workspaceQuery, entityFilter],
+    queryFn: () => searchWorkspace({ query: workspaceQuery, entity: entityFilter, limit: 8 }),
+    enabled: isOpen && workspaceQuery.length >= 2,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -159,11 +198,14 @@ function CommandPalette() {
         .sort((a, b) => b.score - a.score)
         .map((r) => r.c);
 
+    const workspaceCommands = workspaceResults.map(commandFromWorkspaceResult);
+
     return [
       { heading: "Navigation", items: rank(NAV_COMMANDS) },
       { heading: "Actions", items: rank([...scoped, ...ACTION_COMMANDS]) },
+      { heading: "Workspace", items: workspaceCommands },
     ].filter((g) => g.items.length > 0);
-  }, [query, scoped]);
+  }, [query, scoped, workspaceResults]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 

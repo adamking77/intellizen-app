@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { MarkdownBody } from "@/components/ui/markdown-body";
@@ -47,6 +48,7 @@ const CHAT_CLEARED_KEY = "intelizen:chat-cleared-at";
 const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 560;
+const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
 type ChatEntryStatus = "submitted" | "queued" | "failed";
 
 interface AgentChatEntry {
@@ -206,7 +208,12 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
   };
 }
 
-export function AgentPanel() {
+interface AgentPanelProps {
+  mode?: "docked" | "standalone";
+  onEject?: () => void;
+}
+
+export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [collapsed, setCollapsed] = useState(() => readCollapsed());
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -242,8 +249,9 @@ export function AgentPanel() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const { isCramped } = useWindowSize();
+  const standalone = mode === "standalone";
   // Rail mode keeps the approvals badge alive but stops background polling.
-  const expanded = !collapsed && !isCramped;
+  const expanded = standalone || (!collapsed && !isCramped);
 
   const workflowsQuery = useQuery({
     queryKey: ["workflows", "agent-panel", "active", entityFilter],
@@ -412,6 +420,7 @@ export function AgentPanel() {
   }, [chatEntries]);
 
   function toggleCollapsed() {
+    if (standalone) return;
     setCollapsed((current) => {
       const next = !current;
       try {
@@ -421,6 +430,19 @@ export function AgentPanel() {
       }
       return next;
     });
+  }
+
+  async function dockStandalonePanel() {
+    try {
+      window.localStorage.setItem(AGENT_PANEL_DETACHED_KEY, "0");
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: AGENT_PANEL_DETACHED_KEY,
+        newValue: "0",
+      }));
+      await getCurrentWebviewWindow().close();
+    } catch (err) {
+      toastError("Could not dock agent panel", err);
+    }
   }
 
   async function refresh() {
@@ -836,7 +858,7 @@ export function AgentPanel() {
     }
   }
 
-  if (collapsed || isCramped) {
+  if (!standalone && (collapsed || isCramped)) {
     return (
       <aside className="flex h-dvh w-12 shrink-0 flex-col items-center border-l border-[var(--border)] bg-[var(--mantle)] py-3">
         <button
@@ -881,16 +903,21 @@ export function AgentPanel() {
 
   return (
     <aside
-      className="relative flex h-dvh shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]"
-      style={{ width: panelWidth }}
+      className={cn(
+        "relative flex shrink-0 flex-col border border-[var(--border)] bg-[var(--mantle)]",
+        standalone ? "h-dvh w-full rounded-none" : "h-full rounded-xl",
+      )}
+      style={{ width: standalone ? undefined : panelWidth }}
     >
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize agent panel"
-        onPointerDown={startPanelResize}
-        className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-border)]"
-      />
+      {!standalone ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize agent panel"
+          onPointerDown={startPanelResize}
+          className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-border)]"
+        />
+      ) : null}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
@@ -918,15 +945,40 @@ export function AgentPanel() {
           >
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </button>
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label="Collapse agent panel"
-            title="Collapse agent panel"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-          >
-            <PanelRightClose className="h-4 w-4" />
-          </button>
+          {standalone ? (
+            <button
+              type="button"
+              onClick={() => void dockStandalonePanel()}
+              aria-label="Dock agent panel"
+              title="Dock agent panel"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+          ) : (
+            <>
+              {onEject ? (
+                <button
+                  type="button"
+                  onClick={onEject}
+                  aria-label="Eject agent panel"
+                  title="Eject agent panel"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                >
+                  <PanelRightOpen className="h-4 w-4" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label="Collapse agent panel"
+                title="Collapse agent panel"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 

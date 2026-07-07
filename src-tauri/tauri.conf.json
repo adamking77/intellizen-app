@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://jicrdrwtwubveyvzyyrh.supabase.co wss://jicrdrwtwubveyvzyyrh.supabase.co https://hermes-agent-production-c98b.up.railway.app https://api.exa.ai; media-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'self' genui:"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://jicrdrwtwubveyvzyyrh.supabase.co wss://jicrdrwtwubveyvzyyrh.supabase.co https://hermes-agent-production-c98b.up.railway.app https://api.exa.ai https://api.opensanctions.org https://api.gleif.org https://api.company-information.service.gov.uk https://www.sec.gov https://data.sec.gov; media-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'self' genui:"
     }
   },
   "bundle": {

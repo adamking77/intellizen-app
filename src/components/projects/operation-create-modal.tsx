@@ -54,7 +54,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       onCreated?.(operation.id);
       onClose();
     },
-    onError: (err) => toastError("Couldn't create operation", err),
+    onError: (err) => toastError("Couldn't create intel group", err),
   });
 
   useEffect(() => {
@@ -88,16 +88,16 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="New operation"
+        aria-label="New intel group"
         className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0">
             <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Operations
+              Intel
             </p>
             <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New operation
+              New intel group
             </h3>
           </div>
           <button
@@ -156,7 +156,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
               Cancel
             </button>
             <Button type="submit" disabled={!name.trim() || createMutation.isPending}>
-              {createMutation.isPending ? "Creating…" : "Create operation"}
+              {createMutation.isPending ? "Creating…" : "Create intel group"}
             </Button>
           </div>
         </form>

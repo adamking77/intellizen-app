@@ -622,7 +622,7 @@ export function InboxView() {
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
                 <Bookmark className="h-3 w-3" />
-                Save to project…
+                Save to collection…
               </button>
               <button
                 type="button"
@@ -690,14 +690,14 @@ export function InboxView() {
             await saveSignalToProject({ projectId, signalId: saveTarget.id });
             await queryClient.invalidateQueries({ queryKey: ["signals"] });
             await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
-            toast.success("Saved to project");
+            toast.success("Saved to collection");
           } catch (err) {
             toastError("Couldn't save signal", err);
           } finally {
             setSaveTarget(null);
           }
         }}
-        title={saveTarget ? `Save "${saveTarget.title}"` : "Attach to project"}
+        title={saveTarget ? `Save "${saveTarget.title}"` : "Attach to collection"}
       />
 
       <AttachInvestigationDialog
@@ -746,7 +746,7 @@ export function InboxView() {
           clearSelection();
           setBulkSaveOpen(false);
         }}
-        title={`Save ${selectedIds.size} signal${selectedIds.size === 1 ? "" : "s"} to project`}
+        title={`Save ${selectedIds.size} signal${selectedIds.size === 1 ? "" : "s"} to collection`}
       />
     </div>
   );

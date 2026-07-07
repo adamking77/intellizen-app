@@ -4,18 +4,21 @@ macOS-only Tauri v2 desktop intelligence platform for GenZen. Original V1 spec i
 
 ## Current scope (actual build, not frozen spec)
 
-**14 routes**, grouped as 6 operational layers:
+Primary sidebar routes:
 
-| Layer | Routes |
+| Surface | Routes |
 |---|---|
-| Command | `/home`, `/agent-work`, `/workflows`, `/roles` |
-| Monitoring | `/inbox`, `/monitors` |
+| Home | `/home` |
 | Search | `/search` |
-| Organize | `/projects`, `/databases`, `/databases/:id`, `/graph`, `/canvas` |
-| Analyse | `/investigate`, `/reports` |
-| Diagnostics / deep links | Inbox and Monitors remain routable but are no longer primary sidebar surfaces |
+| Intel | `/intel` |
+| Databases | `/databases`, `/databases/:id` |
+| Docs | `/docs` |
+| Graph | `/graph` |
+| Canvas | `/canvas` |
 
-Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors), Reports, Home dashboard pins, Agent Work, Workflows, Roles, Databases, and Canvas were promoted beyond the V1 freeze. `intellizen-tauri-spec.md` and `AGENT.md` describe the original V1 intent — kept for product context, not implementation contracts.
+Deep-link routes remain mounted but are not primary sidebar surfaces: `/investigate`, `/inbox`, `/monitors`, `/agent-work`, `/workflows`, `/roles`. Legacy redirects stay in place: `/projects` redirects to `/intel`; `/reports` redirects to `/docs`.
+
+Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors), Docs, Home dashboard pins, Agent Work, Workflows, Roles, Databases, and Canvas were promoted beyond the V1 freeze. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
 
 ## Build commands
 
@@ -79,11 +82,12 @@ The shared GenZen Brain Supabase project has grown far beyond this app's origina
 
 RLS is enabled on the app schemas. The desktop app uses anon-key access plus the local access header for the 22 app tables; direct service-role access is reserved for scripts, MCP, and maintenance. `workspace.record_revisions`, `workspace.work_events`, and `intel.claims` are append-only from the app side, and public memory bridge views are read-only to anon.
 
-## Investigation + Reports integration
+## Investigation + Docs integration
 
 - **Fiona/Hermes execution**: [src/services/agent.ts](src/services/agent.ts) dispatches workflow runs through the local Hermes run queue, then webhook, then durable `comms.fiona_inbox` fallback. [src/lib/shell.ts](src/lib/shell.ts) is now prompt builders for Fiona/Hermes workflow payloads, not a shell runner.
 - **Vault I/O**: [src/lib/vault.ts](src/lib/vault.ts) wraps the Tauri fs plugin. Reads/writes under `$HOME/vault/intelligence/investigations/<case-id>/`.
 - **Artifact tracking**: workflow outputs and vault files are tracked in Supabase, with investigation artifacts keyed to `case_id` and agent receipts written to `workspace.records` / `workspace.work_events`.
+- **Docs workspace**: `/docs` is backed by the workspace `Documents` database and vault markdown bodies. `knowledge.documents` remains the embedded corpus, not the editing surface.
 
 ## Graph implementation
 
@@ -170,6 +174,8 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 - **UI changes are gated by [DESIGN.md](DESIGN.md)** — tokens only, required states, density/anatomy match, and the review gate at the end of that file. No new routes, sidebar items, or default surfaces without Adam's approval: agents propose views, Adam pins.
 
+- Intel schema names are not UI labels: `anchors.operations`, `anchors.projects`, `intel.*`, MCP tool names, and TypeScript `Operation`/`Project` names remain stable while the user-facing section is Intel and intel projects display as Collections.
+- Workspace databases own the business vocabulary. Business "Operations" and "Projects" belong in workspace databases, not as renames of the intel schema bridge.
 - Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
 - Preserve `raw_payload` on signals so Exa response evolution doesn't force schema churn.
 - Build for resilience around partial data, null publish dates, sparse Deep Research output.

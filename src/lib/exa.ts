@@ -33,6 +33,8 @@ export function signalDraftFromSearchResult(
     snippet: result.snippet,
     watch_domain: watchDomain,
     exa_score: result.exa_score,
+    source_reliability: result.source_reliability ?? null,
+    info_credibility: result.info_credibility ?? null,
     raw_payload: result.raw_payload,
     status: "saved",
   };
@@ -49,6 +51,8 @@ export function signalDraftFromDeepResearch(
     snippet: result.snippet,
     watch_domain: "manual",
     exa_score: null,
+    source_reliability: result.source_reliability ?? null,
+    info_credibility: result.info_credibility ?? null,
     raw_payload: result.raw_payload,
     status: "saved",
   };

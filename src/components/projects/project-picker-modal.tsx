@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, X } from "lucide-react";
 
@@ -17,13 +17,15 @@ type ProjectPickerModalProps = {
   onClose: () => void;
   onSelect: (projectId: number) => Promise<void> | void;
   title?: string;
+  detailsSlot?: ReactNode;
 };
 
 export function ProjectPickerModal({
   open,
   onClose,
   onSelect,
-  title = "Attach to project",
+  title = "Attach to collection",
+  detailsSlot,
 }: ProjectPickerModalProps) {
   const queryClient = useQueryClient();
   const entityFilter = useAppStore((state) => state.entityFilter);
@@ -128,10 +130,10 @@ export function ProjectPickerModal({
               {savingProjectId !== null ? (
                 <>
                   <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />
-                  <span className="text-[var(--accent)]">Saving to project…</span>
+                  <span className="text-[var(--accent)]">Saving to collection…</span>
                 </>
               ) : (
-                "Project routing"
+                "Collection routing"
               )}
             </p>
             <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
@@ -150,9 +152,15 @@ export function ProjectPickerModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          {detailsSlot ? (
+            <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
+              {detailsSlot}
+            </div>
+          ) : null}
+
           <div className="mb-2 flex items-center justify-between">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              Existing projects
+              Existing collections
             </span>
             <span className="font-mono text-[10px] text-[var(--overlay-1)]">
               {existing.length}
@@ -161,7 +169,7 @@ export function ProjectPickerModal({
 
           {existing.length === 0 ? (
             <p className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No projects yet — create one below.
+              No collections yet — create one below.
             </p>
           ) : (
             <div className="grid gap-1.5">
@@ -215,7 +223,7 @@ export function ProjectPickerModal({
               <div className="grid gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                    New project
+                    New collection
                   </span>
                   <button
                     type="button"
@@ -226,7 +234,7 @@ export function ProjectPickerModal({
                   </button>
                 </div>
                 <Input
-                  placeholder="Project name"
+                  placeholder="Collection name"
                   value={name}
                   autoFocus
                   onChange={(event) => setName(event.target.value)}
@@ -274,7 +282,7 @@ export function ProjectPickerModal({
                   "transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >
-                + New project
+                + New collection
               </button>
             )}
           </div>

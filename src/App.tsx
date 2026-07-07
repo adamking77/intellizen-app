@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
 
-import { AppShell } from "@/components/layout/app-shell";
+import { AgentPanelWindow, AppShell } from "@/components/layout/app-shell";
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -43,6 +43,7 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/agent-panel" element={<AgentPanelWindow />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route
@@ -70,13 +71,14 @@ function App() {
             }
           />
           <Route
-            path="/projects"
+            path="/intel"
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
                 <ProjectsView />
               </Suspense>
             }
           />
+          <Route path="/projects" element={<Navigate to="/intel" replace />} />
           <Route
             path="/agent-work"
             element={
@@ -150,13 +152,14 @@ function App() {
             }
           />
           <Route
-            path="/reports"
+            path="/docs"
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
                 <ReportsView />
               </Suspense>
             }
           />
+          <Route path="/reports" element={<Navigate to="/docs" replace />} />
         </Route>
       </Routes>
     </Router>
