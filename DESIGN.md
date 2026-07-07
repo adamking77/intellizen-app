@@ -3,6 +3,8 @@
 Design system refresh for the 7-screen Tauri build. This is the authoritative design reference; `src/index.css`, component primitives, and per-screen work derive from it.
 
 > **Binding status (2026-07-02):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are removed from the sidebar (2026-07-02 product decision — collection runs agentically via Fiona).
+>
+> **Shell reconciliation (2026-07-07):** the app is now a frameless transparent window with floating rounded panes (sogo-app reference): custom traffic lights in the main pane's chrome strip, JS window drag, manual pane-edge resize (see `docs/chrome-layer-handoff-2026-07-07.md`), collapsible sidebar/agent-panel as detached pills, and **pill-shaped buttons app-wide** (Adam-pinned). The "Navigation shell" section below predates this and is historical where it conflicts; sidebar has icons and the section names are Home / Search / Intel / Databases / Docs / Graph / Canvas.
 
 ## Principles
 
@@ -110,11 +112,15 @@ https://github.com/catppuccin/catppuccin
 
 ### Radii, borders, elevation
 
+*(Reconciled 2026-07-07 with the frameless floating-pane shell — Adam pinned the pill language.)*
+
+- Shell panes (sidebar, main, agent panel): **16px** (`rounded-2xl`); collapsed floating pills **28px**
 - Card/panel radius: **12px**
-- Input/button radius: **8px**
-- Pill / small tab: **6px**
+- Input/textarea/select radius: **8px** — fields stay rectangular; only actions are pills
+- **Buttons: full pill (`rounded-full`), all variants and sizes; icon buttons are circles**
+- **Status/count/stage chips: full pill.** Taxonomy/category badges: **6px square chip** (deliberate contrast — labels are not actions)
 - Border weight: **1px default, 2px on active accent bars only**
-- No `box-shadow` except: modal/popover elevation (single flat shadow, no glow: `0 8px 24px rgba(0, 0, 0, 0.4)`)
+- No `box-shadow` except: modal/popover elevation (single flat shadow, no glow: `0 8px 24px rgba(0, 0, 0, 0.4)`), and the collapsed-pill float shadow `0 18px 44px -24px rgba(0,0,0,0.75)`
 
 ### Spacing
 

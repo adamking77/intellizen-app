@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium font-ui select-none " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium font-ui select-none " +
     "transition-[background-color,border-color,color,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
     "active:scale-[0.98] " +
     "disabled:pointer-events-none disabled:opacity-50 " +
@@ -32,9 +32,9 @@ const buttonVariants = cva(
           "hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
       },
       size: {
-        default: "h-9 px-3.5 text-[13px]",
-        sm: "h-8 px-3 text-xs",
-        lg: "h-11 px-5 text-sm",
+        default: "h-9 px-4 text-[13px]",
+        sm: "h-8 px-3.5 text-xs",
+        lg: "h-11 px-6 text-sm",
         icon: "h-9 w-9",
       },
     },
