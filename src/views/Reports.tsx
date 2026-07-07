@@ -252,7 +252,9 @@ export function ReportsView() {
           <FileText className="h-4 w-4 text-[var(--accent)]" />
           <div>
             <span className="text-label">Docs</span>
-            <p className="text-meta">{records.length} document{records.length === 1 ? "" : "s"}</p>
+            <p className="text-meta">
+              {records.length} document{records.length === 1 ? "" : "s"} · markdown, edits save in place
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -340,9 +342,14 @@ export function ReportsView() {
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
-              <p className="text-label">No documents</p>
-              <p className="max-w-[420px] text-ui text-[var(--subtext-0)]">
-                Generated investigation artifacts and drafted docs appear here as workspace records with vault-backed markdown bodies.
+              <p className="text-label">{records.length === 0 ? "No documents" : "Select a document"}</p>
+              <p className="max-w-[440px] text-ui text-[var(--subtext-0)]">
+                Docs is the editing surface for every piece of business paper — workflow reports,
+                briefs, contracts, invoices. Investigation outputs land here automatically; pick one
+                to edit its markdown in place, then move it through the stages.
+              </p>
+              <p className="max-w-[440px] font-mono text-[10px] text-[var(--overlay-1)]">
+                Draft → Copy-audit → Approved → Published/Sent (that last one is yours alone)
               </p>
             </div>
           )}
@@ -390,6 +397,15 @@ function DocsTable({
   );
 }
 
+const STAGE_TONE: Record<string, string> = {
+  Draft: "var(--accent)",
+  "Copy-audit": "var(--caution)",
+  Approved: "var(--success)",
+  "Published/Sent": "var(--overlay-1)",
+};
+
+/** Compact stage pill: colored dot + label, with an invisible native select
+ * on top so one click still opens the stage menu. */
 function StageSelect({
   record,
   onStage,
@@ -399,16 +415,25 @@ function StageSelect({
 }) {
   const stage = fieldString(record, DOCUMENTS_DB_FIELDS.stage) || "Draft";
   return (
-    <select
-      value={stage}
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => onStage(record.id, event.target.value)}
-      className="h-7 rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[11px] text-[var(--text)]"
-    >
-      {DOCUMENT_STAGE_OPTIONS.map((option) => (
-        <option key={option} value={option}>{option}</option>
-      ))}
-    </select>
+    <span className="relative inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border border-[var(--border)] px-2 py-0.5">
+      <span
+        aria-hidden
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: STAGE_TONE[stage] ?? "var(--overlay-1)" }}
+      />
+      <span className="font-ui text-[10px] font-medium text-[var(--subtext-0)]">{stage}</span>
+      <select
+        value={stage}
+        aria-label="Document stage"
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => onStage(record.id, event.target.value)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {DOCUMENT_STAGE_OPTIONS.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    </span>
   );
 }
 

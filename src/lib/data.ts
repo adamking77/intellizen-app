@@ -2877,6 +2877,13 @@ export async function removeHomePinsForWorkspaceDatabase(databaseId: string) {
   return { pins: nextPins, removed: nextPins.length !== pins.length };
 }
 
+/** "pda-what-works_v2.md" → "Pda what works v2" — slugs make bad doc titles. */
+function humanizeDocTitle(raw: string) {
+  const base = raw.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+  if (!base) return raw;
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
 let vaultDocumentSyncPromise: ReturnType<typeof syncVaultFilesToDocumentRecordsInner> | null = null;
 
 export async function syncVaultFilesToDocumentRecords() {
@@ -2904,7 +2911,7 @@ async function syncVaultFilesToDocumentRecordsInner() {
 
   await createWorkspaceRecords(
     missing.map((file) => {
-      const title = file.file_name?.replace(/\.[^.]+$/, "") || file.file_path;
+      const title = humanizeDocTitle(file.file_name || file.file_path);
       const docType =
         file.report_type === "public" ? "brief" :
         file.file_type === "analysis" || file.file_type === "report" || file.report_type ? "report" :
