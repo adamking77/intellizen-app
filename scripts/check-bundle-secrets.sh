@@ -43,6 +43,19 @@ scan_path = sys.argv[1]
 jwt_re = re.compile(rb'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}')
 hits = set()
 
+# Low-sensitivity OSINT sensor keys (free-tier, client-side by design). These
+# legitimately inline into builds via import.meta.env, so their presence is
+# expected — but flag them so a reviewer can confirm the key belongs in a
+# published artifact before shipping. WARN only; do NOT fail the build.
+# Note: these free-tier keys have no fixed recognizable format, so we match on
+# the env-var *identifier* leaking into the bundle (dynamic access, sourcemaps)
+# rather than the inlined value. Conservative by design for a warn tier.
+warn_env = {
+    'VITE_OPENSANCTIONS_API_KEY': 'OpenSanctions sensor',
+    'VITE_COMPANIES_HOUSE_API_KEY': 'Companies House sensor',
+}
+warn_hits = set()
+
 for root, _dirs, files in os.walk(scan_path):
     for name in files:
         path = os.path.join(root, name)
@@ -63,6 +76,14 @@ for root, _dirs, files in os.walk(scan_path):
                 continue
             if claims.get('role') == 'service_role':
                 hits.add((path, token[:24]))
+        for env_name in warn_env:
+            if env_name.encode() in blob:
+                warn_hits.add((path, env_name))
+
+if warn_hits:
+    print('⚠️  Low-sensitivity sensor key reference(s) found — confirm before publish:')
+    for path, env_name in sorted(warn_hits):
+        print(f'   {path}: {env_name} ({warn_env[env_name]})')
 
 if hits:
     print('❌ SERVICE-ROLE KEY FOUND IN ARTIFACT — DO NOT SHIP')

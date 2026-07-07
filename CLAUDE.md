@@ -56,6 +56,8 @@ VITE_INTELLIZEN_LOCAL_ACCESS_KEY=<in .env.local># local-only header secret; neve
 SUPABASE_SERVICE_ROLE_KEY=<in .env.local>       # scripts/MCP only — never VITE_-prefixed
 VITE_EXA_API_KEY=<in .env.local>
 VITE_ANTHROPIC_API_KEY=<in .env.local>
+VITE_OPENSANCTIONS_API_KEY=<in .env.local>  # optional; sensors fall back to keyless endpoint
+VITE_COMPANIES_HOUSE_API_KEY=<in .env.local># optional; Corporate sensor skips CH without it
 ```
 
 The app connects with the **anon key** (since 2026-07-03, audit F-01) and sends `x-intellizen-local-access` from `VITE_INTELLIZEN_LOCAL_ACCESS_KEY`. The live RLS policy `personal_app_local_access` requires `system.intellizen_local_access_ok()` on the 22 app tables the desktop app touches; the anon key alone reads zero rows. `agent.*` and most `system.*` remain service-role-only. Do not reintroduce a `VITE_`-prefixed service-role key — the vite build guard will refuse, by design.
@@ -100,16 +102,22 @@ Graphs can be project-linked or standalone (`project_id = null`).
 
 ## Exa Integration Reference
 
-Install: `pnpm add exa-js`
+Exa is called from the Rust side, not JS. The `exa-js` dependency was removed: [src/lib/exa.ts](src/lib/exa.ts) exposes `runExaSearch(input)`, which calls `invoke("run_exa_search", { input })`. The Tauri command owns the API key (no `VITE_EXA_API_KEY` in the frontend bundle) and makes the HTTP calls to Exa, returning `SearchResultItem[]` or a `DeepResearchResult`.
 
 ### Client setup ([src/lib/exa.ts](src/lib/exa.ts))
 
 ```typescript
-import Exa from "exa-js"
-export const exa = new Exa(import.meta.env.VITE_EXA_API_KEY)
+import { invoke } from "@tauri-apps/api/core"
+
+// input: { mode: SearchMode; query: string; startDate?: string | null }
+export async function runExaSearch(input) {
+  return invoke("run_exa_search", { input })
+}
 ```
 
 ### Search mode implementations
+
+The parameter blocks below document the payload the Rust `run_exa_search` command sends to Exa per mode — they are no longer JS SDK calls, but the fields still describe what each mode requests.
 
 **Web** (semantic, autoprompt):
 ```typescript

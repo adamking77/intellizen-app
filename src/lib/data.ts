@@ -2877,7 +2877,18 @@ export async function removeHomePinsForWorkspaceDatabase(databaseId: string) {
   return { pins: nextPins, removed: nextPins.length !== pins.length };
 }
 
+let vaultDocumentSyncPromise: ReturnType<typeof syncVaultFilesToDocumentRecordsInner> | null = null;
+
 export async function syncVaultFilesToDocumentRecords() {
+  if (!vaultDocumentSyncPromise) {
+    vaultDocumentSyncPromise = syncVaultFilesToDocumentRecordsInner().finally(() => {
+      vaultDocumentSyncPromise = null;
+    });
+  }
+  return vaultDocumentSyncPromise;
+}
+
+async function syncVaultFilesToDocumentRecordsInner() {
   const database = await ensureDocumentsWorkspaceDatabase();
   const [bundle, vaultFiles] = await Promise.all([
     getWorkspaceDatabaseBundle(database.id),

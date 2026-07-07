@@ -387,6 +387,8 @@ async function createRecord(input: {
   const taxonomy = input.taxonomy ?? database.taxonomy ?? {};
   const entity = entityFromRecordInput(database, { entity: input.entity, taxonomy });
 
+  guardDocumentsStage(database, fields);
+
   if (!input.confirm_write) {
     return recordWritePreview("create_record", {
       database_id: database.id,
@@ -456,6 +458,15 @@ async function getWorkspaceRecordById(recordId: string): Promise<WorkspaceRecord
   return data as WorkspaceRecordRow;
 }
 
+function guardDocumentsStage(database: WorkspaceDatabaseRow, fields: Record<string, unknown>) {
+  if (database.icon !== "intel-system:documents") return;
+  if (fields.doc_stage === "Published/Sent") {
+    throw new Error(
+      `Stage "Published/Sent" is human-only (Playbook R11): it records that Adam sent/published the document externally. Move it to "Approved" and leave the final transition to a human in the app.`,
+    );
+  }
+}
+
 function buildRecordUpdateSection(input: {
   actor: string;
   summary?: string | null;
@@ -487,6 +498,9 @@ async function updateRecord(input: {
   const current = await getWorkspaceRecordById(input.record_id);
   const database = await resolveDatabase({ database_id: current.database_id });
   const fieldsPatch = input.fields ?? {};
+
+  guardDocumentsStage(database, fieldsPatch);
+
   const section = buildRecordUpdateSection({
     actor: input.actor,
     summary: input.summary,
