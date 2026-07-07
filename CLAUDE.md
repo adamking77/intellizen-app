@@ -72,7 +72,7 @@ Fiona is GenZen's Operations Director, not just a Hermes profile or chat endpoin
 
 ## Stack
 
-Tauri v2 · React 18 + TypeScript + Vite · Tailwind CSS v4 · hand-rolled UI primitives in `src/components/ui/` (follow the shadcn/ui API but are not CLI-initialized) · Zustand · TanStack Query · Supabase JS v2 · Exa JS SDK (`exa-js`) · `react-force-graph-2d` + `d3-force` for the Insight graph view; custom SVG/DOM canvas for Construct mode · pnpm
+Tauri v2 · React 18 + TypeScript + Vite · Tailwind CSS v4 · hand-rolled UI primitives in `src/components/ui/` (follow the shadcn/ui API but are not CLI-initialized) · Zustand · TanStack Query · Supabase JS v2 · Exa via Rust-side `run_exa_search` Tauri command · `react-force-graph-2d` + `d3-force` for the Insight graph view; custom SVG/DOM canvas for Construct mode · pnpm
 
 Tauri plugins: `opener`, `fs` (scoped to `$HOME/vault/**`), `http` for the local Hermes dashboard bridge. The old shell execution path is not the current workflow runtime.
 
@@ -148,18 +148,11 @@ await exa.searchAndContents(query, {
 
 **Financial Reports:** `category: 'financial report'`.
 
-**Deep Research** (async — REST API, not in SDK):
-```typescript
-const res = await fetch('https://api.exa.ai/research/v1', {
-  method: 'POST',
-  headers: {
-    'x-api-key': import.meta.env.VITE_EXA_API_KEY,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ instructions: query, model: 'exa-research' })
-})
-const { id } = await res.json()
-// Poll GET /research/v1/:id every 2s until status === 'completed'
+**Deep Research** (async — `POST /research/v1`, handled by the Rust command's `deep_research` mode):
+```jsonc
+// payload sent by run_exa_search mode "deep_research"
+{ "instructions": query, "model": "exa-research" }
+// Rust then polls GET /research/v1/:id until status === "completed"
 ```
 
 Deep Research returns a markdown string, not a results array.

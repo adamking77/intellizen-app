@@ -37,3 +37,6 @@ tier2-*.png
 
 # Local Codex state (not shipped)
 .codex/
+shell-*.png
+docs-*.png
+.playwright-mcp/

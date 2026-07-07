@@ -663,7 +663,7 @@ export function ProjectsView() {
         </aside>
 
         {/* Detail pane */}
-        <section className="flex flex-1 flex-col overflow-hidden bg-[var(--base)]">
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
           {selectedProject ? (
             <ProjectDetailPane
               project={selectedProject}

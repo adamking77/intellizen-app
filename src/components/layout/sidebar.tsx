@@ -81,7 +81,7 @@ export function Sidebar() {
     <aside
       style={{ width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED }}
       className={cn(
-        "relative z-10 flex h-dvh shrink-0 flex-col border-r border-[var(--border)] bg-[var(--mantle)]",
+        "relative z-10 flex h-full shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)]",
         "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
       )}
     >
@@ -97,10 +97,16 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             aria-label="Expand sidebar"
-            title="Expand"
-            className="inline-flex items-center justify-center rounded-md transition-opacity duration-150 hover:opacity-70"
+            title={entityFilter ? "Expand — entity scope active" : "Expand"}
+            className="relative inline-flex items-center justify-center rounded-md transition-opacity duration-150 hover:opacity-70"
           >
             <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
+            {entityFilter ? (
+              <span
+                aria-hidden
+                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)] ring-2 ring-[var(--mantle)]"
+              />
+            ) : null}
           </button>
         ) : (
           <div className="flex items-center gap-2">

@@ -860,7 +860,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   if (!standalone && (collapsed || isCramped)) {
     return (
-      <aside className="flex h-dvh w-12 shrink-0 flex-col items-center border-l border-[var(--border)] bg-[var(--mantle)] py-3">
+      <aside className="flex h-full w-12 shrink-0 flex-col items-center overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] py-3">
         <button
           type="button"
           onClick={toggleCollapsed}

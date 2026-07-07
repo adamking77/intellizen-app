@@ -203,7 +203,7 @@ export function SearchView() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh)] w-full flex-col overflow-hidden bg-[var(--base)]">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--base)]">
       {/* Minimal breadcrumb header */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--base)] px-4">
         <span className="text-label">Search</span>

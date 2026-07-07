@@ -87,7 +87,7 @@ export function AppShell() {
 
   return (
     <CommandPaletteProvider>
-      <div className="flex h-dvh min-h-0 gap-2 bg-[var(--base)] p-2">
+      <div className="flex h-dvh min-h-0 gap-2 bg-[var(--crust)] p-2">
         <Sidebar />
         <main className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--base)]">
           <Outlet />
