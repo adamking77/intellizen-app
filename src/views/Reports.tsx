@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ import type {
   WorkspaceDatabaseRecord,
   WorkspaceDatabaseRecordModel,
 } from "@/lib/types";
+import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { readVaultFile, writeVaultFile } from "@/lib/vault";
 import { useAppStore } from "@/store";
@@ -63,6 +64,7 @@ function EditorFallback() {
 
 export function ReportsView() {
   const queryClient = useQueryClient();
+  const { isCramped } = useWindowSize();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
@@ -92,8 +94,12 @@ export function ReportsView() {
 
   useEffect(() => {
     if (selectedRecordId && records.some((record) => record.id === selectedRecordId)) return;
+    if (isCramped) {
+      if (selectedRecordId) setSelectedRecordId(null);
+      return;
+    }
     setSelectedRecordId(records[0]?.id ?? null);
-  }, [records, selectedRecordId]);
+  }, [records, selectedRecordId, isCramped]);
 
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedRecordId) ?? null,
@@ -269,15 +275,39 @@ export function ReportsView() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-[420px] shrink-0 flex-col overflow-hidden border-r border-[var(--border)]">
+        <aside
+          className={cn(
+            "flex flex-col overflow-hidden",
+            isCramped
+              ? selectedRecordId
+                ? "hidden"
+                : "w-full"
+              : "w-[420px] shrink-0 border-r border-[var(--border)]",
+          )}
+        >
           <DocsTable records={records} selectedRecordId={selectedRecordId} onSelect={setSelectedRecordId} onStage={(recordId, stage) => stageMutation.mutate({ recordId, stage })} />
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <section
+          className={cn(
+            "min-w-0 flex-1 flex-col overflow-hidden",
+            isCramped && !selectedRecordId ? "hidden" : "flex",
+          )}
+        >
           {selectedRecord ? (
             <>
               <div className="shrink-0 border-b border-[var(--border)] px-5 py-3">
                 <div className="flex items-start justify-between gap-3">
+                  {isCramped ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRecordId(null)}
+                      aria-label="Back to document list"
+                      className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--subtext-0)] transition-colors hover:text-[var(--text)]"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                   <div className="min-w-0">
                     <h1 className="truncate font-ui text-[17px] font-semibold text-[var(--text)]">{selectedTitle}</h1>
                     <p className="mt-1 truncate text-meta">
