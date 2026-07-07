@@ -1,0 +1,801 @@
+<title>IntelliZen → GenZen OS — Audit</title>
+<style>
+  :root {
+    /* Catppuccin Latte (light) */
+    --base: #eff1f5;
+    --mantle: #e6e9ef;
+    --crust: #dce0e8;
+    --surface: #ffffff;
+    --surface-2: #e6e9ef;
+    --text: #4c4f69;
+    --text-dim: #6c6f85;
+    --text-faint: #8c8fa1;
+    --border: #ccd0da;
+    --border-subtle: #dce0e8;
+    --accent: #1e66f5;
+    --accent-soft: rgba(30, 102, 245, 0.12);
+    --good: #40a02b;
+    --good-soft: rgba(64, 160, 43, 0.14);
+    --warn: #df8e1d;
+    --warn-soft: rgba(223, 142, 29, 0.16);
+    --bad: #d20f39;
+    --bad-soft: rgba(210, 15, 57, 0.12);
+    --peach: #fe640b;
+    --mauve: #8839ef;
+    --meter-empty: #ccd0da;
+    --code-bg: #e6e9ef;
+    --shadow: 0 1px 3px rgba(76, 79, 105, 0.1), 0 4px 16px rgba(76, 79, 105, 0.06);
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --base: #1e1e2e;
+      --mantle: #181825;
+      --crust: #11111b;
+      --surface: #24243a;
+      --surface-2: #2a2a40;
+      --text: #cdd6f4;
+      --text-dim: #a6adc8;
+      --text-faint: #7f849c;
+      --border: #363654;
+      --border-subtle: #2c2c44;
+      --accent: #74c7ec;
+      --accent-soft: rgba(116, 199, 236, 0.14);
+      --good: #a6e3a1;
+      --good-soft: rgba(166, 227, 161, 0.14);
+      --warn: #f9e2af;
+      --warn-soft: rgba(249, 226, 175, 0.14);
+      --bad: #f38ba8;
+      --bad-soft: rgba(243, 139, 168, 0.13);
+      --peach: #fab387;
+      --mauve: #cba6f7;
+      --meter-empty: #313147;
+      --code-bg: #181825;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --base: #1e1e2e;
+    --mantle: #181825;
+    --crust: #11111b;
+    --surface: #24243a;
+    --surface-2: #2a2a40;
+    --text: #cdd6f4;
+    --text-dim: #a6adc8;
+    --text-faint: #7f849c;
+    --border: #363654;
+    --border-subtle: #2c2c44;
+    --accent: #74c7ec;
+    --accent-soft: rgba(116, 199, 236, 0.14);
+    --good: #a6e3a1;
+    --good-soft: rgba(166, 227, 161, 0.14);
+    --warn: #f9e2af;
+    --warn-soft: rgba(249, 226, 175, 0.14);
+    --bad: #f38ba8;
+    --bad-soft: rgba(243, 139, 168, 0.13);
+    --peach: #fab387;
+    --mauve: #cba6f7;
+    --meter-empty: #313147;
+    --code-bg: #181825;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] {
+    --base: #eff1f5;
+    --mantle: #e6e9ef;
+    --crust: #dce0e8;
+    --surface: #ffffff;
+    --surface-2: #e6e9ef;
+    --text: #4c4f69;
+    --text-dim: #6c6f85;
+    --text-faint: #8c8fa1;
+    --border: #ccd0da;
+    --border-subtle: #dce0e8;
+    --accent: #1e66f5;
+    --accent-soft: rgba(30, 102, 245, 0.12);
+    --good: #40a02b;
+    --good-soft: rgba(64, 160, 43, 0.14);
+    --warn: #df8e1d;
+    --warn-soft: rgba(223, 142, 29, 0.16);
+    --bad: #d20f39;
+    --bad-soft: rgba(210, 15, 57, 0.12);
+    --peach: #fe640b;
+    --mauve: #8839ef;
+    --meter-empty: #ccd0da;
+    --code-bg: #e6e9ef;
+    --shadow: 0 1px 3px rgba(76, 79, 105, 0.1), 0 4px 16px rgba(76, 79, 105, 0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+  body {
+    margin: 0;
+    background: var(--base);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px 96px; }
+
+  /* ── Header ── */
+  header.masthead { padding: 48px 0 28px; border-bottom: 1px solid var(--border); }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-size: clamp(26px, 4.5vw, 38px);
+    line-height: 1.15;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .masthead-sub { color: var(--text-dim); max-width: 62ch; margin: 0; }
+  .masthead-meta {
+    display: flex; flex-wrap: wrap; gap: 8px 20px;
+    margin-top: 18px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-faint);
+  }
+
+  /* ── Sticky nav ── */
+  nav.toc {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--base) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-subtle);
+    margin: 0 -24px; padding: 0 24px;
+    overflow-x: auto;
+  }
+  nav.toc ul { display: flex; gap: 4px; list-style: none; margin: 0; padding: 10px 0; white-space: nowrap; }
+  nav.toc a {
+    display: block; padding: 5px 12px; border-radius: 999px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim); text-decoration: none;
+    border: 1px solid transparent;
+  }
+  nav.toc a:hover { color: var(--text); background: var(--surface-2); }
+  nav.toc a.active { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  nav.toc a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  section { padding-top: 44px; }
+  h2 {
+    font-size: 21px; font-weight: 700; letter-spacing: -0.01em;
+    margin: 0 0 6px; text-wrap: balance;
+  }
+  .section-kicker {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-faint); margin: 0 0 4px;
+  }
+  .section-lede { color: var(--text-dim); margin: 0 0 20px; max-width: 68ch; }
+
+  /* ── Verdict ── */
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 22px 26px;
+    box-shadow: var(--shadow);
+  }
+  .verdict p { margin: 0 0 12px; max-width: 72ch; }
+  .verdict p:last-child { margin-bottom: 0; }
+  .verdict strong { color: var(--accent); }
+
+  /* ── Chips ── */
+  .chip {
+    display: inline-block; padding: 1px 9px; border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.03em; white-space: nowrap;
+  }
+  .chip.good { background: var(--good-soft); color: var(--good); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.neutral { background: var(--surface-2); color: var(--text-dim); }
+  .chip.accent { background: var(--accent-soft); color: var(--accent); }
+
+  /* ── Scorecard ── */
+  .score-grid { display: flex; flex-direction: column; gap: 10px; }
+  .score-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .score-row summary {
+    display: grid;
+    grid-template-columns: minmax(150px, 220px) 110px 1fr auto;
+    gap: 16px; align-items: center;
+    padding: 14px 18px; cursor: pointer; list-style: none;
+  }
+  .score-row summary::-webkit-details-marker { display: none; }
+  .score-row summary:hover { background: var(--surface-2); }
+  .score-name { font-weight: 650; font-size: 14px; }
+  .meter { display: flex; gap: 3px; }
+  .meter i {
+    width: 16px; height: 8px; border-radius: 2px; background: var(--meter-empty);
+  }
+  .meter i.f2 { background: var(--bad); }
+  .meter i.f3 { background: var(--warn); }
+  .meter i.f4, .meter i.f5 { background: var(--good); }
+  .score-just { color: var(--text-dim); font-size: 13px; line-height: 1.45; }
+  .score-num { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-dim); }
+  .disclose { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+  .score-body {
+    border-top: 1px solid var(--border-subtle);
+    padding: 14px 18px 18px; background: var(--mantle);
+  }
+  .score-body ul { margin: 0; padding-left: 20px; }
+  .score-body li { margin: 6px 0; font-size: 13.5px; color: var(--text-dim); }
+  .score-body li strong { color: var(--text); font-weight: 600; }
+
+  code, .path {
+    font-family: var(--font-mono); font-size: 0.86em;
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+    color: var(--text);
+  }
+  .score-body code { color: var(--text-dim); }
+
+  /* ── Tables ── */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th {
+    text-align: left; font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--mantle); white-space: nowrap;
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; color: var(--text-dim); }
+  tr:last-child td { border-bottom: none; }
+  td.k { color: var(--text); font-weight: 600; white-space: nowrap; }
+  td .sub { display: block; font-size: 12px; color: var(--text-faint); font-weight: 400; margin-top: 2px; white-space: normal; }
+
+  /* entity filter */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+  .filters button {
+    font-family: var(--font-mono); font-size: 12px; padding: 5px 13px;
+    border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); cursor: pointer;
+  }
+  .filters button:hover { background: var(--surface-2); }
+  .filters button.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  tr.hidden-row { display: none; }
+
+  /* ── Inventory cards ── */
+  .inv-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px; margin-bottom: 14px;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .stat .n { font-family: var(--font-mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .n.good { color: var(--good); }
+  .stat .n.warn { color: var(--warn); }
+  .stat .n.bad { color: var(--bad); }
+  .stat .lbl { font-size: 12px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+
+  details.plain {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    box-shadow: var(--shadow); margin-top: 12px;
+  }
+  details.plain summary {
+    padding: 12px 18px; cursor: pointer; font-weight: 600; font-size: 14px; list-style: none;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  details.plain summary::-webkit-details-marker { display: none; }
+  details.plain summary:hover { background: var(--surface-2); }
+  details.plain .body { border-top: 1px solid var(--border-subtle); padding: 14px 18px; background: var(--mantle); font-size: 13.5px; color: var(--text-dim); }
+  details.plain .body ul { margin: 0; padding-left: 20px; }
+  details.plain .body li { margin: 5px 0; }
+
+  /* ── Moves ── */
+  .move {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); margin-bottom: 14px; overflow: hidden;
+  }
+  .move-head { display: flex; gap: 16px; padding: 18px 20px 4px; align-items: baseline; }
+  .move-rank {
+    font-family: var(--font-mono); font-size: 26px; font-weight: 750;
+    color: var(--accent); line-height: 1; min-width: 34px;
+    font-variant-numeric: tabular-nums;
+  }
+  .move-title { font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+  .move-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 20px 0 70px; }
+  .move-body { padding: 10px 20px 18px 70px; }
+  .move-body p { margin: 8px 0; font-size: 13.5px; color: var(--text-dim); max-width: 72ch; }
+  .move-body p b { color: var(--text); font-weight: 650; }
+  .first-step {
+    margin-top: 12px; border-left: 3px solid var(--good);
+    background: var(--good-soft); border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+  }
+  .first-step .fs-label {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--good); font-weight: 700;
+  }
+  .first-step p { margin: 4px 0 0; color: var(--text); }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border-subtle);
+    border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+    color: var(--text); margin: 10px 0 0;
+  }
+  @media (max-width: 640px) {
+    .move-chips, .move-body { padding-left: 20px; }
+    .score-row summary { grid-template-columns: 1fr auto; }
+    .score-just { grid-column: 1 / -1; }
+  }
+
+  /* ── Cut list ── */
+  .cut-item {
+    display: grid; grid-template-columns: 20px 1fr; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border-subtle);
+  }
+  .cut-item:last-child { border-bottom: none; }
+  .cut-x { color: var(--bad); font-weight: 700; font-family: var(--font-mono); }
+  .cut-item .what { font-weight: 650; color: var(--text); }
+  .cut-item .why { font-size: 13.5px; color: var(--text-dim); margin-top: 2px; max-width: 70ch; }
+
+  /* ── 90-day ── */
+  .phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+  .phase {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 16px 18px;
+  }
+  .phase h3 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
+  .phase .range { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+  .phase ul { margin: 10px 0 0; padding-left: 18px; }
+  .phase li { font-size: 13px; color: var(--text-dim); margin: 6px 0; }
+  .phase li b { color: var(--text); font-weight: 650; }
+  .dep-callout {
+    margin-top: 14px; border: 1px solid color-mix(in srgb, var(--peach) 40%, transparent);
+    background: color-mix(in srgb, var(--peach) 10%, transparent);
+    border-radius: 10px; padding: 14px 18px; font-size: 13.5px; color: var(--text-dim);
+  }
+  .dep-callout b { color: var(--peach); }
+
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border-subtle); font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Operating-System Audit · 2026-07-03</p>
+    <h1>IntelliZen as the GenZen-wide business OS</h1>
+    <p class="masthead-sub">Candidate assessment of the IntelliZen desktop platform as the operating system for the entire GenZen parent company — GenZen Solutions, GoKart Studio, and founder operations — not just as the intel tool it started as.</p>
+    <div class="masthead-meta">
+      <span>14 routes · 28,310 LoC app+MCP</span>
+      <span>9 DB schemas · 85+ migrations</span>
+      <span>1,303 signals · 246 workspace records</span>
+      <span>50 MCP tools · 13 registered workflows</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Sections">
+    <ul>
+      <li><a href="#verdict">Verdict</a></li>
+      <li><a href="#scorecard">Scorecard</a></li>
+      <li><a href="#ground-truth">Ground truth</a></li>
+      <li><a href="#workflows">Who it serves</a></li>
+      <li><a href="#gaps">Gap analysis</a></li>
+      <li><a href="#moves">5 moves</a></li>
+      <li><a href="#cut">Explicitly cut</a></li>
+      <li><a href="#ninety">90-day sequence</a></li>
+    </ul>
+  </nav>
+
+  <section id="verdict">
+    <p class="section-kicker">01 · Verdict</p>
+    <h2>Yes — the chassis is already generic. The entity layer isn't.</h2>
+    <div class="verdict" style="margin-top:14px">
+      <p>IntelliZen can become the GenZen-wide business OS, and it is much closer than its own documentation admits: the CLAUDE.md still describes a 7-screen intel tool shelling out to <code>claude -p</code>, while the actual build has 14 routes, Notion-style generic databases on <code>workspace.records</code> (with revisions, an append RPC, and an audit log), a 13-workflow registry with approval gates, a 50-tool MCP surface, and a Hermes/Fiona agent execution path with a durable fallback queue. The hard parts of a business OS — flexible records, agent write-protocol, workflow receipts — exist.</p>
+      <p><strong>The single biggest thing standing in the way: entity is a cosmetic label, not a structural dimension.</strong> The taxonomy defines four entities, but it lives only as JSON metadata on 9 databases; the intel layer has no entity column at all, the workflow registry stores free-text entity names ("GenZen HQ", "IntelliZen"), the one "operating view" is a hardcoded GenZen-Solutions keyword filter, and GoKart Studio has <em>zero</em> records anywhere in the system. Until entity becomes a first-class, queryable dimension that scopes every surface, adding a second entity means either polluting GZS views or forking the app. Everything else — the dual data layer, the missing internal search, the CRM-as-table — is real but downstream of that.</p>
+    </div>
+  </section>
+
+  <section id="scorecard">
+    <p class="section-kicker">02 · Scorecard</p>
+    <h2>Six dimensions, scored 1–5</h2>
+    <p class="section-lede">Click a row for the evidence behind the score. Citations are file:line in the repo or live-database counts checked on 2026-07-03.</p>
+    <div class="score-grid">
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">Workflow coverage <span class="score-num">3/5</span></span>
+          <span class="meter" aria-label="3 of 5"><i class="f3"></i><i class="f3"></i><i class="f3"></i><i></i><i></i></span>
+          <span class="score-just">Intel gathering is excellent; investigation is solid; CRM is tables-not-pipeline; distribution production happens outside the app.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>Intel gathering: strong.</strong> 7 monitors, 1,303 deduped signals live; Inbox/Monitors/Search flows complete with URL-unique upsert dedup (<code>src/lib/data.ts:628-700</code>).</li>
+            <li><strong>Investigation: solid but hollowing.</strong> Brief→Collect→Analyse works (9 investigations run), and analysis now dispatches to Hermes/Fiona instead of local <code>claude -p</code> (<code>src/views/Investigation.tsx:544-577</code>). But the POLE evidence layer shipped 2026-07-02 (<code>intel.entities</code>, <code>intel.claims</code>, migration <code>20260702105717</code>) sits at <strong>0 rows each</strong> — built, not adopted.</li>
+            <li><strong>Reports: functional</strong> (1,406-line view, prompt builders in <code>src/lib/shell.ts:334</code>); output lands in vault + <code>knowledge.documents</code>.</li>
+            <li><strong>CRM/clients: half.</strong> CRM (15), Clients (2), Introducers (4) exist as workspace databases — but as record tables, with no pipeline stages surfaced, no cadence automation, no link from investigations to client records.</li>
+            <li><strong>Distribution asset production: off the rails.</strong> 8 GZS workflows are registered (pattern briefs, expertise pages, introducer kits) yet Workflow Runs holds only 6 rows — the actual production runs in Claude Code sessions against the vault, invisible to the app.</li>
+            <li><strong>Cross-entity ops: half.</strong> Biz Ops (27) + Tasks (161) are the real board; weekly triage runs as a Claude skill, with the app as read surface.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">Multi-entity fit <span class="score-num">2/5</span></span>
+          <span class="meter" aria-label="2 of 5"><i class="f2"></i><i class="f2"></i><i></i><i></i><i></i></span>
+          <span class="score-just">A four-entity taxonomy exists, but every operational surface is GenZen-Solutions-shaped and GoKart has zero presence.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>The good bone:</strong> a real entity enum exists — <code>genzen</code>, <code>genzen_solutions</code>, <code>gokart_studio</code>, <code>founder_context</code> (<code>src/lib/taxonomy.ts:3-8</code>), and the Databases view groups by it.</li>
+            <li><strong>But it's JSON metadata on 9 databases only.</strong> <code>anchors.projects</code>, <code>intel.monitors</code>, <code>intel.investigations</code>, <code>intel.signals</code> have no entity dimension at all — the entire intel layer is implicitly single-entity.</li>
+            <li><strong>Vocabulary drift already happened:</strong> the Workflow Registry stores free-text entities — "GenZen Solutions", "GenZen HQ", "IntelliZen" — none matching the taxonomy slugs (live query, 13 rows).</li>
+            <li><strong>Hardcoded GZS shapes:</strong> the only operating view filters agent work by a hardcoded GZS-distribution keyword list (<code>src/lib/operating-views.ts:89-106</code>); domain colors are pinned to GZS watch domains like "Spiritual Exploitation" and "Crypto Fraud" (<code>src/lib/domains.ts:5-14</code>); core database UUIDs are compiled into the client (<code>src/lib/data.ts:76-81</code>).</li>
+            <li><strong>GoKart Studio: zero databases, zero workflows, zero records</strong> — live catalog query. NeuroDiv OS tasks ride inside the <code>genzen</code>-tagged Biz Ops board.</li>
+            <li><strong>No entity scoping in navigation</strong> — no switcher or filter in the app shell; every list is global.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">Architecture &amp; data model <span class="score-num">3/5</span></span>
+          <span class="meter" aria-label="3 of 5"><i class="f3"></i><i class="f3"></i><i class="f3"></i><i></i><i></i></span>
+          <span class="score-just">The workspace.records engine is genuinely load-bearing; the dual data layer and client-side invariants will fracture under scale.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>Load-bearing and good:</strong> 9 namespaced schemas; generic databases/views/records with per-record revisions (<code>20260702102017</code>), deleted-record restore, an atomic section-append RPC (<code>20260702090246</code>) that already solved the concurrent-agent clobber problem, and an append-only <code>workspace.work_events</code> log.</li>
+            <li><strong>Fracture line #1 — two implementations of one contract:</strong> <code>src/lib/data.ts</code> (5,198 lines) and <code>mcp-server/src/index.ts</code> (3,381 lines) independently reimplement records, agent work, workflows, and receipts. Every new object type must be built twice and will drift.</li>
+            <li><strong>Fracture line #2 — invariants live in the client:</strong> relation reciprocity (<code>data.ts:4878</code>), revision snapshots, and the anchors↔workspace dual-write sync (<code>syncOperationalWorkspaceDatabases</code>, <code>data.ts:2527</code>) are TypeScript-side. Any writer that isn't the app — raw SQL, a new agent — silently skips them.</li>
+            <li><strong>Fracture line #3 — legacy bridge:</strong> Projects/Operations exist twice (<code>anchors.projects</code>, 15 rows, and a mirrored workspace database) held together by a timed client-side sync.</li>
+            <li><strong>Layout state is device-local:</strong> Home dashboard pins live in localStorage (<code>src/lib/home-pins.ts:16-36</code>) — invisible to agents and lost across machines.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">UX &amp; operator velocity <span class="score-num">3/5</span></span>
+          <span class="meter" aria-label="3 of 5"><i class="f3"></i><i class="f3"></i><i class="f3"></i><i></i><i></i></span>
+          <span class="score-just">Strong primitives (pins, palette, dictation, GenUI) — but the operator still can't search their own company from inside the app.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>Genuinely fast:</strong> pinnable Home dashboard, command palette, agent chat with streaming + generative-UI widgets, live dictation into the composer, peek panels.</li>
+            <li><strong>The big manual tax — no internal search.</strong> The Search view is Exa web search only (<code>src/views/Search.tsx:10</code>); the command palette only navigates and triggers actions (<code>command-palette.tsx:85-103</code>). 590 knowledge documents, 19,110 chunks, 246 workspace records, and 1,303 signals cannot be found from inside the app.</li>
+            <li><strong>Manual handoffs:</strong> investigation → report → client record → distribution asset are separate surfaces with no carried context; linking a case to a Clients record is by hand.</li>
+            <li><strong>CRM upkeep is raw record editing</strong> — no pipeline board, no next-action nudges for the 4 introducers the distribution strategy depends on.</li>
+            <li><strong>Docs drift costs agent velocity too:</strong> CLAUDE.md describes 7 screens and a Tauri-shell Claude integration that no longer exists — every agent session starts with a wrong map.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">Agent-readiness <span class="score-num">3/5</span></span>
+          <span class="meter" aria-label="3 of 5"><i class="f3"></i><i class="f3"></i><i class="f3"></i><i></i><i></i></span>
+          <span class="score-just">Best-in-class work protocol (claim/receipt/approve) — but agents can't touch CRM or any new database without dropping to raw SQL.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>The protocol is real:</strong> ~50 MCP tools including <code>claim_agent_work</code>, <code>append_agent_work_note</code>, <code>close_agent_work</code>, <code>request/resolve_workflow_approval</code>, <code>delegate_work</code> (<code>mcp-server/src/index.ts:1692-2504</code>) — claim → receipt → approval is a working loop.</li>
+            <li><strong>Resilient dispatch:</strong> app-initiated agent work tries the Hermes run queue, falls back to webhook, then to the durable <code>comms.fiona_inbox</code> (35 rows) — with the dispatch error surfaced (<code>src/services/agent.ts:340-365</code>).</li>
+            <li><strong>The hole: no generic record tools.</strong> The MCP server exposes Tasks/Biz Ops/Workflows by hardcoded IDs but has no <code>list_databases</code> / <code>query_records</code> / <code>create_record</code>. Agents managing CRM, Clients, or Introducers must use raw SQL through the supabase-db MCP — bypassing revisions, reciprocity, and work_events. The <code>intellizen-supabase-workspace</code> skill exists precisely to compensate for this gap.</li>
+            <li><strong>Audit trail unused:</strong> <code>workspace.work_events</code> has 2 rows — receipts are being written into record bodies, not the event log.</li>
+            <li><strong>Known MCP footgun:</strong> <code>list_project_signals</code> returns full <code>raw_payload</code> — documented to exceed 1M chars on seeded projects.</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="score-row">
+        <summary>
+          <span class="score-name">Reliability &amp; data safety <span class="score-num">4/5</span></span>
+          <span class="meter" aria-label="4 of 5"><i class="f4"></i><i class="f4"></i><i class="f4"></i><i class="f4"></i><i></i></span>
+          <span class="score-just">The 2026-07-03 audit hardening is real: anon-key client, scoped RLS, build guards, revisions, atomic appends. Residual risk is drift, not disaster.</span>
+          <span class="disclose">evidence ▾</span>
+        </summary>
+        <div class="score-body">
+          <ul>
+            <li><strong>Credential posture fixed:</strong> client runs on the anon key with server-side scoping to 22 app tables (<code>src/lib/supabase.ts:3-8</code>); the vite guard refuses production builds containing the service key; <code>scripts/check-bundle-secrets.sh</code> is the authoritative pre-publish gate.</li>
+            <li><strong>Write safety:</strong> atomic <code>append_record_section</code> RPC prevents concurrent-agent clobbering; record revisions + trash restore; RLS enabled on every table checked.</li>
+            <li><strong>Partial-data resilience</strong> is a stated and observed design rule (null publish dates, sparse Deep Research output, <code>raw_payload</code> preservation).</li>
+            <li><strong>Residual risks:</strong> the anchors↔workspace dual-write sync can race (client-timed, 10-min window, <code>data.ts:177-199</code>); Home layout in localStorage is unbacked-up state; silent Hermes degradation to queue is logged but easy to miss; client-side invariants mean raw-SQL writers can corrupt relational integrity without any guard firing.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section id="ground-truth">
+    <p class="section-kicker">03 · Ground truth</p>
+    <h2>What is actually built and actually used</h2>
+    <p class="section-lede">Live counts from the production Supabase project, 2026-07-03. The delta between "built" and "used" is itself a finding.</p>
+    <div class="inv-grid">
+      <div class="stat"><div class="n good">1,303</div><div class="lbl">intel.signals — monitoring is the proven workhorse</div></div>
+      <div class="stat"><div class="n good">246</div><div class="lbl">workspace.records across 9 databases (161 Tasks, 27 Biz Ops)</div></div>
+      <div class="stat"><div class="n good">13</div><div class="lbl">active workflows in the registry, 8 of them GZS</div></div>
+      <div class="stat"><div class="n warn">6</div><div class="lbl">workflow runs ever recorded — production happens off-app</div></div>
+      <div class="stat"><div class="n bad">0</div><div class="lbl">intel.entities + intel.claims rows — POLE layer built, unused</div></div>
+      <div class="stat"><div class="n bad">0</div><div class="lbl">GoKart Studio databases, workflows, or records</div></div>
+      <div class="stat"><div class="n warn">2</div><div class="lbl">workspace.work_events rows — audit log not yet adopted</div></div>
+      <div class="stat"><div class="n good">590</div><div class="lbl">knowledge.documents (19,110 chunks) — invisible to in-app search</div></div>
+    </div>
+
+    <details class="plain">
+      <summary>The app, as it exists today (not as CLAUDE.md describes it) <span class="disclose">expand ▾</span></summary>
+      <div class="body">
+        <ul>
+          <li><strong>14 routes</strong>, not 7: Home, Inbox, Search, Projects, Agent Work, Workflows, Roles, Monitors, Graph, Canvas, Databases, Database Editor, Investigate, Reports (<code>src/App.tsx:47-159</code>).</li>
+          <li><strong>Execution model changed:</strong> <code>src/lib/shell.ts</code> is now pure prompt-builders "used by Fiona/Hermes workflows" — no more Tauri-shell <code>claude -p</code>. Agent work dispatches via Hermes run queue → webhook → <code>comms.fiona_inbox</code> (<code>src/services/agent.ts:340-365</code>), and chat streams over an OpenAI-compatible SSE endpoint with GenUI widget rendering.</li>
+          <li><strong>Workspace databases are the OS kernel:</strong> Notion-style databases/views/records on <code>workspace.*</code> with schema fields, relations, templates, revisions, timeline/chart/table/list views, and Home pinning — this is what makes a company-wide OS plausible at all.</li>
+          <li><strong>Data model:</strong> intel (signals, monitors, investigations, graph, entities/claims), anchors (projects/operations — legacy, dual-written to workspace), workspace (databases/views/records/revisions/work_events/nodes/canvases), ingest (vault_files, voice_notes), knowledge (documents/chunks/health_checks), comms (fiona_inbox, collaboration_docs).</li>
+          <li><strong>MCP:</strong> ~50 tools spanning intel CRUD, investigation lifecycle, graph upserts, vault I/O, Exa search, and the full agent-work/workflow protocol — but zero generic workspace-record tools.</li>
+          <li><strong>Docs drift:</strong ><code>CLAUDE.md</code> still teaches the 7-screen / <code>claude -p</code> / service-role-era architecture. Fix is cheap and compounding — see the 90-day sequence, week 1.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <section id="workflows">
+    <p class="section-kicker">04 · Who has to be served</p>
+    <h2>Essential workflows per entity vs. actual app support</h2>
+    <p class="section-lede">The workflows each entity genuinely runs today (from the vault: department SOPs, distribution strategy, GoKart overview, session logs) — and whether the app supports, half-supports, or ignores them.</p>
+    <div class="filters" role="group" aria-label="Filter by entity">
+      <button class="on" data-f="all">All</button>
+      <button data-f="gzs">GenZen Solutions</button>
+      <button data-f="gokart">GoKart Studio</button>
+      <button data-f="hq">HQ / Founder</button>
+    </div>
+    <div class="table-scroll">
+      <table id="wf-table">
+        <thead><tr><th>Entity · Function</th><th>Workflow it actually runs</th><th>Status</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr data-e="gzs"><td class="k">GZS · Delivery<span class="sub">counter-exploitation</span></td><td>Client investigations, sanctions screens, OSINT 6-phase, case notes</td><td><span class="chip good">Supported</span></td><td>Brief→Collect→Analyse + 5 registered delivery workflows; gap: POLE evidence layer unused, no case→client link</td></tr>
+          <tr data-e="gzs"><td class="k">GZS · Delivery<span class="sub">watch-domain intel</span></td><td>Daily monitoring across 7 watch domains, signal triage</td><td><span class="chip good">Supported</span></td><td>The app's strongest loop — 1,303 signals, dedup, triage, project routing</td></tr>
+          <tr data-e="gzs"><td class="k">GZS · Distribution</td><td>Pattern briefs, expertise pages, introducer kits, case stories</td><td><span class="chip warn">Half</span></td><td>All 4 registered as workflows with approval gates — but production runs in Claude Code sessions against the vault; app sees 6 runs ever, no asset pipeline surface</td></tr>
+          <tr data-e="gzs"><td class="k">GZS · Revenue<span class="sub">CRM</span></td><td>CRM pipeline, client relationships, introducer cadence</td><td><span class="chip warn">Half</span></td><td>CRM (15) / Clients (2) / Introducers (4) databases exist; no pipeline views, no cadence automation, agents need raw SQL to update them</td></tr>
+          <tr data-e="gzs"><td class="k">GZS · Strategy</td><td>Positioning docs, partnership development, expertise-page theses</td><td><span class="chip warn">Half</span></td><td>Docs live in vault/knowledge.documents; app stores but can't search or surface them</td></tr>
+          <tr data-e="gokart"><td class="k">GoKart · Client work<span class="sub">AI Partnership Design</span></td><td>Prospect research, competitive context, engagement delivery</td><td><span class="chip bad">Ignored</span></td><td>Zero GoKart databases or projects; research pipeline (Search/Projects) would fit but holds no GoKart data</td></tr>
+          <tr data-e="gokart"><td class="k">GoKart · Product<span class="sub">NeuroDiv OS</span></td><td>Build tasks, distribution/SEO plan, content funnel</td><td><span class="chip warn">Half</span></td><td>Tasks ride in the genzen-tagged Biz Ops board with no entity scoping; no content pipeline</td></tr>
+          <tr data-e="gokart"><td class="k">GoKart · Product<span class="sub">Sogo</span></td><td>Product strategy, build coordination</td><td><span class="chip bad">Ignored</span></td><td>Vault docs only — ironically IntelliZen imports Sogo's component patterns (src/lib/sogo-adapter.ts)</td></tr>
+          <tr data-e="hq"><td class="k">HQ · Operations</td><td>Weekly triage, Biz Ops board, quarterly board review</td><td><span class="chip good">Supported</span></td><td>Biz Ops/Tasks/Workflow databases are the live board; triage runs as a Claude skill with the app as surface; intel.board_reviews table exists</td></tr>
+          <tr data-e="hq"><td class="k">Founder · Context</td><td>Voice-note capture → vault, session memory</td><td><span class="chip good">Supported</span></td><td>Telegram → ingest.voice_notes → vault pipeline is live and autonomous</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="gaps">
+    <p class="section-kicker">05 · Gap analysis</p>
+    <h2>Current state → target state, per entity</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Entity</th><th>Current state</th><th>Target state (90 days)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">GenZen HQ<span class="sub">cross-entity</span></td>
+            <td>Real board (Biz Ops 27, Tasks 161) but globally scoped; receipts in record bodies; work_events at 2 rows; triage decisions made in chat, reflected to DB</td>
+            <td>Entity-scoped Home per context; every agent write emits a work_event; triage acts on the same records agents update via MCP</td>
+          </tr>
+          <tr>
+            <td class="k">GZS Delivery</td>
+            <td>Investigation flow solid; POLE layer (entities/claims) at 0 rows; investigations disconnected from client records</td>
+            <td>Entities/claims populated by the Collect and Analyse phases; every case linked to a Clients record; Admiralty grading on claims per the OSINT spec</td>
+          </tr>
+          <tr>
+            <td class="k">GZS Distribution</td>
+            <td>8 workflows registered; production invisible (6 runs ever); assets tracked nowhere; introducer outreach manual</td>
+            <td>Assets database (Draft → Copy-audit → Approved → Published) with vault links; every production run recorded with a receipt; introducer cadence surfaced</td>
+          </tr>
+          <tr>
+            <td class="k">GZS Revenue</td>
+            <td>CRM/Clients/Introducers as raw tables; agent updates require raw SQL that bypasses revisions and reciprocity</td>
+            <td>Pipeline views with stages; agents CRUD records through invariant-preserving MCP tools; case → client → introducer links navigable</td>
+          </tr>
+          <tr>
+            <td class="k">GoKart Studio</td>
+            <td>Zero presence. No databases, workflows, projects, or entity scoping to receive them</td>
+            <td>Entity-scoped onboarding: Prospects, Products, Content databases; NeuroDiv content workflow registered; nav filtered to GoKart shows only GoKart</td>
+          </tr>
+          <tr>
+            <td class="k">Founder</td>
+            <td>Voice ingest live; founder_context taxonomy value defined but unused in-app</td>
+            <td>No new build — founder surfaces ride on entity scoping like any other entity</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="moves">
+    <p class="section-kicker">06 · The five highest-leverage moves</p>
+    <h2>Ranked, each with a first step you can take this week</h2>
+
+    <div class="move">
+      <div class="move-head"><span class="move-rank">1</span><span class="move-title">Make entity a real dimension, not a JSON label</span></div>
+      <div class="move-chips"><span class="chip accent">Effort: M</span><span class="chip neutral">schema + shell</span><span class="chip good">unlocks every other move</span></div>
+      <div class="move-body">
+        <p><b>Problem:</b> entity exists only as taxonomy metadata on 9 workspace databases (<code>taxonomy.ts:3-8</code>). The intel layer has no entity column, the Workflow Registry holds free-text names ("GenZen HQ", "IntelliZen"), the operating view is a hardcoded GZS keyword filter (<code>operating-views.ts:89-106</code>), and nothing in the shell scopes by entity.</p>
+        <p><b>Change:</b> a canonical <code>workspace.entities</code> table; an <code>entity</code> FK on <code>anchors.projects</code>, <code>intel.monitors</code>, <code>intel.investigations</code>, and <code>workspace.databases</code>; normalize the 13 registry rows to slugs; then a global entity filter in the app shell that every list query respects.</p>
+        <p><b>Cost of not doing:</b> the moment GoKart data arrives, it pollutes every GZS view; agents keep guessing entity from strings; the "operating view" pattern can never be replicated for a second entity.</p>
+        <div class="first-step">
+          <div class="fs-label">First step — this week</div>
+          <p>One additive migration + one data fix (~1 hour):</p>
+          <pre>create table workspace.entities (
+  slug text primary key, label text not null, status text not null default 'active');
+insert into workspace.entities values
+  ('genzen','GenZen','active'), ('genzen_solutions','GenZen Solutions','active'),
+  ('gokart_studio','GoKart Studio','active'), ('founder_context','Founder Context','active');
+alter table anchors.projects       add column entity text references workspace.entities;
+alter table intel.monitors         add column entity text references workspace.entities;
+alter table intel.investigations   add column entity text references workspace.entities;
+-- backfill existing rows to 'genzen_solutions'; normalize the 13
+-- Workflow Registry records' workflow_entity values to slugs</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="move">
+      <div class="move-head"><span class="move-rank">2</span><span class="move-title">Give agents generic record tools — stop the raw-SQL bypass</span></div>
+      <div class="move-chips"><span class="chip accent">Effort: S–M</span><span class="chip neutral">mcp-server</span><span class="chip good">unlocks CRM automation + GoKart onboarding</span></div>
+      <div class="move-body">
+        <p><b>Problem:</b> the MCP server drives Tasks/Biz Ops/Workflows via hardcoded database IDs but has no <code>list_databases</code>, <code>query_records</code>, <code>create_record</code>, or <code>update_record</code>. Agents working CRM, Clients, Introducers — or any future database — drop to raw SQL through the supabase-db MCP, bypassing revisions, relation reciprocity, and work_events. A compensating skill (<code>intellizen-supabase-workspace</code>) exists solely because of this gap.</p>
+        <p><b>Change:</b> five generic tools in <code>mcp-server/src/index.ts</code> that route through the same invariant logic the app uses, with entity + database scoping from move 1.</p>
+        <p><b>Cost of not doing:</b> every new database silently forks the write path; relational integrity decays invisibly; CRM stays human-only.</p>
+        <div class="first-step">
+          <div class="fs-label">First step — this week</div>
+          <p>Add the two read-only tools first — <code>list_databases</code> (id, name, entity, schema fields) and <code>query_records</code> (filtered, slim fields, no raw payloads) — to <code>mcp-server/src/index.ts</code>, rebuild, and let agents navigate the full catalog safely before any write tool lands.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="move">
+      <div class="move-head"><span class="move-rank">3</span><span class="move-title">Collapse the dual data layer; push invariants into Postgres</span></div>
+      <div class="move-chips"><span class="chip accent">Effort: L</span><span class="chip neutral">data.ts + mcp-server + RPCs</span><span class="chip good">unlocks build-once objects</span></div>
+      <div class="move-body">
+        <p><b>Problem:</b> <code>src/lib/data.ts</code> (5,198 lines) and <code>mcp-server/src/index.ts</code> (3,381 lines) independently implement the same contracts, and the invariants that keep records coherent — relation reciprocity (<code>data.ts:4878</code>), revision snapshots, the anchors↔workspace dual-write (<code>data.ts:2527</code>) — run only in whichever client remembered to implement them.</p>
+        <p><b>Change:</b> move invariants into Postgres RPCs/triggers (the <code>append_record_section</code> RPC from migration <code>20260702090246</code> is the proven template), then extract a shared TypeScript contracts package consumed by both the app and the MCP server.</p>
+        <p><b>Cost of not doing:</b> every capability costs 2× forever, and app-vs-agent drift becomes a data-integrity bug class you can't lint for.</p>
+        <div class="first-step">
+          <div class="fs-label">First step — this week</div>
+          <p>Port <code>updateWorkspaceRelationLinks</code> to a <code>workspace.update_relation_links</code> RPC (mirroring the append RPC's pattern), point <code>data.ts:4878</code> at it, and make it the only way relations change — one migration, one function swap.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="move">
+      <div class="move-head"><span class="move-rank">4</span><span class="move-title">Internal search: one query across records, knowledge, and signals</span></div>
+      <div class="move-chips"><span class="chip accent">Effort: M</span><span class="chip neutral">SQL function + Search tab + palette</span><span class="chip good">unlocks "the app is where you find company state"</span></div>
+      <div class="move-body">
+        <p><b>Problem:</b> Search is Exa web-only (<code>Search.tsx:10</code>) and the command palette only navigates (<code>command-palette.tsx:85-103</code>). 590 knowledge documents, 19,110 chunks, 246 records, and 1,303 signals are unreachable from inside the app — the operator tabs out to Claude or SQL to answer "what do we know about X".</p>
+        <p><b>Change:</b> a <code>search_workspace</code> Postgres function (tsvector over record fields/titles, document titles/summaries, signal titles) exposed as an "Internal" tab in Search and as record results in the command palette, entity-scoped via move 1. Embeddings already exist for deeper retrieval later.</p>
+        <p><b>Cost of not doing:</b> the OS never becomes the point of recall; every lookup costs a context switch and agents can't cite a shared index.</p>
+        <div class="first-step">
+          <div class="fs-label">First step — this week</div>
+          <p>Write the <code>search_workspace(query text, entity text default null)</code> SQL function unioned over the three sources with type + rank columns; wire it behind a second tab in <code>Search.tsx</code>. FTS first; skip embeddings until it proves out.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="move">
+      <div class="move-head"><span class="move-rank">5</span><span class="move-title">Distribution asset pipeline — the second real workflow, in-app</span></div>
+      <div class="move-chips"><span class="chip accent">Effort: S</span><span class="chip neutral">seed data + existing primitives</span><span class="chip good">unlocks pipeline visibility for the revenue engine</span></div>
+      <div class="move-body">
+        <p><b>Problem:</b> GZS distribution — pattern briefs, expertise pages, introducer kits, the channel strategy the business depends on — is registered as 8 workflows but produced entirely off-app: 6 workflow runs ever recorded, assets tracked nowhere, stages invisible.</p>
+        <p><b>Change:</b> an Assets database (<code>entity = genzen_solutions</code>) with stage field (Draft → Copy-audit → Approved → Published), asset type, vault path, target channel, and relations to Workflow Runs and Introducers — created with the existing <code>createWorkspaceDatabase</code> machinery, updated by agents via move 2's tools, board view pinned to Home.</p>
+        <p><b>Cost of not doing:</b> the highest-value recurring workflow in the company stays a black box, and the multi-entity model never gets its proof case before GoKart arrives.</p>
+        <div class="first-step">
+          <div class="fs-label">First step — this week</div>
+          <p>Seed the database with a schema matching the distribution SOPs and backfill the ~6 known in-flight assets (from <code>departments/distribution/assets/</code>) as records; add <code>asset</code> links to the 4 distribution workflows' <code>related_databases</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cut">
+    <p class="section-kicker">07 · Explicitly cut</p>
+    <h2>Looks worth doing. Isn't.</h2>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px 20px;margin-top:8px">
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">Multi-user auth &amp; permission tiers</div><div class="why">There is one human operator plus agents. The anon-key RLS scoping already models that boundary. Build auth when a second human exists, not before — it taxes every table and every MCP tool for zero current users.</div></div></div>
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">Replacing the vault with in-app documents</div><div class="why">Vault↔Supabase sync already runs at the OS level, and Claude/Fiona/Codex all work the vault natively. Move 4 makes vault-derived knowledge findable in-app; owning the files adds migration risk and breaks three agents' muscle memory.</div></div></div>
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">Generalizing Inbox/Monitors for GoKart</div><div class="why">GoKart doesn't run watch-domain intel monitoring — its workflows are client research and content production. Generalizing a surface only one entity uses is effort spent making the wrong thing multi-entity. Entity-scope it (move 1) and stop.</div></div></div>
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">Auto-graph generation &amp; graph expansion</div><div class="why">76 nodes of manual graph use says it's an analysis canvas, not a bottleneck. The unused POLE tables are the structured layer worth adopting first; auto-graphing on top of an unadopted evidence model builds the roof before the walls.</div></div></div>
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">A GoKart reports/analytics surface before GoKart has records</div><div class="why">Dashboards over empty tables are demo-ware. Seed the databases and one registered workflow first (90-day phase 3); the existing Reports and Home-pin machinery will then serve GoKart with no new build.</div></div></div>
+      <div class="cut-item"><span class="cut-x">✕</span><div><div class="what">Exa Websets / Monitor push delivery, cross-platform builds</div><div class="why">Already correctly out of scope. Nothing in the multi-entity thesis changes that call; polling monitors are proven at current volume.</div></div></div>
+    </div>
+  </section>
+
+  <section id="ninety">
+    <p class="section-kicker">08 · 90-day sequence</p>
+    <h2>Order is dictated by one dependency</h2>
+    <div class="phase-grid" style="margin-top:14px">
+      <div class="phase">
+        <div class="range">Days 1–30</div>
+        <h3>Entity becomes structural</h3>
+        <ul>
+          <li><b>Week 1:</b> entities table + FK columns + registry normalization (move 1 first step); regenerate CLAUDE.md to match the real build — every agent session currently starts with a wrong map.</li>
+          <li>Entity filter in the app shell scoping Databases, Agent Work, Workflows, Projects.</li>
+          <li>Read-only MCP tools: <code>list_databases</code>, <code>query_records</code> (move 2 first step).</li>
+          <li>Reciprocity RPC lands (move 3 first step) so writes are safe before write tools exist.</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="range">Days 31–60</div>
+        <h3>Agents get hands; GZS gets its pipeline</h3>
+        <ul>
+          <li>Write-side MCP tools (<code>create_record</code>, <code>update_record</code>, <code>link_records</code>) routing through the RPC layer, emitting <code>work_events</code>.</li>
+          <li>Assets database seeded and live for GZS distribution (move 5); runs + receipts recorded on real briefs and expertise pages.</li>
+          <li>CRM/Introducers get pipeline views + agent-driven updates — first fully agent-operable revenue surface.</li>
+        </ul>
+      </div>
+      <div class="phase">
+        <div class="range">Days 61–90</div>
+        <h3>Recall, then the second entity</h3>
+        <ul>
+          <li>Internal search shipped: <code>search_workspace</code> FTS + Search tab + palette results (move 4).</li>
+          <li>Shared contracts package extracted; MCP and app consume one implementation (move 3 phase 2).</li>
+          <li><b>GoKart onboarding as the acceptance test:</b> Prospects/Products/Content databases, one registered NeuroDiv content workflow, nav scoped to GoKart showing only GoKart. If this takes more than a week, the entity layer isn't done.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="dep-callout">
+      <b>The dependency that dictates the order:</b> every downstream artifact — MCP record tools, the Assets pipeline, internal search, GoKart's databases — writes into or filters by the entity dimension. Retrofit it after seeding GoKart data and you migrate everything twice; build it first and each later move is additive. That's why move 1 is a week-1 migration, and GoKart onboarding is deliberately last: it's the test you run against a finished chassis, not the way you discover the chassis is missing.
+    </div>
+  </section>
+
+  <footer>
+    Audit basis: repo read at commit a8299d6 (main) · live Supabase queries 2026-07-03 · vault department docs. Unverified externally: Hermes gateway uptime characteristics and Fiona-side run handling — dispatch fallback behavior cited from client code only.
+  </footer>
+</div>
+
+<script>
+  // Scroll-spy for the section nav
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove("active"); });
+          var link = map[entry.target.id];
+          if (link) link.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+  })();
+
+  // Entity filter on the workflow table
+  (function () {
+    var buttons = document.querySelectorAll(".filters button");
+    var rows = document.querySelectorAll("#wf-table tbody tr");
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.remove("on"); });
+        btn.classList.add("on");
+        var f = btn.getAttribute("data-f");
+        rows.forEach(function (row) {
+          var show = f === "all" || row.getAttribute("data-e") === f;
+          row.classList.toggle("hidden-row", !show);
+        });
+      });
+    });
+  })();
+</script>
