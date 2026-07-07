@@ -6,6 +6,7 @@ import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
+import { Select } from "@/components/ui/select";
 import { listProjects, saveSearchResultToProject, searchWorkspace } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
 import { runCorporateSearch, runSanctionsSearch } from "@/lib/sensors";
@@ -309,14 +310,15 @@ export function SearchView() {
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-label">Sort</span>
-                        <select
+                        <Select
                           value={sortKey}
                           onChange={(e) => setSortKey(e.target.value as SortKey)}
-                          className="h-7 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                          controlSize="xs"
+                          aria-label="Sort results"
                         >
                           <option value="score">Score</option>
                           <option value="date">Date</option>
-                        </select>
+                        </Select>
                       </div>
                     </div>
                     {sortedListResults.map((result) => (
@@ -474,10 +476,10 @@ function AdmiraltyControls({
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid gap-1.5">
         <span className="text-label">Source reliability</span>
-        <select
+        <Select
           value={sourceReliability}
           onChange={(event) => onSourceReliability(event.target.value as AdmiraltyReliability)}
-          className="h-9 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+          containerClassName="w-full"
         >
           <option value="A">A - reliable</option>
           <option value="B">B - usually reliable</option>
@@ -485,14 +487,14 @@ function AdmiraltyControls({
           <option value="D">D - not usually reliable</option>
           <option value="E">E - unreliable</option>
           <option value="F">F - cannot judge</option>
-        </select>
+        </Select>
       </label>
       <label className="grid gap-1.5">
         <span className="text-label">Information credibility</span>
-        <select
+        <Select
           value={infoCredibility}
           onChange={(event) => onInfoCredibility(Number(event.target.value))}
-          className="h-9 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+          containerClassName="w-full"
         >
           <option value={1}>1 - confirmed</option>
           <option value={2}>2 - probably true</option>
@@ -500,7 +502,7 @@ function AdmiraltyControls({
           <option value={4}>4 - doubtful</option>
           <option value={5}>5 - improbable</option>
           <option value={6}>6 - cannot judge</option>
-        </select>
+        </Select>
       </label>
     </div>
   );

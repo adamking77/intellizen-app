@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
+import { Select } from "@/components/ui/select";
 import { listWorkspaceDatabases, listWorkspaceEntities } from "@/lib/data";
 import { TAXONOMY_ENTITY_OPTIONS } from "@/lib/taxonomy";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -150,17 +151,19 @@ export function Sidebar() {
 
       {!collapsed ? (
         <div className="border-y border-[var(--border)] px-3 py-3">
-          <select
+          <Select
             value={entityFilter ?? ""}
             onChange={(event) => setEntityFilter(event.target.value || null)}
-            className="h-8 w-full rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            controlSize="sm"
+            containerClassName="w-full"
+            className="bg-[var(--base)]"
             aria-label="Entity scope"
           >
             <option value="">All entities</option>
             {visibleEntityOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
       ) : null}
 

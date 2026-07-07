@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, FileText, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   createWorkspaceRecord,
   DOCUMENT_STAGE_OPTIONS,
@@ -247,28 +248,36 @@ export function ReportsView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-5">
-        <div className="flex items-center gap-3">
+      <header
+        className={cn(
+          "shrink-0 border-b border-[var(--border)]",
+          isCramped
+            ? "flex flex-col items-stretch gap-3 px-4 py-3"
+            : "flex h-14 items-center justify-between px-5",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-3">
           <FileText className="h-4 w-4 text-[var(--accent)]" />
-          <div>
+          <div className="min-w-0">
             <span className="text-label">Docs</span>
-            <p className="text-meta">
+            <p className="truncate text-meta">
               {records.length} document{records.length === 1 ? "" : "s"} · markdown, edits save in place
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <select
+        <div className={cn("flex items-center gap-2", isCramped ? "w-full" : undefined)}>
+          <Select
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}
-            className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)]"
+            controlSize="sm"
+            containerClassName={isCramped ? "min-w-0 flex-1" : undefined}
             aria-label="Filter by stage"
           >
             <option value="all">All stages</option>
             {DOCUMENT_STAGE_OPTIONS.map((stage) => (
               <option key={stage} value={stage}>{stage}</option>
             ))}
-          </select>
+          </Select>
           <Button size="sm" className="gap-1.5" onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
             <Plus className="h-3 w-3" />
             New doc
@@ -464,24 +473,26 @@ function StageSelect({
 }) {
   const stage = fieldString(record, DOCUMENTS_DB_FIELDS.stage) || "Draft";
   return (
-    <span className="relative inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border border-[var(--border)] px-2 py-0.5">
+    <span className="relative inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border border-[var(--border)] px-2 py-0.5 focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_1px_var(--accent-border)]">
       <span
         aria-hidden
         className="h-1.5 w-1.5 rounded-full"
         style={{ background: STAGE_TONE[stage] ?? "var(--overlay-1)" }}
       />
       <span className="font-ui text-[10px] font-medium text-[var(--subtext-0)]">{stage}</span>
-      <select
+      <Select
         value={stage}
         aria-label="Document stage"
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => onStage(record.id, event.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0"
+        hideChevron
+        containerClassName="absolute inset-0"
+        className="h-full w-full cursor-pointer opacity-0"
       >
         {DOCUMENT_STAGE_OPTIONS.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}
-      </select>
+      </Select>
     </span>
   );
 }

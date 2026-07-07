@@ -1068,8 +1068,24 @@ pre {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
+  min-height: 36px;
   padding: 8px 10px;
   font-size: 13px;
+  font-family: var(--font-ui);
+  transition: border-color var(--t-base) var(--ease-out),
+              box-shadow var(--t-base) var(--ease-out),
+              background-color var(--t-base) var(--ease-out);
+}
+
+.db-select {
+  padding-right: 28px;
+}
+
+.db-input:focus,
+.db-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border);
+  outline: none;
 }
 
 /* ─── Dropdown panels ───────────────────────────────────── */
