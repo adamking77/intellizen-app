@@ -61,3 +61,15 @@ Frameless transparent macOS window with floating panes, sogo-style.
 4. Eject panel → drag it, resize it, ↩ re-dock; close ejected window directly → re-docks.
 5. Sidebar/panel expand+collapse at <1100px width and >1100px.
 6. `npx tsc --noEmit` + `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm build` green.
+
+## UI/UX polish backlog (audited 2026-07-07, Adam: "minor, Codex later")
+
+Pill language is pinned and shipped: buttons `rounded-full` app-wide, status/count/stage chips pill, taxonomy badges 6px square, DESIGN.md radii section reconciled. Remaining, in value order:
+
+1. **Select/dropdown primitive** — native selects with inconsistent heights (h-6/h-8/h-9) across Search filters, Docs stage filter, sidebar entity scope. One styled primitive lifts all. Highest impact.
+2. **Focus-ring sweep** — Button/Input have rings; hand-rolled buttons in Graph toolbar, kanban chips, view tabs vary. Keyboard-first app; make focus-visible universal.
+3. **Empty-state consolidation** — `ui/empty-state.tsx` exists; several views hand-roll their own. Mechanical unification.
+4. **DESIGN.md per-screen sections** — Inbox/Monitors/Investigate directions describe demoted surfaces; rewrite around Intel/Docs when touched next.
+5. **Toaster position** — bottom-right collides with the agent panel; bottom-center clears it.
+
+Constraints: DESIGN.md is the gate (tokens only, its banned list); Switzer + Geist Mono pinned; no new fonts, no glass, no gradients regardless of what any design skill suggests.
