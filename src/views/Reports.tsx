@@ -359,6 +359,17 @@ export function ReportsView() {
   );
 }
 
+const DOC_TYPE_ORDER = ["report", "brief", "contract", "invoice", "one-pager", "note"] as const;
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  report: "Reports",
+  brief: "Briefs",
+  contract: "Contracts",
+  invoice: "Invoices",
+  "one-pager": "One-pagers",
+  note: "Notes",
+};
+
 function DocsTable({
   records,
   selectedRecordId,
@@ -370,8 +381,46 @@ function DocsTable({
   onSelect: (recordId: string) => void;
   onStage: (recordId: string, stage: string) => void;
 }) {
+  const groups = DOC_TYPE_ORDER
+    .map((type) => ({
+      type,
+      label: DOC_TYPE_LABELS[type],
+      items: records.filter((record) => (fieldString(record, DOCUMENTS_DB_FIELDS.docType) || "note") === type),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <div className="flex-1 overflow-y-auto">
+      {groups.map((group) => (
+        <section key={group.type}>
+          <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--base)] px-4 py-2">
+            <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--overlay-1)]">
+              {group.label}
+            </span>
+            <span className="rounded-full border border-[var(--border)] px-1.5 font-mono text-[10px] text-[var(--overlay-1)]">
+              {group.items.length}
+            </span>
+          </header>
+          <DocsRows records={group.items} selectedRecordId={selectedRecordId} onSelect={onSelect} onStage={onStage} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function DocsRows({
+  records,
+  selectedRecordId,
+  onSelect,
+  onStage,
+}: {
+  records: WorkspaceDatabaseRecordModel[];
+  selectedRecordId: string | null;
+  onSelect: (recordId: string) => void;
+  onStage: (recordId: string, stage: string) => void;
+}) {
+  return (
+    <>
       {records.map((record) => (
         <button
           key={record.id}
@@ -387,13 +436,13 @@ function DocsTable({
               {fieldString(record, DOCUMENTS_DB_FIELDS.title) || "Untitled"}
             </span>
             <span className="mt-1 block truncate text-meta">
-              {fieldString(record, DOCUMENTS_DB_FIELDS.docType) || "note"} · {fieldString(record, DOCUMENTS_DB_FIELDS.linkedCase) || taxonomyEntityLabel({ entity: fieldString(record, DOCUMENTS_DB_FIELDS.entity) })}
+              {fieldString(record, DOCUMENTS_DB_FIELDS.linkedCase) || taxonomyEntityLabel({ entity: fieldString(record, DOCUMENTS_DB_FIELDS.entity) })}
             </span>
           </span>
           <StageSelect record={record} onStage={onStage} />
         </button>
       ))}
-    </div>
+    </>
   );
 }
 
