@@ -167,7 +167,7 @@ The **Tauri SDK** uses `category: 'news'` for News and `category: 'personal site
 
 ## MCP server
 
-Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `dist/` directory is gitignored — always build after pulling. The server exposes tools for projects, investigations, signals, vault files, and graph nodes/edges.
+Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `dist/` directory is gitignored — always build after pulling. The server exposes tools for projects, investigations, signals, vault files, graph nodes/edges, workspace database views (`list_database_views`, `create_database_view`, `update_database_view` — incl. chart views), and Home dashboard pins (`pin_view_to_home`, `unpin_view_from_home`). Home pins live in the hidden "Home Pins" workspace database (`icon: intel-system:home-pins`); the desktop app polls remote pins every 60s and remote wins, so agent-created views/pins appear without an app rebuild. View/pin writes follow the `confirm_write` preview pattern and emit `workspace.work_events` receipts.
 
 **Known limitation:** `list_project_signals` returns full `raw_payload` per signal — can exceed 1M characters on large projects. When reading project signals via MCP, use `run_exa_search` results (which return only IDs and titles) or query Supabase directly for slim fields rather than calling `list_project_signals` on a well-seeded project.
 

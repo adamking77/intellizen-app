@@ -618,6 +618,508 @@ async function linkRecords(input: {
   };
 }
 
+// ── Database views + home dashboard pins ────────────────────────────────────
+
+type WorkspaceViewRow = {
+  id: string;
+  database_id: string;
+  name: string;
+  type: string;
+  config: Record<string, unknown> | null;
+  position: number;
+  created_at?: string;
+  updated_at: string;
+};
+
+const WORKSPACE_VIEW_TYPES = new Set(["table", "kanban", "list", "gallery", "calendar", "chart", "timeline"]);
+const HOME_PINNABLE_VIEW_TYPES = new Set(["chart", "table", "list", "timeline"]);
+const CHART_TYPES = new Set(["bar", "line", "donut", "pie", "gauge"]);
+const CHART_AGGREGATIONS = new Set(["count", "sum", "avg", "min", "max"]);
+
+const HOME_PINS_DATABASE_ICON = "intel-system:home-pins";
+const HOME_PIN_FIELDS = {
+  pinId: "home_pin_id",
+  databaseId: "home_pin_database_id",
+  viewId: "home_pin_view_id",
+  x: "home_pin_x",
+  y: "home_pin_y",
+  w: "home_pin_w",
+  h: "home_pin_h",
+} as const;
+const HOME_PIN_DEFAULT_W = 4;
+const HOME_PIN_DEFAULT_H = 11;
+const HOME_PIN_GRID_COLS = 12;
+
+const VIEW_SELECT = "id, database_id, name, type, config, position, created_at, updated_at";
+
+async function getWorkspaceViewById(viewId: string): Promise<WorkspaceViewRow> {
+  const { data, error } = await supabase
+    .schema("workspace").from("views")
+    .select(VIEW_SELECT)
+    .eq("id", viewId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as WorkspaceViewRow;
+}
+
+function toViewItem(view: WorkspaceViewRow) {
+  return {
+    id: view.id,
+    database_id: view.database_id,
+    name: view.name,
+    type: view.type,
+    config: view.config ?? {},
+    position: view.position,
+    pinnable_to_home: HOME_PINNABLE_VIEW_TYPES.has(view.type),
+    updated_at: view.updated_at,
+  };
+}
+
+async function listDatabaseViews(input: { database_id?: string; database_name?: string }) {
+  const database = await resolveDatabase(input);
+  const { data, error } = await supabase
+    .schema("workspace").from("views")
+    .select(VIEW_SELECT)
+    .eq("database_id", database.id)
+    .order("position", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return {
+    database_id: database.id,
+    database_name: database.name,
+    views: ((data ?? []) as WorkspaceViewRow[]).map(toViewItem),
+  };
+}
+
+function validateViewConfig(
+  database: WorkspaceDatabaseRow,
+  type: string,
+  config: Record<string, unknown>,
+) {
+  const fieldIds = new Set((database.schema ?? []).map((field) => field.id));
+  const describeFields = () =>
+    (database.schema ?? []).map((field) => `${field.id} (${field.name ?? field.id})`).join(", ");
+
+  for (const key of ["groupBy", "chartValueField"]) {
+    const value = config[key];
+    if (value !== undefined && (typeof value !== "string" || !fieldIds.has(value))) {
+      throw new Error(`config.${key} "${String(value)}" is not a field id on "${database.name}". Fields: ${describeFields()}`);
+    }
+  }
+  if (config.chartValueFields !== undefined) {
+    const values = asStringArray(config.chartValueFields);
+    const unknown = values.filter((id) => !fieldIds.has(id));
+    if (unknown.length > 0) {
+      throw new Error(`config.chartValueFields contains unknown field ids: ${unknown.join(", ")}. Fields: ${describeFields()}`);
+    }
+  }
+  if (config.chartType !== undefined && !CHART_TYPES.has(config.chartType as string)) {
+    throw new Error(`config.chartType must be one of: ${Array.from(CHART_TYPES).join(", ")}`);
+  }
+  if (config.chartAggregation !== undefined && !CHART_AGGREGATIONS.has(config.chartAggregation as string)) {
+    throw new Error(`config.chartAggregation must be one of: ${Array.from(CHART_AGGREGATIONS).join(", ")}`);
+  }
+  if (type === "chart" && config.chartAggregation !== undefined && config.chartAggregation !== "count" && config.chartValueField === undefined && config.chartValueFields === undefined) {
+    throw new Error(`Chart aggregation "${String(config.chartAggregation)}" needs config.chartValueField (a number field id).`);
+  }
+}
+
+function buildViewConfig(
+  database: WorkspaceDatabaseRow,
+  type: string,
+  config: Record<string, unknown> | null | undefined,
+  base?: Record<string, unknown> | null,
+) {
+  const merged: Record<string, unknown> = {
+    sort: [],
+    filter: [],
+    hiddenFields: [],
+    ...(base ?? {}),
+    ...(config ?? {}),
+  };
+  if (type === "chart") {
+    if (merged.chartType === undefined) merged.chartType = "bar";
+    if (merged.chartAggregation === undefined) merged.chartAggregation = "count";
+  }
+  validateViewConfig(database, type, merged);
+  return merged;
+}
+
+async function createDatabaseView(input: {
+  database_id?: string;
+  database_name?: string;
+  name: string;
+  type?: string;
+  config?: Record<string, unknown> | null;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const database = await resolveDatabase({
+    database_id: input.database_id,
+    database_name: input.database_name,
+  });
+  const type = input.type ?? "table";
+  if (!WORKSPACE_VIEW_TYPES.has(type)) {
+    throw new Error(`View type "${type}" is not valid. Types: ${Array.from(WORKSPACE_VIEW_TYPES).join(", ")}`);
+  }
+  const config = buildViewConfig(database, type, input.config);
+  const name = input.name?.trim() || "New view";
+
+  if (!input.confirm_write) {
+    return recordWritePreview("create_database_view", {
+      database_id: database.id,
+      database_name: database.name,
+      name,
+      type,
+      config,
+    });
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .schema("workspace").from("views")
+    .select("position")
+    .eq("database_id", database.id)
+    .order("position", { ascending: false })
+    .limit(1);
+  if (existingError) throw new Error(existingError.message);
+
+  const { data, error } = await supabase
+    .schema("workspace").from("views")
+    .insert([
+      {
+        database_id: database.id,
+        name,
+        type,
+        config,
+        position: ((existing ?? [])[0]?.position as number | undefined ?? -1) + 1,
+      },
+    ])
+    .select(VIEW_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  const view = data as WorkspaceViewRow;
+
+  await recordWorkEvent({
+    event_kind: "database_view.created",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Created ${type} view "${name}" on ${database.name}`,
+    payload: {
+      tool: "create_database_view",
+      database_id: database.id,
+      database_name: database.name,
+      view_id: view.id,
+      view_type: type,
+      config,
+    },
+  });
+
+  return { dry_run: false, view: toViewItem(view) };
+}
+
+async function updateDatabaseView(input: {
+  view_id: string;
+  name?: string;
+  type?: string;
+  config?: Record<string, unknown> | null;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const existing = await getWorkspaceViewById(input.view_id);
+  const { data: databaseRow, error: databaseError } = await supabase
+    .schema("workspace").from("databases")
+    .select("id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at")
+    .eq("id", existing.database_id)
+    .single();
+  if (databaseError) throw new Error(databaseError.message);
+  const database = databaseRow as WorkspaceDatabaseRow;
+
+  const type = input.type ?? existing.type;
+  if (!WORKSPACE_VIEW_TYPES.has(type)) {
+    throw new Error(`View type "${type}" is not valid. Types: ${Array.from(WORKSPACE_VIEW_TYPES).join(", ")}`);
+  }
+  const config =
+    input.config !== undefined || input.type !== undefined
+      ? buildViewConfig(database, type, input.config, existing.config)
+      : undefined;
+
+  const update: Record<string, unknown> = {};
+  if (input.name !== undefined) update.name = input.name.trim() || existing.name;
+  if (input.type !== undefined) update.type = type;
+  if (config !== undefined) update.config = config;
+  if (Object.keys(update).length === 0) {
+    throw new Error("update_database_view needs at least one of name, type, config.");
+  }
+
+  if (!input.confirm_write) {
+    return recordWritePreview("update_database_view", {
+      view_id: existing.id,
+      database_id: database.id,
+      database_name: database.name,
+      current: { name: existing.name, type: existing.type, config: existing.config ?? {} },
+      update,
+    });
+  }
+
+  const { data, error } = await supabase
+    .schema("workspace").from("views")
+    .update(update)
+    .eq("id", existing.id)
+    .select(VIEW_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  const view = data as WorkspaceViewRow;
+
+  await recordWorkEvent({
+    event_kind: "database_view.updated",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Updated view "${view.name}" on ${database.name}`,
+    payload: {
+      tool: "update_database_view",
+      database_id: database.id,
+      database_name: database.name,
+      view_id: view.id,
+      update,
+    },
+  });
+
+  return { dry_run: false, view: toViewItem(view) };
+}
+
+async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
+  const select = "id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at";
+  const { data: existingRows, error: existingError } = await supabase
+    .schema("workspace").from("databases")
+    .select(select)
+    .eq("icon", HOME_PINS_DATABASE_ICON)
+    .limit(1);
+  if (existingError) throw new Error(existingError.message);
+  const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
+  if (existing) return existing;
+
+  // Mirrors ensureHomePinsWorkspaceDatabase() in src/lib/data.ts — keep in sync.
+  const schema = [
+    { id: HOME_PIN_FIELDS.pinId, name: "Pin ID", type: "text" },
+    { id: HOME_PIN_FIELDS.databaseId, name: "Database ID", type: "text" },
+    { id: HOME_PIN_FIELDS.viewId, name: "View ID", type: "text" },
+    { id: HOME_PIN_FIELDS.x, name: "X", type: "number" },
+    { id: HOME_PIN_FIELDS.y, name: "Y", type: "number" },
+    { id: HOME_PIN_FIELDS.w, name: "Width", type: "number" },
+    { id: HOME_PIN_FIELDS.h, name: "Height", type: "number" },
+  ];
+  const { data, error } = await supabase
+    .schema("workspace").from("databases")
+    .insert([
+      {
+        name: "Home Pins",
+        icon: HOME_PINS_DATABASE_ICON,
+        entity: "genzen",
+        schema,
+        header_field_ids: [HOME_PIN_FIELDS.pinId],
+        taxonomy: {
+          entity: "genzen",
+          entity_label: "GenZen",
+          area: "internal_ops",
+          area_label: "Internal Ops",
+          folder: "Home Pins",
+          object_type: "system_database",
+          routing_rule: "home_dashboard_pins",
+        },
+      },
+    ])
+    .select(select)
+    .single();
+  if (error) throw new Error(error.message);
+  const database = data as WorkspaceDatabaseRow;
+
+  const { error: viewError } = await supabase
+    .schema("workspace").from("views")
+    .insert([
+      {
+        database_id: database.id,
+        name: "All items",
+        type: "table",
+        config: {
+          sort: [],
+          filter: [],
+          hiddenFields: [HOME_PIN_FIELDS.pinId],
+          fieldOrder: Object.values(HOME_PIN_FIELDS),
+        },
+        position: 0,
+      },
+    ]);
+  if (viewError) throw new Error(viewError.message);
+  return database;
+}
+
+async function listHomePinRecords(databaseId: string) {
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
+    .eq("database_id", databaseId);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as WorkspaceRecordRow[];
+}
+
+function pinNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+async function pinViewToHome(input: {
+  view_id: string;
+  width?: number;
+  height?: number;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const view = await getWorkspaceViewById(input.view_id);
+  if (!HOME_PINNABLE_VIEW_TYPES.has(view.type)) {
+    throw new Error(`View type "${view.type}" cannot be pinned to Home. Pinnable types: ${Array.from(HOME_PINNABLE_VIEW_TYPES).join(", ")}`);
+  }
+  const viewDatabase = await resolveDatabase({ database_id: view.database_id });
+
+  const pinsDatabase = await ensureHomePinsDatabase();
+  const pinRecords = await listHomePinRecords(pinsDatabase.id);
+  const alreadyPinned = pinRecords.find(
+    (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === view.id,
+  );
+  if (alreadyPinned) {
+    return {
+      dry_run: false,
+      already_pinned: true,
+      pin_record_id: alreadyPinned.id,
+      view_id: view.id,
+      message: `View "${view.name}" is already pinned to Home.`,
+    };
+  }
+
+  const w = Math.min(Math.max(Math.round(input.width ?? HOME_PIN_DEFAULT_W), 3), HOME_PIN_GRID_COLS);
+  const h = Math.max(Math.round(input.height ?? HOME_PIN_DEFAULT_H), 8);
+  // Append below existing pins; the app grid compacts vertically on next layout pass.
+  const y = pinRecords.reduce(
+    (max, record) =>
+      Math.max(max, pinNumber(record.fields?.[HOME_PIN_FIELDS.y], 0) + pinNumber(record.fields?.[HOME_PIN_FIELDS.h], HOME_PIN_DEFAULT_H)),
+    0,
+  );
+
+  if (!input.confirm_write) {
+    return recordWritePreview("pin_view_to_home", {
+      view_id: view.id,
+      view_name: view.name,
+      view_type: view.type,
+      database_id: viewDatabase.id,
+      database_name: viewDatabase.name,
+      placement: { x: 0, y, w, h },
+    });
+  }
+
+  const pinId = randomUUID();
+  const { data, error } = await supabase
+    .schema("workspace").from("records")
+    .insert([
+      {
+        database_id: pinsDatabase.id,
+        entity: pinsDatabase.entity ?? "genzen",
+        fields: {
+          [HOME_PIN_FIELDS.pinId]: pinId,
+          [HOME_PIN_FIELDS.databaseId]: viewDatabase.id,
+          [HOME_PIN_FIELDS.viewId]: view.id,
+          [HOME_PIN_FIELDS.x]: 0,
+          [HOME_PIN_FIELDS.y]: y,
+          [HOME_PIN_FIELDS.w]: w,
+          [HOME_PIN_FIELDS.h]: h,
+        },
+        body: null,
+        taxonomy: {
+          ...(pinsDatabase.taxonomy ?? {}),
+          object_type: "home_dashboard_pin",
+          routing_rule: "home_dashboard_pins",
+        },
+      },
+    ])
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  const pinRecordId = (data as { id: string }).id;
+
+  await recordWorkEvent({
+    record_id: pinRecordId,
+    event_kind: "home_pin.created",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Pinned ${view.type} view "${view.name}" (${viewDatabase.name}) to Home`,
+    payload: {
+      tool: "pin_view_to_home",
+      view_id: view.id,
+      database_id: viewDatabase.id,
+      database_name: viewDatabase.name,
+      pin_id: pinId,
+      placement: { x: 0, y, w, h },
+    },
+  });
+
+  return {
+    dry_run: false,
+    pinned: true,
+    pin_record_id: pinRecordId,
+    pin_id: pinId,
+    view_id: view.id,
+    message: `Pinned "${view.name}" to Home. The app picks up remote pins within ~60 seconds.`,
+  };
+}
+
+async function unpinViewFromHome(input: {
+  view_id: string;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const pinsDatabase = await ensureHomePinsDatabase();
+  const pinRecords = await listHomePinRecords(pinsDatabase.id);
+  const matches = pinRecords.filter(
+    (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === input.view_id,
+  );
+  if (matches.length === 0) {
+    return { dry_run: false, removed: false, message: "No Home pin exists for that view." };
+  }
+
+  if (!input.confirm_write) {
+    return recordWritePreview("unpin_view_from_home", {
+      view_id: input.view_id,
+      pin_record_ids: matches.map((record) => record.id),
+    });
+  }
+
+  const { error } = await supabase
+    .schema("workspace").from("records")
+    .delete()
+    .in("id", matches.map((record) => record.id));
+  if (error) throw new Error(error.message);
+
+  await recordWorkEvent({
+    event_kind: "home_pin.removed",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Unpinned view ${input.view_id} from Home`,
+    payload: {
+      tool: "unpin_view_from_home",
+      view_id: input.view_id,
+      pin_record_ids: matches.map((record) => record.id),
+    },
+  });
+
+  return { dry_run: false, removed: true, pin_record_ids: matches.map((record) => record.id) };
+}
+
 async function getWorkspaceTaskRecord(id: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -2215,6 +2717,91 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "list_database_views",
+      description:
+        "List views (table/kanban/list/gallery/calendar/chart/timeline) of a workspace database, including each view's config and whether it can be pinned to the Home dashboard. Read-only.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Workspace database UUID." },
+          database_name: { type: "string", description: "Exact workspace database name when database_id is unknown." },
+        },
+      },
+    },
+    {
+      name: "create_database_view",
+      description:
+        "Preview or create a view on a workspace database. For chart views set config.chartType (bar|line|donut|pie|gauge), config.groupBy (category field id), and optionally config.chartValueField + config.chartAggregation (count|sum|avg|min|max; defaults to count). Field ids come from list_databases with include_schema true. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Workspace database UUID." },
+          database_name: { type: "string", description: "Exact workspace database name when database_id is unknown." },
+          name: { type: "string", description: "View name shown in the app's view tab bar." },
+          type: { type: "string", description: "View type: table, kanban, list, gallery, calendar, chart, or timeline. Defaults to table." },
+          config: { type: "object", description: "View config. Chart keys: chartType, groupBy, chartValueField, chartValueFields, chartAggregation, chartPalette (blue|rose|gold|teal), chartRange (30d|90d|365d|all). Also sort, filter, hiddenFields." },
+          actor: { type: "string", description: "Actor creating the view; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["name", "actor"],
+      },
+    },
+    {
+      name: "update_database_view",
+      description:
+        "Preview or update an existing workspace database view's name, type, or config. Config keys are merged over the existing config. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          view_id: { type: "string", description: "View UUID from list_database_views." },
+          name: { type: "string", description: "New view name." },
+          type: { type: "string", description: "New view type: table, kanban, list, gallery, calendar, chart, or timeline." },
+          config: { type: "object", description: "Config patch merged over the existing config." },
+          actor: { type: "string", description: "Actor updating the view; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["view_id", "actor"],
+      },
+    },
+    {
+      name: "pin_view_to_home",
+      description:
+        "Preview or pin a database view (chart, table, list, or timeline) to the Home dashboard. Appends the widget below existing pins; the desktop app picks up remote pins within ~60 seconds. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          view_id: { type: "string", description: "View UUID from list_database_views or create_database_view." },
+          width: { type: "number", description: "Widget width in grid columns (3-12). Defaults to 4." },
+          height: { type: "number", description: "Widget height in grid rows (min 8). Defaults to 11." },
+          actor: { type: "string", description: "Actor pinning the view; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["view_id", "actor"],
+      },
+    },
+    {
+      name: "unpin_view_from_home",
+      description:
+        "Preview or remove a view's pin from the Home dashboard. Every confirmed write emits a workspace.work_events receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          view_id: { type: "string", description: "View UUID whose Home pin should be removed." },
+          actor: { type: "string", description: "Actor removing the pin; used in receipt." },
+          durable_role: { type: "string", description: "Durable role represented by the actor." },
+          summary: { type: "string", description: "Receipt summary." },
+          confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
+        },
+        required: ["view_id", "actor"],
+      },
+    },
+    {
       name: "claim_agent_work",
       description:
         "Preview or write an Agent Claim section to a Tasks record and move it to In progress/Doing. Defaults to dry-run; set confirm_write true to update.",
@@ -3090,6 +3677,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       record_id: string;
       relation_field_id: string;
       record_ids: string[];
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── list_database_views ───────────────────────────────────────────────────
+  if (name === "list_database_views") {
+    const result = await listDatabaseViews((args ?? {}) as {
+      database_id?: string;
+      database_name?: string;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── create_database_view ──────────────────────────────────────────────────
+  if (name === "create_database_view") {
+    const result = await createDatabaseView((args ?? {}) as {
+      database_id?: string;
+      database_name?: string;
+      name: string;
+      type?: string;
+      config?: Record<string, unknown> | null;
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── update_database_view ──────────────────────────────────────────────────
+  if (name === "update_database_view") {
+    const result = await updateDatabaseView((args ?? {}) as {
+      view_id: string;
+      name?: string;
+      type?: string;
+      config?: Record<string, unknown> | null;
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── pin_view_to_home ──────────────────────────────────────────────────────
+  if (name === "pin_view_to_home") {
+    const result = await pinViewToHome((args ?? {}) as {
+      view_id: string;
+      width?: number;
+      height?: number;
+      actor: string;
+      durable_role?: string | null;
+      summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── unpin_view_from_home ──────────────────────────────────────────────────
+  if (name === "unpin_view_from_home") {
+    const result = await unpinViewFromHome((args ?? {}) as {
+      view_id: string;
       actor: string;
       durable_role?: string | null;
       summary?: string | null;
