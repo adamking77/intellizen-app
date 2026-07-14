@@ -14,6 +14,7 @@ import {
   type AgentChatWidget as AgentChatWidgetModel,
 } from "@/lib/agent-widgets";
 import { WORKSPACE_REMOTE_WRITE_EVENT } from "@/lib/workspace-events";
+import { selectActiveHermesProfile } from "@/lib/hermes-profiles";
 
 import {
   createVoiceDraftTask,
@@ -312,6 +313,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     queryKey: ["hermes-profiles"],
     queryFn: fetchHermesProfiles,
     staleTime: 60_000,
+    refetchInterval: expanded ? 60_000 : false,
+    refetchOnWindowFocus: "always",
+    networkMode: "always",
     retry: 1,
     enabled: expanded,
   });
@@ -374,7 +378,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     }
     return [];
   }, [profilesQuery.isSuccess, profilesQuery.data, hermesConnected]);
-  const liveHermesProfile = hermesProfiles.find((profile) => profile.isDefault) ?? hermesProfiles[0] ?? null;
+  const liveHermesProfile = selectActiveHermesProfile(hermesProfiles);
   const agentOptions = useMemo(() => {
     // The direct Hermes endpoint is gateway-scoped, not profile-scoped. While
     // it is live, expose only the profile the gateway actually serves so the
@@ -385,7 +389,11 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }, [hermesApiLive, hermesProfiles, liveHermesProfile]);
   const defaultAgent = canonicalAgentName(liveHermesProfile?.name ?? "fiona");
   const targetAgent = selectedAgent && agentOptions.includes(selectedAgent) ? selectedAgent : defaultAgent;
-  const targetProfile = hermesConnected ? hermesProfiles.find((profile) => canonicalAgentName(profile.name) === targetAgent) ?? null : null;
+  const targetProfile = hermesConnected && liveHermesProfile
+    ? canonicalAgentName(liveHermesProfile.name) === targetAgent
+      ? liveHermesProfile
+      : hermesProfiles.find((profile) => canonicalAgentName(profile.name) === targetAgent) ?? null
+    : null;
   const routedChatEntries = useMemo(
     () =>
       (agentChatQuery.data ?? [])
