@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Layout } from "react-grid-layout";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
+import { WORKSPACE_REMOTE_WRITE_EVENT } from "@/lib/workspace-events";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -36,6 +38,7 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 
 export function HomeView() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [genuiPins, setGenuiPins] = useState<GenuiPin[]>(() => loadGenuiPins());
@@ -49,6 +52,7 @@ export function HomeView() {
     queryKey: ["workspace-database-catalog", entityFilter],
     queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
   });
   const {
     data: workspacePins,
@@ -64,8 +68,26 @@ export function HomeView() {
       }
       return remotePins;
     },
-    refetchInterval: 60_000,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: UnlistenFn | null = null;
+    void listen(WORKSPACE_REMOTE_WRITE_EVENT, () => {
+      void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+      void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });
+    }).then((nextUnlisten) => {
+      if (disposed) nextUnlisten();
+      else unlisten = nextUnlisten;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (!workspacePins) return;
@@ -95,17 +117,13 @@ export function HomeView() {
 
   useEffect(() => {
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
-
-    if (validIds.size !== pins.length) {
-      const nextPins = pins.filter((pin) => validIds.has(pin.id));
-      setPins(nextPins);
-      void saveHomePinsToWorkspace(nextPins).catch(() => {});
-    }
-
+    // A remote pin can arrive before the catalog refresh that contains its
+    // newly created view. Keep unresolved pins in source state; deleting them
+    // here races MCP writes and silently removes valid dashboard widgets.
     if (layout.some((item) => !validIds.has(item.id))) {
       setLayout((current) => current.filter((item) => validIds.has(item.id)));
     }
-  }, [layout, pins, pinnedWidgets]);
+  }, [layout, pinnedWidgets]);
 
   const gridLayout = useMemo<Layout>(
     () =>

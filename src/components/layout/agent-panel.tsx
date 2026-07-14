@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { emit } from "@tauri-apps/api/event";
 import { ArrowDown, Mic, MicOff, PanelRightClose, PanelRightOpen, PictureInPicture2, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
@@ -12,6 +13,7 @@ import {
   stripGenuiForStreaming,
   type AgentChatWidget as AgentChatWidgetModel,
 } from "@/lib/agent-widgets";
+import { WORKSPACE_REMOTE_WRITE_EVENT } from "@/lib/workspace-events";
 
 import {
   createVoiceDraftTask,
@@ -289,6 +291,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     enabled: expanded,
   });
   const queryClient = useQueryClient();
+
+  const notifyWorkspaceMayHaveChanged = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+    void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });
+    // Tauri events cross the docked/detached WebviewWindow boundary. This lets
+    // Fiona's ejected panel refresh Home in the main window after MCP writes.
+    void emit(WORKSPACE_REMOTE_WRITE_EVENT).catch(() => {});
+  }, [queryClient]);
   // Direct Hermes connection: the API server health check is the source of
   // truth (it has CORS for the app origin); the dashboard adds the catalog.
   const apiQuery = useQuery({
@@ -329,13 +339,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         { event: "*", schema: "comms", table: "fiona_inbox" },
         () => {
           void queryClient.invalidateQueries({ queryKey: ["agent-panel", "chat-receipts"] });
+          notifyWorkspaceMayHaveChanged();
         },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [expanded, queryClient]);
+  }, [expanded, notifyWorkspaceMayHaveChanged, queryClient]);
 
   const workflows = workflowsQuery.data ?? [];
   const isFetching = workflowsQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching;
@@ -565,6 +576,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               : entry,
           ),
         );
+        notifyWorkspaceMayHaveChanged();
         if (speakReplies && cleanReply && voiceOutputProvider) {
           setIsSpeaking(true);
           void speakWithProvider(cleanReply, voiceOutputProvider.id).catch(() => setIsSpeaking(false));
