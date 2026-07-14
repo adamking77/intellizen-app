@@ -60,14 +60,9 @@ export function HomeView() {
     error: pinsError,
   } = useQuery({
     queryKey: ["home-pins"],
-    queryFn: async () => {
-      const remotePins = await listHomePinsFromWorkspace();
-      const localPins = loadHomePins();
-      if (remotePins.length === 0 && localPins.length > 0) {
-        return saveHomePinsToWorkspace(localPins);
-      }
-      return remotePins;
-    },
+    // Remote pins are authoritative, including an empty list. Restoring local
+    // cache when remote is empty resurrects widgets after a confirmed unpin.
+    queryFn: listHomePinsFromWorkspace,
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
