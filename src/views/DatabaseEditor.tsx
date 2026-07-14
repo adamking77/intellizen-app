@@ -27,6 +27,7 @@ import {
   prepareCsvImport,
 } from "@/lib/database-core";
 import { createTimelineDateField, getTimelineFieldDefaults } from "@/lib/database-timeline";
+import { withDatabaseRecordParam } from "@/lib/database-record-link";
 import {
   findHomePin,
   loadHomePins,
@@ -118,6 +119,7 @@ export function DatabaseEditorView({
   const queryClient = useQueryClient();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const databaseId = databaseIdOverride ?? params.id ?? "";
+  const requestedRecordId = searchParams.get("record")?.trim() || null;
 
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [activePeek, setActivePeek] = useState<{ databaseId: string; recordId: string } | null>(null);
@@ -265,6 +267,29 @@ export function DatabaseEditorView({
       setActivePeek(null);
     }
   }, [activePeek, catalogDatabaseMap]);
+
+  useEffect(() => {
+    if (!database || embedded) return;
+    if (!requestedRecordId) {
+      setActivePeek((current) => (current?.databaseId === database.id ? null : current));
+      return;
+    }
+    if (database.records.some((record) => record.id === requestedRecordId)) {
+      setActivePeek({ databaseId: database.id, recordId: requestedRecordId });
+      setSchemaOpen(false);
+      return;
+    }
+
+    setActivePeek((current) =>
+      current?.databaseId === database.id && current.recordId === requestedRecordId ? null : current,
+    );
+    setSearchParams((current) => {
+      return withDatabaseRecordParam(current, null);
+    }, { replace: true });
+    toast.error("Record unavailable", {
+      description: "The linked record is not present in this database.",
+    });
+  }, [database, embedded, requestedRecordId, setSearchParams]);
 
   useEffect(() => {
     if (!database || !activeView || activeView.type !== "timeline") return;
@@ -717,6 +742,11 @@ export function DatabaseEditorView({
     setActivePeek((current) =>
       current && current.databaseId === targetDatabaseId && current.recordId === recordId ? null : current,
     );
+    if (targetDatabaseId === databaseId && requestedRecordId === recordId) {
+      setSearchParams((current) => {
+        return withDatabaseRecordParam(current, null);
+      }, { replace: true });
+    }
 
     try {
       await deleteWorkspaceRecord(recordId);
@@ -739,6 +769,11 @@ export function DatabaseEditorView({
     try {
       await Promise.all(recordIds.map((recordId) => deleteWorkspaceRecord(recordId)));
       setActivePeek((current) => (current && recordIds.includes(current.recordId) ? null : current));
+      if (requestedRecordId && recordIds.includes(requestedRecordId)) {
+        setSearchParams((current) => {
+          return withDatabaseRecordParam(current, null);
+        }, { replace: true });
+      }
       await refreshDatabase();
       toast.success(`${recordIds.length} records deleted`);
     } catch (err) {
@@ -783,7 +818,8 @@ export function DatabaseEditorView({
         body: sourceRecord._body ?? null,
       });
       await refreshDatabase();
-      setActivePeek({ databaseId: targetDatabaseId, recordId: duplicated.id });
+      if (targetDatabaseId === databaseId) handleOpenRecord(duplicated.id);
+      else setActivePeek({ databaseId: targetDatabaseId, recordId: duplicated.id });
       toast.success("Record duplicated");
     } catch (err) {
       toastError("Duplicate failed", err);
@@ -1307,17 +1343,31 @@ export function DatabaseEditorView({
   function handleOpenSchema() {
     if (isSystemDatabase) return;
     setSchemaOpen(true);
-    setActivePeek(null);
+    handleCloseRecord();
   }
 
   function handleOpenRecord(recordId: string) {
     setActivePeek({ databaseId, recordId });
     setSchemaOpen(false);
+    if (!embedded) {
+      setSearchParams((current) => {
+        return withDatabaseRecordParam(current, recordId);
+      }, { replace: true });
+    }
   }
 
   function handleOpenNestedRecord(targetDatabaseId: string, recordId: string) {
     setActivePeek({ databaseId: targetDatabaseId, recordId });
     setSchemaOpen(false);
+  }
+
+  function handleCloseRecord() {
+    setActivePeek(null);
+    if (!embedded && searchParams.has("record")) {
+      setSearchParams((current) => {
+        return withDatabaseRecordParam(current, null);
+      }, { replace: true });
+    }
   }
 
   if (isLoading) {
@@ -1574,7 +1624,7 @@ export function DatabaseEditorView({
           database={peekDatabase ?? database}
           record={activeRecord}
           catalog={catalog}
-          onClose={() => setActivePeek(null)}
+          onClose={handleCloseRecord}
           onDelete={handleDeleteRecord}
           onDuplicate={handleDuplicateRecord}
           onOpenRecord={handleOpenNestedRecord}

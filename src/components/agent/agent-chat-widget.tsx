@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { AgentChartAdapter } from "@/components/agent/agent-chart-adapter";
 import { SandboxedGenui } from "@/components/agent/sandboxed-genui";
 import { MetricCell } from "@/components/ui/metric-cell";
 import { Badge } from "@/components/ui/badge";
 
-import type { AgentChatWidget as AgentChatWidgetModel, AgentDataChartWidget } from "@/lib/agent-widgets";
+import type { AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
 import { pinGenuiWidget } from "@/lib/genui-pins";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,7 @@ function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: 
         </div>
       ) : null}
       {widget.kind === "data-table" ? <WidgetTable widget={widget} /> : null}
-      {widget.kind === "data-chart" ? <WidgetChart chart={widget.chart} /> : null}
+      {widget.kind === "data-chart" ? <AgentChartAdapter chart={widget.chart} /> : null}
       {widget.kind === "data-insights" ? (
         <ul className="space-y-1 px-2 py-1.5">
           {widget.insights.slice(0, 6).map((insight, index) => (
@@ -155,38 +156,6 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
           {widget.table.totalRows ?? "more"} total rows
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function WidgetChart({ chart }: { chart: AgentDataChartWidget }) {
-  const series = chart.series[0];
-  const bars = useMemo(() => {
-    const points = chart.data.slice(0, 8).map((row) => ({
-      label: String(row[chart.xKey] ?? "—"),
-      value: typeof row[series.key] === "number" ? (row[series.key] as number) : 0,
-    }));
-    const max = Math.max(...points.map((point) => point.value), 1);
-    return points.map((point) => ({ ...point, ratio: point.value / max }));
-  }, [chart, series.key]);
-
-  return (
-    <div className="space-y-1 px-2 py-1.5">
-      {bars.map((bar) => (
-        <div key={bar.label} className="flex items-center gap-2">
-          <span className="w-[72px] shrink-0 truncate font-ui text-[10.5px] text-[var(--subtext-0)]" title={bar.label}>
-            {bar.label}
-          </span>
-          <span className="h-2 flex-1 overflow-hidden rounded-sm bg-[var(--surface-wash)]">
-            <span
-              className="block h-full rounded-sm bg-[var(--accent)] opacity-80"
-              style={{ width: `${Math.max(bar.ratio * 100, 2)}%` }}
-            />
-          </span>
-          <span className="w-10 shrink-0 text-right font-mono text-[10px] text-[var(--text)]">{bar.value}</span>
-        </div>
-      ))}
-      <div className="font-mono text-[9.5px] text-[var(--overlay-1)]">{series.label}</div>
     </div>
   );
 }

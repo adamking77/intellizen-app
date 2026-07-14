@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mic, MicOff, PanelRightClose, PanelRightOpen, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { ArrowDown, Mic, MicOff, PanelRightClose, PanelRightOpen, PictureInPicture2, Play, Plus, RefreshCw, Send, Square, Volume2 } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
+import { AgentActionEvent } from "@/components/agent/agent-action-event";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
   extractGenuiBlocks,
@@ -15,12 +15,12 @@ import {
 
 import {
   createVoiceDraftTask,
+  GENZEN_WORKSPACE_DATABASE_IDS,
   listFionaInboxItems,
-  listWorkflowRuns,
   listWorkflows,
   OPERATOR_ACTOR,
 } from "@/lib/data";
-import type { FionaInboxItem, WorkflowRunItem } from "@/lib/types";
+import type { FionaInboxItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { PaneResizeEdges } from "@/components/layout/window-chrome";
@@ -28,8 +28,15 @@ import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
+import {
+  conversationContextFromChatPayload,
+  readConversationContext,
+  subscribeConversationContext,
+  type ConversationContextSnapshot,
+} from "@/lib/conversation-context";
 import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat, streamHermesChat } from "@/services/agent";
-// Run/approval surfaces live in Databases-native views; the panel is chat only.
+import { normalizeLocalActionEvent, type ConversationActionEvent } from "@/lib/agent-conversation";
+// Operational evidence may appear inline; canonical monitoring and decisions stay in Databases.
 import {
   getPreferredVoiceInputProvider,
   getPreferredVoiceOutputProvider,
@@ -49,8 +56,7 @@ const CHAT_CLEARED_KEY = "intelizen:chat-cleared-at";
 const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 560;
-const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
-type ChatEntryStatus = "submitted" | "queued" | "failed";
+type ChatEntryStatus = "submitted" | "queued" | "failed" | "cancelled";
 
 interface AgentChatEntry {
   id: string;
@@ -65,6 +71,9 @@ interface AgentChatEntry {
   reply?: string | null;
   /** In-chat GenUI widget (agent-native data-widget contract). */
   widget?: AgentChatWidgetModel | null;
+  widgets?: AgentChatWidgetModel[];
+  /** Exact bounded app context included with this message. */
+  context?: ConversationContextSnapshot | null;
 }
 
 /** One rendered message in the thread: a user turn or an agent turn. */
@@ -73,9 +82,10 @@ interface ChatTurn {
   role: "user" | "agent";
   speaker: string;
   text: string | null;
-  widget?: AgentChatWidgetModel | null;
+  widgets?: AgentChatWidgetModel[];
   status?: ChatEntryStatus;
   detail?: string;
+  context?: ConversationContextSnapshot | null;
   ts: string;
 }
 
@@ -92,15 +102,19 @@ function entriesToTurns(entries: AgentChatEntry[]): ChatTurn[] {
       text: entry.message,
       status: entry.status,
       detail: entry.detail,
+      context: entry.context ?? null,
       ts: entry.createdAt,
     });
-    if (entry.reply || entry.widget) {
+    const widgets = entry.widgets ?? (entry.widget ? [entry.widget] : []);
+    if (entry.reply || widgets.length > 0 || entry.status === "cancelled") {
       turns.push({
         id: `${entry.id}-agent`,
         role: "agent",
         speaker: entry.targetAgent,
         text: entry.reply ?? null,
-        widget: entry.widget,
+        widgets,
+        status: entry.status === "cancelled" ? "cancelled" : undefined,
+        detail: entry.status === "cancelled" ? entry.detail : undefined,
         ts: entry.repliedAt ?? entry.createdAt,
       });
     }
@@ -157,31 +171,32 @@ function formatRunTime(value: string | null) {
   }).format(date);
 }
 
-function runTitle(run: WorkflowRunItem) {
-  return run.name.trim() || "Untitled workflow run";
+function canonicalAgentName(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "default") return "fiona";
+  if (normalized.includes("fiona")) return "fiona";
+  if (normalized.includes("steve") || normalized.includes("claude")) return "steve";
+  if (normalized.includes("keel") || normalized.includes("codex")) return "keel";
+  return normalized || "fiona";
 }
 
-function buildVoiceBrief(approvals: WorkflowRunItem[], runs: WorkflowRunItem[]) {
-  const lines: string[] = [];
-  if (approvals.length > 0) {
-    lines.push(`${approvals.length} approval${approvals.length === 1 ? "" : "s"} waiting.`);
-    for (const run of approvals.slice(0, 3)) {
-      lines.push(`${runTitle(run)}. ${run.current_step ?? "Awaiting decision."}`);
-    }
-  } else {
-    lines.push("No approvals waiting.");
-  }
+function agentDisplayName(value: string) {
+  const canonical = canonicalAgentName(value);
+  return canonical.charAt(0).toUpperCase() + canonical.slice(1);
+}
 
-  if (runs.length > 0) {
-    lines.push(`${runs.length} active workflow${runs.length === 1 ? "" : "s"}.`);
-    for (const run of runs.slice(0, 3)) {
-      lines.push(`${runTitle(run)} is ${run.status ?? "active"}. ${run.current_step ?? ""}`.trim());
-    }
-  } else {
-    lines.push("No active workflows.");
-  }
+function contextRouteLabel(context: ConversationContextSnapshot | null | undefined) {
+  if (!context) return null;
+  return `${context.route.pathname}${context.route.search}${context.route.hash}`;
+}
 
-  return lines.join(" ");
+function contextPromptBlock(context: ConversationContextSnapshot | null) {
+  if (!context) return "";
+  return `\n\nIntelliZen visible context (bounded; do not infer broader access):\n${JSON.stringify({
+    version: context.version,
+    route: context.route,
+    references: context.selections,
+  }, null, 2)}`;
 }
 
 function isChatInboxItem(item: FionaInboxItem) {
@@ -195,20 +210,24 @@ function inboxItemToChatEntry(item: FionaInboxItem): AgentChatEntry {
   const targetAgent =
     typeof context?.target_agent === "string"
       ? context.target_agent
-      : item.task.replace(/^Direct chat message for\s+/, "").split(":")[0]?.trim() || "Fiona/Hermes";
+      : item.task.replace(/^Direct chat message for\s+/, "").split(":")[0]?.trim() || "fiona";
   const status: ChatEntryStatus =
     item.status === "blocked" ? "failed" : item.status === "pending" || item.status === "in_progress" ? "queued" : "submitted";
-  const { reply, widget } = item.status === "complete" ? parseAgentChatResult(item.result) : { reply: null, widget: null };
+  const { reply, widgets, widget } = item.status === "complete"
+    ? parseAgentChatResult(item.result)
+    : { reply: null, widgets: [], widget: null };
   return {
     id: item.id,
     message,
-    targetAgent,
+    targetAgent: canonicalAgentName(targetAgent),
     status,
     detail: item.status,
     createdAt: item.created_at,
     repliedAt: item.updated_at ?? null,
     reply,
     widget,
+    widgets,
+    context: conversationContextFromChatPayload(context),
   };
 }
 
@@ -243,6 +262,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const abortRef = useRef<AbortController | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
+  const [inlineActions, setInlineActions] = useState<ConversationActionEvent[]>([]);
+  const [conversationContext, setConversationContext] = useState<ConversationContextSnapshot | null>(() => readConversationContext());
   const dictationRef = useRef<BrowserDictationSession | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -252,11 +273,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const dictationBaseDraftRef = useRef("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const followLatestRef = useRef(true);
+  const [showReturnToLatest, setShowReturnToLatest] = useState(false);
   const { isCramped } = useWindowSize();
   const standalone = mode === "standalone";
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
-  // Rail mode keeps the approvals badge alive but stops background polling.
   const expanded = standalone || !collapsed;
 
   const workflowsQuery = useQuery({
@@ -264,19 +287,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: false, limit: 24 }),
     staleTime: 60_000,
     enabled: expanded,
-  });
-  const activeRunsQuery = useQuery({
-    queryKey: ["workflow-runs", "agent-panel", "active", entityFilter],
-    queryFn: () => listWorkflowRuns({ entity: entityFilter, includeCompleted: false, limit: 8 }),
-    refetchInterval: expanded ? 60_000 : false,
-    staleTime: 20_000,
-    enabled: expanded,
-  });
-  const approvalsQuery = useQuery({
-    queryKey: ["workflow-runs", "agent-panel", "approvals", entityFilter],
-    queryFn: () => listWorkflowRuns({ entity: entityFilter, status: "Needs approval", includeCompleted: true, limit: 8 }),
-    refetchInterval: expanded ? 60_000 : false,
-    staleTime: 20_000,
   });
   const queryClient = useQueryClient();
   // Direct Hermes connection: the API server health check is the source of
@@ -327,16 +337,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     };
   }, [expanded, queryClient]);
 
-  const activeRuns = activeRunsQuery.data ?? [];
-  const approvals = approvalsQuery.data ?? [];
   const workflows = workflowsQuery.data ?? [];
-  const isFetching = workflowsQuery.isFetching || activeRunsQuery.isFetching || approvalsQuery.isFetching || agentChatQuery.isFetching;
-  const error = workflowsQuery.error ?? activeRunsQuery.error ?? approvalsQuery.error;
+  const isFetching = workflowsQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching;
+  const error = workflowsQuery.error ?? agentChatQuery.error;
   const voiceProviders = getVoiceProviderStatus();
   const voiceInputProvider = getPreferredVoiceInputProvider();
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
   const canListen = Boolean(voiceInputProvider);
-  const canSpeak = Boolean(voiceOutputProvider);
   const hermesApiLive = apiQuery.data === true;
   const hermesConnected = hermesApiLive;
   // Profile catalog from the dashboard when it's up; otherwise the running
@@ -356,18 +363,18 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     }
     return [];
   }, [profilesQuery.isSuccess, profilesQuery.data, hermesConnected]);
+  const liveHermesProfile = hermesProfiles.find((profile) => profile.isDefault) ?? hermesProfiles[0] ?? null;
   const agentOptions = useMemo(() => {
-    if (hermesProfiles.length > 0) return hermesProfiles.map((profile) => profile.name);
-    return ["Fiona/Hermes", "Steve/Claude", "Keel/Codex"];
-  }, [hermesProfiles]);
-  const defaultAgent = hermesProfiles.find((profile) => profile.isDefault)?.name ?? hermesProfiles[0]?.name ?? "Fiona/Hermes";
+    // The direct Hermes endpoint is gateway-scoped, not profile-scoped. While
+    // it is live, expose only the profile the gateway actually serves so the
+    // speaker label cannot claim that another agent answered.
+    if (hermesApiLive && liveHermesProfile) return [canonicalAgentName(liveHermesProfile.name)];
+    if (hermesProfiles.length > 0) return hermesProfiles.map((profile) => canonicalAgentName(profile.name));
+    return ["fiona", "steve", "keel"];
+  }, [hermesApiLive, hermesProfiles, liveHermesProfile]);
+  const defaultAgent = canonicalAgentName(liveHermesProfile?.name ?? "fiona");
   const targetAgent = selectedAgent && agentOptions.includes(selectedAgent) ? selectedAgent : defaultAgent;
-  const targetProfile = hermesConnected ? hermesProfiles.find((profile) => profile.name === targetAgent) ?? null : null;
-
-  const visibleRuns = useMemo(() => {
-    const approvalIds = new Set(approvals.map((run) => run.id));
-    return activeRuns.filter((run) => !approvalIds.has(run.id)).slice(0, 5);
-  }, [activeRuns, approvals]);
+  const targetProfile = hermesConnected ? hermesProfiles.find((profile) => canonicalAgentName(profile.name) === targetAgent) ?? null : null;
   const routedChatEntries = useMemo(
     () =>
       (agentChatQuery.data ?? [])
@@ -381,16 +388,33 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   // (direct dispatches get their durable row when the agent writes back).
   const chatTurns = useMemo(() => {
     const routedMessages = new Set(routedChatEntries.map((entry) => entry.message.trim()));
+    const localContextByMessage = new Map(
+      chatEntries
+        .filter((entry) => entry.context)
+        .map((entry) => [entry.message.trim(), entry.context] as const),
+    );
     const entriesById = new Map<string, AgentChatEntry>();
     for (const entry of chatEntries) {
       if (routedMessages.has(entry.message.trim())) continue;
       entriesById.set(entry.id, entry);
     }
     for (const entry of routedChatEntries) {
-      entriesById.set(entry.id, entry);
+      entriesById.set(entry.id, {
+        ...entry,
+        // Legacy inbox rows did not persist the snapshot. Preserve the local
+        // optimistic copy while it exists instead of erasing visible context.
+        context: entry.context ?? localContextByMessage.get(entry.message.trim()) ?? null,
+      });
     }
     return entriesToTurns(Array.from(entriesById.values()));
   }, [chatEntries, routedChatEntries]);
+  const conversationTimeline = useMemo(
+    () => [
+      ...chatTurns.map((turn) => ({ kind: "turn" as const, ts: turn.ts, turn })),
+      ...inlineActions.map((event) => ({ kind: "action" as const, ts: event.createdAt, event })),
+    ].sort((left, right) => new Date(left.ts).getTime() - new Date(right.ts).getTime()),
+    [chatTurns, inlineActions],
+  );
   const awaitingReply = chatTurns.some((turn) => turn.role === "user" && turn.status === "queued");
 
   // Tighten the poll safety net while a reply is outstanding.
@@ -402,11 +426,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     return () => window.clearInterval(interval);
   }, [expanded, awaitingReply, queryClient]);
 
-  // Keep the thread pinned to the newest message.
+  // Follow new content only while Adam is already at the newest message.
   useEffect(() => {
     const thread = threadRef.current;
-    if (thread) thread.scrollTop = thread.scrollHeight;
-  }, [chatTurns.length, isSendingChat, streamingReply]);
+    if (thread && followLatestRef.current) {
+      thread.scrollTop = thread.scrollHeight;
+      setShowReturnToLatest(false);
+    }
+  }, [conversationTimeline.length, isSendingChat, streamingReply]);
 
   useEffect(() => {
     return () => {
@@ -416,6 +443,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       if (supportsBrowserSpeechSynthesis()) window.speechSynthesis.cancel();
     };
   }, []);
+
+  useEffect(() => subscribeConversationContext(setConversationContext), []);
 
   useEffect(() => {
     try {
@@ -438,24 +467,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     });
   }
 
-  async function dockStandalonePanel() {
-    try {
-      window.localStorage.setItem(AGENT_PANEL_DETACHED_KEY, "0");
-      window.dispatchEvent(new StorageEvent("storage", {
-        key: AGENT_PANEL_DETACHED_KEY,
-        newValue: "0",
-      }));
-      await getCurrentWebviewWindow().close();
-    } catch (err) {
-      toastError("Could not dock agent panel", err);
-    }
-  }
-
   async function refresh() {
     await Promise.all([
       workflowsQuery.refetch(),
-      activeRunsQuery.refetch(),
-      approvalsQuery.refetch(),
+      agentChatQuery.refetch(),
+      apiQuery.refetch(),
+      profilesQuery.refetch(),
     ]);
   }
 
@@ -463,16 +480,36 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     const workflow = workflows.find((candidate) => candidate.workflow_id === workflowId);
     if (!workflow) return;
     setPlusMenuOpen(false);
-    await startWorkflowFromPanel({
+    const result = await startWorkflowFromPanel({
       workflowId,
       triggerSource: "ui",
       entityScope: workflow.entity ?? undefined,
       context: {
-        route: typeof window === "undefined" ? null : window.location.pathname,
+        route: contextRouteLabel(conversationContext),
         source: "agent_panel",
         composer_note: chatDraft.trim() || null,
       },
     });
+    if (!result || !("workflow_run_id" in result) || !result.workflow_run_id) return;
+    const occurredAt = new Date().toISOString();
+    setInlineActions((current) => [
+      ...current,
+      normalizeLocalActionEvent({
+        id: `workflow-${result.workflow_run_id}`,
+        actionKind: "workflow",
+        label: workflow.name,
+        observedState: "completed",
+        createdAt: occurredAt,
+        summary: result.current_step ?? "Workflow Run created and dispatched.",
+        correlation: {
+          correlationId: result.workflow_run_id,
+          databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns,
+          recordId: result.workflow_run_id,
+          workflowRunId: result.workflow_run_id,
+        },
+        evidence: { kind: "workflow_run", id: result.workflow_run_id },
+      }),
+    ]);
   }
 
   async function sendChatMessage() {
@@ -483,11 +520,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     if (hermesApiLive) {
       const entryId = `api-${Date.now()}`;
       const sentAt = new Date().toISOString();
+      const sentContext = conversationContext;
       setChatDraft("");
       setIsSendingChat(true);
       setStreamingReply("");
       setChatEntries((current) => [
-        { id: entryId, message, targetAgent, status: "submitted" as ChatEntryStatus, detail: "hermes api", createdAt: sentAt },
+        { id: entryId, message, targetAgent, status: "submitted" as ChatEntryStatus, detail: "hermes api", createdAt: sentAt, context: sentContext },
         ...current,
       ].slice(0, 8));
       let accumulated = "";
@@ -506,7 +544,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         const result = await streamHermesChat({
           message,
           history,
-          systemPrompt: GENUI_SYSTEM_PROMPT,
+          systemPrompt: `${GENUI_SYSTEM_PROMPT}${contextPromptBlock(sentContext)}`,
           signal: controller.signal,
           onDelta: (delta) => {
             accumulated += delta;
@@ -521,6 +559,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                   ...entry,
                   reply: cleanReply || null,
                   widget: widgets[0] ?? null,
+                  widgets,
                   repliedAt: new Date().toISOString(),
                 }
               : entry,
@@ -536,7 +575,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           current.map((entry) =>
             entry.id === entryId
               ? stopped
-                ? { ...entry, reply: accumulated || null, repliedAt: new Date().toISOString(), detail: "stopped" }
+                ? {
+                    ...entry,
+                    status: "cancelled" as ChatEntryStatus,
+                    reply: accumulated || null,
+                    repliedAt: new Date().toISOString(),
+                    detail: "Stopped by user",
+                  }
                 : { ...entry, status: "failed" as ChatEntryStatus, detail: streamError instanceof Error ? streamError.message : "Stream failed" }
               : entry,
           ),
@@ -546,23 +591,25 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         abortRef.current = null;
         setStreamingReply(null);
         setIsSendingChat(false);
+        queueMicrotask(() => composerRef.current?.focus());
       }
       return;
     }
 
     try {
       setIsSendingChat(true);
+      const sentContext = conversationContext;
       const result = await sendToAgentChat({
         message,
         targetAgent,
         profile: targetProfile?.name ?? null,
         context: {
           type: "agent_panel_chat",
-          route: typeof window === "undefined" ? undefined : window.location.pathname,
+          route: contextRouteLabel(sentContext) ?? undefined,
           payload: {
             target_agent: targetAgent,
-            active_run_count: visibleRuns.length,
-            pending_approval_count: approvals.length,
+            conversation_context: sentContext,
+            context_references: sentContext?.selections ?? [],
             voice_input_provider: voiceInputProvider?.id ?? null,
             voice_output_provider: voiceOutputProvider?.id ?? null,
             voice_providers: voiceProviders.map((provider) => ({
@@ -591,10 +638,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           status,
           detail: result.messageId ?? result.inboxItemId ?? status,
           createdAt: new Date().toISOString(),
+          context: sentContext,
         },
         ...current,
       ].slice(0, 8));
       setChatDraft("");
+      queueMicrotask(() => composerRef.current?.focus());
       toast.success(status === "submitted" ? "Message sent to agent" : "Message queued for agent", {
         description: result.messageId ?? result.inboxItemId,
       });
@@ -608,12 +657,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           status,
           detail: chatError instanceof Error ? chatError.message : "Send failed",
           createdAt: new Date().toISOString(),
+          context: conversationContext,
         },
         ...current,
       ].slice(0, 8));
       toastError("Agent chat failed", chatError);
     } finally {
       setIsSendingChat(false);
+      queueMicrotask(() => composerRef.current?.focus());
     }
   }
 
@@ -766,6 +817,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     } catch { /* ignore */ }
     setClearedAt(now);
     setChatEntries([]);
+    setInlineActions([]);
     setPlusMenuOpen(false);
     toast.success("New chat session started");
   }
@@ -808,37 +860,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     window.speechSynthesis.speak(utterance);
   }
 
-  async function speakBrief() {
-    if (isSpeaking) {
-      stopSpeaking();
-      return;
-    }
-
-    if (!voiceOutputProvider) {
-      toast.error("Speech output unavailable");
-      return;
-    }
-
-    try {
-      setIsSpeaking(true);
-      await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), voiceOutputProvider.id);
-    } catch (speakError) {
-      if (voiceOutputProvider.id === "hermes" && supportsBrowserSpeechSynthesis()) {
-        try {
-          await speakWithProvider(buildVoiceBrief(approvals, visibleRuns), "browser");
-          toast.error("Hermes speech unavailable", {
-            description: "Used browser speech fallback.",
-          });
-          return;
-        } catch {
-          /* report the original Hermes error */
-        }
-      }
-      setIsSpeaking(false);
-      toastError("Speech output failed", speakError);
-    }
-  }
-
   async function createTaskFromComposer() {
     const transcript = chatDraft.trim();
     if (!transcript || isCreatingVoiceTask) return;
@@ -849,13 +870,34 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       const result = await createVoiceDraftTask({
         transcript,
         requestedBy: OPERATOR_ACTOR,
-        sourceRoute: typeof window === "undefined" ? null : window.location.pathname,
+        sourceRoute: contextRouteLabel(conversationContext),
         sourceProvider: voiceInputProvider?.id ?? voiceOutputProvider?.id ?? null,
         confirmWrite: true,
       });
       toast.success("Task created from message", {
         description: result.task?.title ?? result.task_id,
       });
+      const taskId = result.task_id;
+      if (taskId) {
+        const occurredAt = new Date().toISOString();
+        setInlineActions((current) => [
+          ...current,
+          normalizeLocalActionEvent({
+            id: `task-${taskId}`,
+            actionKind: "tool",
+            label: result.task?.title ?? "Task created",
+            observedState: "completed",
+            createdAt: occurredAt,
+            summary: "Created a durable Task from the composer message.",
+            correlation: {
+              correlationId: taskId,
+              databaseId: GENZEN_WORKSPACE_DATABASE_IDS.tasks,
+              recordId: taskId,
+            },
+            evidence: { kind: "record_created", id: taskId },
+          }),
+        ]);
+      }
       setChatDraft("");
     } catch (createError) {
       toastError("Task creation failed", createError);
@@ -879,11 +921,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
-        {approvals.length > 0 ? (
-          <span className="mt-4 rounded-full border border-[color-mix(in_srgb,var(--caution)_42%,transparent)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--caution)]">
-            {approvals.length}
-          </span>
-        ) : null}
       </aside>
     );
   }
@@ -943,7 +980,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                 )}
               />
               {hermesConnected
-                ? `Hermes · ${targetProfile?.model ?? targetAgent}`
+                ? `Hermes · ${agentDisplayName(targetAgent)}${targetProfile?.model ? ` · ${targetProfile.model}` : ""}`
                 : "Hermes offline · queuing via inbox"}
             </p>
           </div>
@@ -958,17 +995,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           >
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </button>
-          {standalone ? (
-            <button
-              type="button"
-              onClick={() => void dockStandalonePanel()}
-              aria-label="Dock agent panel"
-              title="Dock agent panel"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-            >
-              <PanelRightClose className="h-4 w-4" />
-            </button>
-          ) : (
+          {!standalone ? (
             <>
               {onEject ? (
                 <button
@@ -978,7 +1005,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                   title="Eject agent panel"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
-                  <PanelRightOpen className="h-4 w-4" />
+                  <PictureInPicture2 className="h-4 w-4" />
                 </button>
               ) : null}
               <button
@@ -991,11 +1018,20 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                 <PanelRightClose className="h-4 w-4" />
               </button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
-      <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div
+        ref={threadRef}
+        className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3"
+        onScroll={(event) => {
+          const node = event.currentTarget;
+          const atLatest = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+          followLatestRef.current = atLatest;
+          setShowReturnToLatest(!atLatest);
+        }}
+      >
         {error ? (
           <div className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3">
             <p className="font-ui text-[12px] font-medium text-[var(--danger)]">Agent state unavailable</p>
@@ -1005,7 +1041,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         ) : null}
 
-        {chatTurns.length === 0 ? (
+        {conversationTimeline.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
             <p className="font-ui text-[12px] text-[var(--subtext-0)]">Message an agent to get started.</p>
             <p className="font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
@@ -1014,8 +1050,15 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {chatTurns.map((turn, index) => {
-              const previous = chatTurns[index - 1];
+            {conversationTimeline.map((item, index) => {
+              if (item.kind === "action") {
+                return <AgentActionEvent key={item.event.id} event={item.event} />;
+              }
+              const { turn } = item;
+              const previous = conversationTimeline
+                .slice(0, index)
+                .reverse()
+                .find((candidate) => candidate.kind === "turn")?.turn;
               const gapMs = previous ? new Date(turn.ts).getTime() - new Date(previous.ts).getTime() : Infinity;
               const showDivider = gapMs > TIME_DIVIDER_GAP_MS;
               const speakerChanged = !previous || previous.speaker !== turn.speaker || showDivider;
@@ -1031,21 +1074,55 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                         <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--subtext-0)]">You</span>
                       ) : null}
                       <p className="whitespace-pre-wrap font-ui text-[12.5px] leading-relaxed text-[var(--text)]">{turn.text}</p>
+                      {contextRouteLabel(turn.context) ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Context sent with this message">
+                          <span className="max-w-full truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--overlay-1)]">
+                            {contextRouteLabel(turn.context)}
+                          </span>
+                          {turn.context?.selections.map((selection) => (
+                            <span
+                              key={`${selection.kind}:${JSON.stringify(selection)}`}
+                              className="max-w-full truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--overlay-1)]"
+                            >
+                              {selection.label ?? selection.kind.replace(/_/g, " ")}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       {turn.status === "queued" ? (
                         <p className="mt-1 font-ui text-[10px] italic text-[var(--overlay-1)]">Waiting for agent…</p>
                       ) : turn.status === "failed" ? (
-                        <p className="mt-1 font-ui text-[10px] text-[var(--danger)]">Failed — {turn.detail}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <p className="font-ui text-[10px] text-[var(--danger)]">Failed — {turn.detail}</p>
+                          <button
+                            type="button"
+                            className="font-ui text-[10px] font-medium text-[var(--accent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                            onClick={() => {
+                              setChatDraft(turn.text ?? "");
+                              queueMicrotask(() => composerRef.current?.focus());
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   ) : (
                     <div className="px-2.5">
                       {speakerChanged ? (
-                        <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{turn.speaker}</span>
+                        <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{agentDisplayName(turn.speaker)}</span>
                       ) : null}
                       {turn.text ? (
                         <MarkdownBody content={turn.text} className="agent-chat-markdown" />
                       ) : null}
-                      {turn.widget ? <AgentChatWidget widget={turn.widget} pinnable /> : null}
+                      {turn.widgets?.map((widget, widgetIndex) => (
+                        <AgentChatWidget key={`${turn.id}-widget-${widgetIndex}`} widget={widget} pinnable />
+                      ))}
+                      {turn.status === "cancelled" ? (
+                        <p className="mt-1 font-ui text-[10px] italic text-[var(--overlay-1)]" role="status" aria-live="polite">
+                          Response stopped.
+                        </p>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1054,8 +1131,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         )}
         {streamingReply !== null ? (
-          <div className="mt-3 px-2.5">
-            <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{targetAgent}</span>
+          <div className="mt-3 px-2.5" aria-live="polite" aria-atomic="false">
+            <span className="mb-0.5 block font-ui text-[10px] font-semibold text-[var(--accent)]">{agentDisplayName(targetAgent)}</span>
             {stripGenuiForStreaming(streamingReply) ? (
               <MarkdownBody content={stripGenuiForStreaming(streamingReply)} className="agent-chat-markdown" />
             ) : streamingReply ? (
@@ -1065,9 +1142,32 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             )}
           </div>
         ) : null}
+        {showReturnToLatest ? (
+          <button
+            type="button"
+            className="sticky bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-2.5 py-1 font-ui text-[10.5px] text-[var(--subtext-0)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            onClick={() => {
+              const thread = threadRef.current;
+              if (thread) thread.scrollTop = thread.scrollHeight;
+              followLatestRef.current = true;
+              setShowReturnToLatest(false);
+            }}
+          >
+            <ArrowDown className="h-3 w-3" aria-hidden="true" />
+            Latest
+          </button>
+        ) : null}
       </div>
 
       <div className="shrink-0 px-3 pb-3 pt-1">
+        {contextRouteLabel(conversationContext) ? (
+          <div className="mb-1.5 flex min-w-0 items-center gap-1 px-1" aria-label="Context that will be sent">
+            <span className="shrink-0 font-ui text-[9.5px] uppercase tracking-[0.12em] text-[var(--overlay-1)]">Context</span>
+            <span className="min-w-0 truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--subtext-0)]">
+              {contextRouteLabel(conversationContext)}
+            </span>
+          </div>
+        ) : null}
         <div className="relative rounded-lg bg-[var(--base)]">
           {plusMenuOpen ? (
             <>
@@ -1112,18 +1212,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                 </button>
                 <button
                   type="button"
-                  disabled={!canSpeak}
-                  onClick={() => {
-                    setPlusMenuOpen(false);
-                    void speakBrief();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-                >
-                  <Volume2 className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
-                  Speak status brief
-                </button>
-                <button
-                  type="button"
                   onClick={toggleSpeakReplies}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
@@ -1143,6 +1231,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           ) : null}
 
           <textarea
+            ref={composerRef}
             value={chatDraft}
             onChange={(event) => setChatDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -1152,7 +1241,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               }
             }}
             rows={3}
-            placeholder={`Message ${targetAgent}…`}
+            placeholder={`Message ${agentDisplayName(targetAgent)}…`}
             className="max-h-40 min-h-[64px] w-full resize-none bg-transparent px-3 pt-2.5 font-ui text-[12.5px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
           />
           {interimTranscript ? (
@@ -1166,6 +1255,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               type="button"
               onClick={() => setPlusMenuOpen((open) => !open)}
               aria-label="Workflows and actions"
+              aria-expanded={plusMenuOpen}
+              aria-haspopup="menu"
               title="Workflows and actions"
               className={cn(
                 "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
@@ -1184,7 +1275,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             >
               {agentOptions.map((agent) => (
                 <option key={agent} value={agent}>
-                  {agent}
+                  {agentDisplayName(agent)}
                 </option>
               ))}
             </select>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { PanelRightOpen, Undo2 } from "lucide-react";
+import { PanelRight, PictureInPicture2 } from "lucide-react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
@@ -10,6 +10,7 @@ import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider } from "./command-palette";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
 
 const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
 const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
@@ -32,7 +33,12 @@ function writeAgentPanelDetached(detached: boolean) {
 }
 
 export function AppShell() {
+  const location = useLocation();
   const [agentPanelDetached, setAgentPanelDetached] = useState(() => readAgentPanelDetached());
+
+  useEffect(() => {
+    publishConversationContext(createRouteConversationContext(location));
+  }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
     const syncDetachedState = () => setAgentPanelDetached(readAgentPanelDetached());
@@ -77,7 +83,8 @@ export function AppShell() {
         focus: true,
         alwaysOnTop: true,
         decorations: false,
-        backgroundColor: "#181825",
+        transparent: true,
+        backgroundColor: "#00000000",
       });
 
       panelWindow.once("tauri://created", () => {
@@ -149,7 +156,7 @@ export function AppShell() {
             )}
             style={{ background: PANE_BG_RAISED }}
           >
-            <PanelRightOpen className="h-4 w-4" />
+            <PictureInPicture2 className="h-4 w-4" />
           </button>
         ) : (
           <AgentPanel onEject={() => void ejectAgentPanel()} />
@@ -186,27 +193,29 @@ export function AgentPanelWindow() {
   const dragWindow = useWindowDrag();
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col bg-[var(--mantle)]">
-      {/* Frameless floating window: this strip is its title bar. */}
-      <div
-        onMouseDown={dragWindow}
-        className="flex h-9 shrink-0 cursor-default items-center justify-between border-b border-[var(--border)] pl-3 pr-2"
-      >
-        <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--overlay-1)]">
-          Agent Panel
-        </span>
-        <button
-          type="button"
-          onClick={redock}
-          aria-label="Return panel to main window"
-          title="Return to main window"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+    <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
+        {/* Frameless floating window: this strip is its title bar. */}
+        <div
+          onMouseDown={dragWindow}
+          className="flex h-9 shrink-0 cursor-default items-center justify-between border-b border-[var(--border)] pl-3 pr-2"
         >
-          <Undo2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1">
-        <AgentPanel mode="standalone" />
+          <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--overlay-1)]">
+            Agent Panel
+          </span>
+          <button
+            type="button"
+            onClick={redock}
+            aria-label="Attach agent panel to main window"
+            title="Attach to main window"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          >
+            <PanelRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1">
+          <AgentPanel mode="standalone" />
+        </div>
       </div>
       <WindowResizeHandles />
       <Toaster
