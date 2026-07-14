@@ -888,7 +888,7 @@ async function updateDatabaseView(input: {
   return { dry_run: false, view: toViewItem(view) };
 }
 
-async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
+async function findHomePinsDatabase(): Promise<WorkspaceDatabaseRow | null> {
   const select = "id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at";
   const { data: existingRows, error: existingError } = await supabase
     .schema("workspace").from("databases")
@@ -897,7 +897,13 @@ async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
     .limit(1);
   if (existingError) throw new Error(existingError.message);
   const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
+  return existing ?? null;
+}
+
+async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
+  const existing = await findHomePinsDatabase();
   if (existing) return existing;
+  const select = "id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at";
 
   // Mirrors ensureHomePinsWorkspaceDatabase() in src/lib/data.ts — keep in sync.
   const schema = [
@@ -997,8 +1003,10 @@ async function pinViewToHome(input: {
   }
   const viewDatabase = await resolveDatabase({ database_id: view.database_id });
 
-  const pinsDatabase = await ensureHomePinsDatabase();
-  const pinRecords = await listHomePinRecords(pinsDatabase.id);
+  const existingPinsDatabase = await findHomePinsDatabase();
+  const pinRecords = existingPinsDatabase
+    ? await listHomePinRecords(existingPinsDatabase.id)
+    : [];
   const alreadyPinned = pinRecords.find(
     (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === view.id,
   );
@@ -1032,6 +1040,7 @@ async function pinViewToHome(input: {
     });
   }
 
+  const pinsDatabase = existingPinsDatabase ?? await ensureHomePinsDatabase();
   const pinId = randomUUID();
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -1094,7 +1103,10 @@ async function unpinViewFromHome(input: {
   summary?: string | null;
   confirm_write?: boolean;
 }) {
-  const pinsDatabase = await ensureHomePinsDatabase();
+  const pinsDatabase = await findHomePinsDatabase();
+  if (!pinsDatabase) {
+    return { dry_run: false, write_performed: false, removed: false, message: "No Home pins exist." };
+  }
   const pinRecords = await listHomePinRecords(pinsDatabase.id);
   const matches = pinRecords.filter(
     (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === input.view_id,
