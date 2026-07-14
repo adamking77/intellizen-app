@@ -909,7 +909,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   if (!standalone && collapsed) {
     return (
       <aside
-        className="flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[28px] border border-[var(--border)] py-3 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)]"
+        className="flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[28px] border border-[var(--border)] py-3"
         style={{ background: "var(--mantle)" }}
       >
         <button

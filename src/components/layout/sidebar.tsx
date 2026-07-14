@@ -95,7 +95,7 @@ export function Sidebar() {
         "relative z-10 flex shrink-0 flex-col overflow-hidden border border-[var(--border)]",
         "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
         collapsed
-          ? "h-auto max-h-full self-start rounded-[28px] pb-2 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)]"
+          ? "h-auto max-h-full self-start rounded-[28px] pb-2"
           : "h-full rounded-2xl",
       )}
     >

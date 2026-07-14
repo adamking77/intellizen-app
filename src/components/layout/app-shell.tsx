@@ -84,6 +84,7 @@ export function AppShell() {
         alwaysOnTop: true,
         decorations: false,
         transparent: true,
+        shadow: false,
         backgroundColor: "#00000000",
       });
 
@@ -117,9 +118,9 @@ export function AppShell() {
           if (event.target === event.currentTarget) dragWindow(event);
         }}
         className={cn("flex h-dvh min-h-0 gap-2 p-2", !isTauriRuntime && "bg-[var(--crust)]")}
-        // 1% alpha keeps the gutters hit-testable for window dragging while
-        // staying visually transparent.
-        style={isTauriRuntime ? { background: "rgba(0,0,0,0.01)" } : undefined}
+        // Non-zero alpha keeps the transparent gutters hit-testable on macOS
+        // without painting a visible outline around the window.
+        style={isTauriRuntime ? { background: "rgba(0,0,0,0.001)" } : undefined}
       >
         <Sidebar />
         <main
@@ -152,7 +153,7 @@ export function AppShell() {
             title="Focus ejected agent panel"
             className={cn(
               "flex h-auto w-12 shrink-0 flex-col items-center self-start rounded-[28px] border border-[var(--border)] py-3",
-              "text-[var(--overlay-1)] shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)] transition-colors hover:text-[var(--text)]",
+              "text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]",
             )}
             style={{ background: PANE_BG_RAISED }}
           >
@@ -194,7 +195,7 @@ export function AgentPanelWindow() {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)]">
         {/* Frameless floating window: this strip is its title bar. */}
         <div
           onMouseDown={dragWindow}
