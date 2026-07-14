@@ -11,6 +11,7 @@ import { CommandPaletteProvider } from "./command-palette";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
+import { HomePinSync } from "@/components/home/home-pin-sync";
 
 const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
 const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
@@ -111,6 +112,7 @@ export function AppShell() {
 
   return (
     <CommandPaletteProvider>
+      <HomePinSync />
       {/* Clicks landing on the transparent gutters (this element itself, not
           a pane) move the window. */}
       <div

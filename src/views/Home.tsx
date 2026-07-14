@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useQuery } from "@tanstack/react-query";
 import type { Layout } from "react-grid-layout";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -27,7 +26,6 @@ import {
 } from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
-import { WORKSPACE_REMOTE_WRITE_EVENT } from "@/lib/workspace-events";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -38,7 +36,6 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 
 export function HomeView() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [genuiPins, setGenuiPins] = useState<GenuiPin[]>(() => loadGenuiPins());
@@ -51,8 +48,9 @@ export function HomeView() {
   } = useQuery({
     queryKey: ["workspace-database-catalog", entityFilter],
     queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
+    staleTime: 0,
+    refetchOnMount: "always",
+    networkMode: "always",
   });
   const {
     data: workspacePins,
@@ -64,25 +62,9 @@ export function HomeView() {
     // cache when remote is empty resurrects widgets after a confirmed unpin.
     queryFn: listHomePinsFromWorkspace,
     staleTime: 0,
-    refetchInterval: 15_000,
-    refetchIntervalInBackground: true,
+    refetchOnMount: "always",
+    networkMode: "always",
   });
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: UnlistenFn | null = null;
-    void listen(WORKSPACE_REMOTE_WRITE_EVENT, () => {
-      void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
-      void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });
-    }).then((nextUnlisten) => {
-      if (disposed) nextUnlisten();
-      else unlisten = nextUnlisten;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [queryClient]);
 
   useEffect(() => {
     if (!workspacePins) return;
