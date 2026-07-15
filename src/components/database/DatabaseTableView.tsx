@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, ChevronRight, Copy, Trash2 } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Copy, Trash2, X } from "lucide-react";
 
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
@@ -852,11 +852,12 @@ export function DatabaseTableView({
                       <button
                         className="db-property-option-remove"
                         title="Remove option"
+                        aria-label={`Remove ${draft.name || "option"}`}
                         onClick={() =>
                           setPropertyOptionDrafts((prev) => prev.filter((_, rowIndex) => rowIndex !== index))
                         }
                       >
-                        ✕
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
 import type {
@@ -100,7 +101,10 @@ type FilterOperator =
   | "gt"
   | "gte"
   | "lt"
-  | "lte";
+  | "lte"
+  | "is_today"
+  | "before_today"
+  | "within_last_days";
 
 interface ViewTabBarProps {
   views: WorkspaceDatabaseModel["views"];
@@ -150,6 +154,7 @@ export function ViewTabBar({
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [pendingDeleteViewId, setPendingDeleteViewId] = useState<string | null>(null);
 
   const addViewRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -270,7 +275,7 @@ export function ViewTabBar({
                     onCancelRename={() => setEditingViewId(null)}
                     onSwitchView={onSwitchView}
                     onStartRename={startRename}
-                    onDeleteView={onDeleteView}
+                    onDeleteView={setPendingDeleteViewId}
                     showClose={views.length > 1}
                   />
                 ))}
@@ -448,6 +453,18 @@ export function ViewTabBar({
         }}
         onToggleField={toggleFieldVisibility}
         onUpdateViewConfig={onUpdateViewConfig}
+      />
+      <ConfirmDialog
+        open={pendingDeleteViewId !== null}
+        title="Delete view"
+        message={`Delete "${views.find((view) => view.id === pendingDeleteViewId)?.name ?? "this view"}"? Records in the database will not be deleted.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (pendingDeleteViewId) onDeleteView(pendingDeleteViewId);
+          setPendingDeleteViewId(null);
+        }}
+        onCancel={() => setPendingDeleteViewId(null)}
       />
     </>
   );
@@ -644,12 +661,17 @@ function FilterPanel({
                       })
                     }
                   >
-                    ×
+                    <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
 
                 {operatorNeedsValue(normalizedOperator) ? (
-                  renderFilterValueInput(field, filter.value, (value) => updateFilter(index, { value }))
+                  renderFilterValueInput(
+                    field,
+                    normalizedOperator,
+                    filter.value,
+                    (value) => updateFilter(index, { value }),
+                  )
                 ) : null}
               </div>
             );
@@ -1467,13 +1489,30 @@ const OPERATOR_LABELS: Record<FilterOperator, string> = {
   gte: "Greater or equal",
   lt: "Less than",
   lte: "Less or equal",
+  is_today: "Is today",
+  before_today: "Is before today",
+  within_last_days: "Is within last (days)",
 };
 
 function operatorsForField(field: WorkspaceDatabaseField): FilterOperator[] {
   switch (field.type) {
     case "number":
-    case "date":
       return ["equals", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"];
+    case "date":
+    case "createdAt":
+    case "lastEditedAt":
+      return [
+        "is_today",
+        "before_today",
+        "within_last_days",
+        "equals",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "is_empty",
+        "is_not_empty",
+      ];
     case "checkbox":
     case "select":
     case "status":
@@ -1484,7 +1523,10 @@ function operatorsForField(field: WorkspaceDatabaseField): FilterOperator[] {
 }
 
 function operatorNeedsValue(operator: FilterOperator) {
-  return operator !== "is_empty" && operator !== "is_not_empty";
+  return operator !== "is_empty"
+    && operator !== "is_not_empty"
+    && operator !== "is_today"
+    && operator !== "before_today";
 }
 
 function defaultFilterForField(field: WorkspaceDatabaseField) {
@@ -1497,9 +1539,23 @@ function defaultFilterForField(field: WorkspaceDatabaseField) {
 
 function renderFilterValueInput(
   field: WorkspaceDatabaseField,
+  operator: FilterOperator,
   value: string,
   onChange: (value: string) => void,
 ) {
+  if (operator === "within_last_days") {
+    return (
+      <Input
+        type="number"
+        min={1}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Days"
+        className="h-9"
+      />
+    );
+  }
   if (field.type === "status" || field.type === "select") {
     return (
       <select className="db-select w-full" value={value} onChange={(event) => onChange(event.target.value)}>

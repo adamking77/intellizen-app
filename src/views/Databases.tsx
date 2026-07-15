@@ -5,11 +5,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  MoreHorizontal,
   Plus,
   Trash2,
 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ContextMenu, type ContextMenuState } from "@/components/ui/context-menu";
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
@@ -35,6 +37,7 @@ export function DatabasesView() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [databaseMenu, setDatabaseMenu] = useState<ContextMenuState | null>(null);
   const [currentDatabaseId, setCurrentDatabaseId] = useState<string | null>(() => loadCurrentDatabaseId());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -183,13 +186,17 @@ export function DatabasesView() {
           {canDeleteCurrentDatabase ? (
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => setDeleteConfirmOpen(true)}
+              variant="secondary"
+              onClick={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect();
+                setDatabaseMenu({ x: bounds.right - 168, y: bounds.bottom + 6 });
+              }}
               disabled={isDeleting}
-              className="gap-1.5 text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)]"
+              aria-label="Database actions"
+              title="Database actions"
+              className="h-8 w-8 p-0"
             >
-              <Trash2 className="h-3 w-3" />
-              {isDeleting ? "Deleting…" : "Delete database"}
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           ) : null}
           <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
@@ -344,6 +351,22 @@ export function DatabasesView() {
           </div>
         </div>
       </div>
+
+      {databaseMenu ? (
+        <ContextMenu
+          x={databaseMenu.x}
+          y={databaseMenu.y}
+          items={[
+            {
+              label: isDeleting ? "Deleting…" : "Delete database",
+              icon: <Trash2 className="h-3.5 w-3.5" />,
+              variant: "danger",
+              onSelect: () => setDeleteConfirmOpen(true),
+            },
+          ]}
+          onClose={() => setDatabaseMenu(null)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleteConfirmOpen && !!currentDatabase}

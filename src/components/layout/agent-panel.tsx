@@ -5,6 +5,7 @@ import { ArrowDown, Mic, MicOff, PanelRightClose, PanelRightOpen, PictureInPictu
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { AgentActionEvent } from "@/components/agent/agent-action-event";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
   extractGenuiBlocks,
@@ -264,6 +265,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   });
   const abortRef = useRef<AbortController | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [confirmNewSessionOpen, setConfirmNewSessionOpen] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
   const [inlineActions, setInlineActions] = useState<ConversationActionEvent[]>([]);
   const [conversationContext, setConversationContext] = useState<ConversationContextSnapshot | null>(() => readConversationContext());
@@ -272,6 +274,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const recordedChunksRef = useRef<Blob[]>([]);
   const hermesPreviewBusyRef = useRef(false);
   const hermesPreviewDirtyRef = useRef(false);
+  const hermesPreviewErrorShownRef = useRef(false);
   /** Draft text present when dictation started; live transcript appends after it. */
   const dictationBaseDraftRef = useRef("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -384,7 +387,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     // it is live, expose only the profile the gateway actually serves so the
     // speaker label cannot claim that another agent answered.
     if (hermesApiLive && liveHermesProfile) return [canonicalAgentName(liveHermesProfile.name)];
-    if (hermesProfiles.length > 0) return hermesProfiles.map((profile) => canonicalAgentName(profile.name));
+    if (hermesProfiles.length > 0) {
+      return Array.from(new Set(hermesProfiles.map((profile) => canonicalAgentName(profile.name))));
+    }
     return ["fiona", "steve", "keel"];
   }, [hermesApiLive, hermesProfiles, liveHermesProfile]);
   const defaultAgent = canonicalAgentName(liveHermesProfile?.name ?? "fiona");
@@ -509,7 +514,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         composer_note: chatDraft.trim() || null,
       },
     });
-    if (!result || !("workflow_run_id" in result) || !result.workflow_run_id) return;
+    if (!result) return;
+    if (!("workflow_run_id" in result) || !result.workflow_run_id) {
+      toast.error("Workflow start could not be verified", {
+        description: "No Workflow Run ID was returned. Check the registry before trying again.",
+      });
+      return;
+    }
     const occurredAt = new Date().toISOString();
     setInlineActions((current) => [
       ...current,
@@ -587,7 +598,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         notifyWorkspaceMayHaveChanged();
         if (speakReplies && cleanReply && voiceOutputProvider) {
           setIsSpeaking(true);
-          void speakWithProvider(cleanReply, voiceOutputProvider.id).catch(() => setIsSpeaking(false));
+          void speakWithProvider(cleanReply, voiceOutputProvider.id).catch((voiceError) => {
+            setIsSpeaking(false);
+            toastError("Voice output failed", voiceError);
+          });
         }
       } catch (streamError) {
         const stopped = streamError instanceof DOMException && streamError.name === "AbortError";
@@ -732,7 +746,16 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         hermesPreviewDirtyRef.current = false;
         const audio = new Blob(recordedChunksRef.current, { type: mimeType });
         if (audio.size === 0) return;
-        const result = await transcribeWithHermes(audio).catch(() => null);
+        let result: Awaited<ReturnType<typeof transcribeWithHermes>>;
+        try {
+          result = await transcribeWithHermes(audio);
+        } catch (previewError) {
+          if (!hermesPreviewErrorShownRef.current) {
+            hermesPreviewErrorShownRef.current = true;
+            toastError("Live dictation preview failed", previewError);
+          }
+          return;
+        }
         if (recorderRef.current?.state !== "recording") return;
         if (result?.transcript) setChatDraft(joinDraft(dictationBaseDraftRef.current, result.transcript));
       } while (hermesPreviewDirtyRef.current && recorderRef.current?.state === "recording");
@@ -756,6 +779,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordedChunksRef.current = [];
+      hermesPreviewErrorShownRef.current = false;
       dictationBaseDraftRef.current = chatDraft.trim();
       const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (event) => {
@@ -834,11 +858,16 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       window.localStorage.removeItem(HERMES_SESSION_KEY);
       window.localStorage.setItem(CHAT_CLEARED_KEY, now);
       window.localStorage.removeItem(CHAT_HISTORY_KEY);
-    } catch { /* ignore */ }
+    } catch (storageError) {
+      setConfirmNewSessionOpen(false);
+      toastError("Could not start a new chat session", storageError);
+      return;
+    }
     setClearedAt(now);
     setChatEntries([]);
     setInlineActions([]);
     setPlusMenuOpen(false);
+    setConfirmNewSessionOpen(false);
     toast.success("New chat session started");
   }
 
@@ -866,7 +895,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       const audio = new Audio(result.dataUrl);
       audioRef.current = audio;
       audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        toast.error("Voice output failed", { description: "The generated audio could not be played." });
+      };
       await audio.play();
       return;
     }
@@ -875,7 +907,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.94;
     utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    utterance.onerror = (event) => {
+      setIsSpeaking(false);
+      toast.error("Voice output failed", { description: event.error || "Speech synthesis stopped unexpectedly." });
+    };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }
@@ -1058,10 +1093,24 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             <p className="mt-1 line-clamp-3 font-ui text-[11px] text-[var(--subtext-0)]">
               {error instanceof Error ? error.message : "Refresh failed."}
             </p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="mt-2 rounded-full border border-[var(--border)] px-2.5 py-1 font-ui text-[10px] font-medium text-[var(--accent)] transition-colors hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            >
+              Retry
+            </button>
           </div>
         ) : null}
 
-        {conversationTimeline.length === 0 ? (
+        {agentChatQuery.isLoading && conversationTimeline.length === 0 ? (
+          <div className="space-y-2 px-2.5 py-2" role="status" aria-label="Loading conversation">
+            <div className="h-3 w-16 rounded-full bg-[var(--surface-0)]" />
+            <div className="h-8 w-full rounded-md bg-[var(--surface-wash)]" />
+            <div className="h-3 w-14 rounded-full bg-[var(--surface-0)]" />
+            <div className="h-12 w-5/6 rounded-md bg-[var(--surface-wash)]" />
+          </div>
+        ) : conversationTimeline.length === 0 && !agentChatQuery.error ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
             <p className="font-ui text-[12px] text-[var(--subtext-0)]">Message an agent to get started.</p>
             <p className="font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
@@ -1162,10 +1211,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             )}
           </div>
         ) : null}
-        {showReturnToLatest ? (
+      </div>
+
+      {showReturnToLatest ? (
+        <div className="flex shrink-0 justify-center border-t border-[var(--border-subtle)] py-1">
           <button
             type="button"
-            className="sticky bottom-1 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-2.5 py-1 font-ui text-[10.5px] text-[var(--subtext-0)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-2.5 py-1 font-ui text-[10.5px] text-[var(--subtext-0)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
             onClick={() => {
               const thread = threadRef.current;
               if (thread) thread.scrollTop = thread.scrollHeight;
@@ -1176,8 +1228,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             <ArrowDown className="h-3 w-3" aria-hidden="true" />
             Latest
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="shrink-0 px-3 pb-3 pt-1">
         {contextRouteLabel(conversationContext) ? (
@@ -1240,7 +1292,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={startNewSession}
+                  onClick={() => {
+                    setPlusMenuOpen(false);
+                    setConfirmNewSessionOpen(true);
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   <RefreshCw className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
@@ -1351,6 +1406,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmNewSessionOpen}
+        title="Start a new chat session?"
+        message="This clears the conversation currently visible in the Agent Panel. Durable workspace records and receipts are not deleted."
+        confirmLabel="Start new session"
+        onConfirm={startNewSession}
+        onCancel={() => setConfirmNewSessionOpen(false)}
+      />
       {!standalone ? <PaneResizeEdges east hideLeft /> : null}
     </aside>
   );

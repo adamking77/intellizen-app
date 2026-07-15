@@ -77,8 +77,8 @@ export function DatabaseListView({
     return (
       <EmptyState
         title="No records"
-        description="Create a record to get started."
-        action={{ label: "+ New Record", onClick: onCreateRecord }}
+        description={embedded ? "No records match this view." : "Create a record to get started."}
+        action={embedded ? undefined : { label: "+ New Record", onClick: onCreateRecord }}
       />
     );
   }

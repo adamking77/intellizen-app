@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 
 import type { AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
 import { pinGenuiWidget } from "@/lib/genui-pins";
+import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,8 +40,13 @@ function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
       type="button"
       disabled={pinned}
       onClick={() => {
-        pinGenuiWidget(widget);
-        setPinned(true);
+        try {
+          const pin = pinGenuiWidget(widget);
+          setPinned(true);
+          toast.success("Pinned to Home", { description: pin.title });
+        } catch (pinError) {
+          toastError("Could not pin generated view", pinError);
+        }
       }}
       className={cn(
         "font-ui text-[9.5px] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",

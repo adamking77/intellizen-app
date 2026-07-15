@@ -87,6 +87,7 @@ import { buildGraphExtractionPrompt } from "@/lib/shell";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
+  GraphNodeRecord,
 } from "@/lib/types";
 
 type GraphMode = "project" | "standalone";
@@ -100,6 +101,8 @@ type PendingGraphExtraction = {
 
 const FIONA_GRAPH_POLL_INTERVAL_MS = 4_000;
 const FIONA_GRAPH_POLL_TIMEOUT_MS = 3 * 60_000;
+const EMPTY_GRAPH_NODES: GraphNodeRecord[] = [];
+const EMPTY_GRAPH_EDGES: GraphEdgeRecord[] = [];
 
 const ENTITY_STYLES: Record<
   GraphEntityType,
@@ -404,8 +407,10 @@ export function GraphView() {
     enabled: graphMode === "project" && graphProjectId !== null,
   });
 
-  const nodes = nodesQuery.data ?? [];
-  const edges = edgesQuery.data ?? [];
+  // Stable loading fallbacks keep selection-cleanup effects from seeing a new
+  // array on every render and recursively scheduling state updates.
+  const nodes = nodesQuery.data ?? EMPTY_GRAPH_NODES;
+  const edges = edgesQuery.data ?? EMPTY_GRAPH_EDGES;
 
   useEffect(() => {
     setDragPositions((current) => {

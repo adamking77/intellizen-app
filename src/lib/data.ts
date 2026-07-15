@@ -40,7 +40,6 @@ import type {
   MonitorInsert,
   Operation,
   Project,
-  ProjectSignal,
   SearchResultItem,
   SignalDraft,
   TaxonomyMetadata,
@@ -65,6 +64,7 @@ import type {
   WorkspaceNode,
   WorkspaceNodeSummary,
 } from "@/lib/types";
+import { normalizeProjectSignalRows } from "@/lib/project-signals";
 import { safeHostname } from "@/lib/utils";
 import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
@@ -574,7 +574,7 @@ export async function listProjectSignals(projectId: number) {
     .order("added_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as unknown as ProjectSignal[];
+  return normalizeProjectSignalRows((data ?? []) as unknown as Parameters<typeof normalizeProjectSignalRows>[0]);
 }
 
 export async function removeSignalFromProject(projectSignalId: number) {
@@ -2990,7 +2990,10 @@ export async function listWorkspaceDatabaseCatalog(input: EntityFilterInput = {}
     .order("id", { ascending: true })
     .range(0, WORKSPACE_CATALOG_RECORD_LIMIT - 1);
 
-  databaseQuery = applyEntityFilter(databaseQuery, input);
+  // Database definitions and their saved views are shared structure. Keep
+  // them available under venture scope while filtering the records below;
+  // otherwise a scoped Tasks row cannot render because the shared Tasks
+  // database itself is owned by the GenZen entity.
   recordQuery = applyEntityFilter(recordQuery, input);
 
   const [

@@ -10,6 +10,8 @@ export interface HomePin {
   h: number;
 }
 
+export type HomePinPlacement = Pick<HomePin, "id" | "x" | "y" | "w" | "h">;
+
 const GRID_COLS = 12;
 const DEFAULT_PIN_W = 4;
 const DEFAULT_PIN_H = 11;
@@ -94,6 +96,37 @@ export function removeHomePinsForDatabase(
     pins: nextPins,
     removed: nextPins.length !== pins.length,
   };
+}
+
+export function patchHomePinPlacements(
+  pins: HomePin[],
+  placements: HomePinPlacement[],
+) {
+  const placementById = new Map(placements.map((placement) => [placement.id, placement]));
+  return pins.map((pin) => {
+    const placement = placementById.get(pin.id);
+    if (!placement) return pin;
+    return {
+      ...pin,
+      x: placement.x,
+      y: placement.y,
+      w: placement.w,
+      h: placement.h,
+    };
+  });
+}
+
+export function removeHomePinById(pins: HomePin[], pinId: string) {
+  return pins.filter((pin) => pin.id !== pinId);
+}
+
+export function restoreHomePin(pins: HomePin[], pin: HomePin) {
+  const alreadyPresent = pins.some(
+    (candidate) =>
+      candidate.id === pin.id ||
+      (candidate.databaseId === pin.databaseId && candidate.viewId === pin.viewId),
+  );
+  return alreadyPresent ? pins : [...pins, pin];
 }
 
 function migrateHomePins(values: unknown[]): HomePin[] {

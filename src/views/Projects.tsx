@@ -12,6 +12,7 @@ import { ProjectCreateModal } from "@/components/projects/project-create-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
+import { QueryState } from "@/components/ui/query-state";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Textarea } from "@/components/ui/textarea";
 import { domainColor } from "@/lib/domains";
@@ -139,10 +140,11 @@ export function ProjectsView() {
     queryFn: () => listProjects({ entity: entityFilter }),
   });
 
-  const { data: signalCounts } = useQuery({
+  const signalCountsQuery = useQuery({
     queryKey: ["project-signal-counts"],
     queryFn: listProjectSignalCounts,
   });
+  const signalCounts = signalCountsQuery.data;
   const { data: investigations } = useQuery({
     queryKey: ["investigations", entityFilter],
     queryFn: () => listInvestigations({ entity: entityFilter }),
@@ -235,11 +237,12 @@ export function ProjectsView() {
     setEditingName(false);
   }, [selectedOperation?.id]);
 
-  const { data: projectSignals } = useQuery({
+  const projectSignalsQuery = useQuery({
     queryKey: ["project-signals", selectedProjectId],
     queryFn: () => listProjectSignals(selectedProjectId as number),
     enabled: selectedProjectId !== null,
   });
+  const projectSignals = projectSignalsQuery.data;
 
   const { data: projectVaultFilesRaw } = useQuery({
     queryKey: ["project-vault-files", selectedProjectId],
@@ -429,15 +432,15 @@ export function ProjectsView() {
 
   // ── Indicators ─────────────────────────────────────────────────────────────
 
+  const loadingOperationalData = operationsLoading || projectsLoading;
   const indicators: IndicatorItem[] = [
-    { label: "Total", value: stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
-    { label: "Active", value: stats.active, status: stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
-    { label: "Archived", value: stats.archived, status: stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
-    { label: "Last touch", value: formatElapsed(stats.lastUpdated) },
+    { label: "Total", value: loadingOperationalData ? "…" : stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
+    { label: "Active", value: loadingOperationalData ? "…" : stats.active, status: !loadingOperationalData && stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
+    { label: "Archived", value: loadingOperationalData ? "…" : stats.archived, status: !loadingOperationalData && stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
+    { label: "Last touch", value: loadingOperationalData ? "…" : formatElapsed(stats.lastUpdated) },
   ];
 
   const loadError = operationsError ?? projectsError;
-  const loadingOperationalData = operationsLoading || projectsLoading;
 
   if (loadError) {
     return (
@@ -454,7 +457,7 @@ export function ProjectsView() {
 
   function renderProject(project: Project, indent = false) {
     const isSelected = selection?.kind === "project" && selection.id === project.id;
-    const count = signalCounts?.[project.id] ?? 0;
+    const count = signalCounts?.[project.id];
     const domain = project.watch_domain;
     const dot = project.status === "active" ? "var(--success)" : "var(--overlay-1)";
     return (
@@ -486,7 +489,16 @@ export function ProjectsView() {
             )}>
               {project.name}
             </p>
-            <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">{count}</span>
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[10px] tabular-nums",
+                signalCountsQuery.error ? "text-[var(--danger)]" : "text-[var(--overlay-1)]",
+              )}
+              title={signalCountsQuery.error ? `Signal count unavailable: ${signalCountsQuery.error.message}` : undefined}
+              aria-label={signalCountsQuery.isLoading ? "Loading signal count" : signalCountsQuery.error ? "Signal count unavailable" : `${count ?? 0} signals`}
+            >
+              {signalCountsQuery.isLoading ? "…" : signalCountsQuery.error ? "!" : count ?? 0}
+            </span>
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[11px]">
             {indent && (
@@ -669,6 +681,9 @@ export function ProjectsView() {
               project={selectedProject}
               operations={operations ?? []}
               projectSignals={projectSignals ?? []}
+              projectSignalsLoading={projectSignalsQuery.isLoading}
+              projectSignalsError={projectSignalsQuery.error}
+              onRetryProjectSignals={() => void projectSignalsQuery.refetch()}
               cases={selectedProjectCases}
               vaultFiles={projectVaultFiles}
               signalCounts={signalCounts ?? {}}
@@ -700,6 +715,8 @@ export function ProjectsView() {
               operationProjects={operationProjects}
               cases={selectedOperationCases}
               signalCounts={signalCounts ?? {}}
+              signalCountsLoading={signalCountsQuery.isLoading}
+              signalCountsError={signalCountsQuery.error}
               descDraft={operationDescDraft}
               descStatus={operationDescStatus}
               editingName={editingName}
@@ -798,6 +815,9 @@ function ProjectDetailPane({
   project,
   operations,
   projectSignals,
+  projectSignalsLoading,
+  projectSignalsError,
+  onRetryProjectSignals,
   cases,
   vaultFiles,
   notesDraft,
@@ -822,6 +842,9 @@ function ProjectDetailPane({
   project: Project;
   operations: Operation[];
   projectSignals: ProjectSignal[];
+  projectSignalsLoading: boolean;
+  projectSignalsError: Error | null;
+  onRetryProjectSignals: () => void;
   cases: Investigation[];
   vaultFiles: VaultFile[];
   signalCounts: Record<number, number>;
@@ -980,15 +1003,23 @@ function ProjectDetailPane({
         <div className="px-5 pt-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Attached signals</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{projectSignals.length}</span>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+              {projectSignalsLoading ? "…" : projectSignalsError ? "!" : projectSignals.length}
+            </span>
           </div>
         </div>
-        {projectSignals.length === 0 ? (
-          <div className="mx-5 mb-5 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-            No saved signals yet. Route from Inbox or Search.
-          </div>
-        ) : (
-          <div className="px-5 pb-5">
+        <div className="px-5 pb-5">
+          <QueryState
+            isLoading={projectSignalsLoading}
+            error={projectSignalsError}
+            isEmpty={projectSignals.length === 0}
+            loadingLabel="Loading attached signals"
+            emptyTitle="No saved signals yet"
+            emptyDescription="Route signals from Inbox or Search."
+            errorTitle="Attached signals unavailable"
+            onRetry={onRetryProjectSignals}
+          >
+            <div>
             {projectSignals.map((ps) =>
               ps.intel_signals ? (
                 <SignalCard
@@ -1004,8 +1035,9 @@ function ProjectDetailPane({
                 />
               ) : null,
             )}
-          </div>
-        )}
+            </div>
+          </QueryState>
+        </div>
       </div>
     </>
   );
@@ -1018,6 +1050,8 @@ function OperationDetailPane({
   operationProjects,
   cases,
   signalCounts,
+  signalCountsLoading,
+  signalCountsError,
   descDraft,
   descStatus,
   editingName,
@@ -1040,6 +1074,8 @@ function OperationDetailPane({
   operationProjects: Project[];
   cases: Investigation[];
   signalCounts: Record<number, number>;
+  signalCountsLoading: boolean;
+  signalCountsError: Error | null;
   descDraft: string;
   descStatus: "idle" | "dirty" | "saving" | "saved";
   editingName: boolean;
@@ -1163,7 +1199,12 @@ function OperationDetailPane({
         <div className="px-5 pt-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Collections</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{operationProjects.length} collection{operationProjects.length === 1 ? "" : "s"} · {totalSignals} signals</span>
+            <span
+              className={cn("font-mono text-[10px]", signalCountsError ? "text-[var(--danger)]" : "text-[var(--overlay-1)]")}
+              title={signalCountsError ? `Signal counts unavailable: ${signalCountsError.message}` : undefined}
+            >
+              {operationProjects.length} collection{operationProjects.length === 1 ? "" : "s"} · {signalCountsLoading ? "…" : signalCountsError ? "counts unavailable" : `${totalSignals} signals`}
+            </span>
           </div>
 
           {assignableProjects.length > 0 && (
@@ -1181,7 +1222,7 @@ function OperationDetailPane({
           ) : (
             <div className="mb-5 flex flex-col gap-1">
               {operationProjects.map((p) => {
-                const count = signalCounts[p.id] ?? 0;
+                const count = signalCounts[p.id];
                 const dot = p.watch_domain ? domainColor(p.watch_domain) : "var(--overlay-1)";
                 return (
                   <button
@@ -1195,7 +1236,9 @@ function OperationDetailPane({
                     <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
                       {p.type.replace("_", " ")}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">{count}</span>
+                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                      {signalCountsLoading ? "…" : signalCountsError ? "!" : count ?? 0}
+                    </span>
                   </button>
                 );
               })}

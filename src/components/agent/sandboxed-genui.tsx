@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 
 import { runSandboxQuery, type SandboxQueryInput } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 /**
  * Inside Tauri the shell comes from the custom genui: protocol — Tauri
@@ -32,19 +33,56 @@ const FRAME_SRC = isTauri() ? "genui://localhost/frame.html" : "/genui-frame.htm
 export function SandboxedGenui({ html, title }: { html: string; title?: string }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(240);
-  const nonce = useMemo(() => crypto.randomUUID(), []);
+  const [attempt, setAttempt] = useState(0);
+  const nonce = useMemo(() => crypto.randomUUID(), [attempt, html]);
+  const [renderState, setRenderState] = useState<
+    { nonce: string; status: "loading" | "ready" | "error"; message?: string }
+  >(() => ({ nonce, status: "loading" }));
+  const currentState = renderState.nonce === nonce ? renderState : { nonce, status: "loading" as const };
 
   useEffect(() => {
+    setHeight(240);
+    setRenderState({ nonce, status: "loading" });
+    const timeout = window.setTimeout(() => {
+      setRenderState((current) =>
+        current.nonce === nonce && current.status === "loading"
+          ? { nonce, status: "error", message: "The generated view did not finish loading." }
+          : current,
+      );
+    }, 12_000);
+
     function onMessage(event: MessageEvent) {
       const frame = iframeRef.current;
       if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data as { nonce?: string; type?: string; id?: number; payload?: unknown; height?: number };
+      const data = event.data as {
+        nonce?: string;
+        type?: string;
+        id?: number;
+        payload?: unknown;
+        height?: number;
+        error?: string;
+      };
 
       if (data?.type === "genui-ready") {
         frame.contentWindow?.postMessage({ type: "render", html, nonce }, "*");
         return;
       }
       if (data?.nonce !== nonce) return;
+
+      if (data.type === "genui-rendered") {
+        window.clearTimeout(timeout);
+        setRenderState({ nonce, status: "ready" });
+        return;
+      }
+      if (data.type === "genui-error") {
+        window.clearTimeout(timeout);
+        setRenderState({
+          nonce,
+          status: "error",
+          message: data.error?.trim() || "The generated view could not be rendered.",
+        });
+        return;
+      }
 
       if (data.type === "resize" && typeof data.height === "number") {
         setHeight(Math.min(Math.max(Math.ceil(data.height), 80), 600));
@@ -64,17 +102,56 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
       }
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", onMessage);
+    };
   }, [nonce, html]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      title={title ?? "Agent-generated view"}
-      sandbox="allow-scripts"
-      src={FRAME_SRC}
-      style={{ height }}
-      className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--base)]"
-    />
+    <div className="relative mt-1.5">
+      {currentState.status === "loading" ? (
+        <div
+          className="flex min-h-28 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-4"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-ui text-[11px] text-[var(--overlay-1)]">Loading generated view…</p>
+        </div>
+      ) : null}
+      {currentState.status === "error" ? (
+        <div
+          className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-3"
+          role="alert"
+        >
+          <p className="font-ui text-[11.5px] font-medium text-[var(--danger)]">Generated view unavailable</p>
+          <p className="mt-1 font-ui text-[10.5px] leading-relaxed text-[var(--subtext-0)]">
+            {currentState.message}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAttempt((current) => current + 1)}
+            className="mt-2 rounded-full border border-[var(--border)] px-2.5 py-1 font-ui text-[10px] font-medium text-[var(--accent)] transition-colors hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+      <iframe
+        key={nonce}
+        ref={iframeRef}
+        title={title ?? "Agent-generated view"}
+        sandbox="allow-scripts"
+        src={FRAME_SRC}
+        style={{ height }}
+        onError={() =>
+          setRenderState({ nonce, status: "error", message: "The generated view frame could not be loaded." })
+        }
+        className={cn(
+          "w-full rounded-md border border-[var(--border)] bg-[var(--base)]",
+          currentState.status === "ready" ? "block" : "pointer-events-none absolute inset-0 opacity-0",
+        )}
+      />
+    </div>
   );
 }

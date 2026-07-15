@@ -27,6 +27,7 @@ export function PinnedViewGrid({
   layout,
   onLayoutChange,
   onOpenWidget,
+  onOpenRecord,
   onRemoveWidget,
 }: {
   widgets: PinnedDatabaseWidgetModel[];
@@ -34,13 +35,32 @@ export function PinnedViewGrid({
   layout: Layout;
   onLayoutChange: (layout: Layout) => void;
   onOpenWidget: (widget: PinnedDatabaseWidgetModel) => void;
+  onOpenRecord: (widget: PinnedDatabaseWidgetModel, recordId: string) => void;
   onRemoveWidget: (widget: PinnedDatabaseWidgetModel) => void;
 }) {
   const [gridShellRef, gridShellSize] = useElementSize<HTMLDivElement>();
+  const orderedWidgets = [...widgets].sort(
+    (left, right) => left.pin.y - right.pin.y || left.pin.x - right.pin.x,
+  );
+  const useStackedLayout = gridShellSize.width > 0 && gridShellSize.width < 640;
 
   return (
     <div ref={gridShellRef} className="db-dashboard-grid-shell">
-      {widgets.length > 0 && gridShellSize.width > 0 ? (
+      {widgets.length > 0 && useStackedLayout ? (
+        <div className="flex flex-col gap-4">
+          {orderedWidgets.map((widget) => (
+            <div key={widget.pin.id} className="h-[420px] min-h-0">
+              <PinnedWidgetCard
+                widget={widget}
+                catalog={catalog}
+                onOpen={() => onOpenWidget(widget)}
+                onOpenRecord={(recordId) => onOpenRecord(widget, recordId)}
+                onRemove={() => onRemoveWidget(widget)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : widgets.length > 0 && gridShellSize.width > 0 ? (
         <GridLayout
           width={gridShellSize.width}
           className="db-dashboard-grid"
@@ -64,12 +84,13 @@ export function PinnedViewGrid({
           onDragStop={(nextLayout) => onLayoutChange(nextLayout)}
           onResizeStop={(nextLayout) => onLayoutChange(nextLayout)}
         >
-          {widgets.map((widget) => (
+          {orderedWidgets.map((widget) => (
             <div key={widget.pin.id} className="min-h-0">
               <PinnedWidgetCard
                 widget={widget}
                 catalog={catalog}
                 onOpen={() => onOpenWidget(widget)}
+                onOpenRecord={(recordId) => onOpenRecord(widget, recordId)}
                 onRemove={() => onRemoveWidget(widget)}
               />
             </div>
@@ -84,11 +105,13 @@ function PinnedWidgetCard({
   widget,
   catalog,
   onOpen,
+  onOpenRecord,
   onRemove,
 }: {
   widget: PinnedDatabaseWidgetModel;
   catalog: WorkspaceDatabaseCatalogEntry[];
   onOpen: () => void;
+  onOpenRecord: (recordId: string) => void;
   onRemove: () => void;
 }) {
   const widthClass =
@@ -105,19 +128,31 @@ function PinnedWidgetCard({
       )}
       data-view-type={widget.view.type}
     >
-      <div className="flex items-start gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+      <div className="relative flex items-start gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
         <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
           <GripVertical className="h-3.5 w-3.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-label truncate">
-            {widget.database.name}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="text-label truncate">
+              {widget.database.name}
+            </div>
+            {widget.view.filter.length > 0 ? (
+              <span className="shrink-0 rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--overlay-1)]">
+                {widget.view.filter.length} filter{widget.view.filter.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
           </div>
           <div className="mt-1 truncate font-ui text-[13px] font-medium leading-5 text-[var(--text)]">
             {widget.view.name}
           </div>
+          {widget.database.taxonomy?.entity_label ? (
+            <div className="mt-0.5 truncate font-ui text-[10px] text-[var(--overlay-1)]">
+              {widget.database.taxonomy.entity_label}
+            </div>
+          ) : null}
         </div>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-[var(--base)] opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-focus-within:opacity-100">
           <button
             type="button"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
@@ -137,7 +172,7 @@ function PinnedWidgetCard({
         </div>
       </div>
       <div className="min-h-0 min-w-0 flex-1">
-        <PinnedWidgetBody widget={widget} catalog={catalog} onOpen={onOpen} />
+        <PinnedWidgetBody widget={widget} catalog={catalog} onOpenRecord={onOpenRecord} />
       </div>
     </div>
   );
@@ -146,11 +181,11 @@ function PinnedWidgetCard({
 function PinnedWidgetBody({
   widget,
   catalog,
-  onOpen,
+  onOpenRecord,
 }: {
   widget: PinnedDatabaseWidgetModel;
   catalog: WorkspaceDatabaseCatalogEntry[];
-  onOpen: () => void;
+  onOpenRecord: (recordId: string) => void;
 }) {
   const [chartHostRef, chartHostSize] = useElementSize<HTMLDivElement>();
   const databaseModel: WorkspaceDatabaseModel = {
@@ -188,7 +223,7 @@ function PinnedWidgetBody({
         view={widget.view}
         catalog={catalog}
         activeRecordId={null}
-        onOpenRecord={onOpen}
+        onOpenRecord={onOpenRecord}
         onUpdateField={() => {}}
         onUpdateView={() => {}}
         onSaveSchema={() => {}}
@@ -208,7 +243,7 @@ function PinnedWidgetBody({
         database={databaseModel}
         view={widget.view}
         catalog={catalog}
-        onOpenRecord={onOpen}
+        onOpenRecord={onOpenRecord}
       />
     );
   }
@@ -220,7 +255,7 @@ function PinnedWidgetBody({
       view={widget.view}
       catalog={catalog}
       activeRecordId={null}
-      onOpenRecord={onOpen}
+      onOpenRecord={onOpenRecord}
       onCreateRecord={() => {}}
       onUpdateView={() => {}}
     />

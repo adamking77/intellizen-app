@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   HASH_PALETTE,
@@ -35,6 +35,10 @@ function makeDatabase(
 }
 
 describe("database-core", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("filters and sorts records using schema-aware values", () => {
     const schema: WorkspaceDatabaseField[] = [
       { id: "title", name: "Title", type: "text" },
@@ -132,6 +136,74 @@ describe("database-core", () => {
     );
 
     expect(filtered.map((record) => record.id)).toEqual(["task-a"]);
+  });
+
+  it("evaluates relative date filters against the local calendar day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 15, 12, 0, 0));
+
+    const schema: WorkspaceDatabaseField[] = [
+      { id: "title", name: "Title", type: "text" },
+      { id: "due", name: "Due", type: "date" },
+    ];
+    const records: WorkspaceDatabaseRecordModel[] = [
+      { id: "overdue", title: "Overdue", due: "2026-07-14" },
+      { id: "today", title: "Today", due: "2026-07-15" },
+      { id: "future", title: "Future", due: "2026-07-16" },
+      { id: "missing", title: "Missing", due: null },
+    ];
+
+    expect(
+      applyFilters(records, [{ fieldId: "due", op: "is_today", value: "" }], schema)
+        .map((record) => record.id),
+    ).toEqual(["today"]);
+    expect(
+      applyFilters(records, [{ fieldId: "due", op: "before_today", value: "" }], schema)
+        .map((record) => record.id),
+    ).toEqual(["overdue"]);
+  });
+
+  it("filters records within a recent calendar-day window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 15, 18, 0, 0));
+
+    const schema: WorkspaceDatabaseField[] = [
+      { id: "updated", name: "Updated", type: "lastEditedAt" },
+    ];
+    const records: WorkspaceDatabaseRecordModel[] = [
+      { id: "today", _updatedAt: "2026-07-15T05:00:00+04:00" },
+      { id: "six-days-ago", _updatedAt: "2026-07-09T23:30:00+04:00" },
+      { id: "seven-days-ago", _updatedAt: "2026-07-08T23:30:00+04:00" },
+      { id: "future", _updatedAt: "2026-07-16T00:30:00+04:00" },
+    ];
+
+    expect(
+      applyFilters(
+        records,
+        [{ fieldId: "updated", op: "within_last_days", value: "7" }],
+        schema,
+      ).map((record) => record.id),
+    ).toEqual(["today", "six-days-ago"]);
+  });
+
+  it("compares date filters chronologically instead of coercing ISO dates to numbers", () => {
+    const schema: WorkspaceDatabaseField[] = [
+      { id: "due", name: "Due", type: "date" },
+    ];
+    const records: WorkspaceDatabaseRecordModel[] = [
+      { id: "before", due: "2026-07-14" },
+      { id: "equal", due: "2026-07-15" },
+      { id: "after", due: "2026-07-16" },
+    ];
+
+    expect(
+      applyFilters(records, [{ fieldId: "due", op: "lt", value: "2026-07-15" }], schema)
+        .map((record) => record.id),
+    ).toEqual(["before"]);
+    expect(
+      applyFilters(records, [{ fieldId: "due", op: "gte", value: "2026-07-15" }], schema)
+        .map((record) => record.id),
+    ).toEqual(["equal", "after"]);
   });
 
   it("evaluates formula fields with references and functions", () => {

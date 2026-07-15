@@ -139,7 +139,7 @@ export function DatabasePeekPanel({
   const [panelWidth, setPanelWidth] = useState(lastPanelWidth);
   const [fullPage, setFullPage] = useState(false);
   const [notesDraft, setNotesDraft] = useState(String(record?._body ?? ""));
-  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [showHeaderPicker, setShowHeaderPicker] = useState(false);
   const [headerDragId, setHeaderDragId] = useState<string | null>(null);
   const [headerFieldIds, setHeaderFieldIds] = useState<string[]>([]);
@@ -219,7 +219,7 @@ export function DatabasePeekPanel({
         })
         .catch(() => {
           if (notesSaveSeqRef.current !== requestId) return;
-          setNotesStatus("dirty");
+          setNotesStatus("error");
         });
     }, 500);
     return () => window.clearTimeout(handle);
@@ -364,7 +364,7 @@ export function DatabasePeekPanel({
       })
       .catch(() => {
         if (notesSaveSeqRef.current !== requestId) return;
-        setNotesStatus("dirty");
+        setNotesStatus("error");
       });
   }
 
@@ -789,15 +789,28 @@ export function DatabasePeekPanel({
             <div className="db-record-section-head db-record-notes-head">
               <div className="db-record-notes-meta">
                 <div className="db-record-section-title mb-0">Notes</div>
-                <span className="db-record-notes-status">
+                <span
+                  className={notesStatus === "error" ? "db-record-notes-status text-[var(--danger)]" : "db-record-notes-status"}
+                >
                   {notesStatus === "saving"
                     ? "Saving..."
                     : notesStatus === "saved"
                       ? "Saved"
+                      : notesStatus === "error"
+                        ? "Save failed"
                       : notesStatus === "dirty"
                         ? "Editing..."
                         : ""}
                 </span>
+                {notesStatus === "error" ? (
+                  <button
+                    type="button"
+                    className="font-ui text-[10px] font-medium text-[var(--accent)] hover:text-[var(--text)]"
+                    onClick={() => setNotesStatus("dirty")}
+                  >
+                    Retry
+                  </button>
+                ) : null}
                 <span className="db-record-editor-count">{wordCount(notesDraft)} words</span>
               </div>
             </div>

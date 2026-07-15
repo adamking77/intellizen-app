@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, FileText, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { QueryState } from "@/components/ui/query-state";
 import { Select } from "@/components/ui/select";
 import {
   createWorkspaceRecord,
@@ -23,7 +24,7 @@ import type {
 } from "@/lib/types";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
-import { readVaultFile, writeVaultFile } from "@/lib/vault";
+import { readVaultFile, removeVaultFile, writeVaultFile } from "@/lib/vault";
 import { useAppStore } from "@/store";
 
 const InlineMarkdownEditor = lazy(async () => {
@@ -160,29 +161,41 @@ export function ReportsView() {
     mutationFn: async () => {
       if (!bundle?.database.id) throw new Error("Documents database is not ready.");
       const title = "Untitled document";
-      const path = `documents/${slugForTitle(title)}.md`;
+      const path = `documents/${slugForTitle(title)}-${Date.now()}.md`;
       await writeVaultFile(path, `# ${title}\n`);
-      return createWorkspaceRecord({
-        databaseId: bundle.database.id,
-        fields: {
-          [DOCUMENTS_DB_FIELDS.title]: title,
-          [DOCUMENTS_DB_FIELDS.docType]: "note",
-          [DOCUMENTS_DB_FIELDS.stage]: "Draft",
-          [DOCUMENTS_DB_FIELDS.entity]: entityFilter ?? "genzen",
-          [DOCUMENTS_DB_FIELDS.vaultPath]: path,
-          [DOCUMENTS_DB_FIELDS.linkedCase]: null,
-          [DOCUMENTS_DB_FIELDS.linkedEngagement]: null,
-          [DOCUMENTS_DB_FIELDS.createdAt]: new Date().toISOString(),
-          [DOCUMENTS_DB_FIELDS.updatedAt]: new Date().toISOString(),
-        },
-        taxonomy: {
-          entity: entityFilter ?? "genzen",
-          area: "internal_ops",
-          folder: "Documents",
-          object_type: "document",
-          routing_rule: "documents_database",
-        },
-      });
+      try {
+        return await createWorkspaceRecord({
+          databaseId: bundle.database.id,
+          fields: {
+            [DOCUMENTS_DB_FIELDS.title]: title,
+            [DOCUMENTS_DB_FIELDS.docType]: "note",
+            [DOCUMENTS_DB_FIELDS.stage]: "Draft",
+            [DOCUMENTS_DB_FIELDS.entity]: entityFilter ?? "genzen",
+            [DOCUMENTS_DB_FIELDS.vaultPath]: path,
+            [DOCUMENTS_DB_FIELDS.linkedCase]: null,
+            [DOCUMENTS_DB_FIELDS.linkedEngagement]: null,
+            [DOCUMENTS_DB_FIELDS.createdAt]: new Date().toISOString(),
+            [DOCUMENTS_DB_FIELDS.updatedAt]: new Date().toISOString(),
+          },
+          taxonomy: {
+            entity: entityFilter ?? "genzen",
+            area: "internal_ops",
+            folder: "Documents",
+            object_type: "document",
+            routing_rule: "documents_database",
+          },
+        });
+      } catch (error) {
+        try {
+          await removeVaultFile(path);
+        } catch (cleanupError) {
+          console.error("Failed to remove orphaned document after record creation failed:", cleanupError);
+          const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+          const creationMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Document record creation failed (${creationMessage}), and the new vault file could not be removed: ${cleanupMessage}`);
+        }
+        throw error;
+      }
     },
     onSuccess: async (record) => {
       await queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
@@ -231,17 +244,20 @@ export function ReportsView() {
 
   if (docsQuery.isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[var(--base)]">
-        <Loader2 className="h-5 w-5 animate-spin text-[var(--accent)]" />
+      <div className="flex h-full items-center justify-center bg-[var(--base)] p-6">
+        <QueryState isLoading error={undefined} isEmpty={false} loadingLabel="Loading documents" onRetry={() => void docsQuery.refetch()}>
+          {null}
+        </QueryState>
       </div>
     );
   }
 
   if (docsQuery.error) {
     return (
-      <div className="flex h-full flex-col bg-[var(--base)] p-6">
-        <p className="text-label text-[var(--danger)]">Docs unavailable</p>
-        <p className="mt-2 text-ui text-[var(--subtext-0)]">{docsQuery.error.message}</p>
+      <div className="flex h-full items-center justify-center bg-[var(--base)] p-6">
+        <QueryState isLoading={false} error={docsQuery.error} isEmpty={false} errorTitle="Docs unavailable" onRetry={() => void docsQuery.refetch()}>
+          {null}
+        </QueryState>
       </div>
     );
   }
@@ -334,11 +350,18 @@ export function ReportsView() {
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                {vaultFileQuery.isLoading ? (
-                  <EditorFallback />
-                ) : (
+                <QueryState
+                  isLoading={vaultFileQuery.isLoading}
+                  error={vaultFileQuery.error}
+                  isEmpty={false}
+                  errorTitle="Document couldn’t be opened"
+                  loadingLabel="Opening document"
+                  loadingFallback={<EditorFallback />}
+                  onRetry={() => void vaultFileQuery.refetch()}
+                >
                   <Suspense fallback={<EditorFallback />}>
                     <InlineMarkdownEditor
+                      key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}
                       initialValue={content}
                       onChange={(value) => {
                         setContent(value);
@@ -346,7 +369,7 @@ export function ReportsView() {
                       }}
                     />
                   </Suspense>
-                )}
+                </QueryState>
               </div>
             </>
           ) : (

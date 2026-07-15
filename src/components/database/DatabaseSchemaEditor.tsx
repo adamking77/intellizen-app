@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trash2, X } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { STATUS_OPTIONS } from "@/lib/database-core";
@@ -244,8 +245,8 @@ export function DatabaseSchemaEditor({
             <h3 className="db-schema-title">{database.name}</h3>
             <div className="db-schema-subtitle">{activeView.name} view</div>
           </div>
-          <button className="db-icon-btn" onClick={onClose} title="Close">
-            ✕
+          <button className="db-icon-btn" onClick={onClose} title="Close" aria-label="Close field manager">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -329,8 +330,13 @@ export function DatabaseSchemaEditor({
 	                      <option key={type} value={type}>{type}</option>
 	                    ))}
 	                  </select>
-	                  <button className="db-icon-btn db-schema-delete" onClick={() => setConfirmRemoveIndex(index)} title="Delete field">
-	                    🗑
+	                  <button
+	                    className="db-icon-btn db-schema-delete"
+	                    onClick={() => setConfirmRemoveIndex(index)}
+	                    title="Delete field"
+	                    aria-label={`Delete ${field.name}`}
+	                  >
+	                    <Trash2 className="h-3.5 w-3.5" />
 	                  </button>
 	                </div>
 

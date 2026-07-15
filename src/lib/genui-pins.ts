@@ -50,6 +50,9 @@ export function saveGenuiPins(pins: GenuiPin[]) {
 
 export function pinGenuiWidget(widget: AgentChatWidget): GenuiPin {
   const pins = loadGenuiPins();
+  if (pins.length >= MAX_PINS) {
+    throw new Error(`Home already has the maximum of ${MAX_PINS} generated views.`);
+  }
   const pin: GenuiPin = {
     id: crypto.randomUUID(),
     title: widget.title?.trim() || defaultTitle(widget),
@@ -57,6 +60,9 @@ export function pinGenuiWidget(widget: AgentChatWidget): GenuiPin {
     pinnedAt: new Date().toISOString(),
   };
   saveGenuiPins([...pins, pin]);
+  if (!loadGenuiPins().some((candidate) => candidate.id === pin.id)) {
+    throw new Error("The generated view was not saved. Try again.");
+  }
   return pin;
 }
 

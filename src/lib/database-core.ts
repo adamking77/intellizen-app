@@ -489,6 +489,7 @@ export function applyFilters(
       const stringValue = valueAsFilterString(getFieldDisplayValue(record, field, database, catalog));
       const rawStringValue = valueAsFilterString(value);
       const filterValue = filter.value.toLowerCase();
+      const dateValue = isDateField(field) ? toLocalDateTimestamp(value) : null;
 
       switch (filter.op) {
         case "contains":
@@ -508,19 +509,82 @@ export function applyFilters(
             value === "" ||
             (Array.isArray(value) && value.length === 0)
           );
+        case "is_today": {
+          if (dateValue === null) return false;
+          const { start, end } = localDayBounds(new Date());
+          return dateValue >= start && dateValue < end;
+        }
+        case "before_today": {
+          if (dateValue === null) return false;
+          return dateValue < localDayBounds(new Date()).start;
+        }
+        case "within_last_days": {
+          if (dateValue === null) return false;
+          const days = Math.floor(Number(filter.value));
+          if (!Number.isFinite(days) || days < 1) return false;
+          const now = new Date();
+          const { start: todayStart, end: tomorrowStart } = localDayBounds(now);
+          const windowStart = new Date(todayStart);
+          windowStart.setDate(windowStart.getDate() - (days - 1));
+          return dateValue >= windowStart.getTime() && dateValue < tomorrowStart;
+        }
         case "gt":
-          return Number(value) > Number(filter.value);
+          return isDateField(field)
+            ? compareDateFilter(dateValue, filter.value, (left, right) => left > right)
+            : Number(value) > Number(filter.value);
         case "gte":
-          return Number(value) >= Number(filter.value);
+          return isDateField(field)
+            ? compareDateFilter(dateValue, filter.value, (left, right) => left >= right)
+            : Number(value) >= Number(filter.value);
         case "lt":
-          return Number(value) < Number(filter.value);
+          return isDateField(field)
+            ? compareDateFilter(dateValue, filter.value, (left, right) => left < right)
+            : Number(value) < Number(filter.value);
         case "lte":
-          return Number(value) <= Number(filter.value);
+          return isDateField(field)
+            ? compareDateFilter(dateValue, filter.value, (left, right) => left <= right)
+            : Number(value) <= Number(filter.value);
         default:
           return true;
       }
     }),
   );
+}
+
+function isDateField(field: WorkspaceDatabaseField) {
+  return field.type === "date" || field.type === "createdAt" || field.type === "lastEditedAt";
+}
+
+function toLocalDateTimestamp(value: WorkspaceDatabaseFieldValue): number | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+
+  if (typeof value === "string") {
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (dateOnly) {
+      const date = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+      return Number.isNaN(date.getTime()) ? null : date.getTime();
+    }
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function localDayBounds(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const endDate = new Date(start);
+  endDate.setDate(endDate.getDate() + 1);
+  return { start, end: endDate.getTime() };
+}
+
+function compareDateFilter(
+  left: number | null,
+  rawRight: string,
+  compare: (left: number, right: number) => boolean,
+) {
+  if (left === null) return false;
+  const right = toLocalDateTimestamp(rawRight);
+  return right !== null && compare(left, right);
 }
 
 export function applySorts(

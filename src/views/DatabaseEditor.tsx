@@ -690,6 +690,7 @@ export function DatabaseEditorView({
     } catch (err) {
       restoreSnapshots(snapshot);
       toastError("Record body update failed", err);
+      throw err;
     }
   }
 
@@ -956,6 +957,7 @@ export function DatabaseEditorView({
   async function handleToggleActiveViewHomePin() {
     if (!database || !activeView) return;
     if (!supportsPinnedHomeView(activeView.type)) return;
+    const previousPins = homePins;
 
     if (findHomePin(homePins, { databaseId: database.id, viewId: activeView.id })) {
       const result = removeHomePin(homePins, {
@@ -968,8 +970,21 @@ export function DatabaseEditorView({
         try {
           await saveHomePinsToWorkspace(result.pins);
           await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
-          toast.success("View removed from Home");
+          toast.success("View removed from Home", {
+            action: {
+              label: "Undo",
+              onClick: () => {
+                setHomePins(previousPins);
+                saveHomePins(previousPins);
+                void saveHomePinsToWorkspace(previousPins)
+                  .then(() => queryClient.invalidateQueries({ queryKey: ["home-pins"] }))
+                  .catch((undoError) => toastError("Couldn't restore Home view", undoError));
+              },
+            },
+          });
         } catch (err) {
+          setHomePins(previousPins);
+          saveHomePins(previousPins);
           toastError("Home pin update failed", err);
         }
       }
@@ -990,6 +1005,8 @@ export function DatabaseEditorView({
           action: { label: "Open Home", onClick: () => navigate("/home") },
         });
       } catch (err) {
+        setHomePins(previousPins);
+        saveHomePins(previousPins);
         toastError("Home pin update failed", err);
       }
     } else {

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Layout } from "react-grid-layout";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -8,24 +8,32 @@ import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { PinnedViewGrid, type PinnedDatabaseWidgetModel } from "@/components/home/pinned-view-grid";
 import {
   loadHomePins,
+  patchHomePinPlacements,
+  removeHomePinById,
+  restoreHomePin,
   saveHomePins,
   supportsPinnedHomeView,
   type HomePin,
+  type HomePinPlacement,
 } from "@/lib/home-pins";
+import { mutateAuthoritativeHomePins } from "@/lib/home-pin-mutations";
 import { loadGenuiPins, unpinGenuiWidget, type GenuiPin } from "@/lib/genui-pins";
 import {
   loadHomeDashboardLayout,
   mergeHomeDashboardLayout,
+  pinnedDatabaseRecordPath,
   saveHomeDashboardLayout,
   type HomeDashboardLayoutItem,
 } from "@/lib/home-dashboard";
 import {
   listHomePinsFromWorkspace,
   listWorkspaceDatabaseCatalog,
+  listWorkspaceEntities,
   saveHomePinsToWorkspace,
 } from "@/lib/data";
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
+import { toast } from "@/lib/toast";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -36,11 +44,18 @@ const ROTATION_ACCENTS: Record<RotationWeek, string> = {
 
 export function HomeView() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [pins, setPins] = useState<HomePin[]>(() => loadHomePins());
   const [genuiPins, setGenuiPins] = useState<GenuiPin[]>(() => loadGenuiPins());
   const [layout, setLayout] = useState<HomeDashboardLayoutItem[]>(() => loadHomeDashboardLayout());
+  const pinMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const rotation = currentRotation();
+  const { data: workspaceEntities = [] } = useQuery({
+    queryKey: ["workspace-entities"],
+    queryFn: listWorkspaceEntities,
+    staleTime: 10 * 60_000,
+  });
   const {
     data: catalog = [],
     isLoading,
@@ -67,12 +82,6 @@ export function HomeView() {
   });
 
   useEffect(() => {
-    if (!workspacePins) return;
-    setPins(workspacePins);
-    saveHomePins(workspacePins);
-  }, [workspacePins]);
-
-  useEffect(() => {
     saveHomePins(pins);
   }, [pins]);
 
@@ -91,6 +100,10 @@ export function HomeView() {
       })
       .filter((widget): widget is PinnedDatabaseWidgetModel => Boolean(widget));
   }, [catalog, pins]);
+
+  const activeEntityLabel = entityFilter
+    ? workspaceEntities.find((entity) => entity.slug === entityFilter)?.label ?? entityFilter.replace(/_/g, " ")
+    : "All entities";
 
   useEffect(() => {
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
@@ -119,35 +132,119 @@ export function HomeView() {
     [layout, pinnedWidgets],
   );
 
-  function commitGridLayout(nextLayout: Layout) {
-    const nextLayoutItems = nextLayout.map((item) => ({
+  const applyAuthoritativePins = useCallback((nextPins: HomePin[]) => {
+    const nextLayout = nextPins.map((pin) => ({
+      id: pin.id,
+      x: pin.x,
+      y: pin.y,
+      w: pin.w,
+      h: pin.h,
+    }));
+    setPins(nextPins);
+    setLayout(nextLayout);
+    saveHomePins(nextPins);
+    queryClient.setQueryData(["home-pins"], nextPins);
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!workspacePins) return;
+    applyAuthoritativePins(workspacePins);
+  }, [applyAuthoritativePins, workspacePins]);
+
+  function enqueuePinMutation(transform: (current: HomePin[]) => HomePin[]) {
+    let authoritative: HomePin[] = [];
+    const operation = pinMutationQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const result = await mutateAuthoritativeHomePins({
+          read: listHomePinsFromWorkspace,
+          write: saveHomePinsToWorkspace,
+          transform,
+        });
+        authoritative = result.authoritative;
+        applyAuthoritativePins(authoritative);
+        await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+      });
+    pinMutationQueueRef.current = operation.catch(() => undefined);
+    return operation.then(() => authoritative);
+  }
+
+  async function restoreRemotePinsAfterFailure() {
+    try {
+      const authoritative = await listHomePinsFromWorkspace();
+      applyAuthoritativePins(authoritative);
+    } catch {
+      await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+    }
+  }
+
+  function persistPlacements(placements: HomePinPlacement[]) {
+    return enqueuePinMutation((current) => patchHomePinPlacements(current, placements));
+  }
+
+  function commitGridLayout(nextGridLayout: Layout) {
+    const nextLayoutItems = nextGridLayout.map((item) => ({
       id: item.i,
       x: item.x,
       y: item.y,
       w: item.w,
       h: item.h,
     }));
-    const byId = new Map(nextLayoutItems.map((item) => [item.id, item]));
-    const nextPins = pins.map((pin) => {
-      const next = byId.get(pin.id);
-      return next ? { ...pin, x: next.x, y: next.y, w: next.w, h: next.h } : pin;
-    });
     setLayout(nextLayoutItems);
-    setPins(nextPins);
-    void saveHomePinsToWorkspace(nextPins).catch(() => {});
+    setPins((current) => patchHomePinPlacements(current, nextLayoutItems));
+    void persistPlacements(nextLayoutItems).catch((err) => {
+      void restoreRemotePinsAfterFailure();
+      toast.error("Home layout was not saved", {
+        description: errorDescription(err),
+        action: {
+          label: "Retry",
+          onClick: () => {
+            void persistPlacements(nextLayoutItems).catch((retryErr) => {
+              void restoreRemotePinsAfterFailure();
+              toast.error("Home layout was not saved", { description: errorDescription(retryErr) });
+            });
+          },
+        },
+      });
+    });
   }
 
   function handleRemovePin(pinId: string) {
-    const nextPins = pins.filter((pin) => pin.id !== pinId);
-    setPins(nextPins);
+    const removedPin = pins.find((pin) => pin.id === pinId);
+    if (!removedPin) return;
+    setPins((current) => removeHomePinById(current, pinId));
     setLayout((current) => current.filter((item) => item.id !== pinId));
-    void saveHomePinsToWorkspace(nextPins).catch(() => {});
+    void enqueuePinMutation((current) => removeHomePinById(current, pinId))
+      .then(() => {
+        toast.success("View removed from Home", {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              setPins((current) => restoreHomePin(current, removedPin));
+              void enqueuePinMutation((current) => restoreHomePin(current, removedPin)).catch((err) => {
+                void restoreRemotePinsAfterFailure();
+                toast.error("View could not be restored", { description: errorDescription(err) });
+              });
+            },
+          },
+        });
+      })
+      .catch((err) => {
+        void restoreRemotePinsAfterFailure();
+        toast.error("View was not removed from Home", {
+          description: errorDescription(err),
+          action: {
+            label: "Retry",
+            onClick: () => handleRemovePin(pinId),
+          },
+        });
+      });
   }
 
   if (error || pinsError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <div className="border-b border-[var(--border)] bg-[var(--base)] px-3 py-4 sm:px-6">
           <span className="text-label">Home unavailable</span>
           <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
             {error instanceof Error
@@ -163,7 +260,7 @@ export function HomeView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 items-end justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-3 py-4 sm:gap-6 sm:px-6">
         <div className="flex flex-col gap-2">
           <span className="text-label">Home</span>
           <p
@@ -173,9 +270,12 @@ export function HomeView() {
             {rotation.week} week · {rotation.daysRemaining} days remaining
           </p>
         </div>
+        <span className="rounded-full border border-[var(--border)] px-2.5 py-1 font-ui text-[11px] text-[var(--subtext-0)]">
+          Scope · {activeEntityLabel}
+        </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-6">
         <section className="mx-auto flex w-full max-w-[1600px] flex-col">
           {isLoading || isLoadingPins ? (
             <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
@@ -189,6 +289,9 @@ export function HomeView() {
               layout={gridLayout}
               onLayoutChange={commitGridLayout}
               onOpenWidget={(widget) => navigate(`/databases/${widget.database.id}?view=${widget.view.id}`)}
+              onOpenRecord={(widget, recordId) =>
+                navigate(pinnedDatabaseRecordPath(widget.database.id, widget.view.id, recordId))
+              }
               onRemoveWidget={(widget) => handleRemovePin(widget.pin.id)}
             />
           ) : (
@@ -225,6 +328,14 @@ export function HomeView() {
       </div>
     </div>
   );
+}
+
+function errorDescription(err: unknown) {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return "The shared Home Pins database did not accept the change.";
 }
 
 /**
