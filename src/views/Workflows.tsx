@@ -223,14 +223,14 @@ export function WorkflowsView() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside className="flex h-[46%] w-full shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)] lg:h-auto lg:w-[390px] lg:border-b-0 lg:border-r">
           <div className="space-y-3 border-b border-[var(--border)] p-4">
-            <div className="grid grid-cols-3 gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] p-1">
               {STATUS_FILTERS.map((filter) => (
                 <button
                   key={filter.id}
                   type="button"
                   onClick={() => setStatusFilter(filter.id)}
                   className={cn(
-                    "h-7 min-w-0 rounded px-2 font-ui text-[11px] font-medium transition-colors",
+                    "h-7 min-w-0 rounded-full px-2 font-ui text-[11px] font-medium transition-colors",
                     statusFilter === filter.id
                       ? "bg-[var(--base)] text-[var(--text)]"
                       : "text-[var(--overlay-1)] hover:text-[var(--subtext-0)]",

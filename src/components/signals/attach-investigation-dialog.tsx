@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
 import type { IntelSignal, Investigation } from "@/lib/types";
 
 interface AttachInvestigationDialogProps {
@@ -20,25 +21,34 @@ export function AttachInvestigationDialog({
   onConfirm,
   isSubmitting,
 }: AttachInvestigationDialogProps) {
-  if (!signal) return null;
-
   const selected =
     investigations.find((investigation) => investigation.case_id === selectedCaseId) ?? null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-[520px] rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-[var(--shadow-elevated)]">
-        <p className="text-sm font-semibold text-[var(--foreground)]">
-          Attach Signal to Investigation
-        </p>
-        <p className="mt-1 text-xs text-[var(--foreground-muted)]">{signal.title}</p>
-
-        <div className="mt-4">
-          <label className="text-xs font-medium text-[var(--foreground-muted)]">
+    <AppDialog
+      open={Boolean(signal)}
+      onOpenChange={(open) => { if (!open && !isSubmitting) onCancel(); }}
+      title="Attach signal to investigation"
+      description={signal?.title}
+      className="w-full max-w-[520px]"
+      footer={(
+        <>
+          <Button variant="ghost" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
+          <Button
+            onClick={() => { if (selected) onConfirm(selected.id); }}
+            disabled={!selected || isSubmitting}
+          >
+            {isSubmitting ? "Attaching…" : "Attach"}
+          </Button>
+        </>
+      )}
+    >
+        <div className="grid gap-1.5">
+          <label className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Investigation
           </label>
           <select
-            className="mt-1 h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] px-3 text-sm"
+            className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--base)] px-3 font-ui text-[13px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
             value={selectedCaseId ?? ""}
             onChange={(event) => onSelectCaseId(event.target.value || null)}
           >
@@ -53,22 +63,6 @@ export function AttachInvestigationDialog({
             )}
           </select>
         </div>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              if (!selected) return;
-              onConfirm(selected.id);
-            }}
-            disabled={!selected || isSubmitting}
-          >
-            {isSubmitting ? "Attaching..." : "Attach"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

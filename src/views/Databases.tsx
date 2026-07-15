@@ -2,16 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
-  ChevronLeft,
-  ChevronRight,
   Loader2,
+  MoreHorizontal,
   Plus,
   Trash2,
 } from "lucide-react";
 
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ContextMenu, type ContextMenuState } from "@/components/ui/context-menu";
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
+import { VentureScope } from "@/components/ui/venture-scope";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
 import { loadHomePins, removeHomePinsForDatabase, saveHomePins } from "@/lib/home-pins";
 import {
@@ -35,6 +38,7 @@ export function DatabasesView() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [databaseMenu, setDatabaseMenu] = useState<ContextMenuState | null>(null);
   const [currentDatabaseId, setCurrentDatabaseId] = useState<string | null>(() => loadCurrentDatabaseId());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -180,16 +184,21 @@ export function DatabasesView() {
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <span className="text-label">Databases</span>
         <div className="flex items-center gap-2">
+          <VentureScope />
           {canDeleteCurrentDatabase ? (
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => setDeleteConfirmOpen(true)}
+              variant="secondary"
+              onClick={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect();
+                setDatabaseMenu({ x: bounds.right - 168, y: bounds.bottom + 6 });
+              }}
               disabled={isDeleting}
-              className="gap-1.5 text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-[var(--danger)]"
+              aria-label="Database actions"
+              title="Database actions"
+              className="h-8 w-8 p-0"
             >
-              <Trash2 className="h-3 w-3" />
-              {isDeleting ? "Deleting…" : "Delete database"}
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           ) : null}
           <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
@@ -200,88 +209,27 @@ export function DatabasesView() {
       </div>
 
       <div className="flex min-h-0 flex-1 bg-[var(--base)]">
-        <aside
-          style={{ width: railCollapsed ? 0 : DATABASE_RAIL_WIDTH_EXPANDED }}
-          className={cn(
-            "flex shrink-0 flex-col overflow-hidden bg-[var(--base)]",
-            "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            !railCollapsed && "border-r border-[var(--border)]",
-          )}
+        <CollapsibleRail
+          title="Databases"
+          width={DATABASE_RAIL_WIDTH_EXPANDED}
+          collapsed={railCollapsed}
+          onCollapse={() => setRailCollapsed(true)}
+          collapseLabel="Collapse database rail"
         >
-          <div
-            className={cn(
-              "flex h-14 shrink-0 items-center border-b border-[var(--border)]",
-              railCollapsed ? "justify-center px-0" : "justify-between px-4",
-            )}
-          >
-            {railCollapsed ? (
-              <button
-                type="button"
-                onClick={() => setRailCollapsed(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                aria-label="Expand database rail"
-                title="Expand databases"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            ) : (
-              <>
-                <div />
-                <button
-                  type="button"
-                  onClick={() => setRailCollapsed(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  aria-label="Collapse database rail"
-                  title="Collapse databases"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              </>
-            )}
-          </div>
-
           <div className="min-h-0 flex-1 overflow-y-auto">
             {isLoading ? (
-              <div className={cn("flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--overlay-1)]", railCollapsed && "justify-center p-3")}>
+              <div className="flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--overlay-1)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {!railCollapsed ? <span>Loading databases...</span> : null}
+                <span>Loading databases...</span>
               </div>
             ) : safeDatabases.length === 0 ? (
-              railCollapsed ? (
-                <div className="flex justify-center p-3">
-                  <span className="rounded-md border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
-                    0
-                  </span>
-                </div>
-              ) : (
-                <div className="p-4">
-                  <p className="font-ui text-[13px] font-medium text-[var(--text)]">No databases yet</p>
-                  <p className="mt-1 text-[12px] text-[var(--overlay-1)]">Create your first database to get started.</p>
-                </div>
-              )
+              <div className="p-4">
+                <p className="font-ui text-[13px] font-medium text-[var(--text)]">No databases yet</p>
+                <p className="mt-1 text-[12px] text-[var(--overlay-1)]">Create your first database to get started.</p>
+              </div>
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
-                {safeDatabases.map((database) => {
-                  if (railCollapsed) {
-                    return (
-                      <button
-                        key={database.id}
-                        type="button"
-                        title={database.name}
-                        onClick={() => selectDatabase(database.id)}
-                        className={cn(
-                          "group flex h-14 w-full items-center justify-center transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
-                          currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
-                        )}
-                      >
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
-                          {database.name.slice(0, 1)}
-                        </span>
-                      </button>
-                    );
-                  }
-
-                  return (
+                {safeDatabases.map((database) => (
                     <button
                       key={database.id}
                       type="button"
@@ -302,25 +250,18 @@ export function DatabasesView() {
                         {database.name}
                       </p>
                     </button>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>
-        </aside>
+        </CollapsibleRail>
 
         <div className="relative min-w-0 flex-1">
-          {railCollapsed ? (
-            <button
-              type="button"
-              onClick={() => setRailCollapsed(false)}
-              className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              aria-label="Expand database rail"
-              title="Show databases"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : null}
+          <CollapsedRailTrigger
+            visible={railCollapsed}
+            onExpand={() => setRailCollapsed(false)}
+            label="Expand database rail"
+          />
 
           <div className={cn("h-full overflow-hidden", railCollapsed && "pl-14")}>
             <div className="h-full">
@@ -344,6 +285,22 @@ export function DatabasesView() {
           </div>
         </div>
       </div>
+
+      {databaseMenu ? (
+        <ContextMenu
+          x={databaseMenu.x}
+          y={databaseMenu.y}
+          items={[
+            {
+              label: isDeleting ? "Deleting…" : "Delete database",
+              icon: <Trash2 className="h-3.5 w-3.5" />,
+              variant: "danger",
+              onSelect: () => setDeleteConfirmOpen(true),
+            },
+          ]}
+          onClose={() => setDatabaseMenu(null)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleteConfirmOpen && !!currentDatabase}

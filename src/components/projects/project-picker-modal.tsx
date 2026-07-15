@@ -1,11 +1,12 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createProject, listProjects } from "@/lib/data";
+import { createProject, listOperations, listProjects } from "@/lib/data";
 import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { cn } from "@/lib/utils";
 import type { ProjectType } from "@/lib/types";
@@ -24,7 +25,7 @@ export function ProjectPickerModal({
   open,
   onClose,
   onSelect,
-  title = "Attach to collection",
+  title = "Save to work item",
   detailsSlot,
 }: ProjectPickerModalProps) {
   const queryClient = useQueryClient();
@@ -41,11 +42,16 @@ export function ProjectPickerModal({
   );
   const [creating, setCreating] = useState(false);
   const [savingProjectId, setSavingProjectId] = useState<number | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
 
   const { data: projects } = useQuery({
     queryKey: ["projects", entityFilter],
     queryFn: () => listProjects({ entity: entityFilter }),
+    enabled: open,
+  });
+
+  const { data: operations } = useQuery({
+    queryKey: ["operations", entityFilter],
+    queryFn: () => listOperations({ entity: entityFilter }),
     enabled: open,
   });
 
@@ -80,18 +86,6 @@ export function ProjectPickerModal({
   });
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
     if (!open) {
       setCreating(false);
       setName("");
@@ -106,52 +100,22 @@ export function ProjectPickerModal({
     }
   }, [open]);
 
-  if (!open) return null;
-
   const existing = projects ?? [];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && savingProjectId === null) onClose(); }}
+      title={title}
+      description="Choose an evidence pile inside the work item where this result belongs."
+      className="w-full max-w-[560px]"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="flex max-h-[min(640px,90vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              {savingProjectId !== null ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />
-                  <span className="text-[var(--accent)]">Saving to collection…</span>
-                </>
-              ) : (
-                "Collection routing"
-              )}
-            </p>
-            <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              {title}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={savingProjectId !== null}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        {savingProjectId !== null ? (
+          <p className="mb-3 flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Saving evidence…
+          </p>
+        ) : null}
           {detailsSlot ? (
             <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
               {detailsSlot}
@@ -160,7 +124,7 @@ export function ProjectPickerModal({
 
           <div className="mb-2 flex items-center justify-between">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              Existing collections
+              Choose an evidence pile inside a work item
             </span>
             <span className="font-mono text-[10px] text-[var(--overlay-1)]">
               {existing.length}
@@ -169,7 +133,7 @@ export function ProjectPickerModal({
 
           {existing.length === 0 ? (
             <p className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No collections yet — create one below.
+              No evidence piles yet — create a standalone one below, then assign it to a work item in Intel.
             </p>
           ) : (
             <div className="grid gap-1.5">
@@ -201,7 +165,10 @@ export function ProjectPickerModal({
                       "truncate font-ui text-[13px] font-medium",
                       isSaving ? "text-[var(--accent)]" : "text-[var(--text)]",
                     )}>
-                      {project.name}
+                      <span className="block truncate">{project.name}</span>
+                      <span className="mt-0.5 block truncate font-ui text-[10px] font-normal text-[var(--overlay-1)]">
+                        {(operations ?? []).find((operation) => operation.id === project.operation_id)?.name ?? "Standalone evidence pile"}
+                      </span>
                     </span>
                     <span className="shrink-0 flex items-center gap-1.5">
                       {isSaving ? (
@@ -223,7 +190,7 @@ export function ProjectPickerModal({
               <div className="grid gap-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                    New collection
+                    New standalone evidence pile
                   </span>
                   <button
                     type="button"
@@ -234,7 +201,7 @@ export function ProjectPickerModal({
                   </button>
                 </div>
                 <Input
-                  placeholder="Collection name"
+                  placeholder="Evidence pile name"
                   value={name}
                   autoFocus
                   onChange={(event) => setName(event.target.value)}
@@ -282,12 +249,10 @@ export function ProjectPickerModal({
                   "transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >
-                + New collection
+                + New standalone evidence pile
               </button>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

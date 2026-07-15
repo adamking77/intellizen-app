@@ -11,6 +11,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { searchWorkspace } from "@/lib/data";
+import { LABELS } from "@/lib/labels";
 import type { InternalSearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
@@ -88,24 +89,17 @@ interface Command {
 const NAV_COMMANDS: Command[] = [
   { id: "nav:home", label: "Home", kind: "navigation", run: ({ navigate }) => navigate("/home") },
   { id: "nav:search", label: "Search", kind: "navigation", run: ({ navigate }) => navigate("/search") },
-  { id: "nav:intel", label: "Intel", kind: "navigation", run: ({ navigate }) => navigate("/intel") },
+  { id: "nav:intel", label: LABELS.researchDesk, kind: "navigation", run: ({ navigate }) => navigate("/intel") },
   { id: "nav:databases", label: "Databases", kind: "navigation", run: ({ navigate }) => navigate("/databases") },
-  { id: "nav:docs", label: "Docs", kind: "navigation", run: ({ navigate }) => navigate("/docs") },
+  { id: "nav:docs", label: LABELS.docs, kind: "navigation", run: ({ navigate }) => navigate("/docs") },
   { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
   { id: "nav:canvas", label: "Canvas", kind: "navigation", run: ({ navigate }) => navigate("/canvas") },
-  { id: "nav:inbox", label: "Inbox", kind: "navigation", run: ({ navigate }) => navigate("/inbox") },
-  { id: "nav:monitors", label: "Monitors", kind: "navigation", run: ({ navigate }) => navigate("/monitors") },
-  { id: "nav:agent-work", label: "Agent Work", kind: "navigation", run: ({ navigate }) => navigate("/agent-work") },
-  { id: "nav:workflows", label: "Workflows", kind: "navigation", run: ({ navigate }) => navigate("/workflows") },
-  { id: "nav:roles", label: "Roles", kind: "navigation", run: ({ navigate }) => navigate("/roles") },
-  { id: "nav:investigate", label: "Case workspace", kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
+  { id: "nav:investigate", label: LABELS.caseWorkspace, kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
 ];
 
 const ACTION_COMMANDS: Command[] = [
   { id: "act:new-investigation", label: "New case investigation", hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
-  { id: "act:new-monitor", label: "New monitor", hint: "Monitors", kind: "action", run: ({ navigate }) => navigate("/monitors") },
-  { id: "act:new-collection", label: "New collection", hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
-  { id: "act:run-monitor", label: "Run monitor", hint: "Refresh Inbox", kind: "action", run: ({ navigate }) => navigate("/inbox") },
+  { id: "act:new-collection", label: `New ${LABELS.collection.toLowerCase()}`, hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
   { id: "act:open-graph", label: "Open Graph", kind: "action", run: ({ navigate }) => navigate("/graph") },
   { id: "act:search-web", label: "Search — Web", hint: "Exa web", kind: "action", run: ({ navigate }) => navigate("/search?mode=web") },
   { id: "act:search-news", label: "Search — News", kind: "action", run: ({ navigate }) => navigate("/search?mode=news") },

@@ -219,9 +219,10 @@ export function WindowResizeHandles() {
           key={zone.dir}
           role="presentation"
           className={cn("fixed", zone.dir.length > 5 ? "z-[210]" : "z-[200]", zone.className)}
-          // 1% alpha keeps the strip hit-testable over fully transparent
-          // window regions without being visible.
-          style={{ cursor: zone.cursor, background: "rgba(0,0,0,0.01)" }}
+          // A non-zero alpha keeps transparent-window regions hit-testable on
+          // macOS. Keep it below visible compositing thresholds so resize
+          // strips do not trace the window edge in production captures.
+          style={{ cursor: zone.cursor, background: "rgba(0,0,0,0.001)" }}
           onPointerDown={(event) => void beginWindowResize(event, zone.dir)}
         />
       ))}
@@ -246,7 +247,7 @@ export function PaneResizeEdges({
 }) {
   if (!isTauriRuntime) return null;
   const strip = "absolute z-40";
-  const paint = { background: "rgba(0,0,0,0.01)" };
+  const paint = { background: "rgba(0,0,0,0.001)" };
   return (
     <>
       <div

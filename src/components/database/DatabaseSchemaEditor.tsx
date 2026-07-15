@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { STATUS_OPTIONS } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,
@@ -233,22 +235,23 @@ export function DatabaseSchemaEditor({
     onClose();
   }
 
-  if (!open) return null;
-
   return (
-    <div className="db-schema-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="db-schema-panel">
-        <div className="db-schema-header">
-          <div className="min-w-0">
-            <div className="db-schema-kicker">Manage fields</div>
-            <h3 className="db-schema-title">{database.name}</h3>
-            <div className="db-schema-subtitle">{activeView.name} view</div>
-          </div>
-          <button className="db-icon-btn" onClick={onClose} title="Close">
-            ✕
-          </button>
-        </div>
-
+    <>
+      <AppDialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        title={database.name}
+        description={`Manage fields in the ${activeView.name} view`}
+        className="flex w-full max-w-[min(1040px,calc(100vw-2rem))] flex-col"
+        footer={(
+          <>
+            <button className="db-btn" onClick={onClose}>Cancel</button>
+            <button className="db-btn db-btn-primary" onClick={handleSave}>Save</button>
+          </>
+        )}
+      >
         <div className="db-schema-toolbar">
           <div className="db-schema-toolbar-meta">
             Visible in this view: {schema.length - hiddenInView.size}/{schema.length}
@@ -329,8 +332,13 @@ export function DatabaseSchemaEditor({
 	                      <option key={type} value={type}>{type}</option>
 	                    ))}
 	                  </select>
-	                  <button className="db-icon-btn db-schema-delete" onClick={() => setConfirmRemoveIndex(index)} title="Delete field">
-	                    🗑
+	                  <button
+	                    className="db-icon-btn db-schema-delete"
+	                    onClick={() => setConfirmRemoveIndex(index)}
+	                    title="Delete field"
+	                    aria-label={`Delete ${field.name}`}
+	                  >
+	                    <Trash2 className="h-3.5 w-3.5" />
 	                  </button>
 	                </div>
 
@@ -546,11 +554,7 @@ export function DatabaseSchemaEditor({
           </div>
         </div>
 
-        <div className="db-schema-footer">
-          <button className="db-btn" onClick={onClose}>Cancel</button>
-          <button className="db-btn db-btn-primary" onClick={handleSave}>Save</button>
-        </div>
-      </div>
+      </AppDialog>
 
       <ConfirmDialog
         open={confirmRemoveIndex !== null}
@@ -563,6 +567,6 @@ export function DatabaseSchemaEditor({
         }}
         onCancel={() => setConfirmRemoveIndex(null)}
       />
-    </div>
+    </>
   );
 }

@@ -8,6 +8,15 @@ export interface HomeDashboardLayoutItem {
   h: number;
 }
 
+export function pinnedDatabaseRecordPath(
+  databaseId: string,
+  viewId: string,
+  recordId: string,
+) {
+  const params = new URLSearchParams({ view: viewId, record: recordId });
+  return `/databases/${encodeURIComponent(databaseId)}?${params.toString()}`;
+}
+
 const STORAGE_KEY = "intelizen:home-layout";
 
 export function loadHomeDashboardLayout(): HomeDashboardLayoutItem[] {
@@ -31,20 +40,18 @@ export function saveHomeDashboardLayout(layout: HomeDashboardLayoutItem[]) {
 
 export function mergeHomeDashboardLayout(
   pins: HomePin[],
-  layout: HomeDashboardLayoutItem[],
+  _layout: HomeDashboardLayoutItem[],
 ): HomeDashboardLayoutItem[] {
-  const layoutById = new Map(layout.map((item) => [item.id, item]));
-  return pins.map((pin) => {
-    const saved = layoutById.get(pin.id);
-    if (saved) return saved;
-    return {
-      id: pin.id,
-      x: pin.x,
-      y: pin.y,
-      w: pin.w,
-      h: pin.h,
-    } satisfies HomeDashboardLayoutItem;
-  });
+  // Home Pins is the durable shared layout. Local storage is only a legacy
+  // cache; letting it override these coordinates makes an agent/MCP move look
+  // like it failed as soon as Home mounts.
+  return pins.map((pin) => ({
+    id: pin.id,
+    x: pin.x,
+    y: pin.y,
+    w: pin.w,
+    h: pin.h,
+  } satisfies HomeDashboardLayoutItem));
 }
 
 function isHomeDashboardLayoutItem(value: unknown): value is HomeDashboardLayoutItem {

@@ -148,7 +148,7 @@ export function MonitorsView() {
                 key={value}
                 onClick={() => setStatusFilter(value)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1",
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
                   "font-ui text-[12px] font-medium",
                   "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                   statusFilter === value
@@ -389,7 +389,7 @@ function MonitorCard({
               <button
                 type="button"
                 onClick={() => onEdit(monitor)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                 title="Edit monitor"
               >
                 <Pencil className="h-3 w-3" />
@@ -397,7 +397,7 @@ function MonitorCard({
               <button
                 type="button"
                 onClick={() => setDeleteConfirmOpen(true)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
                 title="Delete monitor"
               >
                 <Trash2 className="h-3 w-3" />
@@ -603,7 +603,7 @@ function MonitorFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -649,7 +649,7 @@ function MonitorFormModal({
                     type="button"
                     onClick={() => setDraft((d) => ({ ...d, watch_domain: domain }))}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-1",
                       "font-ui text-[11px] font-medium",
                       "transition-colors duration-150",
                       active
@@ -682,7 +682,7 @@ function MonitorFormModal({
                     type="button"
                     onClick={() => setDraft((d) => ({ ...d, frequency: freq }))}
                     className={cn(
-                      "inline-flex items-center rounded-md border px-3 py-1",
+                      "inline-flex items-center rounded-full border px-3 py-1",
                       "font-ui text-[11px] font-medium capitalize",
                       "transition-colors duration-150",
                       active

@@ -43,6 +43,11 @@ export function taxonomyEntityLabel(taxonomy?: TaxonomyMetadata | null) {
   return TAXONOMY_ENTITY_LABELS[entity] ?? "Unfiled";
 }
 
+export function ventureScopeLabel(entity?: string | null) {
+  if (!entity) return "All ventures";
+  return TAXONOMY_ENTITY_LABELS[entity] ?? entity.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function taxonomyAreaLabel(taxonomy?: TaxonomyMetadata | null) {
   const area = typeof taxonomy?.area === "string" ? taxonomy.area : "";
   if (typeof taxonomy?.area_label === "string" && taxonomy.area_label.trim()) {

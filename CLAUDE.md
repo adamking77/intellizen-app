@@ -16,9 +16,9 @@ Primary sidebar routes:
 | Graph | `/graph` |
 | Canvas | `/canvas` |
 
-Deep-link routes remain mounted but are not primary sidebar surfaces: `/investigate`, `/inbox`, `/monitors`, `/agent-work`, `/workflows`, `/roles`. Legacy redirects stay in place: `/projects` redirects to `/intel`; `/reports` redirects to `/docs`.
+`/investigate` remains mounted as a flow-entered deep link from Intel. Retired standalone pages redirect to their surviving operating surface: `/inbox`, `/monitors`, `/agent-work`, and `/roles` → Home; `/workflows` → the Workflow Registry database. Legacy redirects stay in place: `/projects` → Intel and `/reports` → Docs.
 
-Investigation (3-phase flow: Brief → Collect → Analyse, with Scoping / Post / Sit Rep use-case selectors), Docs, Home dashboard pins, Agent Work, Workflows, Roles, Databases, and Canvas were promoted beyond the V1 freeze. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
+Investigation (3-phase flow: Brief → Collect → Analyse), Docs, the Home morning operating loop, durable Home pins, Databases, and Canvas were promoted beyond the V1 freeze. Inbox and Monitors are retired in favor of Fiona's daily brief; Agent Work, Workflows, and Roles are represented by database-backed Home widgets instead of standalone pages. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
 
 ## Build commands
 
@@ -167,7 +167,7 @@ The **Tauri SDK** uses `category: 'news'` for News and `category: 'personal site
 
 ## MCP server
 
-Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `dist/` directory is gitignored — always build after pulling. The server exposes tools for projects, investigations, signals, vault files, graph nodes/edges, workspace database views (`list_database_views`, `create_database_view`, `update_database_view` — incl. chart views), and Home dashboard pins (`pin_view_to_home`, `unpin_view_from_home`). Home pins live in the hidden "Home Pins" workspace database (`icon: intel-system:home-pins`); the desktop app polls remote pins every 60s and remote wins, so agent-created views/pins appear without an app rebuild. View/pin writes follow the `confirm_write` preview pattern and emit `workspace.work_events` receipts.
+Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `dist/` directory is gitignored — always build after pulling. The server exposes tools for projects, investigations, signals, vault files, graph nodes/edges, workspace database views (`list_database_views`, `create_database_view`, `update_database_view` — incl. chart views), and Home dashboard pins (`pin_view_to_home`, `unpin_view_from_home`). Home pins live in the hidden "Home Pins" workspace database (`icon: intel-system:home-pins`); a persistent app-shell observer polls remote pins every 15s across routes, refreshes on window focus, and treats remote state as authoritative, so agent-created views/pins appear without an app rebuild. `pin_view_to_home` accepts integer `x`/`y` coordinates for the same 12-column bento grid used by the frontend and automatically chooses the first open slot when coordinates are omitted. View/pin writes follow the `confirm_write` preview pattern, lead every preview with `DRY RUN — NOTHING WRITTEN`, and emit `workspace.work_events` receipts only on confirmed writes.
 
 **Single-build rule (fleet audit #9, consolidated 2026-07-09):** every consumer runs the repo build at `mcp-server/dist/index.js` — Claude via `~/.claude.json`, Fiona via `~/.hermes/profiles/fiona/mcp-servers/intellizen/run.sh` (env wrapper only, no vendored copy), Codex via `~/.codex/config.toml`. Never vendor another compiled copy; after `pnpm build`, all three pick up the new build on their next MCP (re)start. (The old `list_project_signals` raw_payload bloat was fixed in this build — signal read tools all return slim fields.)
 
@@ -175,7 +175,7 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 - **UI changes are gated by [DESIGN.md](DESIGN.md)** — tokens only, required states, density/anatomy match, and the review gate at the end of that file. No new routes, sidebar items, or default surfaces without Adam's approval: agents propose views, Adam pins.
 
-- Intel schema names are not UI labels: `anchors.operations`, `anchors.projects`, `intel.*`, MCP tool names, and TypeScript `Operation`/`Project` names remain stable while the user-facing section is Intel and intel projects display as Collections.
+- Intel schema names are not UI labels: `anchors.operations`, `anchors.projects`, `intel.*`, MCP tool names, and TypeScript `Operation`/`Project` names remain stable. The UI presents operations as work items and projects as evidence piles. New work items use one of four types (`client_case`, `venture_research`, `publication_research`, `relationship_research`); only client cases expose a case stage, and legacy operations may remain unclassified.
 - Workspace databases own the business vocabulary. Business "Operations" and "Projects" belong in workspace databases, not as renames of the intel schema bridge.
 - Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
 - Preserve `raw_payload` on signals so Exa response evolution doesn't force schema churn.
@@ -186,4 +186,4 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 ## Out of scope (still not built)
 
-Vercel webhook receivers · Exa Monitor API push delivery · auto-graph generation · multi-user auth · cross-platform targets · vault-sync to the Brain Supabase project (manual export only).
+Vercel webhook receivers · Exa Monitor API push delivery · unattended background graph generation · multi-user auth · cross-platform targets · vault-sync to the Brain Supabase project (manual export only).

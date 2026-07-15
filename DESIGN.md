@@ -2,7 +2,7 @@
 
 Design system refresh for the 7-screen Tauri build. This is the authoritative design reference; `src/index.css`, component primitives, and per-screen work derive from it.
 
-> **Binding status (2026-07-02):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are removed from the sidebar (2026-07-02 product decision — collection runs agentically via Fiona).
+> **Binding status (2026-07-15):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are retired in favor of Fiona's daily brief. Agent Work, Workflows, and Roles are database-backed Home widgets rather than standalone destinations.
 >
 > **Shell reconciliation (2026-07-07):** the app is now a frameless transparent window with floating rounded panes (sogo-app reference): custom traffic lights in the main pane's chrome strip, JS window drag, manual pane-edge resize (see `docs/chrome-layer-handoff-2026-07-07.md`), collapsible sidebar/agent-panel as detached pills, and **pill-shaped buttons app-wide** (Adam-pinned). The "Navigation shell" section below predates this and is historical where it conflicts; sidebar has icons and the section names are Home / Search / Intel / Databases / Docs / Graph / Canvas.
 
@@ -13,6 +13,14 @@ Design system refresh for the 7-screen Tauri build. This is the authoritative de
 3. **Data is the decoration.** Numbers, timestamps, and live readouts are the visual hero. The chrome stays quiet.
 4. **Calm over kinetic.** Motion supports legibility, not aesthetic. No gimmicks.
 5. **Single-user desktop app, keyboard-first.** ⌘K is the spine; mouse is supplementary.
+
+### Trust doctrine
+
+1. **Failure must look different from empty.** Every data region has distinct loading, content, empty-with-next-action, and error-with-retry states. A failed read never mounts an editable surface.
+2. **Every action is acknowledged.** User-initiated writes never swallow failures. Optimistic changes, autosaves, and background persistence expose success or failure clearly.
+3. **Destructive means confirmed or undoable.** Deliberate deletion uses the shared confirmation dialog; frequent reversible actions use an Undo toast. Destructive actions do not live in primary page chrome.
+4. **One gesture, one meaning.** The same object has the same click contract and action vocabulary everywhere it appears.
+5. **Keyboard parity.** Every overlay closes with Escape, traps focus while open, and returns focus to its trigger. Primary work remains reachable without a mouse.
 
 ## Reference anchors
 
@@ -157,7 +165,7 @@ Replace the current `.card-intel`, `.panel-hud`, `.btn-accent` with flat, glow-f
 ### Existing primitives — rebuild
 
 - `<Card>` — 1px `--border`, 12px radius, Surface0 background, no hover glow, no gradient. Optional `interactive` prop triggers border-color shift to `--border-strong` on hover (150ms).
-- `<Button>` — three variants: `primary` (Accent bg, Crust text), `secondary` (Surface0 bg, Text fg, 1px border), `ghost` (transparent, Subtext0 fg, no border). All 8px radius, 13px Satoshi medium. `:active` scale-[0.98]. No gradient. No glow.
+- `<Button>` — three variants: `primary` (Accent bg, Crust text), `secondary` (Surface0 bg, Text fg, 1px border), `ghost` (transparent, Subtext0 fg, no border). All full-pill radius, 13px Satoshi medium. `:active` scale-[0.98]. No gradient. No glow.
 - `<Input>` / `<Textarea>` — Surface0 bg, 1px border, 8px radius. Focus: border → Accent, 1px ring (`--accent-border`). No glow.
 - `<Badge>` — 6px radius, uppercase 10px Satoshi 600, tracking-[0.14em]. Variants per status color, all with Surface0-tinted bg at 15% opacity + full-strength text color.
 - `<Checkbox>` — Custom. Unchecked: 1px Surface1 border, 4px radius. Checked: Accent fill, Crust checkmark. 150ms transition.
@@ -170,6 +178,7 @@ Replace the current `.card-intel`, `.panel-hud`, `.btn-accent` with flat, glow-f
 - `<MetricCell>` — for hero numbers. 10px uppercase label above 32px Geist Mono 500 metric. Optional small delta below (Geist Mono 11px, `--success` or `--danger` prefix arrow).
 - `<BracketFrame>` — decorative corner bracket wrapper (`┌ ┐ └ ┘` motif, 1px Subtext0 at 40% opacity, 8px corner length). Use sparingly as section framers on analytical screens.
 - `<CommandPalette>` — ⌘K modal. Global. Fuzzy search across: all routes, common actions (New Investigation, New Monitor, New Project, Run Monitor, Open Graph, Search Web/News/People/Research), recent projects/investigations. Built on a Dialog primitive. 12px radius, Mantle background, 1px Surface1 border, single flat shadow for elevation.
+- `<CollapsibleRail>` — shared Docs, Intel, Databases, and Canvas left rail. Expanded state uses a 56px Mantle header with title left, optional actions, and a circular left-chevron collapse control. Collapsed state is width zero and exposes one circular right-chevron trigger at `left: 12px; top: 12px` in the content pane. Use a 200ms width/padding transition, preserve page-specific widths, and never move the expand control into the page header.
 
 ---
 
@@ -303,7 +312,7 @@ These rules bind all UI work by agents (Claude, Codex, or any future actor) and 
 
 ### Agent-surface rules
 
-- **The Agent Panel is a chat surface, not a form.** Its anatomy is fixed (VS Code agent chat reference): a full-height conversation thread and **one composer frame at the bottom** — textarea on top, controls row inside the frame (plus-menu for workflows/actions, Hermes profile picker, dictation mic, send). Turns are **full-width blocks, never bubbles**: user turns get a subtle `--surface-wash` block with a "You" label; agent turns are plain text with the profile name label; GenUI widgets render inline; timestamps only as dividers after 15-minute gaps. The header shows live Hermes connection state. Never stacked form sections; never a separate "voice box" (dictation types into the composer); **no run/approval data in the panel at all** — those live in Databases-native views.
+- **The Agent Panel is a chat surface, not a form.** Its anatomy is fixed (VS Code agent chat reference): a full-height conversation thread and **one composer frame at the bottom** — textarea on top, controls row inside the frame (plus-menu for workflows/actions, Hermes profile picker, dictation mic, send). Turns are **full-width blocks, never bubbles**: user turns get a subtle `--surface-wash` block with a "You" label; agent turns are plain text with the profile name label; GenUI widgets render inline; timestamps only as dividers after 15-minute gaps. The header shows live Hermes connection state. Never stacked form sections; never a separate "voice box" (dictation types into the composer). Workflow, tool, approval, and receipt evidence may appear only as compact, collapsed-by-default inline conversation events when relevant to a turn. They summarize and link to the canonical Databases record; they never become a fixed run list, approval queue, dashboard, or second task system in the panel.
 - **Agent UI uses the same tokens as everything else.** No "AI feature" styling: no purple/indigo gradients, no glow, no sparkle icons. An agent surface should be visually indistinguishable in material from a database table.
 - **Anatomy consistency:** section headers are `font-ui 11px 600 uppercase --overlay-1`; counts are mono pills (`font-mono 10px` in a `--border` ring); data values are Geist Mono; interface text stays in the 10–13px band. Match the adjacent surface's density exactly.
 - **Three states required** on every data surface: loading (static skeleton or spinner consistent with neighbors), empty (dashed `--border` box, icon + one-line label), error (`--danger`-mixed border box with the message). Mobile width (390px) renders without horizontal overflow.

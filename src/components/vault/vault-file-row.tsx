@@ -88,7 +88,7 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--subtext-0)]">
           {label}
         </span>
-        <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-[var(--overlay-1)]">
+        <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {file.file_type}
         </span>
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/vf:opacity-100">
@@ -104,7 +104,8 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
             type="button"
             disabled={isDeleting}
             onClick={() => void handleDelete()}
-            className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+            aria-label={`Delete ${label}`}
           >
             <Trash2 className="h-3 w-3" />
           </button>
@@ -113,7 +114,7 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
 
       {showTooltip && thumbnailSrc && createPortal(
         <div
-          className="pointer-events-none fixed z-[9999] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--mantle)] shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
+          className="pointer-events-none fixed z-[9999] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
           style={{
             right: window.innerWidth - tooltipPos.x + 8,
             top: Math.max(8, tooltipPos.y - 4),

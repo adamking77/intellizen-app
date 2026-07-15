@@ -22,12 +22,12 @@ import {
   RecordBacklinksSection,
   RecordHistorySection,
 } from "@/components/database/RecordInsightSections";
-import { DatabaseRichTextEditor } from "@/components/database/primitives/DatabaseRichTextEditor";
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
 import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MarkdownBody } from "@/components/ui/markdown-body";
+import { NarrativeEditor } from "@/components/ui/narrative-editor";
 import {
   createRecordFromTemplate,
   GENZEN_WORKSPACE_DATABASE_IDS,
@@ -139,7 +139,7 @@ export function DatabasePeekPanel({
   const [panelWidth, setPanelWidth] = useState(lastPanelWidth);
   const [fullPage, setFullPage] = useState(false);
   const [notesDraft, setNotesDraft] = useState(String(record?._body ?? ""));
-  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [showHeaderPicker, setShowHeaderPicker] = useState(false);
   const [headerDragId, setHeaderDragId] = useState<string | null>(null);
   const [headerFieldIds, setHeaderFieldIds] = useState<string[]>([]);
@@ -219,7 +219,7 @@ export function DatabasePeekPanel({
         })
         .catch(() => {
           if (notesSaveSeqRef.current !== requestId) return;
-          setNotesStatus("dirty");
+          setNotesStatus("error");
         });
     }, 500);
     return () => window.clearTimeout(handle);
@@ -364,7 +364,7 @@ export function DatabasePeekPanel({
       })
       .catch(() => {
         if (notesSaveSeqRef.current !== requestId) return;
-        setNotesStatus("dirty");
+        setNotesStatus("error");
       });
   }
 
@@ -625,6 +625,19 @@ export function DatabasePeekPanel({
             </div>
           )}
 
+          <div className="db-record-section px-6 py-4">
+            <NarrativeEditor
+              label="Notes"
+              value={notesDraft}
+              onChange={updateNotes}
+              onBlur={flushNotesSave}
+              status={notesStatus}
+              onRetry={() => setNotesStatus("dirty")}
+              placeholder="Add context, observations, and decisions…"
+              size="large"
+            />
+          </div>
+
           {canStartRecordWorkflow && (
             <div className="db-record-section px-6 py-3">
               <div className="db-record-section-head">
@@ -785,29 +798,6 @@ export function DatabasePeekPanel({
 
           {record ? <RecordHistorySection recordId={record.id} /> : null}
 
-          <div className="db-record-section px-6 pb-6">
-            <div className="db-record-section-head db-record-notes-head">
-              <div className="db-record-notes-meta">
-                <div className="db-record-section-title mb-0">Notes</div>
-                <span className="db-record-notes-status">
-                  {notesStatus === "saving"
-                    ? "Saving..."
-                    : notesStatus === "saved"
-                      ? "Saved"
-                      : notesStatus === "dirty"
-                        ? "Editing..."
-                        : ""}
-                </span>
-                <span className="db-record-editor-count">{wordCount(notesDraft)} words</span>
-              </div>
-            </div>
-            <div className="db-record-editor db-record-notes-rich" onBlur={flushNotesSave}>
-              <DatabaseRichTextEditor
-                initialValue={notesDraft}
-                onChange={updateNotes}
-              />
-            </div>
-          </div>
         </div>
 
         <div className="db-record-footer">
@@ -851,12 +841,6 @@ export function DatabasePeekPanel({
       />
     </>
   );
-}
-
-function wordCount(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
 }
 
 function SummaryFieldValue({

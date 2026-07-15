@@ -3,7 +3,13 @@ import {
   signalDraftFromDeepResearch,
   signalDraftFromSearchResult,
 } from "@/lib/exa";
-import type { HomePin } from "@/lib/home-pins";
+import {
+  isDatabaseViewHomePin,
+  isGenuiHomePin,
+  parseHomePin,
+  type HomePin,
+  type HomeWidgetFilter,
+} from "@/lib/home-pins";
 import {
   appendMarkdownSection,
   formatAgentWorkTimestamp,
@@ -12,6 +18,7 @@ import {
   markdownList,
 } from "@/lib/agent-work-text";
 import { resolveStatusColor } from "@/lib/database-colors";
+import { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
 import type {
   CanvasDocument,
   CanvasDocumentData,
@@ -40,7 +47,6 @@ import type {
   MonitorInsert,
   Operation,
   Project,
-  ProjectSignal,
   SearchResultItem,
   SignalDraft,
   TaxonomyMetadata,
@@ -65,11 +71,14 @@ import type {
   WorkspaceNode,
   WorkspaceNodeSummary,
 } from "@/lib/types";
+import { normalizeProjectSignalRows } from "@/lib/project-signals";
 import { safeHostname } from "@/lib/utils";
 import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import { supabase } from "@/lib/supabase";
 import { submitWorkflow } from "@/services/agent";
+
+export { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
 
 const SYSTEM_WORKSPACE_DATABASE_ICONS = {
   operations: "intel-system:operations",
@@ -179,22 +188,16 @@ const PROJECTS_DB_FIELDS = {
   updatedAt: "updated_at",
 } as const;
 
-export const DOCUMENTS_DB_FIELDS = {
-  title: "doc_title",
-  docType: "doc_type",
-  stage: "doc_stage",
-  entity: "doc_entity",
-  vaultPath: "doc_vault_path",
-  linkedCase: "doc_linked_case",
-  linkedEngagement: "doc_linked_engagement",
-  createdAt: "doc_created_at",
-  updatedAt: "doc_updated_at",
-} as const;
-
 const HOME_PIN_DB_FIELDS = {
   pinId: "home_pin_id",
+  kind: "home_pin_kind",
   databaseId: "home_pin_database_id",
   viewId: "home_pin_view_id",
+  title: "home_pin_title",
+  filter: "home_pin_filter",
+  config: "home_pin_config",
+  widget: "home_pin_widget",
+  pinnedAt: "home_pin_pinned_at",
   x: "home_pin_x",
   y: "home_pin_y",
   w: "home_pin_w",
@@ -202,7 +205,7 @@ const HOME_PIN_DB_FIELDS = {
 } as const;
 
 export const DOCUMENT_STAGE_OPTIONS = ["Draft", "Copy-audit", "Approved", "Published/Sent"] as const;
-export const DOCUMENT_TYPE_OPTIONS = ["report", "brief", "contract", "invoice", "one-pager", "note"] as const;
+export const DOCUMENT_TYPE_OPTIONS = ["daily-brief", "report", "brief", "contract", "invoice", "one-pager", "note"] as const;
 
 let operationalWorkspaceSyncPromise: Promise<void> | null = null;
 let operationalWorkspaceLastSyncedAt = 0;
@@ -574,7 +577,7 @@ export async function listProjectSignals(projectId: number) {
     .order("added_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as unknown as ProjectSignal[];
+  return normalizeProjectSignalRows((data ?? []) as unknown as Parameters<typeof normalizeProjectSignalRows>[0]);
 }
 
 export async function removeSignalFromProject(projectSignalId: number) {
@@ -2232,8 +2235,31 @@ function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
       type: "text",
     },
     {
+      id: DOCUMENTS_DB_FIELDS.author,
+      name: "Author",
+      type: "text",
+    },
+    {
       id: DOCUMENTS_DB_FIELDS.vaultPath,
       name: "Vault path",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.folder,
+      name: "Folder",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.attachmentType,
+      name: "Attachment type",
+      type: "select",
+      options: ["case", "client", "company", "engagement"],
+    },
+    {
+      // Attachment targets can live in different databases, so this stores
+      // the target record id without pretending one fixed relation target.
+      id: DOCUMENTS_DB_FIELDS.attachedTo,
+      name: "Attached to",
       type: "text",
     },
     {
@@ -2244,6 +2270,21 @@ function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
     {
       id: DOCUMENTS_DB_FIELDS.linkedEngagement,
       name: "Linked engagement",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.linkedClient,
+      name: "Linked client",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.linkedCompany,
+      name: "Linked company",
+      type: "text",
+    },
+    {
+      id: DOCUMENTS_DB_FIELDS.templateSource,
+      name: "Template source",
       type: "text",
     },
     {
@@ -2262,8 +2303,14 @@ function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
 function buildHomePinsWorkspaceSchema(): WorkspaceDatabaseField[] {
   return [
     { id: HOME_PIN_DB_FIELDS.pinId, name: "Pin ID", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.kind, name: "Widget kind", type: "select", options: ["database-view", "genui"] },
     { id: HOME_PIN_DB_FIELDS.databaseId, name: "Database ID", type: "text" },
     { id: HOME_PIN_DB_FIELDS.viewId, name: "View ID", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.title, name: "Title", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.filter, name: "Filter", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.config, name: "Config", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.widget, name: "Widget payload", type: "text" },
+    { id: HOME_PIN_DB_FIELDS.pinnedAt, name: "Pinned at", type: "date" },
     { id: HOME_PIN_DB_FIELDS.x, name: "X", type: "number" },
     { id: HOME_PIN_DB_FIELDS.y, name: "Y", type: "number" },
     { id: HOME_PIN_DB_FIELDS.w, name: "Width", type: "number" },
@@ -2708,7 +2755,21 @@ export async function ensureDocumentsWorkspaceDatabase() {
 
   if (existingError) throw existingError;
   const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
-  if (existing) return toWorkspaceDatabase(existing);
+  if (existing) {
+    const database = toWorkspaceDatabase(existing);
+    const expectedSchema = buildDocumentsWorkspaceSchema();
+    const expectedById = new Map(expectedSchema.map((field) => [field.id, field]));
+    const mergedSchema = database.schema.map((field) => {
+      const expected = expectedById.get(field.id);
+      expectedById.delete(field.id);
+      if (!expected?.options?.length) return field;
+      const options = Array.from(new Set([...(field.options ?? []), ...expected.options]));
+      return options.length === (field.options ?? []).length ? field : { ...field, options };
+    });
+    mergedSchema.push(...expectedById.values());
+    if (JSON.stringify(mergedSchema) === JSON.stringify(database.schema)) return database;
+    return updateWorkspaceDatabaseSchema(database.id, mergedSchema, true);
+  }
 
   const created = await createWorkspaceDatabase({
     name: "Documents",
@@ -2741,7 +2802,21 @@ async function ensureHomePinsWorkspaceDatabase() {
 
   if (existingError) throw existingError;
   const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
-  if (existing) return toWorkspaceDatabase(existing);
+  if (existing) {
+    const database = toWorkspaceDatabase(existing);
+    const expectedSchema = buildHomePinsWorkspaceSchema();
+    const expectedById = new Map(expectedSchema.map((field) => [field.id, field]));
+    const mergedSchema = database.schema.map((field) => {
+      const expected = expectedById.get(field.id);
+      expectedById.delete(field.id);
+      if (!expected?.options?.length) return field;
+      const options = Array.from(new Set([...(field.options ?? []), ...expected.options]));
+      return options.length === (field.options ?? []).length ? field : { ...field, options };
+    });
+    mergedSchema.push(...expectedById.values());
+    if (JSON.stringify(mergedSchema) === JSON.stringify(database.schema)) return database;
+    return updateWorkspaceDatabaseSchema(database.id, mergedSchema, true);
+  }
 
   const created = await createWorkspaceDatabase({
     name: "Home Pins",
@@ -2774,27 +2849,41 @@ function numberField(value: WorkspaceDatabaseFieldValue, fallback: number) {
 
 function homePinFromWorkspaceRecord(record: WorkspaceDatabaseRecord): HomePin | null {
   const pinId = record.fields[HOME_PIN_DB_FIELDS.pinId];
+  const kind = record.fields[HOME_PIN_DB_FIELDS.kind];
   const databaseId = record.fields[HOME_PIN_DB_FIELDS.databaseId];
   const viewId = record.fields[HOME_PIN_DB_FIELDS.viewId];
-  if (typeof pinId !== "string" || typeof databaseId !== "string" || typeof viewId !== "string") {
-    return null;
-  }
-  return {
+  if (typeof pinId !== "string") return null;
+  return parseHomePin({
     id: pinId,
-    databaseId,
-    viewId,
+    kind,
+    databaseId: typeof databaseId === "string" ? databaseId : undefined,
+    viewId: typeof viewId === "string" ? viewId : undefined,
+    title: fieldString(record.fields[HOME_PIN_DB_FIELDS.title]),
+    filter: parseHomePinJson<HomeWidgetFilter[]>(record.fields[HOME_PIN_DB_FIELDS.filter]),
+    config: parseHomePinJson<Record<string, unknown>>(record.fields[HOME_PIN_DB_FIELDS.config]),
+    widget: parseHomePinJson<unknown>(record.fields[HOME_PIN_DB_FIELDS.widget]),
+    pinnedAt: fieldString(record.fields[HOME_PIN_DB_FIELDS.pinnedAt]),
     x: numberField(record.fields[HOME_PIN_DB_FIELDS.x], 0),
     y: numberField(record.fields[HOME_PIN_DB_FIELDS.y], 0),
     w: numberField(record.fields[HOME_PIN_DB_FIELDS.w], 4),
     h: numberField(record.fields[HOME_PIN_DB_FIELDS.h], 11),
-  };
+  });
 }
 
 function workspaceFieldsFromHomePin(pin: HomePin): Record<string, WorkspaceDatabaseFieldValue> {
   return {
     [HOME_PIN_DB_FIELDS.pinId]: pin.id,
-    [HOME_PIN_DB_FIELDS.databaseId]: pin.databaseId,
-    [HOME_PIN_DB_FIELDS.viewId]: pin.viewId,
+    [HOME_PIN_DB_FIELDS.kind]: isGenuiHomePin(pin) ? "genui" : "database-view",
+    [HOME_PIN_DB_FIELDS.databaseId]: isDatabaseViewHomePin(pin) ? pin.databaseId : null,
+    [HOME_PIN_DB_FIELDS.viewId]: isDatabaseViewHomePin(pin) ? pin.viewId : null,
+    [HOME_PIN_DB_FIELDS.title]: pin.title ?? null,
+    [HOME_PIN_DB_FIELDS.filter]: pin.filter ? JSON.stringify(pin.filter) : null,
+    [HOME_PIN_DB_FIELDS.config]: pin.config ? JSON.stringify(pin.config) : null,
+    // Generated HTML is durable code by design. It is validated by the
+    // AgentChatWidget parser and rendered only through SandboxedGenui's
+    // isolated iframe/CSP boundary; never inject this field into the app DOM.
+    [HOME_PIN_DB_FIELDS.widget]: isGenuiHomePin(pin) ? JSON.stringify(pin.widget) : null,
+    [HOME_PIN_DB_FIELDS.pinnedAt]: isGenuiHomePin(pin) ? pin.pinnedAt : null,
     [HOME_PIN_DB_FIELDS.x]: pin.x,
     [HOME_PIN_DB_FIELDS.y]: pin.y,
     [HOME_PIN_DB_FIELDS.w]: pin.w,
@@ -2870,11 +2959,20 @@ export async function saveHomePinsToWorkspace(pins: HomePin[]) {
 
 export async function removeHomePinsForWorkspaceDatabase(databaseId: string) {
   const pins = await listHomePinsFromWorkspace();
-  const nextPins = pins.filter((pin) => pin.databaseId !== databaseId);
+  const nextPins = pins.filter((pin) => !isDatabaseViewHomePin(pin) || pin.databaseId !== databaseId);
   if (nextPins.length !== pins.length) {
     await saveHomePinsToWorkspace(nextPins);
   }
   return { pins: nextPins, removed: nextPins.length !== pins.length };
+}
+
+function parseHomePinJson<T>(value: WorkspaceDatabaseFieldValue): T | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
 }
 
 /** "pda-what-works_v2.md" → "Pda what works v2" — slugs make bad doc titles. */
@@ -2990,7 +3088,10 @@ export async function listWorkspaceDatabaseCatalog(input: EntityFilterInput = {}
     .order("id", { ascending: true })
     .range(0, WORKSPACE_CATALOG_RECORD_LIMIT - 1);
 
-  databaseQuery = applyEntityFilter(databaseQuery, input);
+  // Database definitions and their saved views are shared structure. Keep
+  // them available under venture scope while filtering the records below;
+  // otherwise a scoped Tasks row cannot render because the shared Tasks
+  // database itself is owned by the GenZen entity.
   recordQuery = applyEntityFilter(recordQuery, input);
 
   const [
@@ -5258,26 +5359,40 @@ export async function restoreDeletedRecord(revision: RecordRevisionItem) {
 }
 
 /** Duplicate a record as a reusable template (taxonomy.is_template = true). */
-export async function saveRecordAsTemplate(recordId: string) {
+export async function saveRecordAsTemplate(
+  recordId: string,
+  overrides?: {
+    fields?: Record<string, WorkspaceDatabaseFieldValue>;
+    body?: string | null;
+    taxonomy?: TaxonomyMetadata;
+  },
+) {
   const record = await getWorkspaceRecord(recordId);
   return createWorkspaceRecord({
     databaseId: record.database_id,
-    fields: record.fields,
-    body: record.body,
-    taxonomy: { ...(record.taxonomy ?? {}), is_template: true },
+    fields: { ...record.fields, ...(overrides?.fields ?? {}) },
+    body: overrides?.body !== undefined ? overrides.body : record.body,
+    taxonomy: { ...(record.taxonomy ?? {}), ...(overrides?.taxonomy ?? {}), is_template: true },
     skipSystemSync: true,
   });
 }
 
 /** Create a fresh record from a template record (clears the template flag). */
-export async function createRecordFromTemplate(templateRecordId: string) {
+export async function createRecordFromTemplate(
+  templateRecordId: string,
+  overrides?: {
+    fields?: Record<string, WorkspaceDatabaseFieldValue>;
+    body?: string | null;
+    taxonomy?: TaxonomyMetadata;
+  },
+) {
   const template = await getWorkspaceRecord(templateRecordId);
-  const taxonomy = { ...(template.taxonomy ?? {}) };
+  const taxonomy = { ...(template.taxonomy ?? {}), ...(overrides?.taxonomy ?? {}) };
   delete taxonomy.is_template;
   return createWorkspaceRecord({
     databaseId: template.database_id,
-    fields: template.fields,
-    body: template.body,
+    fields: { ...template.fields, ...(overrides?.fields ?? {}) },
+    body: overrides?.body !== undefined ? overrides.body : template.body,
     taxonomy,
     skipSystemSync: true,
   });

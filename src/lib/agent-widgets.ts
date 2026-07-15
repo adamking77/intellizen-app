@@ -23,8 +23,12 @@ export interface AgentDataChartSeries {
   color?: string;
 }
 
+export const AGENT_WIDGET_CONTRACT_VERSION = 1 as const;
+
+export type AgentWidgetContractVersion = typeof AGENT_WIDGET_CONTRACT_VERSION;
+
 export interface AgentDataChartWidget {
-  type: "bar" | "line" | "area";
+  type: "bar" | "line";
   title?: string;
   xKey: string;
   series: AgentDataChartSeries[];
@@ -44,13 +48,26 @@ export interface AgentRecordLink {
   status?: string;
 }
 
-export type AgentChatWidget =
+type VersionedAgentWidget = { version: AgentWidgetContractVersion };
+
+export type AgentChatWidget = VersionedAgentWidget & (
   | { kind: "data-table"; title?: string; table: AgentDataTableWidget }
   | { kind: "data-chart"; title?: string; chart: AgentDataChartWidget }
   | { kind: "data-insights"; title?: string; insights: string[] }
   | { kind: "data-metrics"; title?: string; metrics: AgentMetricItem[] }
   | { kind: "record-links"; title?: string; links: AgentRecordLink[] }
-  | { kind: "html"; title?: string; html: string };
+  | { kind: "html"; title?: string; html: string }
+);
+
+export type AgentWidgetParseErrorCode =
+  | "invalid-widget"
+  | "unsupported-version"
+  | "unsupported-kind"
+  | "unsupported-chart-type";
+
+export type AgentWidgetParseResult =
+  | { ok: true; widget: AgentChatWidget }
+  | { ok: false; code: AgentWidgetParseErrorCode; message: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -80,9 +97,18 @@ function parseTable(value: unknown): AgentDataTableWidget | null {
   };
 }
 
-function parseChart(value: unknown): AgentDataChartWidget | null {
-  if (!isRecord(value)) return null;
-  const type = value.type === "bar" || value.type === "line" || value.type === "area" ? value.type : null;
+function parseChart(value: unknown): AgentWidgetParseResult | AgentDataChartWidget {
+  if (!isRecord(value)) {
+    return { ok: false, code: "invalid-widget", message: "Chart data is missing or malformed." };
+  }
+  if (value.type === "area") {
+    return {
+      ok: false,
+      code: "unsupported-chart-type",
+      message: "Area charts are not supported. Use a bar or line chart.",
+    };
+  }
+  const type = value.type === "bar" || value.type === "line" ? value.type : null;
   const series = Array.isArray(value.series)
     ? value.series.filter(
         (item): item is AgentDataChartSeries =>
@@ -90,26 +116,59 @@ function parseChart(value: unknown): AgentDataChartWidget | null {
       )
     : [];
   const data = Array.isArray(value.data) ? value.data.filter(isRecord) : [];
-  if (!type || typeof value.xKey !== "string" || series.length === 0 || data.length === 0) return null;
+  if (!type) {
+    return {
+      ok: false,
+      code: "unsupported-chart-type",
+      message: "This chart type is not supported. Use a bar or line chart.",
+    };
+  }
+  if (typeof value.xKey !== "string" || series.length === 0 || data.length === 0) {
+    return { ok: false, code: "invalid-widget", message: "Chart data is missing required axes, series, or rows." };
+  }
   return { type, xKey: value.xKey, series, data, title: typeof value.title === "string" ? value.title : undefined };
 }
 
-/** Parse an agent-native-style widget envelope from an agent result payload. */
-export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
-  if (!isRecord(value)) return null;
+function parseVersion(value: Record<string, unknown>): AgentWidgetParseResult | AgentWidgetContractVersion {
+  const version = value.version ?? AGENT_WIDGET_CONTRACT_VERSION;
+  if (version !== AGENT_WIDGET_CONTRACT_VERSION) {
+    return {
+      ok: false,
+      code: "unsupported-version",
+      message: `Widget contract version ${String(version)} is not supported.`,
+    };
+  }
+  return AGENT_WIDGET_CONTRACT_VERSION;
+}
+
+/**
+ * Parse an agent-native-style widget envelope and retain a readable reason
+ * when it cannot be rendered. Unversioned payloads are treated as legacy v1.
+ */
+export function parseAgentChatWidgetResult(value: unknown): AgentWidgetParseResult {
+  if (!isRecord(value)) {
+    return { ok: false, code: "invalid-widget", message: "Widget data is missing or malformed." };
+  }
+  const versionResult = parseVersion(value);
+  if (typeof versionResult !== "number") return versionResult;
   const title = typeof value.title === "string" ? value.title : undefined;
 
   if (value.kind === "data-table" || isRecord(value.table)) {
     const table = parseTable(value.table ?? value);
-    return table ? { kind: "data-table", title, table } : null;
+    return table
+      ? { ok: true, widget: { version: versionResult, kind: "data-table", title, table } }
+      : { ok: false, code: "invalid-widget", message: "Table data is missing columns or rows." };
   }
   if (value.kind === "data-chart" || isRecord(value.chart)) {
     const chart = parseChart(value.chart ?? value);
-    return chart ? { kind: "data-chart", title, chart } : null;
+    if ("ok" in chart) return chart;
+    return { ok: true, widget: { version: versionResult, kind: "data-chart", title, chart } };
   }
   if (value.kind === "data-insights" || Array.isArray(value.insights)) {
     const insights = asStringList(value.insights);
-    return insights.length > 0 ? { kind: "data-insights", title, insights } : null;
+    return insights.length > 0
+      ? { ok: true, widget: { version: versionResult, kind: "data-insights", title, insights } }
+      : { ok: false, code: "invalid-widget", message: "Insights widget has no readable insights." };
   }
   if (value.kind === "data-metrics" || Array.isArray(value.metrics)) {
     const metrics = (Array.isArray(value.metrics) ? value.metrics : [])
@@ -118,11 +177,13 @@ export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
           isRecord(item) && typeof item.label === "string" &&
           (typeof item.value === "string" || typeof item.value === "number"),
       );
-    return metrics.length > 0 ? { kind: "data-metrics", title, metrics } : null;
+    return metrics.length > 0
+      ? { ok: true, widget: { version: versionResult, kind: "data-metrics", title, metrics } }
+      : { ok: false, code: "invalid-widget", message: "Metrics widget has no readable metrics." };
   }
   if (value.kind === "html" && typeof value.html === "string" && value.html.trim()) {
     // Rendered in a hard sandbox (no network, opaque origin); cap size.
-    return { kind: "html", title, html: value.html.slice(0, 100_000) };
+    return { ok: true, widget: { version: versionResult, kind: "html", title, html: value.html.slice(0, 100_000) } };
   }
   if (value.kind === "record-links" || Array.isArray(value.links)) {
     const links = (Array.isArray(value.links) ? value.links : [])
@@ -131,9 +192,17 @@ export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
           isRecord(item) && typeof item.label === "string" &&
           typeof item.to === "string" && item.to.startsWith("/"),
       );
-    return links.length > 0 ? { kind: "record-links", title, links } : null;
+    return links.length > 0
+      ? { ok: true, widget: { version: versionResult, kind: "record-links", title, links } }
+      : { ok: false, code: "invalid-widget", message: "Record-links widget has no valid in-app links." };
   }
-  return null;
+  return { ok: false, code: "unsupported-kind", message: "This widget type is not supported." };
+}
+
+/** Backward-compatible nullable parser for existing callers. */
+export function parseAgentChatWidget(value: unknown): AgentChatWidget | null {
+  const result = parseAgentChatWidgetResult(value);
+  return result.ok ? result.widget : null;
 }
 
 /**
@@ -145,12 +214,13 @@ export const GENUI_SYSTEM_PROMPT = `You are replying inside the IntelliZen Agent
 When a table, chart, or metric list genuinely communicates better than prose, emit it as a fenced block exactly like this:
 
 \`\`\`genui
-{"kind": "data-chart", "title": "...", "chart": {"type": "bar", "xKey": "label", "series": [{"key": "value", "label": "..."}], "data": [{"label": "...", "value": 1}]}}
+{"version": 1, "kind": "data-chart", "title": "...", "chart": {"type": "bar", "xKey": "label", "series": [{"key": "value", "label": "..."}], "data": [{"label": "...", "value": 1}]}}
 \`\`\`
 
 Supported kinds:
+- Every JSON widget uses \`"version": 1\`. Unversioned widgets are accepted only for legacy compatibility.
 - "data-table": {"table": {"columns": [{"key", "label"}], "rows": [...]}}
-- "data-chart": bar charts as shown above
+- "data-chart": multi-series bar or line charts. Line chart x-axis values must be dates. Area charts are unsupported.
 - "data-insights": {"insights": ["..."]}
 - "data-metrics": {"metrics": [{"label": "Open work", "value": 12, "delta": {"value": "+3", "direction": "up"}}]} — renders as the app's native metric cells; use for KPI/stat readouts
 - "record-links": {"links": [{"label": "Task name", "to": "/databases/<database-id>?record=<record-id>", "status": "In progress"}]} — renders as clickable in-app links; use when referencing IntelliZen records, workflows, or routes you know the ids for
@@ -174,7 +244,7 @@ genui-html rules:
 - NEVER use inline event handlers (onclick="..." etc.) — they resolve in global scope and will throw on your closure variables. Attach ONE delegated listener with addEventListener on a stable container and re-render inside it.
 - Keep it compact (the panel is ~320-540px wide); the frame auto-sizes to your content up to 600px.
 - Prefer the simple genui JSON kinds when they suffice; use genui-html only when interactivity earns it.
-- The user can PIN any widget to their Home dashboard as a persistent tracker that re-runs on every visit/refresh. So when the user asks for a view/tracker/dashboard of their data, fetch the data with window.intellizen.query() inside the widget script (live on every mount) — never hardcode the current values into the HTML.
+- The user can PIN an interactive genui-html widget to Home as a persistent tracker that re-runs on every visit/refresh. So when the user asks for a durable view/tracker/dashboard of their data, fetch the data with window.intellizen.query() inside the widget script (live on every mount) — never hardcode the current values into the HTML. Native JSON widgets are chat-scoped snapshots and are not promoted.
 
 NEVER draw charts with unicode block characters, ASCII art, or markdown tables of bars — always use a genui block instead.`;
 
@@ -187,21 +257,31 @@ export function extractGenuiBlocks(text: string): { text: string; widgets: Agent
   const cleaned = text
     .replace(GENUI_HTML_FENCE_RE, (_match, html: string) => {
       const trimmed = html.trim();
-      if (trimmed) widgets.push({ kind: "html", html: trimmed.slice(0, 100_000) });
-      return "";
+      if (trimmed) {
+        widgets.push({ version: AGENT_WIDGET_CONTRACT_VERSION, kind: "html", html: trimmed.slice(0, 100_000) });
+        return "";
+      }
+      return widgetFallbackText("Generated HTML was empty.");
     })
     .replace(GENUI_FENCE_RE, (_match, json: string) => {
       try {
-        const widget = parseAgentChatWidget(JSON.parse(json.trim()));
-        if (widget) widgets.push(widget);
+        const parsed = parseAgentChatWidgetResult(JSON.parse(json.trim()));
+        if (parsed.ok) {
+          widgets.push(parsed.widget);
+          return "";
+        }
+        return widgetFallbackText(parsed.message);
       } catch {
-        /* malformed widget JSON — drop the block rather than show raw JSON */
+        return widgetFallbackText("Widget JSON was malformed.");
       }
-      return "";
     })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { text: cleaned, widgets };
+}
+
+function widgetFallbackText(message: string) {
+  return `\n\nWidget unavailable: ${message}\n\n`;
 }
 
 /** Streaming display: hide completed genui blocks and any unterminated tail. */
@@ -213,6 +293,8 @@ export function stripGenuiForStreaming(text: string): string {
 
 export interface AgentChatResult {
   reply: string | null;
+  widgets: AgentChatWidget[];
+  /** First widget retained for compatibility with the current single-widget turn renderer. */
   widget: AgentChatWidget | null;
 }
 
@@ -224,7 +306,7 @@ export interface AgentChatResult {
 export function parseAgentChatResult(result: unknown): AgentChatResult {
   if (typeof result === "string") {
     const trimmed = result.trim();
-    if (!trimmed) return { reply: null, widget: null };
+    if (!trimmed) return { reply: null, widgets: [], widget: null };
     // Results are often stored as stringified JSON (text column); decode
     // structured payloads before falling back to plain-text replies.
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -234,16 +316,25 @@ export function parseAgentChatResult(result: unknown): AgentChatResult {
         /* plain text that happens to start with a brace */
       }
     }
-    return { reply: trimmed, widget: null };
+    return { reply: trimmed, widgets: [], widget: null };
   }
-  if (!isRecord(result)) return { reply: null, widget: null };
+  if (!isRecord(result)) return { reply: null, widgets: [], widget: null };
 
   const textCandidate = [result.message, result.reply, result.summary, result.text].find(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
   );
-  const widgetSource = result.widget ?? (Array.isArray(result.widgets) ? result.widgets[0] : null);
+  const widgetSources = Array.isArray(result.widgets)
+    ? result.widgets
+    : result.widget == null
+      ? []
+      : [result.widget];
+  const parsedWidgets = widgetSources.map(parseAgentChatWidgetResult);
+  const widgets = parsedWidgets.flatMap((parsed) => parsed.ok ? [parsed.widget] : []);
+  const warnings = parsedWidgets.flatMap((parsed) => parsed.ok ? [] : [widgetFallbackText(parsed.message).trim()]);
+  const replyParts = [textCandidate?.trim(), ...warnings].filter((part): part is string => Boolean(part));
   return {
-    reply: textCandidate?.trim() ?? null,
-    widget: parseAgentChatWidget(widgetSource),
+    reply: replyParts.length > 0 ? replyParts.join("\n\n") : null,
+    widgets,
+    widget: widgets[0] ?? null,
   };
 }

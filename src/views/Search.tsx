@@ -7,9 +7,11 @@ import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import { Select } from "@/components/ui/select";
-import { listProjects, saveSearchResultToProject, searchWorkspace } from "@/lib/data";
+import { VentureScope } from "@/components/ui/venture-scope";
+import { listOperations, listProjects, saveSearchResultToProject, searchWorkspace } from "@/lib/data";
 import { runExaSearch } from "@/lib/exa";
 import { runCorporateSearch, runSanctionsSearch } from "@/lib/sensors";
+import { ventureScopeLabel } from "@/lib/taxonomy";
 import { toast, toastError } from "@/lib/toast";
 import type { AdmiraltyReliability, DeepResearchResult, InternalSearchResult, SearchMode, SearchResultItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -151,9 +153,18 @@ export function SearchView() {
     queryFn: () => listProjects({ entity: entityFilter }),
   });
 
+  const { data: operations } = useQuery({
+    queryKey: ["operations", entityFilter],
+    queryFn: () => listOperations({ entity: entityFilter }),
+  });
+
   const targetProject = useMemo(
     () => projects?.find((project) => project.id === searchTargetProjectId) ?? null,
     [projects, searchTargetProjectId],
+  );
+  const targetWorkItem = useMemo(
+    () => operations?.find((operation) => operation.id === targetProject?.operation_id) ?? null,
+    [operations, targetProject?.operation_id],
   );
 
   const searchMutation = useMutation({
@@ -224,7 +235,7 @@ export function SearchView() {
                   else inputRef.current?.focus();
                 }, 0);
               }}
-              className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[11px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+              className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[11px] font-medium text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
               title="New search"
             >
               <X className="h-3 w-3" />
@@ -232,25 +243,27 @@ export function SearchView() {
             </button>
           </>
         ) : null}
-        {targetProject && !isCramped ? (
-          <div className="ml-auto flex items-center gap-2 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-1">
-            <Target className="h-3 w-3 text-[var(--accent)]" />
-            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">
-              Target
-            </span>
-            <span className="font-ui text-[12px] text-[var(--text)]">
-              {targetProject.name}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSearchTargetProjectId(null)}
-              className="text-[var(--overlay-1)] hover:text-[var(--text)]"
-              title="Clear target"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ) : null}
+        <div className="ml-auto flex min-w-0 items-center gap-2">
+          <VentureScope className={isCramped ? "hidden sm:inline-flex" : undefined} />
+          {targetProject && !isCramped ? (
+            <div className="flex min-w-0 items-center gap-2 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-1">
+              <Target className="h-3 w-3 shrink-0 text-[var(--accent)]" />
+              <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">Save to</span>
+              <span className="truncate font-ui text-[12px] text-[var(--text)]">
+                {targetWorkItem ? `${targetWorkItem.name} › ` : ""}{targetProject.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSearchTargetProjectId(null)}
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                title="Clear target"
+                aria-label="Clear search target"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {/* Hero composer OR docked composer + results */}
@@ -407,15 +420,13 @@ export function SearchView() {
                   else inputRef.current?.focus();
                 }, 0);
               }}
-              className="mt-6 flex items-start gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--mantle)] px-3 py-2.5 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-wash-strong)]"
+              className="mt-6 inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--mantle)] px-4 py-2 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-wash-strong)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
             >
-              <ArrowDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-              <div className="flex flex-col gap-0.5">
-                <span className="text-label">Try</span>
-                <span className="font-ui text-[13px] text-[var(--subtext-1)]">
+              <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
+              <span className="shrink-0 text-label">Try</span>
+              <span className="min-w-0 font-ui text-[13px] text-[var(--subtext-1)]">
                   {activeMode.example}
-                </span>
-              </div>
+              </span>
             </button>
           </div>
         </div>
@@ -438,14 +449,14 @@ export function SearchView() {
             await queryClient.invalidateQueries({ queryKey: ["projects"] });
             await queryClient.invalidateQueries({ queryKey: ["signals"] });
             setSearchTargetProjectId(projectId);
-            toast.success("Saved to collection");
+            toast.success("Saved to work item", { description: `Evidence pile: ${(projects ?? []).find((project) => project.id === projectId)?.name ?? "Selected pile"}` });
           } catch (err) {
             toastError("Couldn't save result", err);
           } finally {
             setPendingResult(null);
           }
         }}
-        title={pendingResult ? `Attach "${pendingResult.title}"` : "Attach to collection"}
+        title={pendingResult ? `Save "${pendingResult.title}" to a work item` : "Save to work item"}
         detailsSlot={
           pendingResult ? (
             <AdmiraltyControls
@@ -524,7 +535,7 @@ function ModeTabs({
   return (
     <div
       className={cn(
-        "flex items-center gap-1 overflow-x-auto",
+        "scrollbar-quiet flex items-center gap-1 overflow-x-auto",
         compact ? "h-8" : "h-9",
       )}
     >
@@ -537,7 +548,7 @@ function ModeTabs({
             type="button"
             onClick={() => onChange(item.value)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1",
               "font-ui text-[12px] font-medium",
               "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
               isActive
@@ -548,7 +559,7 @@ function ModeTabs({
           >
             {item.label}
             {isDeep && !compact ? (
-              <span className="rounded-sm bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] px-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--warning)]">
+              <span className="rounded-sm bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--warning)]">
                 Async
               </span>
             ) : null}
@@ -594,20 +605,27 @@ function SearchComposer({
 }) {
   const activeMode = SEARCH_MODES.find((m) => m.value === mode)!;
   const isDeep = mode === "deep_research";
+  const runContent = isPending ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      {isDeep ? "Researching…" : "Searching…"}
+    </>
+  ) : isDeep ? (
+    "Start research →"
+  ) : (
+    "Run"
+  );
 
   return (
     <form
-      className={cn("flex min-w-0 gap-2", isDeep ? "items-end" : "items-center")}
+      className={cn("min-w-0 gap-2", isDeep ? "flex flex-col items-stretch" : "flex items-center")}
       onSubmit={(e) => {
         e.preventDefault();
         onRun();
       }}
     >
-      <div className="relative flex min-w-0 flex-1 items-center">
-        {!isDeep && (
-          <SearchIcon className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--overlay-1)]" />
-        )}
-        {isDeep ? (
+      {isDeep ? (
+        <>
           <textarea
             ref={textareaRef}
             placeholder={activeMode.placeholder}
@@ -616,13 +634,24 @@ function SearchComposer({
             onKeyDown={onKeyDown}
             rows={compact ? 2 : 3}
             className={cn(
-              "w-full resize-none rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2.5 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
+              "w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--mantle)] px-3 py-2.5 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
               "focus:border-[var(--accent)] focus:outline-none",
               compact ? "font-ui text-[13px]" : "font-ui text-[15px] leading-[1.5]",
             )}
             autoFocus={!compact}
           />
-        ) : (
+          <Button
+            type="submit"
+            disabled={!canRun}
+            className={cn("min-w-[148px] self-end gap-1.5 px-5", compact ? "h-9" : "h-10")}
+          >
+            {runContent}
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="relative flex min-w-0 flex-1 items-center">
+            <SearchIcon className="pointer-events-none absolute left-4 h-4 w-4 text-[var(--overlay-1)]" />
           <input
             ref={inputRef}
             type="text"
@@ -631,44 +660,38 @@ function SearchComposer({
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={onKeyDown}
             className={cn(
-              "w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] pl-9 pr-3 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
-              "focus:border-[var(--accent)] focus:outline-none",
+              "w-full rounded-full border border-[var(--border)] bg-[var(--mantle)] pl-10 pr-[116px] text-[var(--text)] placeholder:text-[var(--overlay-1)]",
+              "transition-[border-color,box-shadow] duration-150 focus:border-[var(--accent)] focus:outline-none focus:shadow-[0_0_0_1px_var(--accent-border)]",
               compact ? "h-9 font-ui text-[13px]" : "h-12 font-ui text-[15px]",
             )}
             autoFocus={!compact}
           />
-        )}
-      </div>
+            <Button
+              type="submit"
+              disabled={!canRun}
+              className={cn(
+                "absolute right-1 min-w-[96px] shrink-0 gap-1.5 px-4",
+                compact ? "h-7" : "h-10",
+              )}
+            >
+              {runContent}
+            </Button>
+          </div>
 
-      {mode === "news" && !isCramped ? (
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => onStartDate(e.target.value)}
-          className={cn(
-            "rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[11px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none",
-            compact ? "h-9" : "h-12",
-          )}
-          title="Earliest publish date"
-        />
-      ) : null}
-
-      <Button
-        type="submit"
-        disabled={!canRun}
-        className={cn("gap-1.5 shrink-0", compact ? "h-9" : "h-12 px-5")}
-      >
-        {isPending ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {isDeep ? "Researching…" : "Searching…"}
-          </>
-        ) : isDeep ? (
-          "Start research →"
-        ) : (
-          "Run"
-        )}
-      </Button>
+          {mode === "news" && !isCramped ? (
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => onStartDate(e.target.value)}
+              className={cn(
+                "rounded-lg border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[11px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none",
+                compact ? "h-9" : "h-12",
+              )}
+              title="Earliest publish date"
+            />
+          ) : null}
+        </>
+      )}
     </form>
   );
 }
@@ -682,11 +705,11 @@ function InternalResultCard({ result }: { result: InternalSearchResult }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="rounded-sm bg-[var(--surface-wash)] px-1.5 py-0.5 font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+            <span className="rounded-sm bg-[var(--surface-wash)] px-1.5 py-0.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {sourceLabel}
             </span>
             <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-              {result.entity}
+              {ventureScopeLabel(result.entity)}
             </span>
           </div>
           {result.url ? (

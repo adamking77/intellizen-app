@@ -13,18 +13,16 @@ import {
 } from "lucide-react";
 
 import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
-import { Select } from "@/components/ui/select";
-import { listWorkspaceDatabases, listWorkspaceEntities } from "@/lib/data";
-import { TAXONOMY_ENTITY_OPTIONS } from "@/lib/taxonomy";
+import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
-// Inbox and Monitors are demoted from primary navigation (2026-07-02):
-// collection runs agentically via Fiona/monitor workflows. The /inbox and
-// /monitors routes remain deep-linkable for diagnostics.
+// Observational and orchestration surfaces belong on Home as widgets. Inbox
+// and Monitors are retired in favor of Fiona's daily brief; Agent Work,
+// Workflows, and Roles are represented by database-backed Home views.
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Search", to: "/search", key: "search", icon: Search },
@@ -54,16 +52,10 @@ function readCollapsed(): boolean | null {
 export function Sidebar() {
   const dragWindow = useWindowDrag();
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const setEntityFilter = useAppStore((state) => state.setEntityFilter);
   const { data: databases = [] } = useQuery({
     queryKey: ["workspace-databases", entityFilter],
     queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
     staleTime: 30_000,
-  });
-  const { data: workspaceEntities } = useQuery({
-    queryKey: ["workspace-entities"],
-    queryFn: listWorkspaceEntities,
-    staleTime: 10 * 60_000,
   });
   const { isCramped } = useWindowSize();
 
@@ -81,10 +73,6 @@ export function Sidebar() {
   }, [userCollapsed]);
 
   const toggle = () => setUserCollapsed(!collapsed);
-  const entityOptions = (workspaceEntities?.filter((entity) => entity.status !== "archived") ?? [])
-    .map((entity) => ({ value: entity.slug, label: entity.label }));
-  const visibleEntityOptions = entityOptions.length > 0 ? entityOptions : TAXONOMY_ENTITY_OPTIONS;
-
   return (
     <aside
       style={{
@@ -95,7 +83,7 @@ export function Sidebar() {
         "relative z-10 flex shrink-0 flex-col overflow-hidden border border-[var(--border)]",
         "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
         collapsed
-          ? "h-auto max-h-full self-start rounded-[28px] pb-2 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.75)]"
+          ? "h-auto max-h-full self-start rounded-[28px] pb-2"
           : "h-full rounded-2xl",
       )}
     >
@@ -113,7 +101,7 @@ export function Sidebar() {
             onClick={toggle}
             aria-label="Expand sidebar"
             title={entityFilter ? "Expand — entity scope active" : "Expand"}
-            className="relative inline-flex items-center justify-center rounded-md transition-opacity duration-150 hover:opacity-70"
+            className="relative inline-flex items-center justify-center rounded-full transition-opacity duration-150 hover:opacity-70"
           >
             <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
             {entityFilter ? (
@@ -136,7 +124,7 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             className={cn(
-              "inline-flex h-6 w-6 items-center justify-center rounded",
+            "inline-flex h-6 w-6 items-center justify-center rounded-full",
               "font-ui text-[13px] text-[var(--overlay-1)]",
               "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
@@ -148,24 +136,6 @@ export function Sidebar() {
           </button>
         )}
       </div>
-
-      {!collapsed ? (
-        <div className="border-y border-[var(--border)] px-3 py-3">
-          <Select
-            value={entityFilter ?? ""}
-            onChange={(event) => setEntityFilter(event.target.value || null)}
-            controlSize="sm"
-            containerClassName="w-full"
-            className="bg-[var(--base)]"
-            aria-label="Entity scope"
-          >
-            <option value="">All entities</option>
-            {visibleEntityOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </Select>
-        </div>
-      ) : null}
 
       {/* Nav */}
       <nav

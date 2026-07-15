@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 
 import { Badge } from "@/components/database/primitives/Badge";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
@@ -106,7 +106,9 @@ export function DatabaseGalleryView({
               {coverImage ? (
                 <img src={coverImage} alt="" className="db-gallery-cover-img" />
               ) : (
-                <span className="db-gallery-cover-placeholder">📄</span>
+                <span className="db-gallery-cover-placeholder" aria-hidden="true">
+                  <FileText className="h-6 w-6" />
+                </span>
               )}
               {coverField ? (
                 <ImageUploadButton

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Check, X } from "lucide-react";
 
 import { getReadableTextColor } from "@/lib/database-colors";
 
@@ -128,7 +129,9 @@ export function PickerDropdown({
                 }}
               >
                 {option}
-                <span className="db-record-picker-selected-chip-remove">×</span>
+                <span className="db-record-picker-selected-chip-remove" aria-hidden="true">
+                  <X className="h-3 w-3" />
+                </span>
               </span>
             </button>
           ))}
@@ -161,7 +164,9 @@ export function PickerDropdown({
                     >
                       {option}
                     </span>
-                    <span className="db-record-picker-mark">{isSelected ? "✓" : ""}</span>
+                    <span className="db-record-picker-mark" aria-hidden="true">
+                      {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
+                    </span>
                   </button>
                 );
               })}

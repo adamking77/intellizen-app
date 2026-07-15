@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createInvestigation, listProjects } from "@/lib/data";
@@ -89,18 +89,6 @@ export function InvestigationCreateModal({
   });
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
     if (open) {
       setName(initialName);
       setProjectId(initialProjectId);
@@ -108,42 +96,16 @@ export function InvestigationCreateModal({
     }
   }, [open, initialName, initialProjectId, initialOperationId]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !createMutation.isPending) onClose(); }}
+      title="New case investigation"
+      description="Set the case purpose and choose the evidence pile the investigation should work from."
+      className="w-full max-w-[540px]"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="New investigation"
-        className="flex w-full max-w-[540px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Investigate
-            </p>
-            <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New case investigation
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
         <form
-          className="grid gap-4 px-5 py-4"
+          className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || createMutation.isPending) return;
@@ -207,7 +169,7 @@ export function InvestigationCreateModal({
 
           <label className="grid gap-1.5">
             <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              Parent collection{" "}
+              Evidence pile{" "}
               <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                 (optional)
               </span>
@@ -217,7 +179,7 @@ export function InvestigationCreateModal({
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">No parent collection — Exa collects from seed entities</option>
+              <option value="">No evidence pile — Exa collects from seed entities</option>
               {selectableProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -231,11 +193,11 @@ export function InvestigationCreateModal({
               <>
                 Linked to{" "}
                 <span className="font-medium text-[var(--subtext-0)]">{linkedProject.name}</span>.
-                Collect will pull that collection's signals.
+                Collect will pull that evidence pile's signals.
               </>
             ) : (
               <>
-                No collection — Collect will run Exa searches on your seed entities automatically.
+                No evidence pile. Collect will run Exa searches on your seed entities automatically.
               </>
             )}
           </p>
@@ -253,7 +215,6 @@ export function InvestigationCreateModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

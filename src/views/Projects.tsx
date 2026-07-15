@@ -4,6 +4,8 @@ import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, L
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import { AssignProjectsModal } from "@/components/projects/assign-projects-modal";
 import { OperationCreateModal } from "@/components/projects/operation-create-modal";
 import { TaxonomySummary } from "@/components/taxonomy/TaxonomyFields";
@@ -11,11 +13,30 @@ import { VaultFileRow } from "@/components/vault/vault-file-row";
 import { ProjectCreateModal } from "@/components/projects/project-create-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
+import { NarrativeEditor } from "@/components/ui/narrative-editor";
+import { PropertyField } from "@/components/ui/property-field";
+import { QueryState } from "@/components/ui/query-state";
+import type { SaveStateValue } from "@/components/ui/save-state";
+import { Select } from "@/components/ui/select";
 import { StatusPill } from "@/components/ui/status-pill";
-import { Textarea } from "@/components/ui/textarea";
+import { VentureScope } from "@/components/ui/venture-scope";
 import { domainColor } from "@/lib/domains";
+import {
+  CLIENT_CASE_STAGES,
+  INTEL_WORK_TYPES,
+  getClientCaseStage,
+  getIntelWorkType,
+  intelWorkTypeLabel,
+  withClientCaseStage,
+  withIntelWorkType,
+  type ClientCaseStage,
+  type IntelWorkType,
+} from "@/lib/intel-work-items";
 import { cn } from "@/lib/utils";
+import { useWindowSize } from "@/lib/use-window-size";
+import { taxonomyEntityLabel } from "@/lib/taxonomy";
 import {
   deleteOperation,
   deleteProject,
@@ -35,6 +56,7 @@ import type { Investigation, Operation, Project, ProjectSignal, VaultFile } from
 import { useAppStore } from "@/store";
 
 type StatusFilter = "all" | "active" | "archived";
+const INTEL_RAIL_STORAGE_KEY = "intelizen:intel-rail-collapsed";
 
 type Selection =
   | { kind: "project"; id: number }
@@ -67,6 +89,7 @@ function sortVaultFiles(files: VaultFile[]): VaultFile[] {
 export function ProjectsView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isNarrow } = useWindowSize();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const setSearchTargetProjectId = useAppStore((state) => state.setSearchTargetProjectId);
   const pendingProjectSelectionId = useAppStore((state) => state.pendingProjectSelectionId);
@@ -81,12 +104,20 @@ export function ProjectsView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selection, setSelection] = useState<Selection>(null);
   const [notesDraft, setNotesDraft] = useState("");
-  const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [notesStatus, setNotesStatus] = useState<SaveStateValue>("idle");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [operationDescDraft, setOperationDescDraft] = useState("");
-  const [operationDescStatus, setOperationDescStatus] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
+  const [operationDescStatus, setOperationDescStatus] = useState<SaveStateValue>("idle");
   const [collapsedOps, setCollapsedOps] = useState<Set<number>>(new Set());
+  const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(INTEL_RAIL_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   // Resizable left rail
   const [railWidth, setRailWidth] = useState<number>(() => {
@@ -99,6 +130,14 @@ export function ProjectsView() {
   useEffect(() => {
     window.localStorage.setItem("projects-rail-width", String(railWidth));
   }, [railWidth]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(INTEL_RAIL_STORAGE_KEY, railCollapsed ? "1" : "0");
+    } catch {
+      /* keep the mounted preference */
+    }
+  }, [railCollapsed]);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -120,10 +159,11 @@ export function ProjectsView() {
     document.body.style.userSelect = "none";
   };
 
-  const { data: operations, error: operationsError, isLoading: operationsLoading } = useQuery({
+  const operationsQuery = useQuery({
     queryKey: ["operations", entityFilter],
     queryFn: () => listOperations({ entity: entityFilter }),
   });
+  const { data: operations, error: operationsError, isLoading: operationsLoading } = operationsQuery;
 
   useQuery({
     queryKey: ["operational-workspace-sync"],
@@ -134,15 +174,17 @@ export function ProjectsView() {
     staleTime: 60_000,
   });
 
-  const { data: projects, error: projectsError, isLoading: projectsLoading } = useQuery({
+  const projectsQuery = useQuery({
     queryKey: ["projects", entityFilter],
     queryFn: () => listProjects({ entity: entityFilter }),
   });
+  const { data: projects, error: projectsError, isLoading: projectsLoading } = projectsQuery;
 
-  const { data: signalCounts } = useQuery({
+  const signalCountsQuery = useQuery({
     queryKey: ["project-signal-counts"],
     queryFn: listProjectSignalCounts,
   });
+  const signalCounts = signalCountsQuery.data;
   const { data: investigations } = useQuery({
     queryKey: ["investigations", entityFilter],
     queryFn: () => listInvestigations({ entity: entityFilter }),
@@ -235,11 +277,12 @@ export function ProjectsView() {
     setEditingName(false);
   }, [selectedOperation?.id]);
 
-  const { data: projectSignals } = useQuery({
+  const projectSignalsQuery = useQuery({
     queryKey: ["project-signals", selectedProjectId],
     queryFn: () => listProjectSignals(selectedProjectId as number),
     enabled: selectedProjectId !== null,
   });
+  const projectSignals = projectSignalsQuery.data;
 
   const { data: projectVaultFilesRaw } = useQuery({
     queryKey: ["project-vault-files", selectedProjectId],
@@ -270,7 +313,7 @@ export function ProjectsView() {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       setNotesStatus("saved");
     },
-    onError: (err) => { setNotesStatus("dirty"); toastError("Couldn't save notes", err); },
+    onError: (err) => { setNotesStatus("error"); toastError("Couldn't save notes", err); },
   });
 
   useEffect(() => {
@@ -292,7 +335,22 @@ export function ProjectsView() {
       await queryClient.invalidateQueries({ queryKey: ["operations"] });
       setOperationDescStatus("saved");
     },
-    onError: (err) => { setOperationDescStatus("dirty"); toastError("Couldn't save description", err); },
+    onError: (err) => { setOperationDescStatus("error"); toastError("Couldn't save description", err); },
+  });
+
+  const updateWorkItemMetadataMutation = useMutation({
+    mutationFn: (input: { workType?: IntelWorkType; stage?: ClientCaseStage }) => {
+      if (!selectedOperation) throw new Error("Select a work item first.");
+      const taxonomy = input.workType
+        ? withIntelWorkType(selectedOperation.taxonomy, input.workType)
+        : withClientCaseStage(selectedOperation.taxonomy, input.stage ?? "scoping");
+      return updateOperation(selectedOperation.id, { taxonomy });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["operations"] });
+      toast.success("Work item updated");
+    },
+    onError: (err) => toastError("Couldn't update work item", err),
   });
 
   useEffect(() => {
@@ -306,6 +364,18 @@ export function ProjectsView() {
     const handle = window.setTimeout(() => setOperationDescStatus("idle"), 1800);
     return () => window.clearTimeout(handle);
   }, [operationDescStatus]);
+
+  function flushProjectNotes() {
+    if (notesStatus === "dirty" && selectedProjectId != null && !saveNotesMutation.isPending) {
+      saveNotesMutation.mutate(notesDraft);
+    }
+  }
+
+  function flushOperationDescription() {
+    if (operationDescStatus === "dirty" && selectedOperationId != null && !saveOperationDescMutation.isPending) {
+      saveOperationDescMutation.mutate(operationDescDraft);
+    }
+  }
 
   const toggleStatusMutation = useMutation({
     mutationFn: () =>
@@ -324,10 +394,10 @@ export function ProjectsView() {
     },
     onError: (err, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["projects"], context.previous);
-      toastError("Couldn't update collection", err);
+      toastError("Couldn't update evidence pile", err);
     },
     onSuccess: (_, __, context) => {
-      toast.success(context?.nextStatus === "archived" ? "Collection archived" : "Collection reactivated");
+      toast.success(context?.nextStatus === "archived" ? "Evidence pile archived" : "Evidence pile reactivated");
     },
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["projects"] }); },
   });
@@ -386,9 +456,9 @@ export function ProjectsView() {
       setDeleteConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await queryClient.invalidateQueries({ queryKey: ["project-signal-counts"] });
-      toast.success("Collection deleted");
+      toast.success("Evidence pile deleted");
     },
-    onError: (err) => toastError("Couldn't delete collection", err),
+    onError: (err) => toastError("Couldn't delete evidence pile", err),
   });
 
   const assignOperationMutation = useMutation({
@@ -396,9 +466,9 @@ export function ProjectsView() {
       updateProject(projectId, { operation_id: operationId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Intel group updated");
+      toast.success("Work item updated");
     },
-    onError: (err) => toastError("Couldn't update intel group", err),
+    onError: (err) => toastError("Couldn't update work item", err),
   });
 
   const bulkAssignMutation = useMutation<void, Error, number[]>({
@@ -410,9 +480,9 @@ export function ProjectsView() {
     onSuccess: async (_, projectIds) => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       setAssignProjectsOpen(false);
-      toast.success(`${projectIds.length} project${projectIds.length === 1 ? "" : "s"} assigned`);
+      toast.success(`${projectIds.length} evidence pile${projectIds.length === 1 ? "" : "s"} assigned`);
     },
-    onError: (err) => toastError("Couldn't assign collections", err),
+    onError: (err) => toastError("Couldn't assign evidence piles", err),
   });
 
   const deleteOperationMutation = useMutation({
@@ -422,30 +492,39 @@ export function ProjectsView() {
       setDeleteOperationConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["operations"] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Intel group deleted");
+      toast.success("Work item deleted");
     },
-    onError: (err) => toastError("Couldn't delete intel group", err),
+    onError: (err) => toastError("Couldn't delete work item", err),
   });
 
   // ── Indicators ─────────────────────────────────────────────────────────────
 
+  const loadingOperationalData = operationsLoading || projectsLoading;
   const indicators: IndicatorItem[] = [
-    { label: "Total", value: stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
-    { label: "Active", value: stats.active, status: stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
-    { label: "Archived", value: stats.archived, status: stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
-    { label: "Last touch", value: formatElapsed(stats.lastUpdated) },
+    { label: "Total", value: loadingOperationalData ? "…" : stats.total, onClick: () => setStatusFilter("all"), active: statusFilter === "all" },
+    { label: "Active", value: loadingOperationalData ? "…" : stats.active, status: !loadingOperationalData && stats.active > 0 ? "active" : "neutral", onClick: () => setStatusFilter("active"), active: statusFilter === "active" },
+    { label: "Archived", value: loadingOperationalData ? "…" : stats.archived, status: !loadingOperationalData && stats.archived > 0 ? "warning" : "neutral", onClick: () => setStatusFilter("archived"), active: statusFilter === "archived" },
+    { label: "Last touch", value: loadingOperationalData ? "…" : formatElapsed(stats.lastUpdated) },
   ];
 
   const loadError = operationsError ?? projectsError;
-  const loadingOperationalData = operationsLoading || projectsLoading;
 
   if (loadError) {
     return (
-      <div className="flex h-full flex-col overflow-hidden">
-        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-          <span className="text-label">Intel unavailable</span>
-          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">{loadError.message}</p>
-        </div>
+      <div className="flex h-full items-center justify-center overflow-hidden p-6">
+        <QueryState
+          isLoading={false}
+          error={loadError}
+          isEmpty={false}
+          errorTitle="Intel unavailable"
+          onRetry={() => {
+            void operationsQuery.refetch();
+            void projectsQuery.refetch();
+          }}
+          className="w-full max-w-[520px]"
+        >
+          <span />
+        </QueryState>
       </div>
     );
   }
@@ -454,7 +533,7 @@ export function ProjectsView() {
 
   function renderProject(project: Project, indent = false) {
     const isSelected = selection?.kind === "project" && selection.id === project.id;
-    const count = signalCounts?.[project.id] ?? 0;
+    const count = signalCounts?.[project.id];
     const domain = project.watch_domain;
     const dot = project.status === "active" ? "var(--success)" : "var(--overlay-1)";
     return (
@@ -462,7 +541,10 @@ export function ProjectsView() {
         key={project.id}
         type="button"
         data-selected={isSelected ? "true" : undefined}
-        onClick={() => setSelection({ kind: "project", id: project.id })}
+        onClick={() => {
+          setSelection({ kind: "project", id: project.id });
+          if (isNarrow) setMobileRailOpen(false);
+        }}
         className={cn(
           "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left",
           "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -486,22 +568,39 @@ export function ProjectsView() {
             )}>
               {project.name}
             </p>
-            <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">{count}</span>
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[10px] tabular-nums",
+                signalCountsQuery.error ? "text-[var(--danger)]" : "text-[var(--overlay-1)]",
+              )}
+              title={signalCountsQuery.error ? `Signal count unavailable: ${signalCountsQuery.error.message}` : undefined}
+              aria-label={signalCountsQuery.isLoading ? "Loading signal count" : signalCountsQuery.error ? "Signal count unavailable" : `${count ?? 0} signals`}
+            >
+              {signalCountsQuery.isLoading ? "…" : signalCountsQuery.error ? "!" : count ?? 0}
+            </span>
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[11px]">
             {indent && (
               <>
-                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--overlay-1)]">Collection</span>
+                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence pile</span>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
               </>
             )}
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
               {project.type.replace("_", " ")}
             </span>
+            {!entityFilter ? (
+              <>
+                <span aria-hidden className="text-[var(--overlay-0)]">·</span>
+                <span className="min-w-0 truncate font-ui text-[10px] text-[var(--overlay-1)]">
+                  {taxonomyEntityLabel(project.taxonomy ?? { entity: project.entity })}
+                </span>
+              </>
+            ) : null}
             {project.status === "archived" && (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="font-ui text-[10px] uppercase tracking-[0.08em] text-[var(--warning)]">Archived</span>
+                <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
               </>
             )}
             {domain && (
@@ -519,29 +618,47 @@ export function ProjectsView() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar */}
-      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className={cn(
+        "flex shrink-0 justify-between gap-4 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4",
+        isNarrow ? "flex-col items-start" : "items-end",
+      )}>
         <div className="flex flex-col gap-3">
-          <span className="text-label">Intel</span>
+          <div className="flex items-center gap-2">
+            <span className="text-label">Intel</span>
+          </div>
           <IndicatorStrip items={indicators} />
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="primary" onClick={() => setCreateOperationOpen(true)} className="gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <VentureScope />
+          {isNarrow ? (
+            <Button size="sm" variant="secondary" onClick={() => setMobileRailOpen((open) => !open)}>
+              {mobileRailOpen ? "Close list" : "Browse"}
+            </Button>
+          ) : null}
+          <Button aria-label="New work item" size="sm" variant="primary" onClick={() => setCreateOperationOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
-            New intel group
+            <span className="hidden sm:inline">New work item</span>
           </Button>
-          <Button size="sm" variant="accent-outline" onClick={() => setCreateProjectOpen(true)} className="gap-1.5">
+          <Button aria-label="New evidence pile" size="sm" variant="accent-outline" onClick={() => setCreateProjectOpen(true)} className="gap-1.5">
             <Plus className="h-3 w-3" />
-            New collection
+            <span className="hidden sm:inline">New evidence pile</span>
           </Button>
         </div>
       </div>
 
       {/* Content: rail + detail */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Rail */}
-        <aside
-          style={{ width: railWidth }}
-          className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)]"
+        <CollapsibleRail
+          title="Work items"
+          width={isNarrow ? "min(320px, calc(100vw - 2rem))" : railWidth}
+          collapsed={isNarrow ? !mobileRailOpen : railCollapsed}
+          onCollapse={() => {
+            if (isNarrow) setMobileRailOpen(false);
+            else setRailCollapsed(true);
+          }}
+          collapseLabel="Collapse Intel list"
+          className={cn(isNarrow && "absolute inset-y-0 left-0 z-40 shadow-[var(--shadow-elevated)]")}
         >
           <div className="flex-1 overflow-y-auto">
             {loadingOperationalData ? (
@@ -551,18 +668,18 @@ export function ProjectsView() {
               </div>
             ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
-                <p className="text-label">No collections</p>
+                <p className="text-label">No work items</p>
                 <p className="font-ui text-[12px] text-[var(--overlay-1)]">
-                  Create an intel group to organize related research, or add a standalone collection.
+                  Create a work item, then add evidence piles for the signals, files, and graph material inside it.
                 </p>
                 <Button size="sm" onClick={() => setCreateProjectOpen(true)} className="mt-2 gap-1.5">
                   <Plus className="h-3 w-3" />
-                  New collection
+                  New evidence pile
                 </Button>
               </div>
             ) : (
               <>
-                {/* Intel groups with their collections */}
+                {/* Work items with their evidence piles */}
                 {operationGroups.map(({ operation, projects: opProjects }) => {
                   const isOpSelected = selection?.kind === "operation" && selection.id === operation.id;
                   const isCollapsed = collapsedOps.has(operation.id);
@@ -579,7 +696,10 @@ export function ProjectsView() {
                     <div key={operation.id}>
                       <button
                         type="button"
-                        onClick={() => setSelection({ kind: "operation", id: operation.id })}
+                        onClick={() => {
+                          setSelection({ kind: "operation", id: operation.id });
+                          if (isNarrow) setMobileRailOpen(false);
+                        }}
                         className={cn(
                           "relative flex w-full items-center gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left",
                           "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -606,8 +726,9 @@ export function ProjectsView() {
                           )}>
                             {operation.name}
                           </span>
-                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--overlay-1)]">
-                            Intel group · {opProjects.length} collection{opProjects.length === 1 ? "" : "s"}
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                            {intelWorkTypeLabel(getIntelWorkType(operation.taxonomy))} · {opProjects.length} evidence pile{opProjects.length === 1 ? "" : "s"}
+                            {!entityFilter ? ` · ${taxonomyEntityLabel(operation.taxonomy ?? { entity: operation.entity })}` : ""}
                           </span>
                         </div>
                         {opProjects.length > 0 && (
@@ -615,7 +736,7 @@ export function ProjectsView() {
                             role="button"
                             aria-label={isCollapsed ? "Expand" : "Collapse"}
                             onClick={toggleCollapse}
-                            className="ml-auto shrink-0 rounded p-0.5 text-[var(--overlay-1)] hover:text-[var(--text)]"
+                            className="ml-auto shrink-0 rounded-full p-0.5 text-[var(--overlay-1)] hover:text-[var(--text)]"
                           >
                             {isCollapsed
                               ? <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -629,12 +750,12 @@ export function ProjectsView() {
                   );
                 })}
 
-                {/* Unassigned collections */}
+                {/* Unassigned evidence piles */}
                 {unassigned.length > 0 && (
                   <div>
                     {(operationGroups.length > 0) && (
                       <div className="border-b border-[var(--border-subtle)] px-4 py-2.5">
-                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-0)]">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-0)]">
                           Unassigned
                         </span>
                       </div>
@@ -647,10 +768,10 @@ export function ProjectsView() {
           </div>
 
           {/* Resize handle */}
-          <div
+          {!isNarrow && !railCollapsed ? <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize collection list"
+            aria-label="Resize work-item list"
             onMouseDown={startResize}
             onDoubleClick={() => setRailWidth(320)}
             className="group/resize absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize"
@@ -659,16 +780,27 @@ export function ProjectsView() {
               aria-hidden
               className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors duration-150 group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
             />
-          </div>
-        </aside>
+          </div> : null}
+        </CollapsibleRail>
 
         {/* Detail pane */}
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
+        <section className={cn(
+          "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)] transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          !isNarrow && railCollapsed && "pl-14",
+        )}>
+          <CollapsedRailTrigger
+            visible={!isNarrow && railCollapsed}
+            onExpand={() => setRailCollapsed(false)}
+            label="Expand Intel list"
+          />
           {selectedProject ? (
             <ProjectDetailPane
               project={selectedProject}
               operations={operations ?? []}
               projectSignals={projectSignals ?? []}
+              projectSignalsLoading={projectSignalsQuery.isLoading}
+              projectSignalsError={projectSignalsQuery.error}
+              onRetryProjectSignals={() => void projectSignalsQuery.refetch()}
               cases={selectedProjectCases}
               vaultFiles={projectVaultFiles}
               signalCounts={signalCounts ?? {}}
@@ -679,6 +811,8 @@ export function ProjectsView() {
               renamePending={renameMutation.isPending}
               deletePending={deleteProjectMutation.isPending}
               onNotesChange={(v) => { setNotesDraft(v); setNotesStatus("dirty"); }}
+              onNotesBlur={flushProjectNotes}
+              onRetryNotes={() => setNotesStatus("dirty")}
               onEditNameStart={() => { setNameDraft(selectedProject.name); setEditingName(true); }}
               onNameDraftChange={setNameDraft}
               onCommitRename={commitRename}
@@ -700,6 +834,8 @@ export function ProjectsView() {
               operationProjects={operationProjects}
               cases={selectedOperationCases}
               signalCounts={signalCounts ?? {}}
+              signalCountsLoading={signalCountsQuery.isLoading}
+              signalCountsError={signalCountsQuery.error}
               descDraft={operationDescDraft}
               descStatus={operationDescStatus}
               editingName={editingName}
@@ -707,6 +843,8 @@ export function ProjectsView() {
               renamePending={renameMutation.isPending}
               deletePending={deleteOperationMutation.isPending}
               onDescChange={(v) => { setOperationDescDraft(v); setOperationDescStatus("dirty"); }}
+              onDescBlur={flushOperationDescription}
+              onRetryDesc={() => setOperationDescStatus("dirty")}
               onEditNameStart={() => { setNameDraft(selectedOperation.name); setEditingName(true); }}
               onNameDraftChange={setNameDraft}
               onCommitRename={commitRename}
@@ -720,10 +858,13 @@ export function ProjectsView() {
               onSelectProject={(id) => setSelection({ kind: "project", id })}
               allProjects={projects ?? []}
               onAssignProject={() => setAssignProjectsOpen(true)}
+              metadataPending={updateWorkItemMetadataMutation.isPending}
+              onWorkTypeChange={(workType) => updateWorkItemMetadataMutation.mutate({ workType })}
+              onCaseStageChange={(stage) => updateWorkItemMetadataMutation.mutate({ stage })}
             />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
-              <p className="text-label">Select a collection or intel group</p>
+              <p className="text-label">Select a work item or evidence pile</p>
               <p className="font-ui text-[12px] text-[var(--overlay-1)]">
                 Pick one from the list to inspect details.
               </p>
@@ -748,8 +889,8 @@ export function ProjectsView() {
       <DeleteConfirmModal
         open={deleteConfirmOpen && !!selectedProject}
         title={selectedProject?.name ?? ""}
-        label="Delete collection"
-        description="Removes the collection and its signal associations permanently."
+        label="Delete evidence pile"
+        description="Removes the evidence pile and its signal associations permanently."
         footnote="Source signals are not deleted — they stay in Inbox."
         isPending={deleteProjectMutation.isPending}
         onClose={() => setDeleteConfirmOpen(false)}
@@ -759,9 +900,9 @@ export function ProjectsView() {
       <DeleteConfirmModal
         open={deleteOperationConfirmOpen && !!selectedOperation}
         title={selectedOperation?.name ?? ""}
-        label="Delete intel group"
-        description="Removes the intel group. Collections in this group become unassigned."
-        footnote="Collections and their signals are not deleted."
+        label="Delete work item"
+        description="Removes the work item. Evidence piles in it become unassigned."
+        footnote="Evidence piles and their signals are not deleted."
         isPending={deleteOperationMutation.isPending}
         onClose={() => setDeleteOperationConfirmOpen(false)}
         onConfirm={() => { if (selectedOperation) deleteOperationMutation.mutate(selectedOperation.id); }}
@@ -798,6 +939,9 @@ function ProjectDetailPane({
   project,
   operations,
   projectSignals,
+  projectSignalsLoading,
+  projectSignalsError,
+  onRetryProjectSignals,
   cases,
   vaultFiles,
   notesDraft,
@@ -807,6 +951,8 @@ function ProjectDetailPane({
   renamePending,
   deletePending,
   onNotesChange,
+  onNotesBlur,
+  onRetryNotes,
   onEditNameStart,
   onNameDraftChange,
   onCommitRename,
@@ -822,16 +968,21 @@ function ProjectDetailPane({
   project: Project;
   operations: Operation[];
   projectSignals: ProjectSignal[];
+  projectSignalsLoading: boolean;
+  projectSignalsError: Error | null;
+  onRetryProjectSignals: () => void;
   cases: Investigation[];
   vaultFiles: VaultFile[];
   signalCounts: Record<number, number>;
   notesDraft: string;
-  notesStatus: "idle" | "dirty" | "saving" | "saved";
+  notesStatus: SaveStateValue;
   editingName: boolean;
   nameDraft: string;
   renamePending: boolean;
   deletePending: boolean;
   onNotesChange: (v: string) => void;
+  onNotesBlur: () => void;
+  onRetryNotes: () => void;
   onEditNameStart: () => void;
   onNameDraftChange: (v: string) => void;
   onCommitRename: () => void;
@@ -849,10 +1000,10 @@ function ProjectDetailPane({
   return (
     <>
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)]">
-        {/* Collection eyebrow */}
+        {/* Evidence-pile eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-            Intel Collection · {project.type.replace("_", " ")}
+            Evidence pile · {project.type.replace("_", " ")}
           </span>
           <StatusPill variant={project.status === "active" ? "active" : "paused"}>
             {project.status.toUpperCase()}
@@ -860,7 +1011,7 @@ function ProjectDetailPane({
         </div>
 
         {/* Name row + actions */}
-        <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 pt-1">
           <div className="flex min-w-0 items-center">
             {editingName ? (
               <input
@@ -888,7 +1039,7 @@ function ProjectDetailPane({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="accent-outline" className="gap-1.5" onClick={onAddFromSearch}>
               <FolderSearch className="h-3 w-3" />
               Add Search
@@ -924,41 +1075,33 @@ function ProjectDetailPane({
       <div className="flex-1 overflow-y-auto">
         {/* Operation assignment */}
         {operations.length > 0 && (
-          <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-5 py-2.5">
-            <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-              Operation
-            </span>
-            <select
-              className="h-7 min-w-0 flex-1 rounded border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+          <div className="border-b border-[var(--border-subtle)] px-5 py-3">
+            <PropertyField label="Work item" htmlFor={`project-${project.id}-work-item`}>
+            <Select
+              id={`project-${project.id}-work-item`}
+              controlSize="xs"
+              containerClassName="w-full"
               value={project.operation_id ?? ""}
               onChange={(e) => onAssignOperation(e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">Unassigned</option>
+              <option value="">No work item</option>
               {operations.filter((o) => o.status === "active").map((op) => (
                 <option key={op.id} value={op.id}>{op.name}</option>
               ))}
-            </select>
+            </Select>
+            </PropertyField>
           </div>
         )}
 
         <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Notes</span>
-            <span className={cn(
-              "font-mono text-[10px] transition-opacity duration-200",
-              notesStatus === "saving" ? "text-[var(--overlay-1)] opacity-100"
-                : notesStatus === "saved" ? "text-[var(--success)] opacity-100"
-                  : notesStatus === "dirty" ? "text-[var(--overlay-1)] opacity-100"
-                    : "opacity-0",
-            )}>
-              {notesStatus === "saving" ? "Saving…" : notesStatus === "saved" ? "Saved" : notesStatus === "dirty" ? "Editing…" : ""}
-            </span>
-          </div>
-          <Textarea
+          <NarrativeEditor
+            label="Notes"
             value={notesDraft}
-            onChange={(e) => onNotesChange(e.target.value)}
+            onChange={onNotesChange}
+            onBlur={onNotesBlur}
+            status={notesStatus}
+            onRetry={onRetryNotes}
             placeholder="Scope, hypotheses, analyst notes…"
-            className="min-h-[88px]"
           />
         </div>
 
@@ -976,19 +1119,27 @@ function ProjectDetailPane({
           </div>
         )}
 
-        {/* Signals */}
+        {/* Evidence */}
         <div className="px-5 pt-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Attached signals</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{projectSignals.length}</span>
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence signals</span>
+            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+              {projectSignalsLoading ? "…" : projectSignalsError ? "!" : projectSignals.length}
+            </span>
           </div>
         </div>
-        {projectSignals.length === 0 ? (
-          <div className="mx-5 mb-5 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-            No saved signals yet. Route from Inbox or Search.
-          </div>
-        ) : (
-          <div className="px-5 pb-5">
+        <div className="px-5 pb-5">
+          <QueryState
+            isLoading={projectSignalsLoading}
+            error={projectSignalsError}
+            isEmpty={projectSignals.length === 0}
+            loadingLabel="Loading attached signals"
+            emptyTitle="No saved signals yet"
+            emptyDescription="Save evidence from Inbox or Search into this pile."
+            errorTitle="Attached signals unavailable"
+            onRetry={onRetryProjectSignals}
+          >
+            <div>
             {projectSignals.map((ps) =>
               ps.intel_signals ? (
                 <SignalCard
@@ -1004,8 +1155,9 @@ function ProjectDetailPane({
                 />
               ) : null,
             )}
-          </div>
-        )}
+            </div>
+          </QueryState>
+        </div>
       </div>
     </>
   );
@@ -1018,6 +1170,8 @@ function OperationDetailPane({
   operationProjects,
   cases,
   signalCounts,
+  signalCountsLoading,
+  signalCountsError,
   descDraft,
   descStatus,
   editingName,
@@ -1025,6 +1179,8 @@ function OperationDetailPane({
   renamePending,
   deletePending,
   onDescChange,
+  onDescBlur,
+  onRetryDesc,
   onEditNameStart,
   onNameDraftChange,
   onCommitRename,
@@ -1035,18 +1191,25 @@ function OperationDetailPane({
   onSelectProject,
   allProjects,
   onAssignProject,
+  metadataPending,
+  onWorkTypeChange,
+  onCaseStageChange,
 }: {
   operation: Operation;
   operationProjects: Project[];
   cases: Investigation[];
   signalCounts: Record<number, number>;
+  signalCountsLoading: boolean;
+  signalCountsError: Error | null;
   descDraft: string;
-  descStatus: "idle" | "dirty" | "saving" | "saved";
+  descStatus: SaveStateValue;
   editingName: boolean;
   nameDraft: string;
   renamePending: boolean;
   deletePending: boolean;
   onDescChange: (v: string) => void;
+  onDescBlur: () => void;
+  onRetryDesc: () => void;
   onEditNameStart: () => void;
   onNameDraftChange: (v: string) => void;
   onCommitRename: () => void;
@@ -1057,21 +1220,26 @@ function OperationDetailPane({
   onSelectProject: (id: number) => void;
   allProjects: Project[];
   onAssignProject: () => void;
+  metadataPending: boolean;
+  onWorkTypeChange: (workType: IntelWorkType) => void;
+  onCaseStageChange: (stage: ClientCaseStage) => void;
 }) {
   const totalSignals = operationProjects.reduce((acc, p) => acc + (signalCounts[p.id] ?? 0), 0);
   const assignableProjects = allProjects.filter(
     (p) => !operationProjects.some((op) => op.id === p.id) && p.status === "active"
   );
   const primaryCase = cases.find((item) => item.status !== "archived") ?? cases[0] ?? null;
+  const workType = getIntelWorkType(operation.taxonomy);
+  const caseStage = getClientCaseStage(operation.taxonomy);
 
   return (
     <>
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--mantle)]">
-        {/* Intel group eyebrow */}
+        {/* Work-item eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <Layers aria-hidden strokeWidth={1.5} className="h-3 w-3 shrink-0 text-[var(--accent)]" />
           <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
-            Intel group
+            Work item · {intelWorkTypeLabel(workType)}
           </span>
           <StatusPill variant={operation.status === "active" ? "active" : "paused"}>
             {operation.status.toUpperCase()}
@@ -1079,7 +1247,7 @@ function OperationDetailPane({
         </div>
 
         {/* Name row + actions */}
-        <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 pt-1">
           <div className="flex min-w-0 items-center">
           {editingName ? (
             <input
@@ -1107,10 +1275,10 @@ function OperationDetailPane({
           )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="primary" className="gap-1.5" onClick={onNewProject}>
               <Plus className="h-3 w-3" />
-              Add collection
+              Add evidence pile
             </Button>
             <Button
               size="sm"
@@ -1137,51 +1305,90 @@ function OperationDetailPane({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        <div className="border-b border-[var(--border-subtle)] px-5 py-4">
+          <div className="grid gap-3">
+            <PropertyField label="Work type" htmlFor={`operation-${operation.id}-work-type`}>
+              <Select
+                id={`operation-${operation.id}-work-type`}
+                controlSize="sm"
+                containerClassName="w-full"
+                value={workType ?? ""}
+                disabled={metadataPending}
+                onChange={(event) => onWorkTypeChange(event.target.value as IntelWorkType)}
+              >
+                <option value="" disabled>Classify this work item</option>
+                {INTEL_WORK_TYPES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            </PropertyField>
+
+            {workType === "client_case" && caseStage ? (
+              <PropertyField label="Case stage">
+                <div className="grid grid-cols-4 gap-1.5">
+                  {CLIENT_CASE_STAGES.map((stage) => (
+                    <button
+                      key={stage.value}
+                      type="button"
+                      disabled={metadataPending}
+                      onClick={() => onCaseStageChange(stage.value)}
+                      className={cn(
+                        "rounded-full border px-2 py-1.5 font-ui text-[11px] transition-colors disabled:opacity-60",
+                        stage.value === caseStage
+                          ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          : "border-[var(--border-subtle)] bg-[var(--base)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
+                      )}
+                    >
+                      {stage.label}
+                    </button>
+                  ))}
+                </div>
+              </PropertyField>
+            ) : null}
+          </div>
+        </div>
+
         {/* Description */}
         <div className="border-b border-[var(--border-subtle)] px-5 py-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Description</span>
-            <span className={cn(
-              "font-mono text-[10px] transition-opacity duration-200",
-              descStatus === "saving" ? "text-[var(--overlay-1)] opacity-100"
-                : descStatus === "saved" ? "text-[var(--success)] opacity-100"
-                  : descStatus === "dirty" ? "text-[var(--overlay-1)] opacity-100"
-                    : "opacity-0",
-            )}>
-              {descStatus === "saving" ? "Saving…" : descStatus === "saved" ? "Saved" : descStatus === "dirty" ? "Editing…" : ""}
-            </span>
-          </div>
-          <Textarea
+          <NarrativeEditor
+            label="Description"
             value={descDraft}
-            onChange={(e) => onDescChange(e.target.value)}
+            onChange={onDescChange}
+            onBlur={onDescBlur}
+            status={descStatus}
+            onRetry={onRetryDesc}
             placeholder="Scope, objectives, context…"
-            className="min-h-[88px]"
           />
         </div>
 
-        {/* Collections summary */}
+        {/* Evidence-piles summary */}
         <div className="px-5 pt-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Collections</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">{operationProjects.length} collection{operationProjects.length === 1 ? "" : "s"} · {totalSignals} signals</span>
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence piles</span>
+            <span
+              className={cn("font-mono text-[10px]", signalCountsError ? "text-[var(--danger)]" : "text-[var(--overlay-1)]")}
+              title={signalCountsError ? `Signal counts unavailable: ${signalCountsError.message}` : undefined}
+            >
+              {operationProjects.length} pile{operationProjects.length === 1 ? "" : "s"} · {signalCountsLoading ? "…" : signalCountsError ? "counts unavailable" : `${totalSignals} signals`}
+            </span>
           </div>
 
           {assignableProjects.length > 0 && (
             <div className="mb-3">
               <Button size="sm" variant="accent-outline" className="gap-1.5 w-full justify-center" onClick={onAssignProject}>
                 <Plus className="h-3 w-3" />
-                Assign existing collection{assignableProjects.length > 1 ? "s" : ""}
+                Assign existing evidence pile{assignableProjects.length > 1 ? "s" : ""}
               </Button>
             </div>
           )}
           {operationProjects.length === 0 ? (
             <div className="mb-5 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No collections yet. Add a collection to start collecting signals.
+              No evidence piles yet. Add one to collect signals, files, and graph material inside this work item.
             </div>
           ) : (
             <div className="mb-5 flex flex-col gap-1">
               {operationProjects.map((p) => {
-                const count = signalCounts[p.id] ?? 0;
+                const count = signalCounts[p.id];
                 const dot = p.watch_domain ? domainColor(p.watch_domain) : "var(--overlay-1)";
                 return (
                   <button
@@ -1192,10 +1399,12 @@ function OperationDetailPane({
                   >
                     <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
                     <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-[var(--text)]">{p.name}</span>
-                    <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
+                    <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                       {p.type.replace("_", " ")}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">{count}</span>
+                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                      {signalCountsLoading ? "…" : signalCountsError ? "!" : count ?? 0}
+                    </span>
                   </button>
                 );
               })}
@@ -1215,34 +1424,24 @@ function DeleteConfirmModal({
   open: boolean; title: string; label: string; description: string;
   footnote?: string; isPending: boolean; onClose: () => void; onConfirm: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !isPending) onClose(); }}
+      title={`${label}: ${title}`}
+      description={description}
+      className="w-full max-w-[460px]"
+      footer={(
+        <>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
+            <Trash2 className="h-3 w-3" />
+            {isPending ? "Deleting…" : label}
+          </Button>
+        </>
+      )}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
-      >
-        <div className="border-b border-[var(--border)] px-5 py-4">
-          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">{label}</p>
-          <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">{title}</h3>
-        </div>
-        <div className="grid gap-3 px-5 py-4">
-          <p className="font-ui text-[13px] text-[var(--subtext-0)]">{description}</p>
-          {footnote && <p className="font-ui text-[12px] text-[var(--overlay-1)]">{footnote}</p>}
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
-              <Trash2 className="h-3 w-3" />
-              {isPending ? "Deleting…" : label}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+      {footnote ? <p className="font-ui text-[12px] text-[var(--overlay-1)]">{footnote}</p> : <span />}
+    </AppDialog>
   );
 }

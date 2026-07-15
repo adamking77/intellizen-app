@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { NodePicker } from "@/components/graph/node-picker";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
@@ -29,7 +30,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
+import { FieldShell } from "@/components/ui/field-shell";
 import { Input } from "@/components/ui/input";
+import { PropertyField } from "@/components/ui/property-field";
+import type { SaveStateValue } from "@/components/ui/save-state";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   buildEdgePath,
@@ -87,6 +93,7 @@ import { buildGraphExtractionPrompt } from "@/lib/shell";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
+  GraphNodeRecord,
 } from "@/lib/types";
 
 type GraphMode = "project" | "standalone";
@@ -100,6 +107,8 @@ type PendingGraphExtraction = {
 
 const FIONA_GRAPH_POLL_INTERVAL_MS = 4_000;
 const FIONA_GRAPH_POLL_TIMEOUT_MS = 3 * 60_000;
+const EMPTY_GRAPH_NODES: GraphNodeRecord[] = [];
+const EMPTY_GRAPH_EDGES: GraphEdgeRecord[] = [];
 
 const ENTITY_STYLES: Record<
   GraphEntityType,
@@ -139,15 +148,6 @@ const ENTITY_STYLES: Record<
     text: "var(--text)",
     accent: "var(--entity-event)",
   },
-};
-
-// Hex values aligned with CSS token definitions in index.css.
-// Canvas API requires resolved color strings; CSS vars can't be used directly here.
-const INSIGHT_NODE_COLORS: Record<GraphEntityType, string> = {
-  person: "#94e2d5",     // --entity-person
-  organisation: "#89dceb", // --entity-org
-  location: "#fab387",   // --entity-location
-  event: "#f38ba8",      // --entity-event
 };
 
 const ENTITY_ICON: Record<GraphEntityType, typeof User> = {
@@ -251,7 +251,28 @@ function extractGraphSignalContent(rawPayload: unknown): string | null {
 
 export function GraphView() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const entityFilter = useAppStore((state) => state.entityFilter);
+  const caseParam = searchParams.get("case");
+  const projectParam = searchParams.get("project");
+  const insightNodeColors = useMemo<Record<GraphEntityType, string>>(() => {
+    if (typeof document === "undefined") {
+      return {
+        person: "var(--entity-person)",
+        organisation: "var(--entity-org)",
+        location: "var(--entity-location)",
+        event: "var(--entity-event)",
+      };
+    }
+    const styles = getComputedStyle(document.documentElement);
+    return {
+      person: styles.getPropertyValue("--entity-person").trim(),
+      organisation: styles.getPropertyValue("--entity-org").trim(),
+      location: styles.getPropertyValue("--entity-location").trim(),
+      event: styles.getPropertyValue("--entity-event").trim(),
+    };
+  }, []);
   const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
@@ -279,7 +300,9 @@ export function GraphView() {
   const [pointerWorld, setPointerWorld] = useState<Point | null>(null);
   const [nodeDraftLabel, setNodeDraftLabel] = useState("");
   const [nodeDraftType, setNodeDraftType] = useState<GraphEntityType>("person");
+  const [nodeEditStatus, setNodeEditStatus] = useState<SaveStateValue>("idle");
   const [edgeDraftLabel, setEdgeDraftLabel] = useState("");
+  const [edgeEditStatus, setEdgeEditStatus] = useState<SaveStateValue>("idle");
   const [pathFromNodeId, setPathFromNodeId] = useState<string | null>(null);
   const [pathToNodeId, setPathToNodeId] = useState<string | null>(null);
   const [shortestPathNodeIds, setShortestPathNodeIds] = useState<string[]>([]);
@@ -308,13 +331,16 @@ export function GraphView() {
   const [railTab, setRailTab] = useState<"inspect" | "controls">("inspect");
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [pendingInspectorDelete, setPendingInspectorDelete] = useState<
+    { kind: "node" | "edge"; id: string; label: string } | null
+  >(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportFilename, setExportFilename] = useState("graph-export");
   const [exportTarget, setExportTarget] = useState<"project" | "investigation">("project");
   const [exportTargetId, setExportTargetId] = useState<string | number | null>(null);
   const [exportSaving, setExportSaving] = useState(false);
   const [exportDataUrl, setExportDataUrl] = useState<string | null>(null);
-  const { isCramped } = useWindowSize();
+  const { isCramped, isNarrow } = useWindowSize();
 
   useEffect(() => {
     try {
@@ -353,6 +379,7 @@ export function GraphView() {
   const graphProjectIdRef = useRef(graphProjectId);
   const effectiveProjectIdRef = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const createInputRef = useRef<HTMLInputElement | null>(null);
   const pastSnapshotsRef = useRef<GraphSnapshot[]>([]);
   const futureSnapshotsRef = useRef<GraphSnapshot[]>([]);
   const isApplyingHistoryRef = useRef(false);
@@ -370,17 +397,37 @@ export function GraphView() {
     queryFn: () => listInvestigations({ entity: entityFilter }),
   });
 
+  const scopedCase = useMemo(
+    () => investigations?.find((investigation) => investigation.case_id === caseParam) ?? null,
+    [caseParam, investigations],
+  );
+
+  useEffect(() => {
+    if (!caseParam && !projectParam) return;
+    if (caseParam && investigations === undefined) return;
+
+    const linkedProjectId = scopedCase?.project_id
+      ?? (projectParam && Number.isFinite(Number(projectParam)) ? Number(projectParam) : null);
+
+    setGraphMode("project");
+    setGraphProjectId(linkedProjectId);
+    setInteractionMode("construct");
+    hasAutoFitRef.current = null;
+  }, [caseParam, investigations, projectParam, scopedCase?.project_id]);
+
   // Auto-select first project when switching to project mode
   useEffect(() => {
+    if (caseParam || projectParam) return;
     if (graphMode === "project" && graphProjectId === null && projects && projects.length > 0) {
       setGraphProjectId(projects[0].id);
     }
-  }, [graphMode, graphProjectId, projects]);
+  }, [caseParam, graphMode, graphProjectId, projectParam, projects]);
 
   const selectedProject = useMemo(
     () => projects?.find((project) => project.id === graphProjectId) ?? null,
     [projects, graphProjectId],
   );
+  const caseScopeNeedsEvidencePile = Boolean(caseParam && !graphProjectId);
 
   // Effective project ID: null for standalone, selected ID for project mode
   const effectiveProjectId = graphMode === "standalone" ? null : graphProjectId;
@@ -404,8 +451,10 @@ export function GraphView() {
     enabled: graphMode === "project" && graphProjectId !== null,
   });
 
-  const nodes = nodesQuery.data ?? [];
-  const edges = edgesQuery.data ?? [];
+  // Stable loading fallbacks keep selection-cleanup effects from seeing a new
+  // array on every render and recursively scheduling state updates.
+  const nodes = nodesQuery.data ?? EMPTY_GRAPH_NODES;
+  const edges = edgesQuery.data ?? EMPTY_GRAPH_EDGES;
 
   useEffect(() => {
     setDragPositions((current) => {
@@ -1001,7 +1050,7 @@ export function GraphView() {
         id: node.node_id,
         label: node.label,
         entityType: node.entity_type,
-        color: INSIGHT_NODE_COLORS[node.entity_type],
+        color: insightNodeColors[node.entity_type],
         val: clamp(2 + degree * 0.75, 2, 8),
       };
     });
@@ -1014,7 +1063,7 @@ export function GraphView() {
     }));
 
     return { nodes: nodesData, links: linksData };
-  }, [filteredEdges, filteredNodes, nodeDegreeById]);
+  }, [filteredEdges, filteredNodes, insightNodeColors, nodeDegreeById]);
 
   const graphMetrics = useMemo(() => {
     const typeCounts = {
@@ -1094,16 +1143,43 @@ export function GraphView() {
     if (!selectedNode) {
       setNodeDraftLabel("");
       setNodeDraftType("person");
+      setNodeEditStatus("idle");
       return;
     }
 
     setNodeDraftLabel(selectedNode.label);
     setNodeDraftType(selectedNode.entity_type);
+    setNodeEditStatus("idle");
   }, [selectedNode]);
 
   useEffect(() => {
     setEdgeDraftLabel(selectedEdge?.label ?? "");
+    setEdgeEditStatus("idle");
   }, [selectedEdge]);
+
+  useEffect(() => {
+    if (!isConstructMode || nodeEditStatus !== "dirty" || !nodeDraftLabel.trim() || !selectedNode) return;
+    const handle = window.setTimeout(() => void handleSaveSelectedNode(), 650);
+    return () => window.clearTimeout(handle);
+  }, [isConstructMode, nodeDraftLabel, nodeDraftType, nodeEditStatus, selectedNode]);
+
+  useEffect(() => {
+    if (!isConstructMode || edgeEditStatus !== "dirty" || !selectedEdge) return;
+    const handle = window.setTimeout(() => void handleSaveSelectedEdge(), 650);
+    return () => window.clearTimeout(handle);
+  }, [edgeDraftLabel, edgeEditStatus, isConstructMode, selectedEdge]);
+
+  useEffect(() => {
+    if (nodeEditStatus !== "saved") return;
+    const handle = window.setTimeout(() => setNodeEditStatus("idle"), 1200);
+    return () => window.clearTimeout(handle);
+  }, [nodeEditStatus]);
+
+  useEffect(() => {
+    if (edgeEditStatus !== "saved") return;
+    const handle = window.setTimeout(() => setEdgeEditStatus("idle"), 1200);
+    return () => window.clearTimeout(handle);
+  }, [edgeEditStatus]);
 
   useEffect(() => {
     if (!connectSourceId || nodeLookup.has(connectSourceId)) return;
@@ -1444,6 +1520,7 @@ export function GraphView() {
       if (isTextInputTarget) return;
 
       if (event.key === "Escape") {
+        if (overflowOpen) { setOverflowOpen(false); return; }
         if (clearConfirmOpen) { setClearConfirmOpen(false); return; }
         if (exportModalOpen) { setExportModalOpen(false); setExportDataUrl(null); return; }
         setPlaceMode(false);
@@ -1546,6 +1623,7 @@ export function GraphView() {
     selectedNodeId,
     selectedNodeIds,
     isConstructMode,
+    overflowOpen,
   ]);
 
   async function handleCreateNode(position?: Point) {
@@ -1614,9 +1692,10 @@ export function GraphView() {
 
   async function handleSaveSelectedNode() {
     if (!ensureConstructMode("Node editing")) return;
-    if ((graphMode === "project" && !graphProjectId) || !selectedNode || !nodeDraftLabel.trim()) return;
+    if (nodeEditStatus !== "dirty" || (graphMode === "project" && !graphProjectId) || !selectedNode || !nodeDraftLabel.trim()) return;
 
     try {
+      setNodeEditStatus("saving");
       setErrorMessage(null);
       setStatusMessage(null);
       recordHistory();
@@ -1629,17 +1708,20 @@ export function GraphView() {
       });
 
       await nodesQuery.refetch();
+      setNodeEditStatus("saved");
       setStatusMessage("Updated node.");
     } catch (error) {
+      setNodeEditStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Failed to update node.");
     }
   }
 
   async function handleSaveSelectedEdge() {
     if (!ensureConstructMode("Connection editing")) return;
-    if ((graphMode === "project" && !graphProjectId) || !selectedEdge) return;
+    if (edgeEditStatus !== "dirty" || (graphMode === "project" && !graphProjectId) || !selectedEdge) return;
 
     try {
+      setEdgeEditStatus("saving");
       setErrorMessage(null);
       setStatusMessage(null);
       recordHistory();
@@ -1651,8 +1733,10 @@ export function GraphView() {
       });
 
       await edgesQuery.refetch();
+      setEdgeEditStatus("saved");
       setStatusMessage("Updated connection.");
     } catch (error) {
+      setEdgeEditStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Failed to update connection.");
     }
   }
@@ -1761,7 +1845,10 @@ export function GraphView() {
       if (worldEl) {
         try {
           const { toPng } = await import("html-to-image");
-          dataUrl = await toPng(worldEl, { backgroundColor: "#1e1e2e", pixelRatio: 2 });
+          const backgroundColor = getComputedStyle(document.documentElement)
+            .getPropertyValue("--base")
+            .trim();
+          dataUrl = await toPng(worldEl, { backgroundColor, pixelRatio: 2 });
         } catch {
           dataUrl = null;
         }
@@ -1881,7 +1968,7 @@ export function GraphView() {
 
     const projectSignals = projectSignalsQuery.data;
     if (!projectSignals || projectSignals.length === 0) {
-      setErrorMessage("No signals in this project to analyze.");
+      setErrorMessage("No signals in this evidence pile to analyze.");
       return;
     }
 
@@ -1990,6 +2077,12 @@ export function GraphView() {
     });
   }
 
+  function startFirstNode() {
+    setInteractionMode("construct");
+    setRailOpen(true);
+    window.requestAnimationFrame(() => createInputRef.current?.focus());
+  }
+
 
   return (
     <div className="relative flex h-full w-full overflow-hidden bg-[var(--crust)]">
@@ -1998,9 +2091,12 @@ export function GraphView() {
           ============================================================ */}
       <div className="relative flex flex-1 min-w-0 flex-col">
         {/* ---------- TOP BAR ---------- */}
-        <div className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+        <div className={cn(
+          "relative z-30 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4",
+          isCramped ? "min-h-14 flex-wrap py-2" : "h-14",
+        )}>
           {/* Left — breadcrumb + scope */}
-          <div className="flex min-w-0 items-center gap-3">
+          <div className={cn("flex min-w-0 items-center gap-3", isCramped && "order-1 flex-1")}>
             {!isCramped && (
               <div className="text-meta flex items-center gap-1.5">
                 <span className="text-[var(--overlay-1)]">Graph</span>
@@ -2008,7 +2104,7 @@ export function GraphView() {
                 <span className="truncate text-[var(--text)]">
                   {graphMode === "standalone"
                     ? "Standalone"
-                    : selectedProject?.name ?? "Select project"}
+                    : scopedCase?.name ?? selectedProject?.name ?? "Select evidence pile"}
                 </span>
               </div>
             )}
@@ -2031,9 +2127,12 @@ export function GraphView() {
                 setConnectSourceId(null);
                 hasAutoFitRef.current = null;
               }}
-              className="h-7 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-7 min-w-0 max-w-[180px] rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
             >
               <option value="standalone">Standalone</option>
+              {graphMode === "project" && graphProjectId === null ? (
+                <option value="" disabled>No evidence pile linked</option>
+              ) : null}
               {projects?.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -2043,12 +2142,15 @@ export function GraphView() {
           </div>
 
           {/* Center — Insight | Construct */}
-          <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-0.5">
+          <div className={cn(
+            "flex items-center gap-0.5 rounded-full border border-[var(--border)] bg-[var(--mantle)] p-0.5",
+            isCramped && "order-3 w-full justify-center",
+          )}>
             <button
               type="button"
               onClick={() => setInteractionMode("insight")}
               className={cn(
-                "rounded px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+                "rounded-full px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
                 isInsightMode
                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -2060,7 +2162,7 @@ export function GraphView() {
               type="button"
               onClick={() => setInteractionMode("construct")}
               className={cn(
-                "rounded px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+                "rounded-full px-3 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
                 isConstructMode
                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -2071,7 +2173,7 @@ export function GraphView() {
           </div>
 
           {/* Right — search + actions */}
-          <div className="flex items-center gap-1.5">
+          <div className={cn("flex items-center gap-1.5", isCramped && "order-2")}>
             {!isCramped && (
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--overlay-1)]" />
@@ -2085,6 +2187,8 @@ export function GraphView() {
               </div>
             )}
 
+            {!isCramped ? (
+              <>
             <TopbarIconBtn
               title="Zoom in"
               onClick={() => {
@@ -2114,6 +2218,8 @@ export function GraphView() {
             <TopbarIconBtn title="Fit view" onClick={fitVisibleGraph}>
               <Maximize2 className="h-3.5 w-3.5" />
             </TopbarIconBtn>
+              </>
+            ) : null}
 
             {/* Overflow */}
             <div className="relative">
@@ -2150,7 +2256,7 @@ export function GraphView() {
                     />
                     {graphMode === "project" && (
                       <OverflowItem
-                        label={isAutoGenerating ? "Generating…" : "Generate from signals"}
+                        label={isAutoGenerating ? "Generating…" : "Generate from evidence"}
                         disabled={
                           isAutoGenerating ||
                           !graphProjectId ||
@@ -2246,32 +2352,36 @@ export function GraphView() {
                 clearPathAnalysis();
               }}
             />
-            {isInsightMode && graphMode === "project" && visualNodes.length === 0 ? (
+            {isInsightMode && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
                   <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent)]" />
                   <p className="text-heading">
-                    This project graph is empty
+                    {caseScopeNeedsEvidencePile ? "This case needs an evidence pile" : scopedCase ? "This case graph is empty" : "This graph is empty"}
                   </p>
                   <p className="text-meta mt-2 text-[var(--subtext-0)]">
-                    Build a relationship map from project signals, then inspect it here.
+                    {caseScopeNeedsEvidencePile
+                      ? "Link an evidence pile in Intel so this case has a durable place for graph nodes and supporting signals."
+                      : "Create the first node yourself, or generate a starting map from the saved evidence."}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                    <Button
-                      variant="primary"
-                      onClick={() => void handleAutoGenerateFromProject()}
-                      disabled={
-                        isAutoGenerating ||
-                        !graphProjectId ||
-                        (projectSignalsQuery.data?.length ?? 0) === 0
-                      }
-                    >
-                      <Sparkles className="mr-2 h-3.5 w-3.5" />
-                      {isAutoGenerating ? "Generating…" : "Generate from signals"}
-                    </Button>
-                    <Button variant="ghost" onClick={() => setInteractionMode("construct")}>
-                      Switch to Construct
-                    </Button>
+                    {caseScopeNeedsEvidencePile ? (
+                      <Button variant="primary" onClick={() => navigate("/intel")}>Open Intel</Button>
+                    ) : (
+                      <>
+                        <Button variant="primary" onClick={startFirstNode}>Create first node</Button>
+                        {graphMode === "project" && (projectSignalsQuery.data?.length ?? 0) > 0 ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => void handleAutoGenerateFromProject()}
+                            disabled={isAutoGenerating}
+                          >
+                            <Sparkles className="mr-2 h-3.5 w-3.5" />
+                            {isAutoGenerating ? "Generating…" : "Generate from evidence"}
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2634,31 +2744,35 @@ export function GraphView() {
               })}
             </div>
 
-            {graphMode === "project" && visualNodes.length === 0 ? (
+            {visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
                   <p className="text-heading">
-                    This project graph is empty
+                    {caseScopeNeedsEvidencePile ? "This case needs an evidence pile" : scopedCase ? "This case graph is empty" : "This graph is empty"}
                   </p>
                   <p className="text-meta mt-2 text-[var(--subtext-0)]">
-                    Build a relationship map from project signals, then inspect it here.
+                    {caseScopeNeedsEvidencePile
+                      ? "Link an evidence pile in Intel so the case graph has a durable scope."
+                      : "Start with a person, organisation, location, or event. You can connect the evidence as the map grows."}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                    <Button
-                      variant="primary"
-                      onClick={() => void handleAutoGenerateFromProject()}
-                      disabled={
-                        isAutoGenerating ||
-                        !graphProjectId ||
-                        (projectSignalsQuery.data?.length ?? 0) === 0
-                      }
-                    >
-                      <Sparkles className="mr-2 h-3.5 w-3.5" />
-                      {isAutoGenerating ? "Generating…" : "Generate from signals"}
-                    </Button>
-                    <Button variant="ghost" onClick={() => setInteractionMode("construct")}>
-                      Switch to Construct
-                    </Button>
+                    {caseScopeNeedsEvidencePile ? (
+                      <Button variant="primary" onClick={() => navigate("/intel")}>Open Intel</Button>
+                    ) : (
+                      <>
+                        <Button variant="primary" onClick={startFirstNode}>Create first node</Button>
+                        {graphMode === "project" && (projectSignalsQuery.data?.length ?? 0) > 0 ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => void handleAutoGenerateFromProject()}
+                            disabled={isAutoGenerating}
+                          >
+                            <Sparkles className="mr-2 h-3.5 w-3.5" />
+                            {isAutoGenerating ? "Generating…" : "Generate from evidence"}
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2717,7 +2831,7 @@ export function GraphView() {
           {/* Floating construct toolbar (construct only) */}
           {isConstructMode && (
             <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 -translate-x-1/2">
-              <div className="flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)]">
+              <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)]">
                 <ToolbarBtn
                   title="Create node"
                   onClick={() => {
@@ -2805,10 +2919,10 @@ export function GraphView() {
             <div className="pointer-events-none absolute bottom-4 left-4 z-30">
               <div
                 className={cn(
-                  "rounded-md border px-3 py-1.5 font-ui text-[11px] backdrop-blur",
+                  "rounded-md border px-3 py-1.5 font-ui text-[11px]",
                   errorMessage
-                    ? "border-[rgba(240,63,63,0.4)] bg-[rgba(240,63,63,0.1)] text-[#f03f3f]"
-                    : "border-[rgba(166,227,161,0.4)] bg-[rgba(166,227,161,0.1)] text-[#a6e3a1]",
+                    ? "border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-[var(--danger)]"
+                    : "border-[color-mix(in_srgb,var(--success)_40%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]",
                 )}
               >
                 {errorMessage ?? statusMessage}
@@ -2839,10 +2953,11 @@ export function GraphView() {
           ============================================================ */}
       <aside
         className={cn(
-          "relative z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]",
+          "z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]",
           "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          isNarrow ? "absolute inset-y-0 right-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
         )}
-        style={{ width: railOpen ? 340 : 0 }}
+        style={{ width: railOpen ? (isNarrow ? "min(340px, calc(100vw - 2rem))" : 340) : 0 }}
       >
         {railOpen && (
           <>
@@ -2859,10 +2974,15 @@ export function GraphView() {
                 onClick={() => setRailTab("controls")}
               />
               <div className="flex-1" />
+              {isNarrow ? (
+                <TopbarIconBtn title="Close graph rail" onClick={() => setRailOpen(false)}>
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                </TopbarIconBtn>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setRailOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                 title="Hide"
               >
                 <X className="h-3.5 w-3.5" />
@@ -2929,7 +3049,7 @@ export function GraphView() {
                             }}
                           />
                           <span
-                            className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em]"
+                            className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em]"
                             style={{
                               color: ENTITY_STYLES[selectedNode.entity_type].accent,
                             }}
@@ -2938,38 +3058,49 @@ export function GraphView() {
                           </span>
                         </div>
                         {isConstructMode ? (
-                          <Input
-                            value={nodeDraftLabel}
-                            onChange={(e) => setNodeDraftLabel(e.target.value)}
-                            placeholder="Node label"
-                          />
+                          <FieldShell
+                            label="Node details"
+                            status={nodeEditStatus}
+                            onRetry={() => setNodeEditStatus("dirty")}
+                            className="mt-1"
+                          >
+                            <div className="grid gap-3">
+                              <PropertyField label="Name" htmlFor={`graph-node-${selectedNode.node_id}-label`}>
+                                <Input
+                                  id={`graph-node-${selectedNode.node_id}-label`}
+                                  value={nodeDraftLabel}
+                                  onChange={(e) => {
+                                    setNodeDraftLabel(e.target.value);
+                                    setNodeEditStatus("dirty");
+                                  }}
+                                  onBlur={() => void handleSaveSelectedNode()}
+                                  placeholder="Node label"
+                                />
+                              </PropertyField>
+                              <PropertyField label="Type" htmlFor={`graph-node-${selectedNode.node_id}-type`}>
+                                <Select
+                                  id={`graph-node-${selectedNode.node_id}-type`}
+                                  controlSize="sm"
+                                  containerClassName="w-full"
+                                  value={nodeDraftType}
+                                  onChange={(e) => {
+                                    setNodeDraftType(e.target.value as GraphEntityType);
+                                    setNodeEditStatus("dirty");
+                                  }}
+                                  onBlur={() => void handleSaveSelectedNode()}
+                                >
+                                  <option value="person">Person</option>
+                                  <option value="organisation">Organisation</option>
+                                  <option value="location">Location</option>
+                                  <option value="event">Event</option>
+                                </Select>
+                              </PropertyField>
+                            </div>
+                          </FieldShell>
                         ) : (
                           <p className="text-heading">{selectedNode.label}</p>
                         )}
-                        {isConstructMode && (
-                          <select
-                            className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                            value={nodeDraftType}
-                            onChange={(e) =>
-                              setNodeDraftType(e.target.value as GraphEntityType)
-                            }
-                          >
-                            <option value="person">Person</option>
-                            <option value="organisation">Organisation</option>
-                            <option value="location">Location</option>
-                            <option value="event">Event</option>
-                          </select>
-                        )}
                         <div className="flex flex-wrap gap-1.5 pt-1">
-                          {isConstructMode && (
-                            <Button
-                              size="sm"
-                              onClick={() => void handleSaveSelectedNode()}
-                              disabled={!nodeDraftLabel.trim()}
-                            >
-                              Save
-                            </Button>
-                          )}
                           <Button
                             size="sm"
                             variant="secondary"
@@ -2996,12 +3127,14 @@ export function GraphView() {
                                 Link
                               </Button>
                               <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => void handleDeleteNode(selectedNode.node_id)}
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-[var(--overlay-1)] hover:text-[var(--danger)]"
+                                onClick={() => setPendingInspectorDelete({ kind: "node", id: selectedNode.node_id, label: selectedNode.label })}
+                                aria-label={`Delete ${selectedNode.label}`}
+                                title="Delete node"
                               >
-                                <Trash2 className="mr-1 h-3 w-3" />
-                                Delete
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </>
                           )}
@@ -3057,29 +3190,42 @@ export function GraphView() {
                         {findNodeLabel(nodes, selectedEdge.target_node_id)}
                       </p>
                       {isConstructMode ? (
-                        <>
-                          <Input
-                            value={edgeDraftLabel}
-                            onChange={(e) => setEdgeDraftLabel(e.target.value)}
-                            placeholder="Relationship label"
-                          />
-                          <div className="flex flex-wrap gap-1.5">
-                            <Button
-                              size="sm"
-                              onClick={() => void handleSaveSelectedEdge()}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => void handleDeleteEdge(selectedEdge.edge_id)}
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Delete
-                            </Button>
+                        <FieldShell
+                          label="Connection details"
+                          status={edgeEditStatus}
+                          onRetry={() => setEdgeEditStatus("dirty")}
+                        >
+                          <div className="grid gap-3">
+                            <PropertyField label="Label" htmlFor={`graph-edge-${selectedEdge.edge_id}-label`}>
+                              <Input
+                                id={`graph-edge-${selectedEdge.edge_id}-label`}
+                                value={edgeDraftLabel}
+                                onChange={(e) => {
+                                  setEdgeDraftLabel(e.target.value);
+                                  setEdgeEditStatus("dirty");
+                                }}
+                                onBlur={() => void handleSaveSelectedEdge()}
+                                placeholder="Relationship label"
+                              />
+                            </PropertyField>
+                            <div className="flex justify-end">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-[var(--overlay-1)] hover:text-[var(--danger)]"
+                                onClick={() => setPendingInspectorDelete({
+                                  kind: "edge",
+                                  id: selectedEdge.edge_id,
+                                  label: edgeDraftLabel.trim() || "this connection",
+                                })}
+                                aria-label="Delete connection"
+                                title="Delete connection"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
-                        </>
+                        </FieldShell>
                       ) : (
                         <p className="text-meta text-[var(--subtext-0)]">
                           {selectedEdge.label?.trim() ?? "Unlabeled relationship"}
@@ -3118,64 +3264,72 @@ export function GraphView() {
                 <div className="flex flex-col divide-y divide-[var(--border)]">
                   {/* Create node (construct only) */}
                   {isConstructMode && (
-                    <div className="flex flex-col gap-2 px-4 py-4">
-                      <span className="text-label">New node</span>
-                      <Input
-                        placeholder="Node label"
-                        value={createLabel}
-                        onChange={(e) => setCreateLabel(e.target.value)}
-                      />
-                      <select
-                        className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
-                        value={createEntityType}
-                        onChange={(e) =>
-                          setCreateEntityType(e.target.value as GraphEntityType)
-                        }
-                      >
-                        <option value="person">Person</option>
-                        <option value="organisation">Organisation</option>
-                        <option value="location">Location</option>
-                        <option value="event">Event</option>
-                      </select>
-                      <div className="flex flex-wrap gap-1.5">
-                        <Button
-                          size="sm"
-                          onClick={() => void handleCreateNode()}
-                          disabled={
-                            (graphMode === "project" && !graphProjectId) ||
-                            !createLabel.trim()
-                          }
-                        >
-                          Add
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={placeMode ? "primary" : "secondary"}
-                          onClick={() => setPlaceMode((c) => !c)}
-                          disabled={
-                            (graphMode === "project" && !graphProjectId) ||
-                            !createLabel.trim()
-                          }
-                        >
-                          <Crosshair className="mr-1 h-3 w-3" />
-                          {placeMode ? "Cancel" : "Place"}
-                        </Button>
-                      </div>
+                    <div className="px-4 py-4">
+                      <FieldShell label="New node">
+                        <div className="grid gap-3">
+                          <PropertyField label="Name" htmlFor="graph-create-node-label">
+                            <Input
+                              id="graph-create-node-label"
+                              ref={createInputRef}
+                              placeholder="Node label"
+                              value={createLabel}
+                              onChange={(e) => setCreateLabel(e.target.value)}
+                            />
+                          </PropertyField>
+                          <PropertyField label="Type" htmlFor="graph-create-node-type">
+                            <Select
+                              id="graph-create-node-type"
+                              controlSize="sm"
+                              containerClassName="w-full"
+                              value={createEntityType}
+                              onChange={(e) => setCreateEntityType(e.target.value as GraphEntityType)}
+                            >
+                              <option value="person">Person</option>
+                              <option value="organisation">Organisation</option>
+                              <option value="location">Location</option>
+                              <option value="event">Event</option>
+                            </Select>
+                          </PropertyField>
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              onClick={() => void handleCreateNode()}
+                              disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
+                            >
+                              Add
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={placeMode ? "primary" : "secondary"}
+                              onClick={() => setPlaceMode((c) => !c)}
+                              disabled={(graphMode === "project" && !graphProjectId) || !createLabel.trim()}
+                            >
+                              <Crosshair className="mr-1 h-3 w-3" />
+                              {placeMode ? "Cancel" : "Place"}
+                            </Button>
+                          </div>
+                        </div>
+                      </FieldShell>
                     </div>
                   )}
 
                   {/* Connection label (construct only) */}
                   {isConstructMode && (
-                    <div className="flex flex-col gap-2 px-4 py-4">
-                      <span className="text-label">Next link label</span>
-                      <Input
-                        placeholder="Relationship label"
-                        value={connectLabel}
-                        onChange={(e) => setConnectLabel(e.target.value)}
-                      />
-                      <p className="text-meta">
-                        Applied to the next connection you create.
-                      </p>
+                    <div className="px-4 py-4">
+                      <FieldShell label="Connection default">
+                        <PropertyField
+                          label="Label"
+                          htmlFor="graph-next-connection-label"
+                          hint="Applied to the next connection you create."
+                        >
+                          <Input
+                            id="graph-next-connection-label"
+                            placeholder="Relationship label"
+                            value={connectLabel}
+                            onChange={(e) => setConnectLabel(e.target.value)}
+                          />
+                        </PropertyField>
+                      </FieldShell>
                     </div>
                   )}
 
@@ -3211,22 +3365,8 @@ export function GraphView() {
                       ))}
                     </div>
                     <div className="mt-2 flex flex-col gap-1.5">
-                      <Button
-                        size="sm"
-                        variant={showEdgeLabels ? "accent-outline" : "ghost"}
-                        className="w-full"
-                        onClick={() => setShowEdgeLabels((c) => !c)}
-                      >
-                        Edge labels {showEdgeLabels ? "on" : "off"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={showMinimap ? "accent-outline" : "ghost"}
-                        className="w-full"
-                        onClick={() => setShowMinimap((c) => !c)}
-                      >
-                        Minimap {showMinimap ? "on" : "off"}
-                      </Button>
+                      <SettingToggleRow label="Edge labels" checked={showEdgeLabels} onChange={() => setShowEdgeLabels((c) => !c)} />
+                      <SettingToggleRow label="Minimap" checked={showMinimap} onChange={() => setShowMinimap((c) => !c)} />
                       <Button
                         size="sm"
                         variant={focusMode === "selection" ? "accent-outline" : "ghost"}
@@ -3292,14 +3432,14 @@ export function GraphView() {
                       />
                       <div className="flex flex-col gap-1.5">
                         <span className="text-label">Label density</span>
-                        <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
+                        <div className="flex items-center gap-0.5 rounded-full border border-[var(--border)] bg-[var(--base)] p-0.5">
                           {(["context", "selected", "all"] as const).map((mode) => (
                             <button
                               key={mode}
                               type="button"
                               onClick={() => setInsightLabelMode(mode)}
                               className={cn(
-                                "flex-1 rounded px-2 py-1 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
+                                "flex-1 rounded-full px-2 py-1 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
                                 insightLabelMode === mode
                                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -3321,14 +3461,14 @@ export function GraphView() {
                       value={pathFromNodeId}
                       onChange={setPathFromNodeId}
                       placeholder="From…"
-                      entityAccent={INSIGHT_NODE_COLORS}
+                      entityAccent={insightNodeColors}
                     />
                     <NodePicker
                       nodes={visualNodes}
                       value={pathToNodeId}
                       onChange={setPathToNodeId}
                       placeholder="To…"
-                      entityAccent={INSIGHT_NODE_COLORS}
+                      entityAccent={insightNodeColors}
                     />
                     <div className="flex flex-wrap gap-1.5">
                       <Button
@@ -3361,7 +3501,7 @@ export function GraphView() {
                       value={egoCenterNodeId}
                       onChange={setEgoCenterNodeId}
                       placeholder="Center…"
-                      entityAccent={INSIGHT_NODE_COLORS}
+                      entityAccent={insightNodeColors}
                     />
                     <div className="flex items-center gap-2">
                       <Input
@@ -3398,104 +3538,95 @@ export function GraphView() {
         )}
       </aside>
 
+      <AppDialog
+        open={Boolean(pendingInspectorDelete)}
+        onOpenChange={(open) => { if (!open) setPendingInspectorDelete(null); }}
+        title={`Delete ${pendingInspectorDelete?.kind ?? "item"}?`}
+        description="This removes it from the graph. You can undo immediately afterward."
+        className="w-full max-w-[380px]"
+        footer={(
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setPendingInspectorDelete(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                const pending = pendingInspectorDelete;
+                setPendingInspectorDelete(null);
+                if (!pending) return;
+                if (pending.kind === "node") void handleDeleteNode(pending.id);
+                else void handleDeleteEdge(pending.id);
+              }}
+            >
+              <Trash2 className="mr-1.5 h-3 w-3" />
+              Delete
+            </Button>
+          </>
+        )}
+      >
+        <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+          {pendingInspectorDelete?.label}
+        </p>
+      </AppDialog>
+
       {/* ============================================================
           Clear graph confirm dialog
           ============================================================ */}
-      {clearConfirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setClearConfirmOpen(false); }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Clear graph"
-            className="flex w-full max-w-[380px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-              <div className="min-w-0">
-                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-                  Graph
-                </p>
-                <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
-                  Clear entire graph?
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setClearConfirmOpen(false)}
-                aria-label="Close"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="px-5 py-4">
-              <p className="font-ui text-[13px] text-[var(--subtext-0)]">
-                Removes all{" "}
-                <span className="text-[var(--text)]">{nodes.length} nodes</span> and{" "}
-                <span className="text-[var(--text)]">{edges.length} edges</span> from the canvas.
-                You can undo immediately after.
-              </p>
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setClearConfirmOpen(false)}
-                  className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
-                >
-                  Cancel
-                </button>
-                <Button variant="destructive" size="sm" onClick={() => void handleClearGraph()}>
-                  <Trash2 className="mr-1.5 h-3 w-3" />
-                  Clear graph
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <AppDialog
+        open={clearConfirmOpen}
+        onOpenChange={setClearConfirmOpen}
+        title="Clear entire graph?"
+        description="This removes every node and relationship from the current canvas. You can undo immediately afterward."
+        className="w-full max-w-[380px]"
+        footer={(
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setClearConfirmOpen(false)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={() => void handleClearGraph()}>
+              <Trash2 className="mr-1.5 h-3 w-3" />
+              Clear graph
+            </Button>
+          </>
+        )}
+      >
+        <p className="font-ui text-[13px] text-[var(--subtext-0)]">
+          Removing {nodes.length} nodes and {edges.length} relationships does not delete supporting evidence or source files.
+        </p>
+      </AppDialog>
 
       {/* ============================================================
           Export PNG modal
           ============================================================ */}
-      {exportModalOpen && exportDataUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setExportModalOpen(false);
-              setExportDataUrl(null);
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Export graph as PNG"
-            className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-              <div className="min-w-0">
-                <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-                  Graph
-                </p>
-                <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
-                  Export as PNG
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
-                aria-label="Close"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="grid gap-4 px-5 py-4">
+      <AppDialog
+        open={exportModalOpen && Boolean(exportDataUrl)}
+        onOpenChange={(open) => {
+          setExportModalOpen(open);
+          if (!open) setExportDataUrl(null);
+        }}
+        title="Export graph as PNG"
+        description="Preview the image, name it, and choose its evidence or case destination."
+        className="w-full max-w-[480px]"
+        footer={(
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
+              disabled={exportSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveGraphExport()}
+              disabled={exportSaving || !exportTargetId}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              {exportSaving ? "Saving…" : "Save to vault"}
+            </Button>
+          </>
+        )}
+      >
+        {exportDataUrl ? (
+            <div className="grid gap-4">
               {/* Preview */}
               <div
                 className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--crust)]"
@@ -3525,7 +3656,7 @@ export function GraphView() {
                 <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   Save to
                 </span>
-                <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--base)] p-0.5">
+                <div className="flex items-center gap-0.5 rounded-full border border-[var(--border)] bg-[var(--base)] p-0.5">
                   {(["project", "investigation"] as const).map((t) => (
                     <button
                       key={t}
@@ -3539,13 +3670,13 @@ export function GraphView() {
                         );
                       }}
                       className={cn(
-                        "flex-1 rounded px-3 py-1.5 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
+                        "flex-1 rounded-full px-3 py-1.5 font-ui text-[11px] font-medium capitalize transition-colors duration-150",
                         exportTarget === t
                           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
                       )}
                     >
-                      {t === "project" ? "Project" : "Investigation"}
+                      {t === "project" ? "Evidence pile" : "Investigation"}
                     </button>
                   ))}
                 </div>
@@ -3576,27 +3707,9 @@ export function GraphView() {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setExportModalOpen(false); setExportDataUrl(null); }}
-                  disabled={exportSaving}
-                  className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
-                >
-                  Cancel
-                </button>
-                <Button
-                  onClick={() => void handleSaveGraphExport()}
-                  disabled={exportSaving || !exportTargetId}
-                >
-                  <Download className="mr-1.5 h-3.5 w-3.5" />
-                  {exportSaving ? "Saving…" : "Save to vault"}
-                </Button>
-              </div>
             </div>
-          </div>
-        </div>
-      )}
+        ) : null}
+      </AppDialog>
     </div>
   );
 }
@@ -3621,9 +3734,10 @@ function TopbarIconBtn({
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)]",
         "transition-colors duration-150",
         "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
         "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--overlay-1)]",
@@ -3674,7 +3788,7 @@ function RailTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded px-2.5 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+        "rounded-full px-2.5 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
         active
           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -3705,7 +3819,7 @@ function ToolbarBtn({
       title={title}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded px-2 transition-colors duration-150",
+        "inline-flex h-7 items-center gap-1.5 rounded-full px-2 transition-colors duration-150",
         active
           ? "bg-[var(--accent-soft)] text-[var(--accent)]"
           : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -3713,6 +3827,44 @@ function ToolbarBtn({
       )}
     >
       {children}
+    </button>
+  );
+}
+
+function SettingToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className="flex min-h-9 items-center justify-between rounded-lg px-2.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+    >
+      <span className="text-meta text-[var(--subtext-1)]">{label}</span>
+      <span
+        aria-hidden
+        className={cn(
+          "relative h-5 w-9 rounded-full border transition-colors duration-150",
+          checked
+            ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+            : "border-[var(--border)] bg-[var(--base)]",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 h-3.5 w-3.5 rounded-full transition-[left,background-color] duration-150",
+            checked ? "left-[17px] bg-[var(--accent)]" : "left-0.5 bg-[var(--overlay-1)]",
+          )}
+        />
+      </span>
     </button>
   );
 }
@@ -3729,15 +3881,15 @@ function StatChip({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 rounded-md border px-2 py-1 backdrop-blur",
+        "flex items-center gap-1.5 rounded-md border px-2 py-1",
         accent
           ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-          : "border-[var(--border)] bg-[rgba(24,24,37,0.85)]",
+          : "border-[var(--border)] bg-[color-mix(in_srgb,var(--mantle)_85%,transparent)]",
       )}
     >
       <span
         className={cn(
-          "font-ui text-[9px] font-semibold uppercase tracking-[0.14em]",
+          "font-ui text-[10px] font-semibold uppercase tracking-[0.14em]",
           accent ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
         )}
       >
@@ -3758,7 +3910,7 @@ function StatChip({
 function StatBlock({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-ui text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
         {label}
       </span>
       <span className="font-mono text-[16px] tabular-nums text-[var(--text)]">{value}</span>

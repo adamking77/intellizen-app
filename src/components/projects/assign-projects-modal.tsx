@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
 
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Operation, Project } from "@/lib/types";
@@ -29,15 +30,6 @@ export function AssignProjectsModal({
     if (!open) { setQuery(""); setSelected(new Set()); }
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return assignableProjects;
@@ -61,42 +53,34 @@ export function AssignProjectsModal({
     }
   }
 
-  if (!open) return null;
-
   const allChecked = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
   const someChecked = filtered.some((p) => selected.has(p.id));
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Assign collections to ${operation.name}`}
-        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              {operation.name}
-            </p>
-            <h3 className="mt-1 font-ui text-[15px] font-medium text-[var(--text)]">
-              Assign collections
-            </h3>
-          </div>
-          <button
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !isPending) onClose(); }}
+      title="Assign evidence piles"
+      description={`Choose the existing evidence that belongs inside ${operation.name}.`}
+      className="w-full max-w-[480px]"
+      footer={(
+        <>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button
             type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            disabled={selected.size === 0 || isPending}
+            onClick={() => onAssign(Array.from(selected))}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
+            {isPending
+              ? "Assigning…"
+              : selected.size === 0
+                ? "Assign evidence piles"
+                : `Assign ${selected.size} evidence pile${selected.size === 1 ? "" : "s"}`}
+          </Button>
+        </>
+      )}
+    >
+      <div className="-mx-5 -my-4">
         {/* Search */}
         <div className="border-b border-[var(--border-subtle)] px-4 py-2.5">
           <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-1.5 focus-within:border-[var(--accent)]">
@@ -104,7 +88,7 @@ export function AssignProjectsModal({
             <input
               autoFocus
               type="text"
-              placeholder="Filter collections…"
+              placeholder="Filter evidence piles…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="min-w-0 flex-1 bg-transparent font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:outline-none"
@@ -116,12 +100,12 @@ export function AssignProjectsModal({
         <div className="flex max-h-[320px] flex-col overflow-y-auto">
           {assignableProjects.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-5 py-10 text-center">
-              <p className="font-ui text-[13px] text-[var(--subtext-0)]">All collections already assigned</p>
-              <p className="font-ui text-[11px] text-[var(--overlay-1)]">Create a new collection from the intel group pane.</p>
+              <p className="font-ui text-[13px] text-[var(--subtext-0)]">All evidence piles already assigned</p>
+              <p className="font-ui text-[11px] text-[var(--overlay-1)]">Create a new evidence pile from the work-item pane.</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-5 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
-              No collections match "{query}"
+              No evidence piles match "{query}"
             </div>
           ) : (
             <>
@@ -140,10 +124,10 @@ export function AssignProjectsModal({
                       : "border-[var(--overlay-0)] bg-transparent",
                 )}>
                   {(allChecked || someChecked) && (
-                    <span className="block h-[2px] w-2 rounded-full bg-white" />
+                    <span className="block h-[2px] w-2 rounded-full bg-[var(--crust)]" />
                   )}
                 </span>
-                <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--overlay-1)]">
+                <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   {allChecked ? "Deselect all" : "Select all"}
                 </span>
                 <span className="ml-auto font-mono text-[10px] text-[var(--overlay-1)]">
@@ -170,7 +154,7 @@ export function AssignProjectsModal({
                         : "border-[var(--overlay-0)] bg-transparent",
                     )}>
                       {isChecked && (
-                        <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-none stroke-white stroke-2">
+                        <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-none stroke-[var(--crust)] stroke-2">
                           <polyline points="1,4 4,7 9,1" />
                         </svg>
                       )}
@@ -182,7 +166,7 @@ export function AssignProjectsModal({
                       )}>
                         {project.name}
                       </span>
-                      <span className="block font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
+                      <span className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                         {project.type.replace("_", " ")}
                         {project.operation_id ? " · reassigning" : ""}
                       </span>
@@ -194,28 +178,7 @@ export function AssignProjectsModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
-          >
-            Cancel
-          </button>
-          <Button
-            type="button"
-            disabled={selected.size === 0 || isPending}
-            onClick={() => onAssign(Array.from(selected))}
-          >
-            {isPending
-              ? "Assigning…"
-              : selected.size === 0
-                ? "Assign collections"
-                : `Assign ${selected.size} collection${selected.size === 1 ? "" : "s"}`}
-          </Button>
-        </div>
       </div>
-    </div>
+    </AppDialog>
   );
 }

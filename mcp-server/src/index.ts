@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
+import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
@@ -358,12 +359,7 @@ function entityFromRecordInput(database: WorkspaceDatabaseRow, input: {
 }
 
 function recordWritePreview(action: string, payload: Record<string, unknown>) {
-  return {
-    dry_run: true,
-    action,
-    message: `Preview only. Re-run with confirm_write: true to ${action.replaceAll("_", " ")}.`,
-    ...payload,
-  };
+  return dryRunPreview(action, action.replaceAll("_", " "), payload);
 }
 
 async function createRecord(input: {
@@ -892,7 +888,7 @@ async function updateDatabaseView(input: {
   return { dry_run: false, view: toViewItem(view) };
 }
 
-async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
+async function findHomePinsDatabase(): Promise<WorkspaceDatabaseRow | null> {
   const select = "id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at";
   const { data: existingRows, error: existingError } = await supabase
     .schema("workspace").from("databases")
@@ -901,7 +897,13 @@ async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
     .limit(1);
   if (existingError) throw new Error(existingError.message);
   const existing = ((existingRows ?? []) as WorkspaceDatabaseRow[])[0];
+  return existing ?? null;
+}
+
+async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
+  const existing = await findHomePinsDatabase();
   if (existing) return existing;
+  const select = "id, entity, name, icon, schema, header_field_ids, taxonomy, updated_at";
 
   // Mirrors ensureHomePinsWorkspaceDatabase() in src/lib/data.ts — keep in sync.
   const schema = [
@@ -971,8 +973,23 @@ function pinNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function homePinPlacement(record: WorkspaceRecordRow): HomePinPlacement {
+  const w = Math.min(
+    Math.max(Math.round(pinNumber(record.fields?.[HOME_PIN_FIELDS.w], HOME_PIN_DEFAULT_W)), 3),
+    HOME_PIN_GRID_COLS,
+  );
+  return {
+    x: Math.max(Math.round(pinNumber(record.fields?.[HOME_PIN_FIELDS.x], 0)), 0),
+    y: Math.max(Math.round(pinNumber(record.fields?.[HOME_PIN_FIELDS.y], 0)), 0),
+    w,
+    h: Math.max(Math.round(pinNumber(record.fields?.[HOME_PIN_FIELDS.h], HOME_PIN_DEFAULT_H)), 8),
+  };
+}
+
 async function pinViewToHome(input: {
   view_id: string;
+  x?: number;
+  y?: number;
   width?: number;
   height?: number;
   actor: string;
@@ -986,8 +1003,10 @@ async function pinViewToHome(input: {
   }
   const viewDatabase = await resolveDatabase({ database_id: view.database_id });
 
-  const pinsDatabase = await ensureHomePinsDatabase();
-  const pinRecords = await listHomePinRecords(pinsDatabase.id);
+  const existingPinsDatabase = await findHomePinsDatabase();
+  const pinRecords = existingPinsDatabase
+    ? await listHomePinRecords(existingPinsDatabase.id)
+    : [];
   const alreadyPinned = pinRecords.find(
     (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === view.id,
   );
@@ -1003,12 +1022,12 @@ async function pinViewToHome(input: {
 
   const w = Math.min(Math.max(Math.round(input.width ?? HOME_PIN_DEFAULT_W), 3), HOME_PIN_GRID_COLS);
   const h = Math.max(Math.round(input.height ?? HOME_PIN_DEFAULT_H), 8);
-  // Append below existing pins; the app grid compacts vertically on next layout pass.
-  const y = pinRecords.reduce(
-    (max, record) =>
-      Math.max(max, pinNumber(record.fields?.[HOME_PIN_FIELDS.y], 0) + pinNumber(record.fields?.[HOME_PIN_FIELDS.h], HOME_PIN_DEFAULT_H)),
-    0,
-  );
+  const placement = resolveHomePinPlacement(pinRecords.map(homePinPlacement), {
+    x: input.x,
+    y: input.y,
+    w,
+    h,
+  }, HOME_PIN_GRID_COLS);
 
   if (!input.confirm_write) {
     return recordWritePreview("pin_view_to_home", {
@@ -1017,10 +1036,11 @@ async function pinViewToHome(input: {
       view_type: view.type,
       database_id: viewDatabase.id,
       database_name: viewDatabase.name,
-      placement: { x: 0, y, w, h },
+      placement,
     });
   }
 
+  const pinsDatabase = existingPinsDatabase ?? await ensureHomePinsDatabase();
   const pinId = randomUUID();
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -1032,8 +1052,8 @@ async function pinViewToHome(input: {
           [HOME_PIN_FIELDS.pinId]: pinId,
           [HOME_PIN_FIELDS.databaseId]: viewDatabase.id,
           [HOME_PIN_FIELDS.viewId]: view.id,
-          [HOME_PIN_FIELDS.x]: 0,
-          [HOME_PIN_FIELDS.y]: y,
+          [HOME_PIN_FIELDS.x]: placement.x,
+          [HOME_PIN_FIELDS.y]: placement.y,
           [HOME_PIN_FIELDS.w]: w,
           [HOME_PIN_FIELDS.h]: h,
         },
@@ -1062,7 +1082,7 @@ async function pinViewToHome(input: {
       database_id: viewDatabase.id,
       database_name: viewDatabase.name,
       pin_id: pinId,
-      placement: { x: 0, y, w, h },
+      placement,
     },
   });
 
@@ -1072,7 +1092,7 @@ async function pinViewToHome(input: {
     pin_record_id: pinRecordId,
     pin_id: pinId,
     view_id: view.id,
-    message: `Pinned "${view.name}" to Home. The app picks up remote pins within ~60 seconds.`,
+    message: `Pinned "${view.name}" to Home. The running desktop app picks up remote pins within ~15 seconds.`,
   };
 }
 
@@ -1083,7 +1103,10 @@ async function unpinViewFromHome(input: {
   summary?: string | null;
   confirm_write?: boolean;
 }) {
-  const pinsDatabase = await ensureHomePinsDatabase();
+  const pinsDatabase = await findHomePinsDatabase();
+  if (!pinsDatabase) {
+    return { dry_run: false, write_performed: false, removed: false, message: "No Home pins exist." };
+  }
   const pinRecords = await listHomePinRecords(pinsDatabase.id);
   const matches = pinRecords.filter(
     (record) => record.fields?.[HOME_PIN_FIELDS.viewId] === input.view_id,
@@ -1390,10 +1413,8 @@ function agentWritePreview<T extends Record<string, unknown>>(
   nextBody: string | null | undefined,
   extra: T,
 ) {
-  return {
-    dry_run: true,
+  return dryRunPreview(tool, "update the task record", {
     tool,
-    message: "Preview only. Re-run with confirm_write: true to update the task record.",
     work_item_id: record.id,
     current: {
       title: fieldString(record.fields[AGENT_TASK_FIELDS.name]) ?? record.id,
@@ -1408,7 +1429,7 @@ function agentWritePreview<T extends Record<string, unknown>>(
       body_appended: nextBody !== record.body,
     },
     ...extra,
-  };
+  });
 }
 
 async function claimAgentWork(input: {
@@ -1680,13 +1701,11 @@ Return path:
 ${returnPath}`;
 
   if (!input.confirm_write) {
-    return {
-      dry_run: true,
-      message: "Preview only. Re-run with confirm_write: true to create the delegated child task.",
+    return dryRunPreview("delegate_work", "create the delegated child task", {
       delegation_id: delegationId,
       parent_work_item_id: parent.id,
       child_preview: { title: childTitle, fields: childFields, body: childBody },
-    };
+    });
   }
 
   const { data: child, error: childError } = await supabase
@@ -1820,12 +1839,10 @@ async function upsertIntelEntity(input: {
   const match = (existing ?? [])[0] as Record<string, unknown> | undefined;
 
   if (!input.confirm_write) {
-    return {
-      dry_run: true,
-      message: "Preview only. Re-run with confirm_write: true to write the entity.",
-      action: match ? "merge_into_existing" : "create",
+    return dryRunPreview("upsert_osint_entity", "write the entity", {
+      operation: match ? "merge_into_existing" : "create",
       existing_entity: match ?? null,
-    };
+    });
   }
 
   let entity: Record<string, unknown>;
@@ -1899,11 +1916,9 @@ async function recordIntelClaim(input: {
   if (!input.recorded_by?.trim()) throw new Error("recorded_by is required: claims must name their recorder.");
 
   if (!input.confirm_write) {
-    return {
-      dry_run: true,
-      message: "Preview only. Re-run with confirm_write: true to record the claim (append-only).",
+    return dryRunPreview("record_osint_claim", "record the claim (append-only)", {
       next_claim: { claim, grade: `${input.source_reliability ?? "?"}${input.info_credibility ?? "?"}` },
-    };
+    });
   }
 
   const { data, error } = await supabase
@@ -2127,9 +2142,7 @@ Summary: ${input.summary}
 Details: see the Workflow Runs record receipt timeline.`;
 
   if (!input.confirm_write) {
-    return {
-      dry_run: true,
-      message: "Preview only. Re-run with confirm_write: true to update the Workflow Runs record.",
+    return dryRunPreview("update_workflow_run", "update the Workflow Runs record", {
       workflow_run_id: run.id,
       next_run: toWorkflowRunItem({ ...run, fields: nextFields, body: nextBody }),
       task_sync: syncTask
@@ -2141,7 +2154,7 @@ Details: see the Workflow Runs record receipt timeline.`;
           }
         : null,
       appended_section: section,
-    };
+    });
   }
 
   const updatedRun = await appendRecordSectionAtomic(run.id, section, fieldsPatch);
@@ -2395,9 +2408,7 @@ Context:
 ${JSON.stringify(input.context ?? {}, null, 2)}`;
 
   if (!input.confirm_write) {
-    return {
-      dry_run: true,
-      message: "Preview only. Re-run with confirm_write: true to create a Workflow Runs record.",
+    return dryRunPreview("start_workflow_run", "create a Workflow Runs record", {
       workflow: workflowItem,
       next_run: {
         name: runName,
@@ -2408,7 +2419,7 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         source_documents: sourceDocumentIds,
         source_records: sourceRecords,
       },
-    };
+    });
   }
 
   const { data, error } = await supabase
@@ -2770,13 +2781,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "pin_view_to_home",
       description:
-        "Preview or pin a database view (chart, table, list, or timeline) to the Home dashboard. Appends the widget below existing pins; the desktop app picks up remote pins within ~60 seconds. Every confirmed write emits a workspace.work_events receipt.",
+        "Preview or pin a database view (chart, table, list, or timeline) to the Home dashboard's 12-column bento grid. Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
       inputSchema: {
         type: "object",
         properties: {
           view_id: { type: "string", description: "View UUID from list_database_views or create_database_view." },
-          width: { type: "number", description: "Widget width in grid columns (3-12). Defaults to 4." },
-          height: { type: "number", description: "Widget height in grid rows (min 8). Defaults to 11." },
+          x: { type: "integer", minimum: 0, maximum: 11, description: "Optional zero-based bento grid column. Supply with y; x + width must be <= 12." },
+          y: { type: "integer", minimum: 0, description: "Optional zero-based bento grid row. Supply with x." },
+          width: { type: "integer", minimum: 3, maximum: 12, description: "Widget width in grid columns (3-12). Defaults to 4." },
+          height: { type: "integer", minimum: 8, description: "Widget height in grid rows (min 8). Defaults to 11." },
           actor: { type: "string", description: "Actor pinning the view; used in receipt." },
           durable_role: { type: "string", description: "Durable role represented by the actor." },
           summary: { type: "string", description: "Receipt summary." },
@@ -3729,6 +3742,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "pin_view_to_home") {
     const result = await pinViewToHome((args ?? {}) as {
       view_id: string;
+      x?: number;
+      y?: number;
       width?: number;
       height?: number;
       actor: string;

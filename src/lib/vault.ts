@@ -146,14 +146,13 @@ export async function readVaultDirectory(
 export async function readVaultFile(
   filepath: string,
   root: VaultRoot = "intelligence",
-): Promise<string | null> {
+): Promise<string> {
   try {
     const fullPath = await resolveVaultPath(filepath, root);
-    const content = await readTextFile(fullPath);
-    return content;
+    return await readTextFile(fullPath);
   } catch (error) {
     console.error("Failed to read vault file:", error);
-    return null;
+    throw error;
   }
 }
 
@@ -237,8 +236,11 @@ export async function removeInvestigationDirectory(caseId: string): Promise<bool
 /**
  * Delete a single file from the vault.
  */
-export async function removeVaultFile(filepath: string): Promise<void> {
-  const fullPath = await resolveVaultPath(filepath);
+export async function removeVaultFile(
+  filepath: string,
+  root: VaultRoot = "intelligence",
+): Promise<void> {
+  const fullPath = await resolveVaultPath(filepath, root);
   if (await exists(fullPath)) {
     await remove(fullPath);
   }

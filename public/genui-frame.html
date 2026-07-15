@@ -32,6 +32,8 @@ body {
   var NONCE = null;
   var nextId = 1;
   var pending = {};
+  var rendered = false;
+  var rootObserver = null;
 
   function postToHost(message) {
     message.nonce = NONCE;
@@ -60,14 +62,52 @@ body {
     });
   }
 
+  function errorMessage(error) {
+    if (error && typeof error.message === "string" && error.message) return error.message;
+    if (typeof error === "string" && error) return error;
+    return "The generated view could not be rendered.";
+  }
+
+  function hasRenderableContent(root) {
+    return Array.prototype.some.call(root.childNodes, function hasContent(node) {
+      if (node.nodeType === Node.TEXT_NODE) return Boolean(node.textContent && node.textContent.trim());
+      if (node.nodeType !== Node.ELEMENT_NODE || node.tagName === "SCRIPT" || node.tagName === "STYLE") return false;
+      var rect = node.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return true;
+      return Array.prototype.some.call(node.childNodes, hasContent);
+    });
+  }
+
+  function reportRenderedWhenVisible(root) {
+    if (rendered || !hasRenderableContent(root)) return;
+    rendered = true;
+    if (rootObserver) rootObserver.disconnect();
+    postToHost({ type: "genui-rendered" });
+  }
+
+  function reportError(error) {
+    if (NONCE === null) return;
+    postToHost({ type: "genui-error", error: errorMessage(error) });
+  }
+
   window.addEventListener("message", function (event) {
     var data = event.data || {};
     if (data.type === "render" && typeof data.html === "string" && NONCE === null) {
       NONCE = data.nonce || "";
       var root = document.getElementById("root");
-      root.innerHTML = data.html;
-      executeScripts(root);
-      postResize();
+      try {
+        rootObserver = new MutationObserver(function () {
+          postResize();
+          reportRenderedWhenVisible(root);
+        });
+        rootObserver.observe(root, { childList: true, subtree: true, characterData: true, attributes: true });
+        root.innerHTML = data.html;
+        executeScripts(root);
+        postResize();
+        reportRenderedWhenVisible(root);
+      } catch (error) {
+        reportError(error);
+      }
       return;
     }
     if (data.nonce !== NONCE || typeof data.id !== "number" || !pending[data.id]) return;
@@ -85,6 +125,12 @@ body {
   window.addEventListener("load", function () {
     new ResizeObserver(postResize).observe(document.body);
     parent.postMessage({ type: "genui-ready" }, "*");
+  });
+  window.addEventListener("error", function (event) {
+    reportError(event.error || event.message);
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    reportError(event.reason);
   });
 })();
 </script>

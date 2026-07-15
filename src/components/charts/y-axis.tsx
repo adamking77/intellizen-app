@@ -11,6 +11,8 @@ export interface YAxisProps {
   formatLargeNumbers?: boolean;
   /** Custom formatter for tick labels (e.g. USD). Overrides formatLargeNumbers when set. */
   formatValue?: (value: number) => string;
+  /** Hide fractional ticks for count-based charts. */
+  integerOnly?: boolean;
 }
 
 function formatLabel(
@@ -47,18 +49,19 @@ const YAxisInner = memo(function YAxisInner({
   numTicks = 5,
   formatLargeNumbers = true,
   formatValue,
+  integerOnly = false,
   container,
 }: YAxisProps & { container: HTMLDivElement }) {
   const { yScale, margin } = useChartStable();
 
   const ticks = useMemo(() => {
     const tickValues = yScale.ticks(numTicks);
-    return tickValues.map((value) => ({
+    return tickValues.filter((value) => !integerOnly || Number.isInteger(value)).map((value) => ({
       value,
       y: (yScale(value) ?? 0) + margin.top,
       label: formatLabel(value, formatLargeNumbers, formatValue),
     }));
-  }, [yScale, margin.top, numTicks, formatLargeNumbers, formatValue]);
+  }, [yScale, margin.top, numTicks, formatLargeNumbers, formatValue, integerOnly]);
 
   return createPortal(
     <div
