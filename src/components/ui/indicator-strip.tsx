@@ -31,7 +31,7 @@ export function IndicatorStrip({ items, className, ...props }: IndicatorStripPro
   return (
     <div
       className={cn(
-        "inline-flex items-stretch divide-x divide-[var(--border-subtle)]",
+        "scrollbar-quiet flex max-w-full items-stretch divide-x divide-[var(--border-subtle)] overflow-x-auto",
         className,
       )}
       {...props}

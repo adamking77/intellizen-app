@@ -7,6 +7,7 @@ import { MetricCell } from "@/components/ui/metric-cell";
 import { Badge } from "@/components/ui/badge";
 
 import type { AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
+import { listHomePinsFromWorkspace, saveHomePinsToWorkspace } from "@/lib/data";
 import { pinGenuiWidget } from "@/lib/genui-pins";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,10 @@ import { cn } from "@/lib/utils";
 export function AgentChatWidget({ widget, pinnable = false }: { widget: AgentChatWidgetModel; pinnable?: boolean }) {
   const body =
     widget.kind === "html" ? <SandboxedGenui html={widget.html} title={widget.title} /> : <WidgetCard widget={widget} />;
-  if (!pinnable) return body;
+  // Only HTML trackers carry an executable live-query contract. Native JSON
+  // widgets are intentionally chat-scoped snapshots; promoting them would
+  // create a durable card that silently goes stale.
+  if (!pinnable || widget.kind !== "html") return body;
   return (
     <div>
       {body}
@@ -35,25 +39,33 @@ export function AgentChatWidget({ widget, pinnable = false }: { widget: AgentCha
 
 function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
   const [pinned, setPinned] = useState(false);
+  const [pinning, setPinning] = useState(false);
   return (
     <button
       type="button"
-      disabled={pinned}
+      disabled={pinned || pinning}
       onClick={() => {
-        try {
-          const pin = pinGenuiWidget(widget);
+        setPinning(true);
+        void pinGenuiWidget(widget, {
+          read: listHomePinsFromWorkspace,
+          write: saveHomePinsToWorkspace,
+        }).then((pin) => {
+          // Success is only shown after the remote-authoritative readback
+          // contains the generated widget record.
           setPinned(true);
           toast.success("Pinned to Home", { description: pin.title });
-        } catch (pinError) {
+        }).catch((pinError) => {
           toastError("Could not pin generated view", pinError);
-        }
+        }).finally(() => {
+          setPinning(false);
+        });
       }}
       className={cn(
-        "font-ui text-[9.5px] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+        "font-ui text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
         pinned ? "text-[var(--success)]" : "text-[var(--overlay-1)] hover:text-[var(--accent)]",
       )}
     >
-      {pinned ? "Pinned to Home" : "Pin to Home"}
+      {pinned ? "Pinned to Home" : pinning ? "Pinning…" : "Pin to Home"}
     </button>
   );
 }
@@ -158,7 +170,7 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
         </tbody>
       </table>
       {widget.table.truncated || (widget.table.totalRows ?? rows.length) > rows.length ? (
-        <div className="border-t border-[var(--border-subtle)] px-2 py-1 font-mono text-[9.5px] text-[var(--overlay-1)]">
+        <div className="border-t border-[var(--border-subtle)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
           {widget.table.totalRows ?? "more"} total rows
         </div>
       ) : null}

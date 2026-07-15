@@ -782,21 +782,21 @@
 .intelizen-canvas .align-button,
 .intelizen-canvas .swatch-button {
   gap: 8px;
-  border-radius: 14px;
+  border-radius: 999px;
 }
 
 .intelizen-canvas .toolbar-command {
   width: 26px;
   height: 26px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 999px;
 }
 
 .intelizen-canvas .insert-button {
   width: 34px;
   height: 34px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 999px;
 }
 
 .intelizen-canvas .tray-button:hover,
@@ -1052,3 +1052,29 @@
 .intelizen-canvas .align-preview-left { align-items: flex-start; }
 .intelizen-canvas .align-preview-center { align-items: center; }
 .intelizen-canvas .align-preview-right { align-items: flex-end; }
+.canvas-node-markdown .md-heading-1,
+.canvas-node-markdown .md-heading-2,
+.canvas-node-markdown .md-heading-3,
+.canvas-node-markdown .md-paragraph,
+.canvas-node-markdown .md-list,
+.canvas-node-markdown .md-codeblock {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.canvas-node-markdown .md-heading-1,
+.canvas-node-markdown .md-heading-2,
+.canvas-node-markdown .md-heading-3 {
+  font-weight: 650;
+}
+
+.canvas-node-markdown .md-list {
+  padding-left: 18px;
+  white-space: normal;
+}
+
+.canvas-node-markdown .md-codeblock {
+  white-space: pre-wrap;
+}

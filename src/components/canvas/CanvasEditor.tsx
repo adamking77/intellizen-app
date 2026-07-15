@@ -21,6 +21,7 @@ import {
 } from "@xyflow/react";
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import type { CanvasDocumentData, CanvasEdgeData, CanvasLineStyle, CanvasNodeData, CanvasNodeType, CanvasSide } from "@/lib/types";
 import {
   alignOptions,
@@ -537,7 +538,7 @@ function CanvasNodeComponent({ data, selected }: NodeProps) {
               }
             }}
           >
-            {displayTitle(nodeData)}
+            <MarkdownBody content={displayTitle(nodeData)} className="canvas-node-markdown" />
           </div>
         ) : null}
 

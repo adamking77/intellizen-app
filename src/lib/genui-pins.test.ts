@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AgentChatWidget } from "@/lib/agent-widgets";
-import { loadGenuiPins, pinGenuiWidget } from "@/lib/genui-pins";
+import { pinGenuiWidget } from "@/lib/genui-pins";
+import type { HomePin } from "@/lib/home-pins";
 
 const widget: AgentChatWidget = {
   version: 1,
@@ -10,56 +11,28 @@ const widget: AgentChatWidget = {
   insights: ["One decision needs review."],
 };
 
-class MemoryStorage implements Storage {
-  private values = new Map<string, string>();
-
-  get length() {
-    return this.values.size;
-  }
-
-  clear() {
-    this.values.clear();
-  }
-
-  getItem(key: string) {
-    return this.values.get(key) ?? null;
-  }
-
-  key(index: number) {
-    return Array.from(this.values.keys())[index] ?? null;
-  }
-
-  removeItem(key: string) {
-    this.values.delete(key);
-  }
-
-  setItem(key: string, value: string) {
-    this.values.set(key, value);
-  }
-}
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("GenUI pin persistence", () => {
-  it("only returns a pin after it can be read back from storage", () => {
-    const localStorage = new MemoryStorage();
-    vi.stubGlobal("window", { localStorage });
+  it("only returns a pin after the remote-authoritative readback contains it", async () => {
+    let remote: HomePin[] = [];
+    const read = vi.fn(async () => remote);
+    const write = vi.fn(async (pins: HomePin[]) => {
+      remote = pins;
+    });
 
-    const pin = pinGenuiWidget(widget);
+    const pin = await pinGenuiWidget(widget, { read, write });
 
-    expect(loadGenuiPins()).toEqual([pin]);
+    expect(pin.kind).toBe("genui");
+    expect(pin.widget).toEqual(widget);
+    expect(remote).toContainEqual(pin);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("surfaces storage failures instead of claiming the widget was pinned", () => {
-    const localStorage = new MemoryStorage();
-    vi.spyOn(localStorage, "setItem").mockImplementation(() => {
-      throw new Error("Storage unavailable");
+  it("surfaces remote failures instead of claiming the widget was pinned", async () => {
+    const read = vi.fn(async () => [] as HomePin[]);
+    const write = vi.fn(async () => {
+      throw new Error("Workspace unavailable");
     });
-    vi.stubGlobal("window", { localStorage });
 
-    expect(() => pinGenuiWidget(widget)).toThrow("Storage unavailable");
-    expect(loadGenuiPins()).toEqual([]);
+    await expect(pinGenuiWidget(widget, { read, write })).rejects.toThrow("Workspace unavailable");
   });
 });

@@ -41,7 +41,7 @@ export function AgentActionEvent({ event }: { event: ConversationActionEvent }) 
         </span>
         <span
           className={cn(
-            "shrink-0 font-mono text-[9.5px] uppercase tracking-[0.08em]",
+            "shrink-0 font-mono text-[10px] uppercase tracking-[0.14em]",
             event.state === "completed" && "text-[var(--success)]",
             event.state === "failed" && "text-[var(--danger)]",
             event.state !== "completed" && event.state !== "failed" && "text-[var(--caution)]",
@@ -58,7 +58,7 @@ export function AgentActionEvent({ event }: { event: ConversationActionEvent }) 
       {expanded ? (
         <div className="border-t border-[var(--border-subtle)] px-2.5 py-2">
           <p className="font-ui text-[11px] leading-relaxed text-[var(--subtext-0)]">{event.summary}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] text-[var(--overlay-1)]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-[var(--overlay-1)]">
             <span>{event.actionKind}</span>
             <span>{new Date(event.createdAt).toLocaleString()}</span>
             {event.evidence ? <span>{event.evidence.kind}</span> : null}

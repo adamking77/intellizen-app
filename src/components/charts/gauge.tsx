@@ -78,8 +78,8 @@ function interpolateHex(
 }
 
 const DEFAULT_ACTIVE_GRADIENT: readonly [string, string] = [
-  "#bef264",
-  "#10b981",
+  "#89b4fa",
+  "#74c7ec",
 ];
 
 const DEFAULT_ACTIVE_FILL_OPACITY = 1;

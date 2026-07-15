@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 
 import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createProject, listOperations } from "@/lib/data";
@@ -76,15 +76,6 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
   });
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
     if (!open) {
       setName("");
       setType("research");
@@ -105,40 +96,16 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
     setTaxonomy(taxonomyDraftFromMetadata(operation.taxonomy));
   }, [open, operationId, operations]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !createMutation.isPending) onClose(); }}
+      title="New evidence pile"
+      description="Keep related signals, files, and graph material together inside a work item."
+      className="w-full max-w-[480px]"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="New collection"
-        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Intel
-            </p>
-            <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New collection
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
         <form
-          className="grid gap-3 px-5 py-4"
+          className="grid gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || createMutation.isPending) return;
@@ -150,7 +117,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
               Name
             </span>
             <Input
-              placeholder="Collection name"
+              placeholder="Evidence pile name"
               value={name}
               autoFocus
               onChange={(event) => setName(event.target.value)}
@@ -196,7 +163,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
           {selectableOperations.length > 0 && (
             <label className="grid gap-1.5">
               <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-                Intel group{" "}
+                Work item{" "}
                 <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                   (optional)
                 </span>
@@ -206,7 +173,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 value={operationId ?? ""}
                 onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">No group — standalone collection</option>
+                <option value="">No work item — standalone evidence pile</option>
                 {selectableOperations.map((op) => (
                   <option key={op.id} value={op.id}>
                     {op.name}
@@ -230,11 +197,10 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
               type="submit"
               disabled={!name.trim() || createMutation.isPending}
             >
-              {createMutation.isPending ? "Creating…" : "Create collection"}
+              {createMutation.isPending ? "Creating…" : "Create evidence pile"}
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { Textarea } from "@/components/ui/textarea";
 import { createOperation } from "@/lib/data";
+import { INTEL_WORK_TYPES, withIntelWorkType, type IntelWorkType } from "@/lib/intel-work-items";
 import { buildTaxonomyMetadata } from "@/lib/taxonomy";
 import { toastError } from "@/lib/toast";
 import { useAppStore } from "@/store";
@@ -22,6 +23,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [workType, setWorkType] = useState<IntelWorkType>("client_case");
   const [taxonomy, setTaxonomy] = useState(() =>
     taxonomyDraftFromMetadata(null, {
       entity: entityFilter ?? "genzen_solutions",
@@ -35,17 +37,21 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       createOperation({
         name: name.trim(),
         description: description.trim() || null,
-        taxonomy: buildTaxonomyMetadata({
-          entity: taxonomy.entity,
-          area: taxonomy.area,
-          folder: taxonomy.folder || name.trim(),
-          objectType: "operation",
-        }),
+        taxonomy: withIntelWorkType(
+          buildTaxonomyMetadata({
+            entity: taxonomy.entity,
+            area: taxonomy.area,
+            folder: taxonomy.folder || name.trim(),
+            objectType: "operation",
+          }),
+          workType,
+        ),
       }),
     onSuccess: async (operation) => {
       await queryClient.invalidateQueries({ queryKey: ["operations"] });
       setName("");
       setDescription("");
+      setWorkType("client_case");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
         entity: entityFilter ?? "genzen_solutions",
         area: "research_intelligence",
@@ -54,22 +60,14 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
       onCreated?.(operation.id);
       onClose();
     },
-    onError: (err) => toastError("Couldn't create intel group", err),
+    onError: (err) => toastError("Couldn't create work item", err),
   });
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) {
       setName("");
       setDescription("");
+      setWorkType("client_case");
       setTaxonomy(taxonomyDraftFromMetadata(null, {
         entity: entityFilter ?? "genzen_solutions",
         area: "research_intelligence",
@@ -78,40 +76,16 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
     }
   }, [open]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !createMutation.isPending) onClose(); }}
+      title="New work item"
+      description="Choose the kind of research first. Client cases alone use the four-stage case workflow."
+      className="w-full max-w-[480px]"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="New intel group"
-        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              Intel
-            </p>
-            <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              New intel group
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
         <form
-          className="grid gap-3 px-5 py-4"
+          className="grid gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || createMutation.isPending) return;
@@ -128,6 +102,24 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
               autoFocus
               onChange={(e) => setName(e.target.value)}
             />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              Work type
+            </span>
+            <select
+              className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+              value={workType}
+              onChange={(event) => setWorkType(event.target.value as IntelWorkType)}
+            >
+              {INTEL_WORK_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <span className="font-ui text-[11px] text-[var(--overlay-1)]">
+              {INTEL_WORK_TYPES.find((option) => option.value === workType)?.description}
+            </span>
           </label>
 
           <TaxonomyFields value={taxonomy} onChange={setTaxonomy} />
@@ -156,11 +148,10 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
               Cancel
             </button>
             <Button type="submit" disabled={!name.trim() || createMutation.isPending}>
-              {createMutation.isPending ? "Creating…" : "Create intel group"}
+              {createMutation.isPending ? "Creating…" : "Create work item"}
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

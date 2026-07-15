@@ -131,7 +131,7 @@ function SeriesLegend({ series }: { series: PreparedSeries[] }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 pb-1 pt-2" aria-hidden="true">
       {series.map((item) => (
-        <span key={item.key} className="inline-flex items-center gap-1 font-ui text-[9.5px] text-[var(--overlay-1)]">
+        <span key={item.key} className="inline-flex items-center gap-1 font-ui text-[10px] text-[var(--overlay-1)]">
           <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} />
           {item.label}
         </span>

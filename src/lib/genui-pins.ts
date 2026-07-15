@@ -1,13 +1,14 @@
 import type { AgentChatWidget } from "@/lib/agent-widgets";
 import { parseAgentChatWidget } from "@/lib/agent-widgets";
+import { mutateAuthoritativeHomePins } from "@/lib/home-pin-mutations";
+import {
+  createGenuiHomePin,
+  isGenuiHomePin,
+  type HomeGenuiPin,
+  type HomePin,
+} from "@/lib/home-pins";
 
-/**
- * Pinned GenUI widgets: agent-generated views/dashboard widgets Adam has
- * explicitly pinned from chat onto Home. Stored locally (same governance as
- * home pins — nothing appears on Home unless Adam pins it). html-kind
- * widgets re-run their live bridge queries every time they mount, so a
- * pinned widget is a self-refreshing tracker, not a snapshot.
- */
+/** Legacy local GenUI shape retained only for one-time migration into Home Pins. */
 export interface GenuiPin {
   id: string;
   title: string;
@@ -48,22 +49,31 @@ export function saveGenuiPins(pins: GenuiPin[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pins.slice(0, MAX_PINS)));
 }
 
-export function pinGenuiWidget(widget: AgentChatWidget): GenuiPin {
-  const pins = loadGenuiPins();
-  if (pins.length >= MAX_PINS) {
-    throw new Error(`Home already has the maximum of ${MAX_PINS} generated views.`);
+export interface GenuiPinPersistence {
+  read: () => Promise<HomePin[]>;
+  write: (pins: HomePin[]) => Promise<unknown>;
+}
+
+export async function pinGenuiWidget(
+  widget: AgentChatWidget,
+  persistence: GenuiPinPersistence,
+): Promise<HomeGenuiPin> {
+  let requestedId: string | undefined;
+  const result = await mutateAuthoritativeHomePins({
+    ...persistence,
+    transform: (current) => {
+      const requested = createGenuiHomePin(widget, current);
+      requestedId = requested.id;
+      return [...current, requested];
+    },
+  });
+  const verified = result.authoritative.find(
+    (pin): pin is HomeGenuiPin => isGenuiHomePin(pin) && pin.id === requestedId,
+  );
+  if (!verified) {
+    throw new Error("The generated view was not verified in Home Pins. Try again.");
   }
-  const pin: GenuiPin = {
-    id: crypto.randomUUID(),
-    title: widget.title?.trim() || defaultTitle(widget),
-    widget,
-    pinnedAt: new Date().toISOString(),
-  };
-  saveGenuiPins([...pins, pin]);
-  if (!loadGenuiPins().some((candidate) => candidate.id === pin.id)) {
-    throw new Error("The generated view was not saved. Try again.");
-  }
-  return pin;
+  return verified;
 }
 
 export function unpinGenuiWidget(pinId: string): GenuiPin[] {
@@ -72,19 +82,31 @@ export function unpinGenuiWidget(pinId: string): GenuiPin[] {
   return next;
 }
 
-function defaultTitle(widget: AgentChatWidget) {
-  switch (widget.kind) {
-    case "html":
-      return "Agent view";
-    case "data-table":
-      return "Agent table";
-    case "data-chart":
-      return "Agent chart";
-    case "data-metrics":
-      return "Agent metrics";
-    case "data-insights":
-      return "Agent insights";
-    case "record-links":
-      return "Agent links";
+export async function migrateLegacyGenuiPins(persistence: GenuiPinPersistence) {
+  const legacyPins = loadGenuiPins();
+  if (legacyPins.length === 0) return [];
+
+  const result = await mutateAuthoritativeHomePins({
+    ...persistence,
+    transform: (current) => {
+      let next = current;
+      for (const legacy of legacyPins) {
+        if (next.some((pin) => pin.id === legacy.id)) continue;
+        const generated = createGenuiHomePin(legacy.widget, next);
+        next = [...next, {
+          ...generated,
+          id: legacy.id,
+          title: legacy.title,
+          pinnedAt: legacy.pinnedAt,
+        }];
+      }
+      return next;
+    },
+  });
+
+  if (!legacyPins.every((legacy) => result.authoritative.some((pin) => pin.id === legacy.id))) {
+    throw new Error("Legacy generated views were not fully verified in Home Pins.");
   }
+  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  return result.authoritative.filter(isGenuiHomePin);
 }

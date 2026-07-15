@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, ChevronRight, Copy, Trash2, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Copy, Pencil, Trash2, X } from "lucide-react";
 
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
@@ -126,7 +126,7 @@ export function DatabaseTableView({
   database,
   view,
   catalog,
-  activeRecordId: _activeRecordId,
+  activeRecordId,
   embedded = false,
   schemaLocked = false,
   onOpenRecord,
@@ -465,7 +465,10 @@ export function DatabaseTableView({
     const isExpanded = subRecordsConfig ? expandedRows.has(record.id) : false;
 
     return (
-      <tr key={record.id} className={`db-row${isSubRow ? " db-row-sub" : ""}`}>
+      <tr
+        key={record.id}
+        className={`db-row${isSubRow ? " db-row-sub" : ""}${activeRecordId === record.id ? " db-row-active" : ""}`}
+      >
         {!embedded ? (
           <td
             className="db-td db-td-check"
@@ -541,21 +544,7 @@ export function DatabaseTableView({
                     className="db-td-content"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (embedded) {
-                        onOpenRecord(record.id);
-                        return;
-                      }
-                      if (field.type === "checkbox") {
-                        onUpdateField(record.id, field.id, record[field.id] !== true);
-                        setEditingCell(null);
-                        return;
-                      }
-                      if (field.type === "relation") {
-                        onOpenRecord(record.id);
-                        return;
-                      }
-                      if (!isEditableField(field)) return;
-                      setEditingCell({ recordId: record.id, fieldId: field.id });
+                      onOpenRecord(record.id);
                     }}
                   >
                     <TableCell
@@ -568,6 +557,20 @@ export function DatabaseTableView({
                         setEditingCell(null);
                       }}
                     />
+                    {!embedded && field.type !== "checkbox" && isEditableField(field) ? (
+                      <button
+                        type="button"
+                        className="db-cell-edit-btn"
+                        aria-label={`Edit ${field.name}`}
+                        title={`Edit ${field.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingCell({ recordId: record.id, fieldId: field.id });
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    ) : null}
                   </div>
                   {field.id === firstVisibleFieldId && !embedded && (
                     <div className="db-row-actions db-row-actions-inline">

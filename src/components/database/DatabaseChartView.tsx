@@ -195,7 +195,10 @@ export function DatabaseChartView({
   const seriesData = useMemo(
     () => chartData.map((datum, index) => ({
       ...datum,
-      color: chartType === "line" ? palette[0] : palette[index % palette.length],
+      color:
+        chartType === "line" || chartType === "bar"
+          ? palette[0]
+          : palette[index % palette.length],
       detail: chartType === "donut" || chartType === "pie" ? formatShare(datum.value, total) : undefined,
     })),
     [chartData, chartType, palette, total],
@@ -328,6 +331,7 @@ export function DatabaseChartView({
               orientation={view.chartOrientation ?? "vertical"}
               metricLabel={valueLabel}
               showGrid={view.chartShowGrid ?? true}
+              integerTicks={aggregation === "count"}
               compact={compact}
               compactWidthUnits={compactWidthUnits}
               compactHeightUnits={compactHeightUnits}
@@ -348,6 +352,7 @@ function BarChartCard({
   orientation,
   metricLabel,
   showGrid,
+  integerTicks,
   compact,
   compactWidthUnits,
   compactHeightUnits,
@@ -361,6 +366,7 @@ function BarChartCard({
   orientation: "vertical" | "horizontal";
   metricLabel: string;
   showGrid: boolean;
+  integerTicks?: boolean;
   compact?: boolean;
   compactWidthUnits?: number;
   compactHeightUnits?: number;
@@ -432,7 +438,7 @@ function BarChartCard({
             stroke="var(--chart-line-primary)"
           />
         )}
-        {!isHorizontal ? <YAxis formatValue={formatTick} /> : null}
+        {!isHorizontal ? <YAxis formatValue={formatTick} integerOnly={integerTicks} /> : null}
         {isHorizontal ? <BarYAxis maxLabels={maxLabels} /> : <BarXAxis maxLabels={maxLabels} />}
         <ChartTooltip
           content={({ point }) =>
@@ -1269,7 +1275,7 @@ function getCartesianChartMetrics(
       height: 292,
       margin: { top: 20, right: 18, bottom: 20, left: 8 },
       maxBarSize: 32,
-      barRadius: 5,
+      barRadius: 1,
     };
   }
 
@@ -1288,7 +1294,7 @@ function getCartesianChartMetrics(
       height,
       margin: { top: 18, right, bottom: 12, left },
       maxBarSize: Math.max(16, Math.round((36 * compactBarScale) / 2) * 2),
-      barRadius: 4,
+      barRadius: 1,
     };
   }
 
@@ -1297,7 +1303,7 @@ function getCartesianChartMetrics(
       height: heightUnits >= 12 ? 278 : 246,
       margin: { top: 18, right: 8, bottom: 12, left: 6 },
       maxBarSize: 20,
-      barRadius: 4,
+      barRadius: 1,
     };
   }
 
@@ -1306,7 +1312,7 @@ function getCartesianChartMetrics(
       height: heightUnits >= 12 ? 286 : 258,
       margin: { top: 18, right: 10, bottom: 12, left: 8 },
       maxBarSize: 24,
-      barRadius: 4,
+      barRadius: 1,
     };
   }
 
@@ -1314,7 +1320,7 @@ function getCartesianChartMetrics(
     height: heightUnits >= 12 ? 296 : 272,
     margin: { top: 20, right: 14, bottom: 12, left: 10 },
     maxBarSize: 28,
-    barRadius: 4,
+    barRadius: 1,
   };
 }
 

@@ -13,14 +13,9 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
   });
 }
 
-const InboxView = lazyNamed(() => import("@/views/Inbox"), "InboxView");
 const HomeView = lazyNamed(() => import("@/views/Home"), "HomeView");
 const SearchView = lazyNamed(() => import("@/views/Search"), "SearchView");
 const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView");
-const AgentWorkView = lazyNamed(() => import("@/views/AgentWork"), "AgentWorkView");
-const WorkflowsView = lazyNamed(() => import("@/views/Workflows"), "WorkflowsView");
-const RolesView = lazyNamed(() => import("@/views/Roles"), "RolesView");
-const MonitorsView = lazyNamed(() => import("@/views/Monitors"), "MonitorsView");
 const GraphView = lazyNamed(() => import("@/views/Graph"), "GraphView");
 const CanvasView = lazyNamed(() => import("@/views/Canvas"), "CanvasView");
 const DatabasesView = lazyNamed(() => import("@/views/Databases"), "DatabasesView");
@@ -54,14 +49,7 @@ function App() {
               </Suspense>
             }
           />
-          <Route
-            path="/inbox"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <InboxView />
-              </Suspense>
-            }
-          />
+          <Route path="/inbox" element={<Navigate to="/home" replace />} />
           <Route
             path="/search"
             element={
@@ -79,38 +67,13 @@ function App() {
             }
           />
           <Route path="/projects" element={<Navigate to="/intel" replace />} />
-          <Route
-            path="/agent-work"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <AgentWorkView />
-              </Suspense>
-            }
-          />
+          <Route path="/agent-work" element={<Navigate to="/home" replace />} />
           <Route
             path="/workflows"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <WorkflowsView />
-              </Suspense>
-            }
+            element={<Navigate to="/databases/c1000000-0000-0000-0000-000000000001" replace />}
           />
-          <Route
-            path="/roles"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <RolesView />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/monitors"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <MonitorsView />
-              </Suspense>
-            }
-          />
+          <Route path="/roles" element={<Navigate to="/home" replace />} />
+          <Route path="/monitors" element={<Navigate to="/home" replace />} />
           <Route
             path="/graph"
             element={

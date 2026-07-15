@@ -33,6 +33,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { Input } from "@/components/ui/input";
 import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
 import type {
@@ -778,18 +779,6 @@ function ViewSettingsModal({
   onToggleField: (fieldId: string) => void;
   onUpdateViewConfig: ViewTabBarProps["onUpdateViewConfig"];
 }) {
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
-
   if (!open) return null;
 
   const coverCandidates = database.schema.filter((field) => field.type === "url" || field.type === "text");
@@ -853,43 +842,21 @@ function ViewSettingsModal({
   const cardFieldCount = Math.min(selectedFieldIds.length, 3);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
       }}
+      title={activeView.name}
+      description={`View settings · ${VIEW_DEFAULT_NAMES[activeView.type]} view`}
+      className="w-full max-w-[640px]"
+      footer={(
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Done
+        </Button>
+      )}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="View settings"
-        className="flex max-h-[min(720px,90vh)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
-              <Settings2 className="h-3 w-3 text-[var(--accent)]" />
-              View settings
-            </p>
-            <h3 className="mt-2 truncate font-ui text-[15px] font-medium text-[var(--text)]">
-              {activeView.name}
-            </h3>
-            <p className="mt-1 text-[12px] text-[var(--overlay-1)]">
-              {VIEW_DEFAULT_NAMES[activeView.type]} view
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="space-y-5">
+      <div className="space-y-5">
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -1448,16 +1415,8 @@ function ViewSettingsModal({
                 Manage schema
               </Button>
             </section>
-          </div>
-        </div>
-
-        <div className="flex justify-end border-t border-[var(--border)] px-5 py-4">
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Done
-          </Button>
-        </div>
       </div>
-    </div>
+    </AppDialog>
   );
 }
 

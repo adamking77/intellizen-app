@@ -8,6 +8,7 @@ import { SignalCard } from "@/components/signals/signal-card";
 import { SignalDetail } from "@/components/signals/signal-detail";
 import { Button } from "@/components/ui/button";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
+import { LABELS } from "@/lib/labels";
 import { domainColor } from "@/lib/domains";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -382,7 +383,7 @@ export function InboxView() {
                 key={value}
                 onClick={() => setFilter(value)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1",
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
                   "font-ui text-[12px] font-medium",
                   "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                   filter === value
@@ -423,7 +424,7 @@ export function InboxView() {
             aria-expanded={filterOpen}
             aria-haspopup="listbox"
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+              "inline-flex items-center gap-1.5 rounded-full border px-2 py-1",
               "font-ui text-[12px] font-medium",
               "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
               activeDomains.size > 0 || filterOpen
@@ -471,7 +472,7 @@ export function InboxView() {
                         type="button"
                         onClick={() => toggleDomain(domain)}
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-1",
+                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-1",
                           "font-ui text-[11px] font-medium",
                           "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                           active
@@ -611,7 +612,7 @@ export function InboxView() {
                 type="button"
                 onClick={() => bulkArchiveMutation.mutate(Array.from(selectedIds))}
                 disabled={bulkArchiveMutation.isPending}
-                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)] disabled:opacity-50"
               >
                 <Archive className="h-3 w-3" />
                 Clear
@@ -619,15 +620,15 @@ export function InboxView() {
               <button
                 type="button"
                 onClick={() => setBulkSaveOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-ui text-[12px] font-medium text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
                 <Bookmark className="h-3 w-3" />
-                Save to collection…
+                Save to {LABELS.collection.toLowerCase()}…
               </button>
               <button
                 type="button"
                 onClick={clearSelection}
-                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 font-ui text-[11px] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 font-ui text-[11px] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
                 <X className="h-3 w-3" />
                 Clear
@@ -690,14 +691,14 @@ export function InboxView() {
             await saveSignalToProject({ projectId, signalId: saveTarget.id });
             await queryClient.invalidateQueries({ queryKey: ["signals"] });
             await queryClient.invalidateQueries({ queryKey: ["signals", "unread-count"] });
-            toast.success("Saved to collection");
+            toast.success(`Saved to ${LABELS.collection.toLowerCase()}`);
           } catch (err) {
             toastError("Couldn't save signal", err);
           } finally {
             setSaveTarget(null);
           }
         }}
-        title={saveTarget ? `Save "${saveTarget.title}"` : "Attach to collection"}
+        title={saveTarget ? `Save "${saveTarget.title}"` : `Attach to ${LABELS.collection.toLowerCase()}`}
       />
 
       <AttachInvestigationDialog
@@ -746,7 +747,7 @@ export function InboxView() {
           clearSelection();
           setBulkSaveOpen(false);
         }}
-        title={`Save ${selectedIds.size} signal${selectedIds.size === 1 ? "" : "s"} to collection`}
+        title={`Save ${selectedIds.size} signal${selectedIds.size === 1 ? "" : "s"} to ${LABELS.collection.toLowerCase()}`}
       />
     </div>
   );

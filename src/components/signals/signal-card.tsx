@@ -40,10 +40,11 @@ export function SignalCard({
   const host = safeHostname(url);
   const showCheckbox = Boolean(onToggleSelect);
   const label = watchDomain ?? "Manual";
+  const openSignal = onClick ?? (() => { void openUrl(url); });
 
   return (
     <div
-      onClick={onClick}
+      onClick={openSignal}
       data-selected={isSelected ? "true" : undefined}
       data-active={isActive ? "true" : undefined}
       className={cn(
@@ -83,7 +84,7 @@ export function SignalCard({
           }}
           aria-label={isSelected ? "Deselect signal" : "Select signal"}
           className={cn(
-            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border transition-all duration-150",
+            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-150",
             isSelected
               ? "border-[var(--accent)] bg-[var(--accent)] opacity-100"
               : selectionActive
@@ -98,16 +99,22 @@ export function SignalCard({
       {/* Stacked content column */}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {/* Title */}
-        <p
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openSignal();
+          }}
+          aria-label={`Open ${title}`}
           className={cn(
-            "min-w-0 font-ui text-[13px] leading-snug line-clamp-2",
+            "min-w-0 text-left font-ui text-[13px] leading-snug line-clamp-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]",
             isSelected || isActive
               ? "text-[var(--text)] font-medium"
               : "text-[var(--subtext-1)] group-hover/row:text-[var(--text)]",
           )}
         >
           {title}
-        </p>
+        </button>
 
         {/* Meta row: topic chip · source · score · date · actions */}
         <div className="flex items-center gap-5">
@@ -119,7 +126,7 @@ export function SignalCard({
                 style={{ background: color }}
               />
               <span
-                className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em]"
+                className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em]"
                 style={{ color }}
               >
                 {label}
@@ -163,12 +170,13 @@ export function SignalCard({
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/row:opacity-100">
+          <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-within/row:opacity-100">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void openUrl(url); }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               title="Open URL"
+              aria-label="Open URL"
             >
               <ExternalLink className="h-3 w-3" />
             </button>
@@ -176,8 +184,9 @@ export function SignalCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSave(); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-                title="Save to project"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                title="Save to evidence pile"
+                aria-label="Save to evidence pile"
               >
                 <Bookmark className="h-3 w-3" />
               </button>
@@ -186,8 +195,9 @@ export function SignalCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
                 title="Dismiss"
+                aria-label="Dismiss"
               >
                 <X className="h-3 w-3" />
               </button>

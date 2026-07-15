@@ -2,7 +2,7 @@
 
 Design system refresh for the 7-screen Tauri build. This is the authoritative design reference; `src/index.css`, component primitives, and per-screen work derive from it.
 
-> **Binding status (2026-07-02):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are removed from the sidebar (2026-07-02 product decision — collection runs agentically via Fiona).
+> **Binding status (2026-07-15):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are retired in favor of Fiona's daily brief. Agent Work, Workflows, and Roles are database-backed Home widgets rather than standalone destinations.
 >
 > **Shell reconciliation (2026-07-07):** the app is now a frameless transparent window with floating rounded panes (sogo-app reference): custom traffic lights in the main pane's chrome strip, JS window drag, manual pane-edge resize (see `docs/chrome-layer-handoff-2026-07-07.md`), collapsible sidebar/agent-panel as detached pills, and **pill-shaped buttons app-wide** (Adam-pinned). The "Navigation shell" section below predates this and is historical where it conflicts; sidebar has icons and the section names are Home / Search / Intel / Databases / Docs / Graph / Canvas.
 
@@ -13,6 +13,14 @@ Design system refresh for the 7-screen Tauri build. This is the authoritative de
 3. **Data is the decoration.** Numbers, timestamps, and live readouts are the visual hero. The chrome stays quiet.
 4. **Calm over kinetic.** Motion supports legibility, not aesthetic. No gimmicks.
 5. **Single-user desktop app, keyboard-first.** ⌘K is the spine; mouse is supplementary.
+
+### Trust doctrine
+
+1. **Failure must look different from empty.** Every data region has distinct loading, content, empty-with-next-action, and error-with-retry states. A failed read never mounts an editable surface.
+2. **Every action is acknowledged.** User-initiated writes never swallow failures. Optimistic changes, autosaves, and background persistence expose success or failure clearly.
+3. **Destructive means confirmed or undoable.** Deliberate deletion uses the shared confirmation dialog; frequent reversible actions use an Undo toast. Destructive actions do not live in primary page chrome.
+4. **One gesture, one meaning.** The same object has the same click contract and action vocabulary everywhere it appears.
+5. **Keyboard parity.** Every overlay closes with Escape, traps focus while open, and returns focus to its trigger. Primary work remains reachable without a mouse.
 
 ## Reference anchors
 

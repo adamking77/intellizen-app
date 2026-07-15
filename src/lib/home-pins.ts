@@ -1,15 +1,39 @@
+import { parseAgentChatWidget, type AgentChatWidget } from "@/lib/agent-widgets";
 import type { WorkspaceDatabaseModel } from "@/lib/types";
 
-export interface HomePin {
+export type HomeWidgetKind = "database-view" | "genui";
+
+export interface HomePinBase {
   id: string;
-  databaseId: string;
-  viewId: string;
   x: number;
   y: number;
   w: number;
   h: number;
+  title?: string;
+  filter?: HomeWidgetFilter[];
+  config?: Record<string, unknown>;
 }
 
+export interface HomeWidgetFilter {
+  fieldId: string;
+  op: string;
+  value: string;
+}
+
+/** `kind` stays optional so pre-unification Home Pin objects remain source-compatible. */
+export interface HomeDatabaseViewPin extends HomePinBase {
+  kind?: "database-view";
+  databaseId: string;
+  viewId: string;
+}
+
+export interface HomeGenuiPin extends HomePinBase {
+  kind: "genui";
+  widget: AgentChatWidget;
+  pinnedAt: string;
+}
+
+export type HomePin = HomeDatabaseViewPin | HomeGenuiPin;
 export type HomePinPlacement = Pick<HomePin, "id" | "x" | "y" | "w" | "h">;
 
 const GRID_COLS = 12;
@@ -42,18 +66,28 @@ export function supportsPinnedHomeView(type: WorkspaceDatabaseModel["views"][num
   return type === "chart" || type === "table" || type === "list" || type === "timeline";
 }
 
+export function isDatabaseViewHomePin(pin: HomePin): pin is HomeDatabaseViewPin {
+  return pin.kind !== "genui";
+}
+
+export function isGenuiHomePin(pin: HomePin): pin is HomeGenuiPin {
+  return pin.kind === "genui";
+}
+
 export function findHomePin(
   pins: HomePin[],
-  input: Pick<HomePin, "databaseId" | "viewId">,
+  input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId">,
 ) {
-  return pins.find((pin) => pin.databaseId === input.databaseId && pin.viewId === input.viewId) ?? null;
+  return pins.find(
+    (pin) => isDatabaseViewHomePin(pin) && pin.databaseId === input.databaseId && pin.viewId === input.viewId,
+  ) ?? null;
 }
 
 export function upsertHomePin(
   pins: HomePin[],
-  input: Pick<HomePin, "databaseId" | "viewId">,
+  input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId">,
 ) {
-  const existing = pins.find((pin) => pin.viewId === input.viewId);
+  const existing = findHomePin(pins, input);
   if (existing) {
     return { pins, added: false, pin: existing };
   }
@@ -76,10 +110,14 @@ export function upsertHomePin(
 
 export function removeHomePin(
   pins: HomePin[],
-  input: Pick<HomePin, "databaseId" | "viewId">,
+  input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId">,
 ) {
   const nextPins = pins.filter(
-    (pin) => !(pin.databaseId === input.databaseId && pin.viewId === input.viewId),
+    (pin) => !(
+      isDatabaseViewHomePin(pin) &&
+      pin.databaseId === input.databaseId &&
+      pin.viewId === input.viewId
+    ),
   );
   return {
     pins: nextPins,
@@ -91,7 +129,7 @@ export function removeHomePinsForDatabase(
   pins: HomePin[],
   databaseId: string,
 ) {
-  const nextPins = pins.filter((pin) => pin.databaseId !== databaseId);
+  const nextPins = pins.filter((pin) => !isDatabaseViewHomePin(pin) || pin.databaseId !== databaseId);
   return {
     pins: nextPins,
     removed: nextPins.length !== pins.length,
@@ -124,15 +162,132 @@ export function restoreHomePin(pins: HomePin[], pin: HomePin) {
   const alreadyPresent = pins.some(
     (candidate) =>
       candidate.id === pin.id ||
-      (candidate.databaseId === pin.databaseId && candidate.viewId === pin.viewId),
+      (
+        isDatabaseViewHomePin(candidate) &&
+        isDatabaseViewHomePin(pin) &&
+        candidate.databaseId === pin.databaseId &&
+        candidate.viewId === pin.viewId &&
+        candidate.config?.presetKey === pin.config?.presetKey
+      ),
   );
   return alreadyPresent ? pins : [...pins, pin];
+}
+
+export function createGenuiHomePin(widget: AgentChatWidget, pins: HomePin[]): HomeGenuiPin {
+  const generatedPins = pins.filter(isGenuiHomePin);
+  if (generatedPins.length >= 12) {
+    throw new Error("Home already has the maximum of 12 generated views.");
+  }
+  const width = 6;
+  return {
+    id: crypto.randomUUID(),
+    kind: "genui",
+    title: widget.title?.trim() || defaultGenuiTitle(widget),
+    widget,
+    pinnedAt: new Date().toISOString(),
+    ...getNextPinPlacement(pins, width),
+    w: width,
+    h: 12,
+  };
+}
+
+export function createDatabaseHomePin(
+  pins: HomePin[],
+  input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId"> &
+    Pick<HomeDatabaseViewPin, "title" | "filter" | "config">,
+): HomeDatabaseViewPin {
+  return {
+    id: crypto.randomUUID(),
+    kind: "database-view",
+    databaseId: input.databaseId,
+    viewId: input.viewId,
+    title: input.title,
+    filter: input.filter,
+    config: input.config,
+    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    w: DEFAULT_PIN_W,
+    h: DEFAULT_PIN_H,
+  };
+}
+
+export function patchHomePinMetadata(
+  pins: HomePin[],
+  pinId: string,
+  metadata: Pick<HomePinBase, "title" | "filter" | "config">,
+) {
+  return pins.map((pin) => pin.id === pinId ? { ...pin, ...metadata } : pin);
+}
+
+export function parseHomeWidgetFilterJson(value: string): HomeWidgetFilter[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!isHomeWidgetFilterArray(parsed)) {
+    throw new Error("Filters must be a JSON array of fieldId, op, and value objects.");
+  }
+  return parsed;
+}
+
+export function parseHomeWidgetConfigJson(value: string): Record<string, unknown> {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!isPlainRecord(parsed)) throw new Error("Config must be a JSON object.");
+  return parsed;
+}
+
+export function parseHomePin(value: unknown): HomePin | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.id !== "string" ||
+    typeof candidate.x !== "number" ||
+    typeof candidate.y !== "number" ||
+    typeof candidate.w !== "number" ||
+    typeof candidate.h !== "number"
+  ) {
+    return null;
+  }
+  if (candidate.kind !== undefined && candidate.kind !== "database-view" && candidate.kind !== "genui") {
+    return null;
+  }
+
+  const common = {
+    id: candidate.id,
+    x: candidate.x,
+    y: candidate.y,
+    w: candidate.w,
+    h: candidate.h,
+    ...(typeof candidate.title === "string" && candidate.title.trim() ? { title: candidate.title.trim() } : {}),
+    ...(isHomeWidgetFilterArray(candidate.filter) ? { filter: candidate.filter } : {}),
+    ...(isPlainRecord(candidate.config) ? { config: candidate.config } : {}),
+  };
+
+  if (candidate.kind === "genui") {
+    const widget = parseAgentChatWidget(candidate.widget);
+    if (!widget) return null;
+    return {
+      ...common,
+      kind: "genui",
+      widget,
+      pinnedAt: typeof candidate.pinnedAt === "string" ? candidate.pinnedAt : new Date().toISOString(),
+    };
+  }
+
+  if (typeof candidate.databaseId !== "string" || typeof candidate.viewId !== "string") return null;
+  return {
+    ...common,
+    kind: candidate.kind === "database-view" ? "database-view" : undefined,
+    databaseId: candidate.databaseId,
+    viewId: candidate.viewId,
+  };
 }
 
 function migrateHomePins(values: unknown[]): HomePin[] {
   const migrated = values
     .map((value, index) => {
-      if (isHomePin(value)) return value;
+      const current = parseHomePin(value);
+      if (current) return current;
       if (!value || typeof value !== "object") return null;
       const candidate = value as {
         id?: string;
@@ -173,20 +328,6 @@ function legacyHeightToGrid(height: "short" | "medium" | "tall" | undefined) {
   if (height === "short") return 9;
   if (height === "tall") return 16;
   return DEFAULT_PIN_H;
-}
-
-function isHomePin(value: unknown): value is HomePin {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<HomePin>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.databaseId === "string" &&
-    typeof candidate.viewId === "string" &&
-    typeof candidate.x === "number" &&
-    typeof candidate.y === "number" &&
-    typeof candidate.w === "number" &&
-    typeof candidate.h === "number"
-  );
 }
 
 function needsGridNormalization(pins: HomePin[]) {
@@ -279,4 +420,32 @@ function clampGridWidth(width: number) {
 
 function clampGridHeight(height: number) {
   return Math.max(Math.round(height), 8);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isHomeWidgetFilterArray(value: unknown): value is HomeWidgetFilter[] {
+  return Array.isArray(value) && value.every((entry) => {
+    if (!isPlainRecord(entry)) return false;
+    return typeof entry.fieldId === "string" && typeof entry.op === "string" && typeof entry.value === "string";
+  });
+}
+
+function defaultGenuiTitle(widget: AgentChatWidget) {
+  switch (widget.kind) {
+    case "html":
+      return "Agent view";
+    case "data-table":
+      return "Agent table";
+    case "data-chart":
+      return "Agent chart";
+    case "data-metrics":
+      return "Agent metrics";
+    case "data-insights":
+      return "Agent insights";
+    case "record-links":
+      return "Agent links";
+  }
 }

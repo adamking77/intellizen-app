@@ -245,14 +245,14 @@ export function RecordPickerDropdown({
                 onToggle(id);
               }
             }}
-            className="rounded-md px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="rounded-full px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             Clear
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
+            className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
           >
             Done
           </button>

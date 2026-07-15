@@ -363,7 +363,7 @@ export function CanvasView() {
                   onClick={handleCreateCanvas}
                   disabled={isCreating}
                   className={cn(
-                    "inline-flex h-7 w-7 items-center justify-center rounded text-[var(--overlay-1)] transition-colors",
+                    "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors",
                     "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                     isCreating && "opacity-60",
                   )}
@@ -375,7 +375,7 @@ export function CanvasView() {
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                   title="Collapse canvas sidebar"
                   aria-label="Collapse canvas sidebar"
                 >
@@ -423,7 +423,7 @@ export function CanvasView() {
                       <button
                         type="button"
                         onClick={() => void handleDeleteCanvas(canvas.id)}
-                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
+                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
                         title="Delete canvas"
                         aria-label={`Delete ${canvas.name}`}
                       >
@@ -444,7 +444,7 @@ export function CanvasView() {
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             title="Show canvases"
             aria-label="Expand canvas sidebar"
           >
@@ -477,7 +477,7 @@ export function CanvasView() {
           {loadingCanvas ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--overlay-1)]" />
           ) : currentSummary ? (
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}
             </span>
           ) : null}

@@ -244,7 +244,7 @@ genui-html rules:
 - NEVER use inline event handlers (onclick="..." etc.) — they resolve in global scope and will throw on your closure variables. Attach ONE delegated listener with addEventListener on a stable container and re-render inside it.
 - Keep it compact (the panel is ~320-540px wide); the frame auto-sizes to your content up to 600px.
 - Prefer the simple genui JSON kinds when they suffice; use genui-html only when interactivity earns it.
-- The user can PIN any widget to their Home dashboard as a persistent tracker that re-runs on every visit/refresh. So when the user asks for a view/tracker/dashboard of their data, fetch the data with window.intellizen.query() inside the widget script (live on every mount) — never hardcode the current values into the HTML.
+- The user can PIN an interactive genui-html widget to Home as a persistent tracker that re-runs on every visit/refresh. So when the user asks for a durable view/tracker/dashboard of their data, fetch the data with window.intellizen.query() inside the widget script (live on every mount) — never hardcode the current values into the HTML. Native JSON widgets are chat-scoped snapshots and are not promoted.
 
 NEVER draw charts with unicode block characters, ASCII art, or markdown tables of bars — always use a genui block instead.`;
 

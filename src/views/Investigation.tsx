@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Loader2,
   Lock,
+  Network,
   Play,
   Plus,
   Save,
@@ -20,10 +21,13 @@ import {
 import { CaseIntelPanel } from "@/components/investigations/case-intel-panel";
 import { VaultFileRow } from "@/components/vault/vault-file-row";
 import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
+import { QueryState } from "@/components/ui/query-state";
 import { Textarea } from "@/components/ui/textarea";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { useWindowSize } from "@/lib/use-window-size";
 import { useAppStore } from "@/store";
 import {
   addSignalToInvestigation,
@@ -33,6 +37,7 @@ import {
   getInvestigation,
   listInvestigations,
   listInvestigationSignals,
+  listOperations,
   listProjectSignals,
   listProjects,
   listSignals,
@@ -43,7 +48,15 @@ import {
   startWorkflow,
   updateInvestigation,
   updateInvestigationPhase,
+  updateOperation,
 } from "@/lib/data";
+import {
+  CLIENT_CASE_STAGES,
+  getClientCaseStage,
+  getIntelWorkType,
+  withClientCaseStage,
+  type ClientCaseStage,
+} from "@/lib/intel-work-items";
 import { buildAnalysisPrompt } from "@/lib/shell";
 import type { Investigation, InvestigationUseCase } from "@/lib/types";
 
@@ -58,12 +71,12 @@ const PHASES = [
   {
     id: 2,
     name: "Collect",
-    hint: "Review signals from the parent project, run Exa collection, or import from saved signals.",
+    hint: "Review signals from the evidence pile, run Exa collection, or import from saved signals.",
   },
   {
     id: 3,
     name: "Analyse",
-    hint: "Fiona analyses all collected signals and writes the intelligence output back to Reports.",
+    hint: "Fiona analyses all collected signals and writes the intelligence output into Docs.",
   },
 ] as const;
 
@@ -122,17 +135,20 @@ function formatElapsed(iso: string | null | undefined): string {
 export function InvestigationView() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { isNarrow } = useWindowSize();
   const [searchParams, setSearchParams] = useSearchParams();
   const entityFilter = useAppStore((s) => s.entityFilter);
   const setPendingProjectSelectionId = useAppStore((s) => s.setPendingProjectSelectionId);
 
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "in-progress" | "complete" | "archived">("all");
   const caseParam = searchParams.get("case");
 
   const selectCase = (caseId: string | null) => {
     setSelectedCaseId(caseId);
+    if (isNarrow) setMobileRailOpen(false);
     if (caseId) setSearchParams({ case: caseId }, { replace: true });
     else setSearchParams({}, { replace: true });
   };
@@ -190,40 +206,50 @@ export function InvestigationView() {
 
   // ─── Queries ───────────────────────────────────────────────────────────────
 
-  const { data: investigations, isLoading } = useQuery({
+  const investigationsQuery = useQuery({
     queryKey: ["investigations", entityFilter],
     queryFn: () => listInvestigations({ entity: entityFilter }),
   });
+  const { data: investigations, isLoading } = investigationsQuery;
 
-  const { data: selectedInvestigation } = useQuery({
+  const selectedInvestigationQuery = useQuery({
     queryKey: ["investigation", selectedCaseId],
     queryFn: () => getInvestigation(selectedCaseId!),
     enabled: !!selectedCaseId,
   });
+  const { data: selectedInvestigation } = selectedInvestigationQuery;
 
-  const { data: investigationSignals } = useQuery({
+  const investigationSignalsQuery = useQuery({
     queryKey: ["investigation-signals", selectedInvestigation?.id],
     queryFn: () => listInvestigationSignals(selectedInvestigation!.id),
     enabled: !!selectedInvestigation?.id,
   });
+  const { data: investigationSignals } = investigationSignalsQuery;
 
-  const { data: savedSignals } = useQuery({
+  const savedSignalsQuery = useQuery({
     queryKey: ["signals", "saved-for-investigation", entityFilter],
     queryFn: async () => {
       const all = await listSignals({ entity: entityFilter });
       return all.filter((s) => s.status === "saved");
     },
   });
+  const { data: savedSignals } = savedSignalsQuery;
 
-  const { data: vaultFiles } = useQuery({
+  const vaultFilesQuery = useQuery({
     queryKey: ["vault-files", selectedInvestigation?.case_id],
     queryFn: () => listVaultFiles(selectedInvestigation!.case_id),
     enabled: !!selectedInvestigation?.case_id,
   });
+  const { data: vaultFiles } = vaultFilesQuery;
 
   const { data: projects } = useQuery({
     queryKey: ["projects", entityFilter],
     queryFn: () => listProjects({ entity: entityFilter }),
+  });
+
+  const { data: operations } = useQuery({
+    queryKey: ["operations", entityFilter],
+    queryFn: () => listOperations({ entity: entityFilter }),
   });
 
   useEffect(() => {
@@ -239,12 +265,21 @@ export function InvestigationView() {
         : null,
     [projects, selectedInvestigation?.project_id],
   );
+  const parentOperation = useMemo(
+    () => selectedInvestigation?.operation_id
+      ? (operations ?? []).find((operation) => operation.id === selectedInvestigation.operation_id) ?? null
+      : null,
+    [operations, selectedInvestigation?.operation_id],
+  );
+  const parentWorkType = getIntelWorkType(parentOperation?.taxonomy);
+  const clientCaseStage = getClientCaseStage(parentOperation?.taxonomy);
 
-  const { data: parentProjectSignals } = useQuery({
+  const parentProjectSignalsQuery = useQuery({
     queryKey: ["project-signals", selectedInvestigation?.project_id],
     queryFn: () => listProjectSignals(selectedInvestigation!.project_id as number),
     enabled: !!selectedInvestigation?.project_id,
   });
+  const { data: parentProjectSignals } = parentProjectSignalsQuery;
 
   useEffect(() => {
     if (!pendingAnalysisWriteback) return;
@@ -270,11 +305,11 @@ export function InvestigationView() {
         const hasWriteback = files.some((file) => !pending.initialFileIds.includes(file.id));
         if (hasWriteback) {
           setPendingAnalysisWriteback(null);
-          setAnalysisOutput("Fiona finished the analysis. The new file is available in Reports.");
+          setAnalysisOutput("Fiona finished the analysis. The new file is available in Docs.");
           toast.success("Fiona analysis complete");
         } else if (Date.now() - pending.startedAt >= FIONA_ANALYSIS_POLL_TIMEOUT_MS) {
           setPendingAnalysisWriteback(null);
-          setAnalysisOutput("Fiona may still be working. Reports will show the file when writeback completes.");
+          setAnalysisOutput("Fiona may still be working. Docs will show the file when writeback completes.");
         }
       } catch (error) {
         if (!cancelled) {
@@ -419,6 +454,22 @@ export function InvestigationView() {
       void queryClient.invalidateQueries({ queryKey: ["investigation", selectedCaseId] });
     },
     onError: (err) => toastError("Couldn't update phase", err),
+  });
+
+  const updateCaseStageMutation = useMutation({
+    mutationFn: (stage: ClientCaseStage) => {
+      if (!parentOperation || parentWorkType !== "client_case") {
+        throw new Error("This investigation is not linked to a client-case work item.");
+      }
+      return updateOperation(parentOperation.id, {
+        taxonomy: withClientCaseStage(parentOperation.taxonomy, stage),
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["operations"] });
+      toast.success("Client-case stage updated");
+    },
+    onError: (err) => toastError("Couldn't update client-case stage", err),
   });
 
   const addSignalMutation = useMutation({
@@ -581,7 +632,7 @@ export function InvestigationView() {
         confirmWrite: true,
       });
 
-      setAnalysisOutput("Analysis dispatched as a Workflow Run. Watching Reports for writeback…");
+      setAnalysisOutput("Analysis dispatched as a Workflow Run. Watching Docs for writeback…");
       setPendingAnalysisWriteback({
         caseId: selectedInvestigation.case_id,
         startedAt: Date.now(),
@@ -628,10 +679,20 @@ export function InvestigationView() {
   const isPhaseLocked = !!selectedInvestigation && !hasRequiredPhaseGates(selectedPhase, selectedPhaseGates);
   const analysisComplete = selectedPhaseGates[getPhaseGateKey(3)] === true;
 
-  if (isLoading) {
+  if (isLoading || investigationsQuery.error) {
     return (
-      <div className="flex h-screen flex-1 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[var(--accent)]" />
+      <div className="flex h-full flex-1 items-center justify-center p-6">
+        <QueryState
+          isLoading={isLoading}
+          error={investigationsQuery.error}
+          isEmpty={false}
+          loadingLabel="Loading investigations"
+          errorTitle="Investigations unavailable"
+          onRetry={() => void investigationsQuery.refetch()}
+          className="w-full max-w-[520px]"
+        >
+          <span />
+        </QueryState>
       </div>
     );
   }
@@ -639,12 +700,20 @@ export function InvestigationView() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar */}
-      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className={cn(
+        "flex shrink-0 justify-between gap-4 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4",
+        isNarrow ? "flex-col items-start" : "items-end",
+      )}>
         <div className="flex flex-col gap-3">
           <span className="text-label">Case workspace</span>
           <IndicatorStrip items={indicators} />
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          {isNarrow ? (
+            <Button size="sm" variant="secondary" onClick={() => setMobileRailOpen((open) => !open)}>
+              {mobileRailOpen ? "Close cases" : "Browse cases"}
+            </Button>
+          ) : null}
           <Button size="sm" onClick={() => navigate("/intel")} className="gap-1.5">
             <Plus className="h-3 w-3" />
             New from Intel
@@ -652,11 +721,14 @@ export function InvestigationView() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Case rail */}
         <aside
-          style={{ width: railWidth }}
-          className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)]"
+          style={{ width: isNarrow ? (mobileRailOpen ? "min(320px, calc(100vw - 2rem))" : 0) : railWidth }}
+          className={cn(
+            "flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)] transition-[width] duration-150",
+            isNarrow ? "absolute inset-y-0 left-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
+          )}
         >
           <div className="flex-1 overflow-y-auto">
             {filteredCases.length === 0 ? (
@@ -712,7 +784,7 @@ export function InvestigationView() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--subtext-0)]">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                           {USE_CASE_LABELS[uc]}
                         </span>
                         <span className="text-[var(--overlay-0)]">·</span>
@@ -722,7 +794,7 @@ export function InvestigationView() {
                         {inv.status === "archived" && (
                           <>
                             <span className="text-[var(--overlay-0)]">·</span>
-                            <span className="font-ui text-[10px] uppercase tracking-[0.08em] text-[var(--warning)]">Archived</span>
+                            <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
                           </>
                         )}
                       </div>
@@ -745,7 +817,7 @@ export function InvestigationView() {
             )}
           </div>
 
-          <div
+          {!isNarrow ? <div
             role="separator"
             aria-orientation="vertical"
             onMouseDown={startResize}
@@ -753,16 +825,29 @@ export function InvestigationView() {
             className="group/resize absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize"
           >
             <span aria-hidden className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]" />
-          </div>
+          </div> : null}
         </aside>
 
         {/* Workspace */}
         <section className="flex flex-1 flex-col overflow-hidden bg-[var(--base)]">
-          {selectedInvestigation ? (
+          {selectedInvestigationQuery.error ? (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <QueryState
+                isLoading={false}
+                error={selectedInvestigationQuery.error}
+                isEmpty={false}
+                errorTitle="Case workspace unavailable"
+                onRetry={() => void selectedInvestigationQuery.refetch()}
+                className="w-full max-w-[520px]"
+              >
+                <span />
+              </QueryState>
+            </div>
+          ) : selectedInvestigation ? (
             <>
               {/* Case chrome */}
-              <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-5">
-                <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-5 py-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2 className="truncate text-heading">{selectedInvestigation.name}</h2>
                   <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">{selectedInvestigation.case_id}</span>
                   <span className="shrink-0 rounded-full border border-[var(--border-subtle)] bg-[var(--mantle)] px-2 py-0.5 font-ui text-[10px] font-medium text-[var(--subtext-0)]">
@@ -775,14 +860,23 @@ export function InvestigationView() {
                       className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
                     >
                       <FolderOpen className="h-2.5 w-2.5" />
-                      <span className="max-w-[160px] truncate">{parentProject.name}</span>
+                      <span className="max-w-[160px] truncate">Evidence: {parentProject.name}</span>
                     </button>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-meta text-[var(--subtext-0)]">
                     Phase <span className="font-mono text-[var(--text)]">{selectedPhase}</span> of 3
                   </span>
+                  <Button
+                    size="sm"
+                    variant="accent-outline"
+                    onClick={() => navigate(`/graph?case=${encodeURIComponent(selectedInvestigation.case_id)}${selectedInvestigation.project_id ? `&project=${selectedInvestigation.project_id}` : ""}`)}
+                    className="gap-1.5"
+                  >
+                    <Network className="h-3 w-3" />
+                    Open case graph
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -806,8 +900,36 @@ export function InvestigationView() {
                 </div>
               </div>
 
-              {/* Phase spine */}
+              {parentWorkType === "client_case" && clientCaseStage ? (
+                <div className="shrink-0 border-b border-[var(--border)] bg-[var(--base)] px-5 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-label">Client-case stage</span>
+                    <span className="text-meta text-[var(--subtext-0)]">Shared with the work item in Intel</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {CLIENT_CASE_STAGES.map((stage) => (
+                      <button
+                        key={stage.value}
+                        type="button"
+                        disabled={updateCaseStageMutation.isPending}
+                        onClick={() => updateCaseStageMutation.mutate(stage.value)}
+                        className={cn(
+                          "rounded-full border px-3 py-2 text-left font-ui text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                          stage.value === clientCaseStage
+                            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "border-[var(--border-subtle)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
+                        )}
+                      >
+                        {stage.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Investigation workflow */}
               <div className="shrink-0 border-b border-[var(--border)] bg-[var(--mantle)] px-5 py-3">
+                <span className="mb-2 block text-label">Investigation workflow</span>
                 <div className="flex items-stretch gap-1">
                   {PHASES.map((phase) => {
                     const isActive = phase.id === selectedPhase;
@@ -897,7 +1019,7 @@ export function InvestigationView() {
                           placeholder="One per line — people, organisations, locations, or events to start from."
                         />
                         <p className="text-meta text-[var(--subtext-0)]">
-                          {parentProject ? "Used to supplement project signals with targeted Exa searches." : "Exa will search each of these in Collect."}
+                          {parentProject ? "Used to supplement evidence-pile signals with targeted Exa searches." : "Exa will search each of these in Collect."}
                         </p>
                       </div>
 
@@ -966,6 +1088,18 @@ export function InvestigationView() {
 
                   {/* ── Phase 2: Collect ── */}
                   {selectedPhase === 2 && (
+                    <QueryState
+                      isLoading={investigationSignalsQuery.isLoading || savedSignalsQuery.isLoading || parentProjectSignalsQuery.isLoading}
+                      error={investigationSignalsQuery.error ?? savedSignalsQuery.error ?? parentProjectSignalsQuery.error}
+                      isEmpty={false}
+                      loadingLabel="Loading case evidence"
+                      errorTitle="Case evidence unavailable"
+                      onRetry={() => {
+                        void investigationSignalsQuery.refetch();
+                        void savedSignalsQuery.refetch();
+                        if (selectedInvestigation.project_id) void parentProjectSignalsQuery.refetch();
+                      }}
+                    >
                     <div className="space-y-5">
                       <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
@@ -979,7 +1113,7 @@ export function InvestigationView() {
                           )}
                         </div>
                         <p className="mt-1 text-meta text-[var(--subtext-0)]">
-                          Add signals via Exa collection, parent project import, or saved signals. Confirm when you have what you need.
+                          Add signals via Exa collection, evidence pile import, or saved signals. Confirm when you have what you need.
                         </p>
                       </div>
 
@@ -1028,7 +1162,7 @@ export function InvestigationView() {
                               ? "are being imported automatically."
                               : (parentProjectSignals?.length ?? 0) > 0
                                 ? "are all attached."
-                                : "— no signals on this project yet."}
+                                : "— no signals in this evidence pile yet."}
                           </p>
                         </div>
                       )}
@@ -1060,7 +1194,7 @@ export function InvestigationView() {
                                 type="button"
                                 onClick={() => removeSignalMutation.mutate(sig.id)}
                                 disabled={removeSignalMutation.isPending}
-                                className="mt-0.5 shrink-0 rounded p-1 text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)] disabled:opacity-50"
+                          className="mt-0.5 shrink-0 rounded-full p-1 text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)] disabled:opacity-50"
                                 aria-label="Remove signal"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1108,10 +1242,19 @@ export function InvestigationView() {
                         runIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
                       />
                     </div>
+                    </QueryState>
                   )}
 
                   {/* ── Phase 3: Analyse ── */}
                   {selectedPhase === 3 && (
+                    <QueryState
+                      isLoading={investigationSignalsQuery.isLoading}
+                      error={investigationSignalsQuery.error}
+                      isEmpty={false}
+                      loadingLabel="Loading analysis evidence"
+                      errorTitle="Analysis evidence unavailable"
+                      onRetry={() => void investigationSignalsQuery.refetch()}
+                    >
                     <div className="space-y-5">
                       <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
@@ -1143,6 +1286,7 @@ export function InvestigationView() {
                         runIcon={<Play className="h-3.5 w-3.5" />}
                       />
                     </div>
+                    </QueryState>
                   )}
                 </div>
               </div>
@@ -1181,7 +1325,16 @@ export function InvestigationView() {
               />
 
               {/* Vault files */}
-              {(vaultFiles ?? []).length > 0 && (
+              <QueryState
+                isLoading={vaultFilesQuery.isLoading}
+                error={vaultFilesQuery.error}
+                isEmpty={false}
+                loadingLabel="Loading case files"
+                errorTitle="Case files unavailable"
+                onRetry={() => void vaultFilesQuery.refetch()}
+                className="m-3"
+              >
+              {(vaultFiles ?? []).length > 0 ? (
                 <div className="shrink-0 border-t border-[var(--border)]">
                   <div className="px-5 py-3">
                     <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
@@ -1198,7 +1351,8 @@ export function InvestigationView() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : <span />}
+              </QueryState>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
@@ -1239,38 +1393,28 @@ function DeleteInvestigationModal({
   open: boolean; investigationName: string; caseId: string; isPending: boolean;
   onClose: () => void; onConfirm: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,7,8,0.72)] p-6 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}
+    <AppDialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !isPending) onClose(); }}
+      title={`Delete ${investigationName}?`}
+      description="This removes the investigation, its attached-signal links, and its vault folder."
+      className="w-full max-w-[460px]"
+      footer={(
+        <>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
+            <Trash2 className="h-3 w-3" />
+            {isPending ? "Deleting…" : "Delete investigation"}
+          </Button>
+        </>
+      )}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Delete investigation"
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
-      >
-        <div className="border-b border-[var(--border)] px-5 py-4">
-          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--danger)]">Delete investigation</p>
-          <h3 className="mt-1 truncate font-ui text-[15px] font-medium text-[var(--text)]">{investigationName}</h3>
-          <p className="mt-2 font-mono text-[11px] text-[var(--overlay-1)]">{caseId}</p>
-        </div>
-        <div className="grid gap-3 px-5 py-4">
-          <p className="font-ui text-[13px] text-[var(--subtext-0)]">
-            Removes the investigation record, attached signals, and vault folder.
-          </p>
-          <p className="font-ui text-[12px] text-[var(--overlay-1)]">Source signals and project signals are not deleted.</p>
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={onConfirm} disabled={isPending} className="gap-1.5">
-              <Trash2 className="h-3 w-3" />
-              {isPending ? "Deleting…" : "Delete investigation"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+      <p className="font-mono text-[11px] text-[var(--overlay-1)]">{caseId}</p>
+      <p className="mt-3 font-ui text-[12px] text-[var(--subtext-0)]">
+        Source signals and evidence-pile signals are not deleted.
+      </p>
+    </AppDialog>
   );
 }
 

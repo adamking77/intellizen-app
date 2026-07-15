@@ -211,7 +211,7 @@ export function AgentPanelWindow() {
             onClick={redock}
             aria-label="Attach agent panel to main window"
             title="Attach to main window"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
             <PanelRight className="h-3.5 w-3.5" />
           </button>

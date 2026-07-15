@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, type ContextMenuState } from "@/components/ui/context-menu";
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
+import { VentureScope } from "@/components/ui/venture-scope";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
 import { loadHomePins, removeHomePinsForDatabase, saveHomePins } from "@/lib/home-pins";
 import {
@@ -183,6 +184,7 @@ export function DatabasesView() {
       <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
         <span className="text-label">Databases</span>
         <div className="flex items-center gap-2">
+          <VentureScope />
           {canDeleteCurrentDatabase ? (
             <Button
               size="sm"
@@ -225,7 +227,7 @@ export function DatabasesView() {
               <button
                 type="button"
                 onClick={() => setRailCollapsed(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                 aria-label="Expand database rail"
                 title="Expand databases"
               >
@@ -237,7 +239,7 @@ export function DatabasesView() {
                 <button
                   type="button"
                   onClick={() => setRailCollapsed(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                   aria-label="Collapse database rail"
                   title="Collapse databases"
                 >
@@ -256,7 +258,7 @@ export function DatabasesView() {
             ) : safeDatabases.length === 0 ? (
               railCollapsed ? (
                 <div className="flex justify-center p-3">
-                  <span className="rounded-md border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
+                  <span className="rounded-full border border-[var(--border)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
                     0
                   </span>
                 </div>
@@ -281,7 +283,7 @@ export function DatabasesView() {
                           currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
                         )}
                       >
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--base)] font-ui text-[11px] font-semibold uppercase text-[var(--text)] transition-colors group-hover:border-[var(--accent-border)] group-hover:text-[var(--accent)]">
                           {database.name.slice(0, 1)}
                         </span>
                       </button>
@@ -321,7 +323,7 @@ export function DatabasesView() {
             <button
               type="button"
               onClick={() => setRailCollapsed(false)}
-              className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               aria-label="Expand database rail"
               title="Show databases"
             >

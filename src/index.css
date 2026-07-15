@@ -899,6 +899,29 @@ pre {
   background: var(--surface-2);
 }
 
+/* Horizontal chip/tab rails stay discoverable without reading as progress bars. */
+.scrollbar-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-quiet:hover {
+  scrollbar-color: var(--surface-1) transparent;
+}
+
+.scrollbar-quiet::-webkit-scrollbar {
+  height: 3px;
+}
+
+.scrollbar-quiet::-webkit-scrollbar-track,
+.scrollbar-quiet::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.scrollbar-quiet:hover::-webkit-scrollbar-thumb {
+  background: var(--surface-1);
+}
+
 /* ============================================================
    Motion — mount, route fade
    ============================================================ */
@@ -1018,7 +1041,7 @@ pre {
   background: var(--mantle);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 999px;
   padding: 6px 12px;
   font-family: var(--font-ui);
   font-size: 13px;
@@ -1208,6 +1231,11 @@ pre {
   background: var(--surface-wash);
 }
 
+.db-row-active {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .db-td {
   border-bottom: 1px solid var(--border-subtle);
   border-right: 1px solid var(--border-subtle);
@@ -1230,11 +1258,35 @@ pre {
 .db-td-content {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.db-cell-edit-btn {
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--overlay-1);
+  opacity: 0.32;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.db-cell-edit-btn:hover,
+.db-cell-edit-btn:focus-visible {
+  background: var(--surface-wash);
+  color: var(--text);
+  opacity: 1;
+  outline: none;
 }
 
 .db-row-check {
@@ -1295,7 +1347,7 @@ pre {
   color: var(--overlay-1);
   cursor: pointer;
   padding: 0;
-  border-radius: 3px;
+  border-radius: 999px;
   margin-right: 3px;
   vertical-align: middle;
 }
@@ -1378,7 +1430,7 @@ pre {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 
 .db-add-field-btn:hover {
@@ -1483,7 +1535,7 @@ pre {
   width: 24px;
   height: 24px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--mantle);
   color: var(--text);
   cursor: pointer;
@@ -1509,7 +1561,7 @@ pre {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--overlay-1);
   cursor: pointer;
@@ -1614,7 +1666,7 @@ pre {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 
 .db-property-option-remove:hover {
@@ -1671,7 +1723,7 @@ pre {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   font-size: 13px;
   background: transparent;
@@ -1716,7 +1768,7 @@ pre {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 999px;
   transition: color var(--t-base) var(--ease-out),
               background-color var(--t-base) var(--ease-out),
               opacity var(--t-base) var(--ease-out);
@@ -1789,56 +1841,7 @@ pre {
   color: var(--overlay-1);
 }
 
-/* ─── Schema overlay ────────────────────────────────────── */
-.db-schema-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  z-index: 100;
-  padding: 32px 20px 20px;
-}
-
-.db-schema-panel {
-  background: var(--mantle);
-  border-radius: 12px;
-  width: min(1040px, calc(100vw - 40px));
-  max-height: 84vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-elevated);
-}
-
-.db-schema-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 18px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.db-schema-kicker {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--overlay-1);
-}
-
-.db-schema-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.db-schema-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--overlay-1);
-}
-
+/* ─── Schema editor ─────────────────────────────────────── */
 .db-schema-toolbar {
   display: flex;
   align-items: center;
@@ -1953,14 +1956,6 @@ pre {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.db-schema-footer {
-  display: flex;
-  gap: 6px;
-  padding: 14px 18px;
-  border-top: 1px solid var(--border-subtle);
-  justify-content: flex-end;
 }
 
 /* ─── Fields panel ──────────────────────────────────────── */
@@ -2525,12 +2520,6 @@ pre {
   min-width: 0;
 }
 
-.db-record-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .db-record-footer {
   display: flex;
   align-items: center;
@@ -2545,144 +2534,120 @@ pre {
   color: var(--overlay-1);
 }
 
-.db-record-editor-count {
-  font-size: 11px;
-  color: var(--overlay-1);
-}
-
-.db-record-notes-head {
-  align-items: flex-start;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.db-record-notes-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.db-record-notes-status {
-  font-size: 11px;
-  color: var(--overlay-1);
-}
-
-.db-record-notes-rich {
-  min-height: 220px;
-  height: 220px;
-  resize: vertical;
-  overflow: visible;
-}
-
-.db-record-notes-rich .db-rich-editor,
-.db-record-notes-rich .db-rich-editor-surface,
-.db-record-notes-rich .bn-container,
-.db-record-notes-rich .bn-editor,
-.db-record-notes-rich .bn-editor [contenteditable="true"] {
-  min-height: 100%;
-}
-
-.db-record-notes-rich .db-rich-editor {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.db-record-notes-rich .db-rich-editor-toolbar {
+.narrative-editor-toolbar {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   flex-wrap: wrap;
+  opacity: 0;
+  transition: opacity var(--t-base) var(--ease-out);
 }
 
-.db-record-notes-rich .db-rich-editor-toolbar-btn {
+.narrative-editor:hover .narrative-editor-toolbar,
+.narrative-editor:focus-within .narrative-editor-toolbar {
+  opacity: 1;
+}
+
+.narrative-editor-toolbar:focus-within {
+  opacity: 1;
+}
+
+.narrative-editor-toolbar-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
   color: var(--overlay-1);
   transition: background-color var(--t-base) var(--ease-out),
               color var(--t-base) var(--ease-out);
 }
 
-.db-record-notes-rich .db-rich-editor-toolbar-btn:hover,
-.db-record-notes-rich .db-rich-editor-toolbar-btn:focus-visible {
+.narrative-editor-toolbar-btn:hover,
+.narrative-editor-toolbar-btn:focus-visible {
   background: var(--surface-wash);
   color: var(--text);
   outline: none;
 }
 
-.db-record-notes-rich .db-rich-editor-surface {
-  flex: 1;
-  min-height: 0;
+.narrative-editor-surface {
   background: var(--base);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   overflow: auto;
 }
 
-.db-record-notes-rich .bn-container,
-.db-record-notes-rich .bn-editor {
+.narrative-editor-surface--standard {
+  min-height: 176px;
+  max-height: min(46vh, 420px);
+}
+
+.narrative-editor-surface--large {
+  min-height: 248px;
+  max-height: min(54vh, 560px);
+}
+
+.narrative-editor .bn-container,
+.narrative-editor .bn-editor {
   background: transparent;
+  font-family: var(--font-ui);
 }
 
-.db-record-notes-rich .bn-editor {
-  padding: 10px 12px;
+.narrative-editor .bn-editor {
+  padding: 14px 16px;
 }
 
-.db-record-notes-rich .bn-editor [contenteditable="true"] {
+.narrative-editor .bn-editor [contenteditable="true"] {
   padding: 0;
-  min-height: 160px;
+  min-height: 148px;
+  outline: none;
 }
 
-.db-record-notes-rich .bn-editor p,
-.db-record-notes-rich .bn-editor li,
-.db-record-notes-rich .bn-editor blockquote,
-.db-record-notes-rich .bn-editor td,
-.db-record-notes-rich .bn-editor th,
-.db-record-notes-rich .bn-inline-content,
-.db-record-notes-rich .bn-inline-content * {
+.narrative-editor-surface--large .bn-editor [contenteditable="true"] {
+  min-height: 220px;
+}
+
+.narrative-editor .bn-editor p,
+.narrative-editor .bn-editor li,
+.narrative-editor .bn-editor blockquote,
+.narrative-editor .bn-editor td,
+.narrative-editor .bn-editor th,
+.narrative-editor .bn-inline-content,
+.narrative-editor .bn-inline-content * {
   font-size: 13px;
   line-height: 1.55;
 }
 
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"],
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] *,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="1"] h1,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="1"] h2,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="1"] h3 {
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"],
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] *,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="1"] h1,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="1"] h2,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="1"] h3 {
   font-size: 18px;
   line-height: 1.3;
 }
 
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"],
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] *,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="2"] h1,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="2"] h2,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="2"] h3 {
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"],
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] *,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="2"] h1,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="2"] h2,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="2"] h3 {
   font-size: 16px;
   line-height: 1.35;
 }
 
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"],
-.db-record-notes-rich .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] *,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="3"] h1,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="3"] h2,
-.db-record-notes-rich .bn-editor [data-content-type="heading"][data-level="3"] h3 {
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"],
+.narrative-editor .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] *,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="3"] h1,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="3"] h2,
+.narrative-editor .bn-editor [data-content-type="heading"][data-level="3"] h3 {
   font-size: 14px;
   line-height: 1.4;
 }
 
-.db-record-notes-rich .bn-toolbar,
-.db-record-notes-rich [data-content-type="formattingToolbar"] {
+.narrative-editor .bn-toolbar,
+.narrative-editor [data-content-type="formattingToolbar"] {
   border: none;
   box-shadow: var(--shadow-elevated);
   background: var(--mantle);
@@ -3199,7 +3164,7 @@ pre {
   bottom: 8px;
   font-size: 10px;
   padding: 2px 6px;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--mantle);
   border: 1px solid var(--border);
   color: var(--text);
@@ -3985,7 +3950,7 @@ pre {
 .db-timeline-notice-action {
   flex-shrink: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 999px;
   background: transparent;
   padding: 4px 8px;
   font-family: var(--font-ui);

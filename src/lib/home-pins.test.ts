@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createGenuiHomePin,
+  isDatabaseViewHomePin,
+  isGenuiHomePin,
+  parseHomePin,
+  parseHomeWidgetConfigJson,
+  parseHomeWidgetFilterJson,
   patchHomePinPlacements,
   removeHomePinById,
   restoreHomePin,
@@ -28,6 +34,42 @@ const second: HomePin = {
 };
 
 describe("Home pin mutations", () => {
+  it("treats legacy database rows as database-view widgets", () => {
+    const parsed = parseHomePin(first);
+    expect(parsed && isDatabaseViewHomePin(parsed)).toBe(true);
+    expect(parsed).toEqual(first);
+  });
+
+  it("rejects unknown durable widget kinds", () => {
+    expect(parseHomePin({ ...first, kind: "script" })).toBeNull();
+  });
+
+  it("parses durable generated widgets with editable metadata", () => {
+    const pin = createGenuiHomePin({
+      version: 1,
+      kind: "html",
+      title: "Live tracker",
+      html: "<p>Live</p>",
+    }, [first]);
+    const parsed = parseHomePin(JSON.parse(JSON.stringify({
+      ...pin,
+      config: { refreshMode: "mount" },
+    })));
+
+    expect(parsed && isGenuiHomePin(parsed)).toBe(true);
+    expect(parsed?.title).toBe("Live tracker");
+    expect(parsed?.config).toEqual({ refreshMode: "mount" });
+  });
+
+  it("validates filter and config metadata before persistence", () => {
+    expect(parseHomeWidgetFilterJson('[{"fieldId":"status","op":"equals","value":"Open"}]')).toEqual([
+      { fieldId: "status", op: "equals", value: "Open" },
+    ]);
+    expect(parseHomeWidgetConfigJson('{"groupBy":"owner"}')).toEqual({ groupBy: "owner" });
+    expect(() => parseHomeWidgetFilterJson('{"fieldId":"status"}')).toThrow("Filters must be a JSON array");
+    expect(() => parseHomeWidgetConfigJson("[]")).toThrow("Config must be a JSON object");
+  });
+
   it("patches placement without dropping pins outside the edited layout", () => {
     expect(
       patchHomePinPlacements(
