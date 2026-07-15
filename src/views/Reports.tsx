@@ -7,13 +7,13 @@ import {
   CopyPlus,
   FileText,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Search,
   Trash2,
 } from "lucide-react";
 
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -399,17 +399,6 @@ export function ReportsView() {
         isCramped ? "flex flex-col items-stretch gap-3 px-4 py-3" : "flex h-14 items-center justify-between px-5",
       )}>
         <div className="flex min-w-0 items-center gap-3">
-          {!isCramped && railCollapsed ? (
-            <button
-              type="button"
-              onClick={() => setRailCollapsed(false)}
-              aria-label="Expand document list"
-              title="Show documents"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-            >
-              <PanelLeftOpen className="h-4 w-4" />
-            </button>
-          ) : null}
           <FileText className="h-4 w-4 text-[var(--accent)]" />
           <div className="min-w-0">
             <span className="text-label">Docs</span>
@@ -496,39 +485,28 @@ export function ReportsView() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside
-          style={!isCramped ? { width: railCollapsed ? 0 : 420 } : undefined}
-          aria-hidden={!isCramped && railCollapsed ? true : undefined}
-          className={cn(
-            "flex flex-col overflow-hidden",
-            isCramped
-              ? selectedRecordId ? "hidden" : "w-full"
-              : "shrink-0 transition-[width] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            !isCramped && !railCollapsed && "border-r border-[var(--border)]",
-            !isCramped && railCollapsed && "invisible",
-          )}
+        <CollapsibleRail
+          title="Documents"
+          width={isCramped ? "100%" : 420}
+          collapsed={!isCramped && railCollapsed}
+          onCollapse={() => setRailCollapsed(true)}
+          collapseLabel="Collapse document list"
+          showCollapseButton={!isCramped}
+          className={cn(isCramped && selectedRecordId && "hidden")}
         >
-          {!isCramped ? (
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--border)] px-3">
-              <span className="text-label">Documents</span>
-              <button
-                type="button"
-                onClick={() => setRailCollapsed(true)}
-                aria-label="Collapse document list"
-                title="Collapse documents"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
-            </div>
-          ) : null}
           <DocsTable records={records} selectedRecordId={selectedRecordId} onSelect={setSelectedRecordId} searchQuery={searchQuery} />
-        </aside>
+        </CollapsibleRail>
 
         <section className={cn(
-          "min-w-0 flex-1 flex-col overflow-hidden",
+          "relative min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
           isCramped && !selectedRecordId ? "hidden" : "flex",
+          !isCramped && railCollapsed && "pl-14",
         )}>
+          <CollapsedRailTrigger
+            visible={!isCramped && railCollapsed}
+            onExpand={() => setRailCollapsed(false)}
+            label="Expand document list"
+          />
           {selectedRecord ? (
             <>
               <div className="shrink-0 border-b border-[var(--border)] px-5 py-3">

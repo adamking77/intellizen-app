@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Loader2, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import { AssignProjectsModal } from "@/components/projects/assign-projects-modal";
 import { OperationCreateModal } from "@/components/projects/operation-create-modal";
 import { TaxonomySummary } from "@/components/taxonomy/TaxonomyFields";
@@ -622,17 +624,6 @@ export function ProjectsView() {
       )}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            {!isNarrow && railCollapsed ? (
-              <button
-                type="button"
-                onClick={() => setRailCollapsed(false)}
-                aria-label="Expand Intel list"
-                title="Show Intel work items"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-            ) : null}
             <span className="text-label">Intel</span>
           </div>
           <IndicatorStrip items={indicators} />
@@ -658,30 +649,17 @@ export function ProjectsView() {
       {/* Content: rail + detail */}
       <div className="relative flex flex-1 overflow-hidden">
         {/* Rail */}
-        <aside
-          style={{ width: isNarrow ? (mobileRailOpen ? "min(320px, calc(100vw - 2rem))" : 0) : railCollapsed ? 0 : railWidth }}
-          aria-hidden={isNarrow ? !mobileRailOpen : railCollapsed}
-          className={cn(
-            "flex shrink-0 flex-col overflow-hidden bg-[var(--base)] transition-[width] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            (isNarrow || !railCollapsed) && "border-r border-[var(--border)]",
-            isNarrow ? "absolute inset-y-0 left-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
-            ((isNarrow && !mobileRailOpen) || (!isNarrow && railCollapsed)) && "invisible",
-          )}
+        <CollapsibleRail
+          title="Work items"
+          width={isNarrow ? "min(320px, calc(100vw - 2rem))" : railWidth}
+          collapsed={isNarrow ? !mobileRailOpen : railCollapsed}
+          onCollapse={() => {
+            if (isNarrow) setMobileRailOpen(false);
+            else setRailCollapsed(true);
+          }}
+          collapseLabel="Collapse Intel list"
+          className={cn(isNarrow && "absolute inset-y-0 left-0 z-40 shadow-[var(--shadow-elevated)]")}
         >
-          {!isNarrow ? (
-            <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--border)] px-3">
-              <span className="text-label">Work items</span>
-              <button
-                type="button"
-                onClick={() => setRailCollapsed(true)}
-                aria-label="Collapse Intel list"
-                title="Collapse Intel work items"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
-            </div>
-          ) : null}
           <div className="flex-1 overflow-y-auto">
             {loadingOperationalData ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
@@ -803,10 +781,18 @@ export function ProjectsView() {
               className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors duration-150 group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
             />
           </div> : null}
-        </aside>
+        </CollapsibleRail>
 
         {/* Detail pane */}
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
+        <section className={cn(
+          "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)] transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          !isNarrow && railCollapsed && "pl-14",
+        )}>
+          <CollapsedRailTrigger
+            visible={!isNarrow && railCollapsed}
+            onExpand={() => setRailCollapsed(false)}
+            label="Expand Intel list"
+          />
           {selectedProject ? (
             <ProjectDetailPane
               project={selectedProject}

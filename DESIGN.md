@@ -165,7 +165,7 @@ Replace the current `.card-intel`, `.panel-hud`, `.btn-accent` with flat, glow-f
 ### Existing primitives — rebuild
 
 - `<Card>` — 1px `--border`, 12px radius, Surface0 background, no hover glow, no gradient. Optional `interactive` prop triggers border-color shift to `--border-strong` on hover (150ms).
-- `<Button>` — three variants: `primary` (Accent bg, Crust text), `secondary` (Surface0 bg, Text fg, 1px border), `ghost` (transparent, Subtext0 fg, no border). All 8px radius, 13px Satoshi medium. `:active` scale-[0.98]. No gradient. No glow.
+- `<Button>` — three variants: `primary` (Accent bg, Crust text), `secondary` (Surface0 bg, Text fg, 1px border), `ghost` (transparent, Subtext0 fg, no border). All full-pill radius, 13px Satoshi medium. `:active` scale-[0.98]. No gradient. No glow.
 - `<Input>` / `<Textarea>` — Surface0 bg, 1px border, 8px radius. Focus: border → Accent, 1px ring (`--accent-border`). No glow.
 - `<Badge>` — 6px radius, uppercase 10px Satoshi 600, tracking-[0.14em]. Variants per status color, all with Surface0-tinted bg at 15% opacity + full-strength text color.
 - `<Checkbox>` — Custom. Unchecked: 1px Surface1 border, 4px radius. Checked: Accent fill, Crust checkmark. 150ms transition.
@@ -178,6 +178,7 @@ Replace the current `.card-intel`, `.panel-hud`, `.btn-accent` with flat, glow-f
 - `<MetricCell>` — for hero numbers. 10px uppercase label above 32px Geist Mono 500 metric. Optional small delta below (Geist Mono 11px, `--success` or `--danger` prefix arrow).
 - `<BracketFrame>` — decorative corner bracket wrapper (`┌ ┐ └ ┘` motif, 1px Subtext0 at 40% opacity, 8px corner length). Use sparingly as section framers on analytical screens.
 - `<CommandPalette>` — ⌘K modal. Global. Fuzzy search across: all routes, common actions (New Investigation, New Monitor, New Project, Run Monitor, Open Graph, Search Web/News/People/Research), recent projects/investigations. Built on a Dialog primitive. 12px radius, Mantle background, 1px Surface1 border, single flat shadow for elevation.
+- `<CollapsibleRail>` — shared Docs, Intel, Databases, and Canvas left rail. Expanded state uses a 56px Mantle header with title left, optional actions, and a circular left-chevron collapse control. Collapsed state is width zero and exposes one circular right-chevron trigger at `left: 12px; top: 12px` in the content pane. Use a 200ms width/padding transition, preserve page-specific widths, and never move the expand control into the page header.
 
 ---
 

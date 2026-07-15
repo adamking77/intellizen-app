@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, FilePlus2, Loader2, Trash2 } from "lucide-react";
+import { FilePlus2, Loader2, Trash2 } from "lucide-react";
 
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { createEmptyCanvasDocument, serializeCanvasDocument } from "@/components/canvas/CanvasSerializer";
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import {
   createCanvasDocument,
   deleteCanvasDocument,
@@ -346,45 +348,31 @@ export function CanvasView() {
 
   return (
     <div className="flex h-full min-h-0 bg-[var(--base)]">
-      <aside
-        style={{ width: sidebarOpen ? 284 : 0 }}
-        className={cn(
-          "flex shrink-0 flex-col overflow-hidden bg-[var(--mantle)] transition-[width] duration-200",
-          sidebarOpen && "border-r border-[var(--border)]",
+      <CollapsibleRail
+        title="Canvas"
+        width={284}
+        collapsed={!sidebarOpen}
+        onCollapse={() => setSidebarOpen(false)}
+        collapseLabel="Collapse canvas sidebar"
+        bodyClassName="w-[284px]"
+        actions={(
+          <button
+            type="button"
+            onClick={handleCreateCanvas}
+            disabled={isCreating}
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors",
+              "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+              isCreating && "opacity-60",
+            )}
+            title="New canvas"
+            aria-label="New canvas"
+          >
+            {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus2 className="h-3.5 w-3.5" />}
+          </button>
         )}
       >
-        {sidebarOpen ? (
-          <>
-            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-              <span className="text-label">Canvas</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleCreateCanvas}
-                  disabled={isCreating}
-                  className={cn(
-                    "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors",
-                    "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                    isCreating && "opacity-60",
-                  )}
-                  title="New canvas"
-                  aria-label="New canvas"
-                >
-                  {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus2 className="h-3.5 w-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                  title="Collapse canvas sidebar"
-                  aria-label="Collapse canvas sidebar"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-          <div className="min-h-0 w-[284px] flex-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loadingCanvases ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
@@ -435,22 +423,14 @@ export function CanvasView() {
               </div>
             )}
           </div>
-          </>
-        ) : null}
-      </aside>
+      </CollapsibleRail>
 
       <section className="relative flex min-w-0 flex-1 flex-col">
-        {!sidebarOpen ? (
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--base)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-            title="Show canvases"
-            aria-label="Expand canvas sidebar"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        ) : null}
+        <CollapsedRailTrigger
+          visible={!sidebarOpen}
+          onExpand={() => setSidebarOpen(true)}
+          label="Expand canvas sidebar"
+        />
 
         <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
           <div className={cn("flex min-w-0 flex-1 items-center", !sidebarOpen && "pl-11")}>
