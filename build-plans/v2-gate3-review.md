@@ -42,6 +42,11 @@ copied, linked, or mounted into the worker profile.
 - native sanitized environment, cancellation, timeout, and process-tree tests;
 - generated worker config contains no `supabase-genzen`, service-role name, or
   provider API key;
+- the live canonical `mcp-server/dist/index.js --plane worker` process completed
+  MCP negotiation with only capability environment names and exposed exactly
+  the 11 reviewed worker tools;
+- live worker negotiation exposed zero generic create, update, relation, or
+  roster-proposal tools;
 - Settings dialog renders as a keyboard-complete application modal and exposes a
   distinct browser/native-discovery failure state;
 - `pnpm smoke` passed after the Gate 3 UI and runtime changes;
@@ -58,4 +63,3 @@ Adam must complete provider-managed login in the isolated profile. After that:
 5. rerun full smoke and the bundle scan.
 
 Gate 4 does not begin until those checks pass.
-
