@@ -15,6 +15,11 @@ import { homedir } from "os";
 import { fileURLToPath } from "url";
 import { assertPersistenceSafe } from "../../shared/persistence-redaction.mjs";
 import {
+  dryRunWorkflowDefinition,
+  validateWorkflowDefinition,
+  type WorkflowRoleResolution,
+} from "../../shared/workflow-schema.mjs";
+import {
   ROSTER_DATABASE_IDS,
   WORKER_TOOL_NAMES,
   assertGenericRecordMutationAllowed,
@@ -132,6 +137,8 @@ const WORKFLOW_REGISTRY_FIELDS = {
   receiptTemplate: "workflow_receipt_template",
   successCriteria: "workflow_success_criteria",
   failureBehavior: "workflow_failure_behavior",
+  definition: "workflow_definition",
+  definitionVersion: "workflow_definition_version",
   runs: "workflow_runs",
 } as const;
 
@@ -152,6 +159,14 @@ const WORKFLOW_RUN_FIELDS = {
   receipt: "run_receipt",
   startedAt: "run_started_at",
   completedAt: "run_completed_at",
+  schemaVersion: "run_schema_version",
+  definitionSnapshot: "run_definition_snapshot",
+  currentStepId: "run_current_step_id",
+  stepStates: "run_step_states",
+  approvals: "run_approvals",
+  version: "run_version",
+  fencingToken: "run_fencing_token",
+  contextEvidence: "run_context_evidence",
 } as const;
 
 async function callWorkerCapabilityBroker(
@@ -293,6 +308,25 @@ function fieldString(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return null;
+}
+
+function fieldNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function fieldJson(value: unknown): unknown | null {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function firstRelationId(value: unknown): string | null {
@@ -2308,6 +2342,10 @@ function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
     receipt_template: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.receiptTemplate]),
     success_criteria: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.successCriteria]),
     failure_behavior: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.failureBehavior]),
+    definition: fieldJson(record.fields[WORKFLOW_REGISTRY_FIELDS.definition]),
+    definition_version: fieldNumber(
+      record.fields[WORKFLOW_REGISTRY_FIELDS.definitionVersion],
+    ),
     run_ids: asStringArray(record.fields[WORKFLOW_REGISTRY_FIELDS.runs]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
@@ -2333,6 +2371,14 @@ function toWorkflowRunItem(record: WorkspaceRecordRow) {
     receipt: fieldString(record.fields[WORKFLOW_RUN_FIELDS.receipt]),
     started_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.startedAt]),
     completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
+    schema_version: fieldString(record.fields[WORKFLOW_RUN_FIELDS.schemaVersion]),
+    definition_snapshot: fieldJson(
+      record.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot],
+    ),
+    current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
+    step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
+    approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
+    run_version: fieldNumber(record.fields[WORKFLOW_RUN_FIELDS.version]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
   };
@@ -2666,6 +2712,59 @@ async function getWorkflowByWorkflowId(workflowId: string): Promise<WorkspaceRec
   return data as WorkspaceRecordRow;
 }
 
+async function getWorkflowDefinition(input: { workflow_id: string }) {
+  const workflow = await getWorkflowByWorkflowId(input.workflow_id);
+  const item = toWorkflowTemplateItem(workflow);
+  if (item.definition == null) {
+    throw new Error(`Workflow ${input.workflow_id} has no schema-v1 definition.`);
+  }
+  return {
+    workflow_record_id: workflow.id,
+    workflow_id: item.workflow_id,
+    definition_version: item.definition_version,
+    definition: item.definition,
+    validation: validateWorkflowDefinition(item.definition),
+  };
+}
+
+async function validateWorkflow(input: {
+  workflow_id?: string;
+  definition?: unknown;
+  role_resolutions?: Record<string, WorkflowRoleResolution>;
+  known_approval_roles?: string[];
+  dry_run?: boolean;
+}) {
+  if (!input.workflow_id && input.definition == null) {
+    throw new Error("validate_workflow requires workflow_id or definition.");
+  }
+  if (input.workflow_id && input.definition != null) {
+    throw new Error("validate_workflow accepts workflow_id or definition, not both.");
+  }
+  const stored = input.workflow_id
+    ? await getWorkflowDefinition({ workflow_id: input.workflow_id })
+    : null;
+  const definition = stored?.definition ?? input.definition;
+  const validation = validateWorkflowDefinition(definition);
+  const dryRun = input.dry_run
+    ? dryRunWorkflowDefinition({
+        definition,
+        roleResolutions: input.role_resolutions ?? {},
+        knownApprovalRoles:
+          input.known_approval_roles ?? ["founder_approval_authority"],
+      })
+    : null;
+  return {
+    workflow_record_id: stored?.workflow_record_id ?? null,
+    workflow_id: stored?.workflow_id ?? null,
+    definition_version: stored?.definition_version ?? null,
+    valid: validation.valid,
+    errors: validation.errors,
+    entry_step_id: validation.entryStepId,
+    reachable_step_ids: validation.reachableStepIds,
+    dry_run: dryRun,
+  };
+}
+
 async function startWorkflow(input: {
   workflow_id: string;
   trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
@@ -2682,6 +2781,29 @@ async function startWorkflow(input: {
 }) {
   const workflow = await getWorkflowByWorkflowId(input.workflow_id);
   const workflowItem = toWorkflowTemplateItem(workflow);
+  const definition = workflowItem.definition;
+  if (definition != null) {
+    const validation = validateWorkflowDefinition(definition);
+    if (!validation.valid) {
+      throw new Error(
+        `Workflow definition is invalid: ${validation.errors
+          .map((error) => `${error.path}: ${error.message}`)
+          .join("; ")}`,
+      );
+    }
+    const definitionVersion =
+      typeof (definition as { version?: unknown }).version === "number"
+        ? (definition as { version: number }).version
+        : null;
+    if (
+      workflowItem.definition_version != null &&
+      workflowItem.definition_version !== definitionVersion
+    ) {
+      throw new Error(
+        `Workflow definition version mismatch: field ${workflowItem.definition_version}, definition ${definitionVersion}.`,
+      );
+    }
+  }
   const sourceDocumentIds = Array.from(
     new Set([
       ...(input.source_documents ?? []).map((value) => String(value)),
@@ -2696,10 +2818,22 @@ async function startWorkflow(input: {
     ]),
   );
   const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
-  const currentStep = input.requires_approval ? "Queued for approval" : "Queued";
+  const definitionSteps =
+    definition && typeof definition === "object" && Array.isArray(
+      (definition as { steps?: unknown }).steps,
+    )
+      ? ((definition as { steps: Array<{ id: string; title: string }> }).steps)
+      : [];
+  const entryStep = definitionSteps[0] ?? null;
+  const initialNeedsApproval = definition == null && Boolean(input.requires_approval);
+  const currentStep = initialNeedsApproval
+    ? "Queued for approval"
+    : entryStep
+      ? `Queued: ${entryStep.title}`
+      : "Queued";
   const fields = {
     [WORKFLOW_RUN_FIELDS.name]: runName,
-    [WORKFLOW_RUN_FIELDS.status]: input.requires_approval ? "Needs approval" : "Queued",
+    [WORKFLOW_RUN_FIELDS.status]: initialNeedsApproval ? "Needs approval" : "Queued",
     [WORKFLOW_RUN_FIELDS.workflow]: [workflow.id],
     [WORKFLOW_RUN_FIELDS.task]: input.task_id ? [input.task_id] : [],
     [WORKFLOW_RUN_FIELDS.bizOps]: input.biz_ops_id ? [input.biz_ops_id] : [],
@@ -2719,6 +2853,20 @@ async function startWorkflow(input: {
     [WORKFLOW_RUN_FIELDS.receipt]: "",
     [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
     [WORKFLOW_RUN_FIELDS.completedAt]: null,
+    ...(definition
+      ? {
+          [WORKFLOW_RUN_FIELDS.schemaVersion]: "intellizen.workflow/1",
+          [WORKFLOW_RUN_FIELDS.definitionSnapshot]: definition,
+          [WORKFLOW_RUN_FIELDS.currentStepId]: entryStep?.id ?? "",
+          [WORKFLOW_RUN_FIELDS.stepStates]: Object.fromEntries(
+            definitionSteps.map((step) => [step.id, "queued"]),
+          ),
+          [WORKFLOW_RUN_FIELDS.approvals]: {},
+          [WORKFLOW_RUN_FIELDS.version]: 0,
+          [WORKFLOW_RUN_FIELDS.fencingToken]: 0,
+          [WORKFLOW_RUN_FIELDS.contextEvidence]: {},
+        }
+      : {}),
   };
   const body = `# ${runName}
 
@@ -2742,6 +2890,20 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
   if (!input.confirm_write) {
     return dryRunPreview("start_workflow_run", "create a Workflow Runs record", {
       workflow: workflowItem,
+      schema_v1: definition
+        ? {
+            definition_valid: true,
+            dispatches: false,
+            sequence: dryRunWorkflowDefinition({
+              definition,
+              roleResolutions: {},
+              knownApprovalRoles: ["founder_approval_authority"],
+            }).sequence,
+            role_resolution_required: definitionSteps
+              .filter((step) => (step as { kind?: string }).kind === "role-assign")
+              .map((step) => step.id),
+          }
+        : null,
       next_run: {
         name: runName,
         status: fields[WORKFLOW_RUN_FIELDS.status],
@@ -2793,6 +2955,26 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
   if (input.biz_ops_id) {
     await appendWorkspaceRecordRelation(input.biz_ops_id, AGENT_BIZ_OPS_FIELDS.workflowRuns, run.id);
   }
+
+  await recordWorkEvent({
+    record_id: input.task_id ?? run.id,
+    workflow_run_id: run.id,
+    event_kind: "workflow_run_started",
+    actor: input.requested_by,
+    durable_role: workflowItem.owner_role,
+    summary: runName,
+    payload: {
+      workflow_id: input.workflow_id,
+      workflow_record_id: workflow.id,
+      trigger_source: input.trigger_source,
+      entity_scope: input.entity_scope ?? workflowItem.entity ?? null,
+      task_id: input.task_id ?? null,
+      biz_ops_id: input.biz_ops_id ?? null,
+      schema_version: definition ? "intellizen.workflow/1" : null,
+      definition_version: workflowItem.definition_version,
+      requires_approval: Boolean(initialNeedsApproval),
+    },
+  });
 
   return {
     dry_run: false,
@@ -3376,6 +3558,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           status: { type: "string", description: "Optional exact status filter." },
           include_inactive: { type: "boolean", description: "Include non-Active workflows. Defaults to false." },
           limit: { type: "number", description: "Max workflows to return. Defaults to 50." },
+        },
+      },
+    },
+    {
+      name: "get_workflow_definition",
+      description:
+        "Read the exact versioned schema-v1 JSON definition stored on a Workflow Registry record.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_id: { type: "string" },
+        },
+        required: ["workflow_id"],
+      },
+    },
+    {
+      name: "validate_workflow",
+      description:
+        "Validate a stored or supplied schema-v1 workflow and optionally return a no-dispatch dry run. This tool never writes or dispatches.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_id: { type: "string" },
+          definition: { type: "object" },
+          role_resolutions: {
+            type: "object",
+            description:
+              "Optional host-reviewed role/runtime resolutions used to evaluate dispatch readiness.",
+          },
+          known_approval_roles: {
+            type: "array",
+            items: { type: "string" },
+          },
+          dry_run: { type: "boolean" },
         },
       },
     },
@@ -4401,6 +4617,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       include_inactive?: boolean;
       limit?: number;
     });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "get_workflow_definition") {
+    const result = await getWorkflowDefinition(
+      (args ?? {}) as { workflow_id: string },
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "validate_workflow") {
+    const result = await validateWorkflow(
+      (args ?? {}) as Parameters<typeof validateWorkflow>[0],
+    );
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 

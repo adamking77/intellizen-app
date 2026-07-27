@@ -220,6 +220,8 @@ export interface WorkflowTemplateItem {
   receipt_template: string | null;
   success_criteria: string | null;
   failure_behavior: string | null;
+  definition: unknown | null;
+  definition_version: number | null;
   run_ids: string[];
   body_preview: string;
   updated_at: string;
@@ -243,6 +245,12 @@ export interface WorkflowRunItem {
   receipt: string | null;
   started_at: string | null;
   completed_at: string | null;
+  schema_version: string | null;
+  definition_snapshot: unknown | null;
+  current_step_id: string | null;
+  step_states: unknown | null;
+  approvals: unknown | null;
+  run_version: number | null;
   body_preview: string;
   updated_at: string;
 }

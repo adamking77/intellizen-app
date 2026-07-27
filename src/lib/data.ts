@@ -75,6 +75,11 @@ import { normalizeProjectSignalRows } from "@/lib/project-signals";
 import { safeHostname } from "@/lib/utils";
 import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
+import {
+  dryRunWorkflowDefinition,
+  validateWorkflowDefinition,
+  type WorkflowDefinitionV1,
+} from "@/lib/workflow-schema";
 import { supabase } from "@/lib/supabase";
 import { submitWorkflow } from "@/services/agent";
 
@@ -144,6 +149,8 @@ const WORKFLOW_REGISTRY_FIELDS = {
   receiptTemplate: "workflow_receipt_template",
   successCriteria: "workflow_success_criteria",
   failureBehavior: "workflow_failure_behavior",
+  definition: "workflow_definition",
+  definitionVersion: "workflow_definition_version",
   runs: "workflow_runs",
 } as const;
 
@@ -164,6 +171,14 @@ const WORKFLOW_RUN_FIELDS = {
   receipt: "run_receipt",
   startedAt: "run_started_at",
   completedAt: "run_completed_at",
+  schemaVersion: "run_schema_version",
+  definitionSnapshot: "run_definition_snapshot",
+  currentStepId: "run_current_step_id",
+  stepStates: "run_step_states",
+  approvals: "run_approvals",
+  version: "run_version",
+  fencingToken: "run_fencing_token",
+  contextEvidence: "run_context_evidence",
 } as const;
 
 const OPERATIONS_DB_FIELDS = {
@@ -3725,6 +3740,25 @@ function fieldString(value: WorkspaceDatabaseFieldValue): string | null {
   return null;
 }
 
+function fieldNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function fieldJson(value: unknown): unknown | null {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 function newRecordId(prefix = "delegation") {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -4422,6 +4456,10 @@ function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTempla
     receipt_template: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.receiptTemplate]),
     success_criteria: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.successCriteria]),
     failure_behavior: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.failureBehavior]),
+    definition: fieldJson(record.fields[WORKFLOW_REGISTRY_FIELDS.definition]),
+    definition_version: fieldNumber(
+      record.fields[WORKFLOW_REGISTRY_FIELDS.definitionVersion],
+    ),
     run_ids: asStringArray(record.fields[WORKFLOW_REGISTRY_FIELDS.runs]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
@@ -4447,6 +4485,14 @@ function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
     receipt: fieldString(record.fields[WORKFLOW_RUN_FIELDS.receipt]),
     started_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.startedAt]),
     completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
+    schema_version: fieldString(record.fields[WORKFLOW_RUN_FIELDS.schemaVersion]),
+    definition_snapshot: fieldJson(
+      record.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot],
+    ),
+    current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
+    step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
+    approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
+    run_version: fieldNumber(record.fields[WORKFLOW_RUN_FIELDS.version]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
   };
@@ -4777,6 +4823,26 @@ ${details.join("\n")}`;
 export async function startWorkflow(input: StartWorkflowInput) {
   const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
   const workflowItem = toWorkflowTemplateItem(workflow);
+  let definition: WorkflowDefinitionV1 | null = null;
+  if (workflowItem.definition != null) {
+    const validation = validateWorkflowDefinition(workflowItem.definition);
+    if (!validation.valid) {
+      throw new Error(
+        `Workflow definition is invalid: ${validation.errors
+          .map((error) => `${error.path}: ${error.message}`)
+          .join("; ")}`,
+      );
+    }
+    definition = workflowItem.definition as WorkflowDefinitionV1;
+    if (
+      workflowItem.definition_version != null &&
+      workflowItem.definition_version !== definition.version
+    ) {
+      throw new Error(
+        `Workflow definition version mismatch: field ${workflowItem.definition_version}, definition ${definition.version}.`,
+      );
+    }
+  }
   const sourceDocumentIds = Array.from(
     new Set([
       ...(input.sourceDocuments ?? []).map((value) => String(value)),
@@ -4791,10 +4857,19 @@ export async function startWorkflow(input: StartWorkflowInput) {
     ]),
   );
   const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
-  const currentStep = input.requiresApproval ? "Queued for approval" : "Queued";
+  const initialNeedsApproval = !definition && Boolean(input.requiresApproval);
+  const entryStep = definition?.steps[0] ?? null;
+  const currentStep = initialNeedsApproval
+    ? "Queued for approval"
+    : entryStep
+      ? `Queued: ${entryStep.title}`
+      : "Queued";
+  const stepStates = definition
+    ? Object.fromEntries(definition.steps.map((step) => [step.id, "queued"]))
+    : null;
   const fields: Record<string, WorkspaceDatabaseFieldValue> = {
     [WORKFLOW_RUN_FIELDS.name]: runName,
-    [WORKFLOW_RUN_FIELDS.status]: input.requiresApproval ? "Needs approval" : "Queued",
+    [WORKFLOW_RUN_FIELDS.status]: initialNeedsApproval ? "Needs approval" : "Queued",
     [WORKFLOW_RUN_FIELDS.workflow]: [workflow.id],
     [WORKFLOW_RUN_FIELDS.task]: input.taskId ? [input.taskId] : [],
     [WORKFLOW_RUN_FIELDS.bizOps]: input.bizOpsId ? [input.bizOpsId] : [],
@@ -4814,6 +4889,22 @@ export async function startWorkflow(input: StartWorkflowInput) {
     [WORKFLOW_RUN_FIELDS.receipt]: "",
     [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
     [WORKFLOW_RUN_FIELDS.completedAt]: null,
+    ...(definition
+      ? {
+          [WORKFLOW_RUN_FIELDS.schemaVersion]: definition.schema,
+          [WORKFLOW_RUN_FIELDS.definitionSnapshot]:
+            definition as unknown as WorkspaceDatabaseFieldValue,
+          [WORKFLOW_RUN_FIELDS.currentStepId]: entryStep?.id ?? "",
+          [WORKFLOW_RUN_FIELDS.stepStates]:
+            stepStates as unknown as WorkspaceDatabaseFieldValue,
+          [WORKFLOW_RUN_FIELDS.approvals]:
+            {} as unknown as WorkspaceDatabaseFieldValue,
+          [WORKFLOW_RUN_FIELDS.version]: 0,
+          [WORKFLOW_RUN_FIELDS.fencingToken]: 0,
+          [WORKFLOW_RUN_FIELDS.contextEvidence]:
+            {} as unknown as WorkspaceDatabaseFieldValue,
+        }
+      : {}),
   };
   const body = `# ${runName}
 
@@ -4835,10 +4926,27 @@ Context:
 ${JSON.stringify(input.context ?? {}, null, 2)}`;
 
   if (!input.confirmWrite) {
+    const schemaDryRun = definition
+      ? dryRunWorkflowDefinition({
+          definition,
+          roleResolutions: {},
+          knownApprovalRoles: ["founder_approval_authority"],
+        })
+      : null;
     return {
       dry_run: true,
       message: "Preview only. Re-run with confirmWrite: true to create a Workflow Runs record.",
       workflow: workflowItem,
+      schema_v1: schemaDryRun
+        ? {
+            definition_valid: validateWorkflowDefinition(definition).valid,
+            dispatches: false,
+            sequence: schemaDryRun.sequence,
+            role_resolution_required: schemaDryRun.errors
+              .filter((error) => error.code === "role_unavailable")
+              .map((error) => error.path),
+          }
+        : null,
       next_run: {
         name: runName,
         status: fields[WORKFLOW_RUN_FIELDS.status],
@@ -4903,7 +5011,7 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     },
   });
 
-  if (!input.requiresApproval) {
+  if (!initialNeedsApproval && !definition) {
     try {
       const dispatch = await submitWorkflow({
         workflowId: input.workflowId,
