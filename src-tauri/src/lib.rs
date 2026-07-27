@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 mod hermes;
 mod runtime_bindings;
 mod runtimes;
+mod supabase_proxy;
 
 const EXA_API_BASE: &str = "https://api.exa.ai";
 const EXA_SEARCH_CONTENTS: &str = "/search";
@@ -507,6 +508,7 @@ pub fn run() {
             hermes::hermes_run_status,
             hermes::hermes_check_gateway,
             hermes::hermes_gateway_submit,
+            supabase_proxy::supabase_proxy_request,
             runtime_bindings::runtime_bindings_list,
             runtime_bindings::runtime_bindings_upsert,
             runtime_bindings::runtime_binding_prepare_worker_profile,
