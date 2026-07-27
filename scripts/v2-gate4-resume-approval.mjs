@@ -133,6 +133,17 @@ assertPersistenceSafe({
   payloadHash,
   payloadSnapshot: approvalEntry.payloadSnapshot,
 });
+const artifact = {
+  artifactRef: "simulation://intellizen/gate4/internal-proof",
+  action: "simulate-consequential-action",
+  simulated: true,
+  externalAction: false,
+  approvedPayloadHash: payloadHash,
+  result: "No external action performed.",
+};
+// Validate every deterministic value before the first write. A redaction
+// rejection must not leave an approved run or dispatcher lease half-applied.
+assertPersistenceSafe({ artifact });
 const dispatcherSession = crypto.randomUUID();
 const leaseKey = `run:${runId}:gate4-approved:lease`;
 const lease = requireResult(
@@ -240,15 +251,6 @@ const started = await transition({
     approvedPayloadHash: payloadHash,
   },
 });
-const artifact = {
-  artifactRef: `simulation://intellizen/gate4/${runId}`,
-  action: "simulate-consequential-action",
-  simulated: true,
-  externalAction: false,
-  approvedPayloadHash: payloadHash,
-  result: "No external action performed.",
-};
-assertPersistenceSafe({ artifact });
 const completed = await transition({
   name: "complete_safe_simulation",
   version: started.run_version,

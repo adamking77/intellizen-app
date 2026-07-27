@@ -40,5 +40,15 @@ describe("persistence redaction gate", () => {
     expect(assessPersistenceSafety(safe)).toEqual({ safe: true, findings: [] });
     expect(assertPersistenceSafe(safe)).toBe(safe);
   });
-});
 
+  it("accepts the stable Gate 7 simulation reference while preserving hash correlation", () => {
+    const artifact = {
+      artifactRef: "simulation://intellizen/gate4/internal-proof",
+      approvedPayloadHash:
+        "755b52749ccb252a2cca630e464ee940f3427ed8e5e9fb803fa6f87b61974660",
+      simulated: true,
+      externalAction: false,
+    };
+    expect(assertPersistenceSafe({ artifact })).toEqual({ artifact });
+  });
+});
