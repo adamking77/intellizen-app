@@ -1,0 +1,4 @@
+{"type":"run.started","runId":"run-malformed"}
+this is not json
+{"type":"output.delta","text":"Recovered output."}
+{"type":"run.completed","result":"Recovered."}

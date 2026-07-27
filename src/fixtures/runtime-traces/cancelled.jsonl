@@ -1,0 +1,3 @@
+{"type":"run.started","runId":"run-cancelled"}
+{"type":"output.delta","text":"Partial draft."}
+{"type":"run.cancelled"}

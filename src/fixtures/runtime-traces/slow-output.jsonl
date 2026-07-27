@@ -1,0 +1,5 @@
+{"type":"run.started","runId":"run-slow"}
+{"type":"output.delta","text":"one"}
+{"type":"output.delta","text":"two"}
+{"type":"output.delta","text":"three"}
+{"type":"run.completed","result":"onetwothree"}

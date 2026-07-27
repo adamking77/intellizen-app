@@ -1,0 +1,3 @@
+{"type":"run.started","runId":"run-duplicate"}
+{"type":"run.completed","result":"first"}
+{"type":"run.completed","result":"second"}

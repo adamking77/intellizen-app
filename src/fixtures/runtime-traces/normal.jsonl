@@ -1,0 +1,5 @@
+{"type":"run.started","runId":"run-normal"}
+{"type":"output.delta","text":"Draft "}
+{"type":"output.delta","text":"complete."}
+{"type":"usage","inputTokens":12,"outputTokens":4}
+{"type":"run.completed","result":"Draft complete."}
