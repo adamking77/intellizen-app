@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod runtime_bindings;
+mod runtimes;
 
 const EXA_API_BASE: &str = "https://api.exa.ai";
 const EXA_SEARCH_CONTENTS: &str = "/search";
@@ -499,7 +500,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
             runtime_bindings::runtime_bindings_list,
-            runtime_bindings::runtime_bindings_upsert
+            runtime_bindings::runtime_bindings_upsert,
+            runtimes::runtime_run,
+            runtimes::runtime_cancel
         ])
         .on_window_event(|window, event| {
             // macOS convention: closing the main window hides it; the app
