@@ -211,6 +211,7 @@ function normalizeCodex(lines: string[]): NormalizedRuntimeEvent[] {
   const events: NormalizedRuntimeEvent[] = [];
   let lastMessage: string | undefined;
   let terminalSeen = false;
+  let failed = false;
 
   for (const line of lines) {
     let wire: Record<string, unknown>;
@@ -241,6 +242,7 @@ function normalizeCodex(lines: string[]): NormalizedRuntimeEvent[] {
       if (item.type === "agent_message") {
         const text = safeText(item.text, "runtimeOutput");
         if (text === null) {
+          failed = true;
           events.push({
             kind: "persistence_rejected",
             message: "Codex output was rejected by the persistence safety gate.",
@@ -254,6 +256,7 @@ function normalizeCodex(lines: string[]): NormalizedRuntimeEvent[] {
         item.status === "failed" ||
         item.error != null
       ) {
+        failed = true;
         events.push(protocolError("Codex reported a failed item."));
       }
       continue;
@@ -277,8 +280,8 @@ function normalizeCodex(lines: string[]): NormalizedRuntimeEvent[] {
         terminalSeen = true;
         events.push({
           kind: "terminal",
-          reason: "completed",
-          ...(lastMessage === undefined ? {} : { result: lastMessage }),
+          reason: failed ? "failed" : "completed",
+          ...(!failed && lastMessage !== undefined ? { result: lastMessage } : {}),
         });
       }
       continue;

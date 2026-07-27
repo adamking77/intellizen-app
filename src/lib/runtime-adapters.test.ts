@@ -158,4 +158,37 @@ describe("Codex 0.145.0 adapter contract", () => {
       { kind: "terminal", reason: "completed", result: "GATE3_OK" },
     ]);
   });
+
+  it("fails the turn when Codex reports a failed item", () => {
+    const events = codexRuntimeAdapter.normalize([
+      '{"type":"thread.started","thread_id":"failed-run"}',
+      '{"type":"item.completed","item":{"type":"error","message":"provider failed"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":0}}',
+    ]);
+    expect(events).toContainEqual({
+      kind: "protocol_error",
+      message: "Codex reported a failed item.",
+    });
+    expect(events[events.length - 1]).toEqual({
+      kind: "terminal",
+      reason: "failed",
+    });
+  });
+
+  it("never marks secret-rejected output completed", () => {
+    const canary = "api_key=AbCdEfGhIjKlMnOpQrStUvWxYz1234567890";
+    const events = codexRuntimeAdapter.normalize([
+      '{"type":"thread.started","thread_id":"secret-run"}',
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message", text: canary },
+      }),
+      '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
+    ]);
+    expect(events[events.length - 1]).toEqual({
+      kind: "terminal",
+      reason: "failed",
+    });
+    expect(JSON.stringify(events)).not.toContain(canary);
+  });
 });
