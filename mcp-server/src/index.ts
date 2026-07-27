@@ -13,6 +13,18 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
+import { assertPersistenceSafe } from "../../shared/persistence-redaction.mjs";
+import {
+  ROSTER_DATABASE_IDS,
+  WORKER_TOOL_NAMES,
+  assertGenericRecordMutationAllowed,
+  assertRosterProposalPatch,
+  assertWorkerPlaneEnvironment,
+  buildRosterChangeProposalPreview,
+  filterToolsForPlane,
+  parseMcpPlane,
+  readWorkerBrokerConfig,
+} from "./control-plane.js";
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 
 function loadEnvFile(path: string): Record<string, string> {
@@ -33,9 +45,14 @@ function loadEnvFile(path: string): Record<string, string> {
   );
 }
 
-const localEnv = loadEnvFile(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env.local"),
-);
+const MCP_PLANE = parseMcpPlane(process.argv.slice(2));
+if (MCP_PLANE === "worker") {
+  assertWorkerPlaneEnvironment(process.env);
+}
+
+const localEnv = MCP_PLANE === "admin"
+  ? loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env.local"))
+  : {};
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ??
@@ -54,11 +71,19 @@ const EXA_API_KEY =
   localEnv.VITE_EXA_API_KEY ??
   localEnv.EXA_API_KEY;
 
-if (!SUPABASE_KEY) {
+if (MCP_PLANE === "admin" && !SUPABASE_KEY) {
   throw new Error("Missing Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY in .env.local.");
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = MCP_PLANE === "admin"
+  ? createClient(SUPABASE_URL, SUPABASE_KEY!)
+  : new Proxy({} as ReturnType<typeof createClient>, {
+      get() {
+        throw new Error("Worker plane cannot access Supabase directly; use the capability broker.");
+      },
+    });
+const WORKER_BROKER_CONFIG =
+  MCP_PLANE === "worker" ? readWorkerBrokerConfig(process.env) : null;
 const VAULT_BASE = join(homedir(), "vault", "intelligence");
 const GENZEN_WORKSPACE_DATABASE_IDS = {
   bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
@@ -128,6 +153,33 @@ const WORKFLOW_RUN_FIELDS = {
   startedAt: "run_started_at",
   completedAt: "run_completed_at",
 } as const;
+
+async function callWorkerCapabilityBroker(
+  tool: string,
+  args: Record<string, unknown>,
+) {
+  if (!WORKER_BROKER_CONFIG || !WORKER_TOOL_NAMES.has(tool)) {
+    throw new Error(`Tool "${tool}" is unavailable in the worker plane.`);
+  }
+
+  assertPersistenceSafe(args);
+  const response = await fetch(WORKER_BROKER_CONFIG.url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${WORKER_BROKER_CONFIG.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ tool, arguments: args }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Worker capability broker rejected ${tool} with status ${response.status}.`);
+  }
+
+  const result: unknown = await response.json();
+  assertPersistenceSafe(result);
+  return result;
+}
 
 function vaultPath(...segments: string[]): string {
   return join(VAULT_BASE, ...segments);
@@ -348,6 +400,78 @@ async function queryRecords(input: {
     .slice(0, limit);
 }
 
+async function listRoles(input: { include_retired?: boolean; limit?: number }) {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const { data, error } = await supabase
+    .schema("workspace")
+    .from("records")
+    .select("id, database_id, fields, updated_at")
+    .eq("database_id", ROSTER_DATABASE_IDS.roles)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as WorkspaceRecordRow[])
+    .filter(
+      (record) =>
+        input.include_retired || record.fields?.role_status !== "retired",
+    )
+    .map((record) => ({
+      id: record.id,
+      role_key: record.fields?.role_key ?? null,
+      name: record.fields?.role_name ?? null,
+      mandate: record.fields?.role_mandate ?? null,
+      authority_ceiling: record.fields?.role_authority_ceiling ?? null,
+      delegation_policy: record.fields?.role_delegation_policy ?? null,
+      owner_gate: record.fields?.role_owner_gate ?? null,
+      verification_eligible: record.fields?.role_verification_eligible ?? false,
+      status: record.fields?.role_status ?? null,
+      updated_at: record.updated_at,
+    }));
+}
+
+async function listRoleAssignments(input: {
+  role_id?: string | null;
+  agent_id?: string | null;
+  include_suspended?: boolean;
+  limit?: number;
+}) {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const { data, error } = await supabase
+    .schema("workspace")
+    .from("records")
+    .select("id, database_id, fields, updated_at")
+    .eq("database_id", ROSTER_DATABASE_IDS.roleAssignments)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as WorkspaceRecordRow[])
+    .filter((record) => {
+      const roleIds = Array.isArray(record.fields?.role_assignment_role)
+        ? record.fields.role_assignment_role
+        : [];
+      const agentIds = Array.isArray(record.fields?.role_assignment_agent)
+        ? record.fields.role_assignment_agent
+        : [];
+      if (!input.include_suspended && record.fields?.role_assignment_status !== "active") {
+        return false;
+      }
+      if (input.role_id && !roleIds.includes(input.role_id)) return false;
+      if (input.agent_id && !agentIds.includes(input.agent_id)) return false;
+      return true;
+    })
+    .map((record) => ({
+      id: record.id,
+      role_ids: record.fields?.role_assignment_role ?? [],
+      agent_ids: record.fields?.role_assignment_agent ?? [],
+      binding_ref: record.fields?.role_assignment_binding_ref ?? null,
+      scope: record.fields?.role_assignment_scope ?? null,
+      status: record.fields?.role_assignment_status ?? null,
+      updated_at: record.updated_at,
+    }));
+}
+
 function entityFromRecordInput(database: WorkspaceDatabaseRow, input: {
   entity?: string | null;
   taxonomy?: Record<string, unknown> | null;
@@ -384,6 +508,11 @@ async function createRecord(input: {
   const entity = entityFromRecordInput(database, { entity: input.entity, taxonomy });
 
   guardDocumentsStage(database, fields);
+  assertGenericRecordMutationAllowed({
+    databaseId: database.id,
+    operation: "create",
+    fieldIds: Object.keys(fields),
+  });
 
   if (!input.confirm_write) {
     return recordWritePreview("create_record", {
@@ -496,6 +625,11 @@ async function updateRecord(input: {
   const fieldsPatch = input.fields ?? {};
 
   guardDocumentsStage(database, fieldsPatch);
+  assertGenericRecordMutationAllowed({
+    databaseId: database.id,
+    operation: "update",
+    fieldIds: Object.keys(fieldsPatch),
+  });
 
   const section = buildRecordUpdateSection({
     actor: input.actor,
@@ -563,6 +697,11 @@ async function linkRecords(input: {
     database_name: input.database_name,
   });
   const recordIds = Array.from(new Set((input.record_ids ?? []).filter(Boolean)));
+  assertGenericRecordMutationAllowed({
+    databaseId: database.id,
+    operation: "relation",
+    relationFieldId: input.relation_field_id,
+  });
 
   if (!input.confirm_write) {
     return recordWritePreview("link_records", {
@@ -612,6 +751,199 @@ async function linkRecords(input: {
       updated_at: updated.updated_at,
     },
   };
+}
+
+async function proposeRosterChange(input: {
+  target_database_id: string;
+  target_record_id: string;
+  field_patch: Record<string, unknown>;
+  reason: string;
+  actor: string;
+  durable_role?: string | null;
+  confirm_write?: boolean;
+}) {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("propose_roster_change requires a reason.");
+  assertRosterProposalPatch({
+    databaseId: input.target_database_id,
+    fieldPatch: input.field_patch,
+  });
+
+  const current = await getWorkspaceRecordById(input.target_record_id);
+  if (current.database_id !== input.target_database_id) {
+    throw new Error("Roster proposal target does not belong to the selected database.");
+  }
+
+  const before = Object.fromEntries(
+    Object.keys(input.field_patch).map((fieldId) => [
+      fieldId,
+      current.fields?.[fieldId] ?? null,
+    ]),
+  );
+  const after = { ...input.field_patch };
+  const preview = buildRosterChangeProposalPreview({
+    databaseId: input.target_database_id,
+    recordId: input.target_record_id,
+    before,
+    after,
+    reason,
+  });
+  if (!input.confirm_write) return preview;
+
+  const proposal = {
+    target_database_id: input.target_database_id,
+    target_record_id: input.target_record_id,
+    before,
+    after,
+    reason,
+    requested_by: input.actor,
+    applies_change: false,
+  };
+  assertPersistenceSafe(proposal);
+  const created = await createRecord({
+    database_id: ROSTER_DATABASE_IDS.workflowRuns,
+    entity: "genzen",
+    fields: {
+      run_name: `Roster change proposal: ${input.target_record_id}`,
+      run_status: "Needs approval",
+      run_entity_scope: "genzen",
+      run_owner_role: "founder_approval_authority",
+      run_actor: input.actor,
+      run_trigger_source: "mcp",
+      run_current_step: "Awaiting founder roster approval",
+      run_context: JSON.stringify(proposal),
+      run_receipt: "Proposal recorded only. No roster field was changed.",
+      run_started_at: new Date().toISOString(),
+      run_completed_at: null,
+    },
+    body: [
+      "# Roster Change Proposal",
+      "",
+      `Requested by: ${input.actor}`,
+      `Reason: ${reason}`,
+      "",
+      "```json",
+      JSON.stringify({ before, after }, null, 2),
+      "```",
+      "",
+      "This record does not apply the change. A human must approve and apply it in Settings.",
+    ].join("\n"),
+    taxonomy: {
+      entity: "genzen",
+      area: "operations",
+      object_type: "roster_change_proposal",
+    },
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: `Requested roster change approval for ${input.target_record_id}`,
+    confirm_write: true,
+  });
+
+  return {
+    ...created,
+    applies_change: false,
+    proposal,
+  };
+}
+
+type WorkflowTransitionInput = {
+  workflow_run_id: string;
+  expected_run_version: number;
+  expected_step_id: string;
+  expected_step_state: string;
+  next_step_id: string;
+  next_step_state: string;
+  next_run_status: string;
+  dispatcher_session: string;
+  fencing_token: number;
+  idempotency_key: string;
+  request_hash: string;
+  actor: string;
+  event_kind: string;
+  event_summary: string;
+  event_payload?: Record<string, unknown>;
+  approval_mutation?: Record<string, unknown> | null;
+  confirm_write?: boolean;
+};
+
+async function advanceWorkflowStep(input: WorkflowTransitionInput) {
+  const receiptFields = [
+    input.idempotency_key,
+    input.request_hash,
+    input.actor,
+    input.event_kind,
+    input.event_summary,
+  ];
+  if (receiptFields.some((value) => !value?.trim())) {
+    throw new Error(
+      "advance_workflow_step requires idempotency, request hash, actor, event kind, and event summary.",
+    );
+  }
+  assertPersistenceSafe(input);
+
+  const rpcArguments = {
+    p_workflow_run_id: input.workflow_run_id,
+    p_expected_run_version: input.expected_run_version,
+    p_expected_step_id: input.expected_step_id,
+    p_expected_step_state: input.expected_step_state,
+    p_next_step_id: input.next_step_id,
+    p_next_step_state: input.next_step_state,
+    p_next_run_status: input.next_run_status,
+    p_dispatcher_session: input.dispatcher_session,
+    p_fencing_token: input.fencing_token,
+    p_idempotency_key: input.idempotency_key,
+    p_request_hash: input.request_hash,
+    p_actor: input.actor,
+    p_event_kind: input.event_kind,
+    p_event_summary: input.event_summary,
+    p_event_payload: input.event_payload ?? {},
+    p_approval_mutation: input.approval_mutation ?? null,
+  };
+
+  if (!input.confirm_write) {
+    return dryRunPreview(
+      "advance_workflow_step",
+      "apply the typed workflow transition and mandatory receipt transaction",
+      rpcArguments,
+    );
+  }
+
+  const { data, error } = await supabase
+    .schema("workspace")
+    .rpc("transition_workflow_step", rpcArguments);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function reportVerification(input: Omit<
+  WorkflowTransitionInput,
+  "event_kind" | "event_payload" | "approval_mutation"
+> & {
+  producer_assignment_id: string;
+  verifier_assignment_id: string;
+  method: string;
+  evidence: Record<string, unknown>;
+}) {
+  const verification = {
+    producer_assignment_id: input.producer_assignment_id,
+    verifier_assignment_id: input.verifier_assignment_id,
+    method: input.method,
+    evidence: input.evidence,
+    label: "verification_claim",
+    label_reason:
+      "Independent verification is assigned only after runner-side assignment correlation.",
+  };
+  assertPersistenceSafe(verification);
+
+  return advanceWorkflowStep({
+    ...input,
+    event_kind: "verification_recorded",
+    event_payload: {
+      assignmentId: input.verifier_assignment_id,
+      verification,
+    },
+    approval_mutation: null,
+  });
 }
 
 // ── Database views + home dashboard pins ────────────────────────────────────
@@ -2601,8 +2933,8 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const tools = [
     // ── Search ──────────────────────────────────────────────────────────────
     {
       name: "list_agent_projects",
@@ -2669,6 +3001,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "list_roles",
+      description: "List durable organization roles and their authority metadata. Read-only.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          include_retired: { type: "boolean", description: "Include retired roles." },
+          limit: { type: "number", description: "Max roles to return. Defaults to 50." },
+        },
+      },
+    },
+    {
+      name: "list_role_assignments",
+      description:
+        "List role-to-agent assignments with opaque local binding references. Read-only.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          role_id: { type: "string", description: "Optional Roles record UUID." },
+          agent_id: { type: "string", description: "Optional Agents record UUID." },
+          include_suspended: { type: "boolean", description: "Include suspended assignments." },
+          limit: { type: "number", description: "Max assignments to return. Defaults to 50." },
+        },
+      },
+    },
+    {
       name: "create_record",
       description:
         "Preview or create a workspace record in a selected database. Every confirmed write emits a workspace.work_events receipt.",
@@ -2725,6 +3082,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
         },
         required: ["record_id", "relation_field_id", "record_ids", "actor"],
+      },
+    },
+    {
+      name: "propose_roster_change",
+      description:
+        "Preview or record a protected roster-field change as a Needs approval Workflow Run. Never applies the roster change.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target_database_id: {
+            type: "string",
+            description: "Roles, Agents, or Role Assignments database UUID.",
+          },
+          target_record_id: { type: "string", description: "Existing roster record UUID." },
+          field_patch: {
+            type: "object",
+            description: "Exact protected-field patch proposed for human review.",
+          },
+          reason: { type: "string", description: "Why the roster change is requested." },
+          actor: { type: "string", description: "Requester identity." },
+          durable_role: { type: "string", description: "Requester durable role." },
+          confirm_write: {
+            type: "boolean",
+            description: "Required true to create the proposal record. Never applies the change.",
+          },
+        },
+        required: [
+          "target_database_id",
+          "target_record_id",
+          "field_patch",
+          "reason",
+          "actor",
+        ],
       },
     },
     {
@@ -2987,6 +3377,102 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           include_inactive: { type: "boolean", description: "Include non-Active workflows. Defaults to false." },
           limit: { type: "number", description: "Max workflows to return. Defaults to 50." },
         },
+      },
+    },
+    {
+      name: "advance_workflow_step",
+      description:
+        "Preview or execute one schema-v1 workflow CAS transition through workspace.transition_workflow_step. Cannot mutate arbitrary record fields.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_run_id: { type: "string" },
+          expected_run_version: { type: "number" },
+          expected_step_id: { type: "string" },
+          expected_step_state: { type: "string" },
+          next_step_id: { type: "string" },
+          next_step_state: { type: "string" },
+          next_run_status: { type: "string" },
+          dispatcher_session: { type: "string" },
+          fencing_token: { type: "number" },
+          idempotency_key: { type: "string" },
+          request_hash: { type: "string" },
+          actor: { type: "string" },
+          event_kind: { type: "string" },
+          event_summary: { type: "string" },
+          event_payload: { type: "object" },
+          approval_mutation: { type: "object" },
+          confirm_write: {
+            type: "boolean",
+            description: "Required true to invoke the transition RPC. Defaults to preview.",
+          },
+        },
+        required: [
+          "workflow_run_id",
+          "expected_run_version",
+          "expected_step_id",
+          "expected_step_state",
+          "next_step_id",
+          "next_step_state",
+          "next_run_status",
+          "dispatcher_session",
+          "fencing_token",
+          "idempotency_key",
+          "request_hash",
+          "actor",
+          "event_kind",
+          "event_summary",
+        ],
+      },
+    },
+    {
+      name: "report_verification",
+      description:
+        "Preview or record verification evidence through the workflow transition RPC. Caller evidence remains a verification claim until the runner correlates distinct assignments.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          workflow_run_id: { type: "string" },
+          expected_run_version: { type: "number" },
+          expected_step_id: { type: "string" },
+          expected_step_state: { type: "string" },
+          next_step_id: { type: "string" },
+          next_step_state: { type: "string" },
+          next_run_status: { type: "string" },
+          dispatcher_session: { type: "string" },
+          fencing_token: { type: "number" },
+          idempotency_key: { type: "string" },
+          request_hash: { type: "string" },
+          actor: { type: "string" },
+          event_summary: { type: "string" },
+          producer_assignment_id: { type: "string" },
+          verifier_assignment_id: { type: "string" },
+          method: { type: "string" },
+          evidence: { type: "object" },
+          confirm_write: {
+            type: "boolean",
+            description: "Required true to invoke the transition RPC. Defaults to preview.",
+          },
+        },
+        required: [
+          "workflow_run_id",
+          "expected_run_version",
+          "expected_step_id",
+          "expected_step_state",
+          "next_step_id",
+          "next_step_state",
+          "next_run_status",
+          "dispatcher_session",
+          "fencing_token",
+          "idempotency_key",
+          "request_hash",
+          "actor",
+          "event_summary",
+          "producer_assignment_id",
+          "verifier_assignment_id",
+          "method",
+          "evidence",
+        ],
       },
     },
     {
@@ -3600,11 +4086,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["case_id"],
       },
     },
-  ],
-}));
+  ];
+  return { tools: filterToolsForPlane(tools, MCP_PLANE) };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (MCP_PLANE === "worker") {
+    const result = await callWorkerCapabilityBroker(
+      name,
+      (args ?? {}) as Record<string, unknown>,
+    );
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
 
   // ── list_agent_projects ───────────────────────────────────────────────────
   if (name === "list_agent_projects") {
@@ -3651,6 +4145,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
+  // ── list_roles / list_role_assignments ───────────────────────────────────
+  if (name === "list_roles") {
+    const result = await listRoles((args ?? {}) as {
+      include_retired?: boolean;
+      limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "list_role_assignments") {
+    const result = await listRoleAssignments((args ?? {}) as {
+      role_id?: string | null;
+      agent_id?: string | null;
+      include_suspended?: boolean;
+      limit?: number;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
   // ── create_record ────────────────────────────────────────────────────────
   if (name === "create_record") {
     const result = await createRecord((args ?? {}) as {
@@ -3693,6 +4206,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       actor: string;
       durable_role?: string | null;
       summary?: string | null;
+      confirm_write?: boolean;
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── propose_roster_change ────────────────────────────────────────────────
+  if (name === "propose_roster_change") {
+    const result = await proposeRosterChange((args ?? {}) as {
+      target_database_id: string;
+      target_record_id: string;
+      field_patch: Record<string, unknown>;
+      reason: string;
+      actor: string;
+      durable_role?: string | null;
       confirm_write?: boolean;
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -3874,6 +4401,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       include_inactive?: boolean;
       limit?: number;
     });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  // ── schema-v1 workflow proof-kernel writes ───────────────────────────────
+  if (name === "advance_workflow_step") {
+    const result = await advanceWorkflowStep((args ?? {}) as WorkflowTransitionInput);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
+  if (name === "report_verification") {
+    const result = await reportVerification((args ?? {}) as Parameters<
+      typeof reportVerification
+    >[0]);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
