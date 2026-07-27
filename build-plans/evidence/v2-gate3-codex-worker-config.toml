@@ -1,0 +1,21 @@
+[mcp_servers.intelizen-worker]
+command = "/Users/adamking/.local/bin/node"
+args = [
+  "/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js",
+  "--plane",
+  "worker",
+]
+default_tools_approval_mode = "approve"
+enabled_tools = [
+  "advance_workflow_step",
+  "append_agent_work_note",
+  "list_agent_projects",
+  "list_agent_work",
+  "list_databases",
+  "list_role_assignments",
+  "list_roles",
+  "list_workflow_runs",
+  "list_workflows",
+  "query_records",
+  "report_verification",
+]

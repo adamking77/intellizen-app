@@ -6,7 +6,11 @@ import normalTrace from "@/fixtures/runtime-traces/normal.jsonl?raw";
 import secretOutputTrace from "@/fixtures/runtime-traces/secret-output.jsonl?raw";
 import slowOutputTrace from "@/fixtures/runtime-traces/slow-output.jsonl?raw";
 import timeoutTrace from "@/fixtures/runtime-traces/timeout.jsonl?raw";
+import codexNormalTrace from "@/fixtures/runtime-traces/codex-0.145.0-normal.jsonl?raw";
 import {
+  assertCodexCliVersion,
+  codexExecArgs,
+  codexRuntimeAdapter,
   getRuntimeAdapter,
   mockRuntimeAdapter,
   type NormalizedRuntimeEvent,
@@ -20,6 +24,7 @@ const traces = {
   "secret-output": secretOutputTrace,
   "slow-output": slowOutputTrace,
   timeout: timeoutTrace,
+  "codex-normal": codexNormalTrace,
 };
 
 function trace(name: keyof typeof traces) {
@@ -117,5 +122,40 @@ describe("mock runtime adapter golden traces", () => {
     expect(() => getRuntimeAdapter("unknown")).toThrow(
       "Unsupported runtime adapter: unknown.",
     );
+  });
+});
+
+describe("Codex 0.145.0 adapter contract", () => {
+  it("pins the exact installed version", () => {
+    expect(() => assertCodexCliVersion("codex-cli 0.145.0")).not.toThrow();
+    expect(() => assertCodexCliVersion("codex-cli 0.146.0")).toThrow(
+      "Unsupported Codex CLI version",
+    );
+  });
+
+  it("builds the reviewed stdin and sandbox invocation", () => {
+    expect(codexExecArgs("/tmp/assignment")).toEqual([
+      "exec",
+      "--strict-config",
+      "--json",
+      "--ephemeral",
+      "--ignore-rules",
+      "--sandbox",
+      "workspace-write",
+      "-c",
+      'approval_policy="never"',
+      "-C",
+      "/tmp/assignment",
+      "-",
+    ]);
+  });
+
+  it("normalizes observed JSONL and measured usage", () => {
+    expect(codexRuntimeAdapter.normalize(trace("codex-normal"))).toEqual([
+      { kind: "started", runId: "019fa-runtime-fixture" },
+      { kind: "output", text: "GATE3_OK" },
+      { kind: "usage", inputTokens: 21028, outputTokens: 8 },
+      { kind: "terminal", reason: "completed", result: "GATE3_OK" },
+    ]);
   });
 });
