@@ -154,8 +154,7 @@ It covers:
 Native verification covers the sanitized process boundary, per-run deny broker,
 dedicated grant-contained assignment directories, timeout, cancellation,
 process-tree cleanup, binding validation, and runtime discovery. The current
-native suite has 14 passing tests. Full smoke and bundle-secret scans will be
-repeated after the final Claude/UI proof, not inferred from an earlier binary.
+native suite has 14 passing tests.
 
 The first broad exact-value scan found the Hermes API key and webhook signing
 secret in the frontend output, despite the earlier service-role-only scans
@@ -168,6 +167,25 @@ Hermes API key: 0 files
 intended local access header: 1 compiled asset
 ```
 
+Current full regression:
+
+```text
+app: 38 test files passed, 187 assertions passed
+intentional live Gate 4 skip: 1
+MCP: 12 tests passed
+Rust: 14 tests passed
+TypeScript: passed
+clippy -D warnings: passed
+Vite production build: passed
+pnpm smoke: passed
+V2 dev app debug bundle: passed
+```
+
+The exact-value scan also passed against the rebuilt V2 dev app bundle. Its
+plist still reads `IntelliZen V2 Dev` and
+`com.genzen.intellizen.v2dev`. These checks will be repeated once more after
+the final Claude/UI proof if that proof changes source.
+
 ## Remaining closure actions
 
 1. Adam completes the already-open Claude browser login for the isolated
@@ -178,7 +196,8 @@ intended local access header: 1 compiled asset
    explicit confirm-write action.
 4. Unlock macOS, quit and reopen only the exact V2 dev bundle, and repeat the
    latest-binary role-chat, eject/re-dock, 390 px, and keyboard-focus checks.
-5. Run the full app, MCP, Rust, smoke, and secret-scan suite.
+5. Repeat the already-green full app, MCP, Rust, smoke, and secret-scan suite
+   only if the final Claude/UI proof requires a source change.
 6. Change this review to `Passed` and commit the final Gate 6 evidence package.
 
 Gate 7 must not be credited until every item above is complete.
