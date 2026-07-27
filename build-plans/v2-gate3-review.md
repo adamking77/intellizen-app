@@ -13,6 +13,8 @@
 - runtime discovery for version and isolated auth readiness;
 - Settings → Runtimes review/create flow;
 - live isolation probe script using a clean assignment directory;
+- live probe broker that permits exactly one `list_roles` call and rejects every
+  other capability;
 - worker environment names aligned to the canonical MCP capability contract:
   `INTELLIZEN_WORKER_CAPABILITY_URL` and
   `INTELLIZEN_WORKER_CAPABILITY_TOKEN`.
@@ -47,10 +49,37 @@ copied, linked, or mounted into the worker profile.
   the 11 reviewed worker tools;
 - live worker negotiation exposed zero generic create, update, relation, or
   roster-proposal tools;
+- the real-runtime probe is contractually required to call the worker
+  `list_roles` capability exactly once, confirm `chief_engineer`, and leave the
+  clean assignment fixture unchanged;
 - Settings dialog renders as a keyboard-complete application modal and exposes a
   distinct browser/native-discovery failure state;
 - `pnpm smoke` passed after the Gate 3 UI and runtime changes;
 - bundle scan found no Supabase service-role JWT.
+
+Latest integrated regression:
+
+```text
+pnpm test
+  29 files passed
+  141 tests passed
+
+cd mcp-server && pnpm build && pnpm test
+  build passed
+  12 tests passed
+
+ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke
+  TypeScript check passed
+  cargo clippy -D warnings passed
+  Vite build passed
+  Rust tests: 9 passed
+
+scripts/check-bundle-secrets.sh dist
+  no Supabase service-role JWT found
+```
+
+The local-only access key appeared in exactly one intended bundle file. The
+entire `dist/` directory was moved to Trash immediately after verification.
 
 ## Exit work remaining
 
