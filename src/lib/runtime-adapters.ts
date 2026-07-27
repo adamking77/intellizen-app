@@ -6,11 +6,25 @@ export type RuntimeTerminalReason =
   | "cancelled"
   | "timed_out";
 
+export type RuntimeFailureCode =
+  | "auth_lost"
+  | "parent_lost"
+  | "orphaned_child"
+  | "resume_unsupported"
+  | "ambiguous_delivery";
+
 export type NormalizedRuntimeEvent =
   | { kind: "started"; runId: string }
   | { kind: "output"; text: string }
   | { kind: "usage"; inputTokens: number; outputTokens: number }
   | { kind: "protocol_error"; message: string }
+  | {
+      kind: "runtime_error";
+      code: RuntimeFailureCode;
+      message: string;
+      resultKnown: boolean;
+      retryable: boolean;
+    }
   | { kind: "persistence_rejected"; message: string }
   | { kind: "terminal"; reason: RuntimeTerminalReason; result?: string };
 
@@ -36,7 +50,58 @@ type MockWireEvent =
   | { type: "run.completed"; result: string }
   | { type: "run.failed"; message: string }
   | { type: "run.cancelled" }
-  | { type: "run.timed_out" };
+  | { type: "run.timed_out" }
+  | { type: "run.auth_lost" }
+  | { type: "run.parent_lost" }
+  | { type: "run.orphaned_child" }
+  | { type: "run.resume_unsupported" }
+  | { type: "run.delivery_ambiguous" };
+
+const MOCK_FAILURES: Record<
+  Extract<MockWireEvent["type"], `run.${string}`>,
+  {
+    code: RuntimeFailureCode;
+    message: string;
+    resultKnown: boolean;
+    retryable: boolean;
+  } | null
+> = {
+  "run.started": null,
+  "run.completed": null,
+  "run.failed": null,
+  "run.cancelled": null,
+  "run.timed_out": null,
+  "run.auth_lost": {
+    code: "auth_lost",
+    message: "Runtime authentication was lost during the session.",
+    resultKnown: false,
+    retryable: false,
+  },
+  "run.parent_lost": {
+    code: "parent_lost",
+    message: "The runtime parent process disappeared before a terminal result.",
+    resultKnown: false,
+    retryable: false,
+  },
+  "run.orphaned_child": {
+    code: "orphaned_child",
+    message: "A runtime child process outlived its parent and required cleanup.",
+    resultKnown: false,
+    retryable: false,
+  },
+  "run.resume_unsupported": {
+    code: "resume_unsupported",
+    message: "The runtime cannot resume this interrupted session.",
+    resultKnown: false,
+    retryable: false,
+  },
+  "run.delivery_ambiguous": {
+    code: "ambiguous_delivery",
+    message: "Runtime delivery may have occurred, but no result can be confirmed.",
+    resultKnown: false,
+    retryable: false,
+  },
+};
 
 function protocolError(message: string): NormalizedRuntimeEvent {
   return { kind: "protocol_error", message };
@@ -107,6 +172,15 @@ function normalizeMock(lines: string[]): NormalizedRuntimeEvent[] {
           outputTokens: wire.outputTokens,
         });
       }
+      continue;
+    }
+
+    const runtimeFailure =
+      wire.type in MOCK_FAILURES
+        ? MOCK_FAILURES[wire.type as keyof typeof MOCK_FAILURES]
+        : null;
+    if (runtimeFailure) {
+      events.push({ kind: "runtime_error", ...runtimeFailure });
       continue;
     }
 

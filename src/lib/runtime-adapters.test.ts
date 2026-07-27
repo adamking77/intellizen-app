@@ -6,6 +6,11 @@ import normalTrace from "@/fixtures/runtime-traces/normal.jsonl?raw";
 import secretOutputTrace from "@/fixtures/runtime-traces/secret-output.jsonl?raw";
 import slowOutputTrace from "@/fixtures/runtime-traces/slow-output.jsonl?raw";
 import timeoutTrace from "@/fixtures/runtime-traces/timeout.jsonl?raw";
+import authFailureTrace from "@/fixtures/runtime-traces/auth-failure.jsonl?raw";
+import parentLossTrace from "@/fixtures/runtime-traces/parent-loss.jsonl?raw";
+import orphanedChildTrace from "@/fixtures/runtime-traces/orphaned-child.jsonl?raw";
+import resumeUnsupportedTrace from "@/fixtures/runtime-traces/resume-unsupported.jsonl?raw";
+import ambiguousDeliveryTrace from "@/fixtures/runtime-traces/ambiguous-delivery.jsonl?raw";
 import codexNormalTrace from "@/fixtures/runtime-traces/codex-0.145.0-normal.jsonl?raw";
 import {
   assertCodexCliVersion,
@@ -24,6 +29,11 @@ const traces = {
   "secret-output": secretOutputTrace,
   "slow-output": slowOutputTrace,
   timeout: timeoutTrace,
+  "auth-failure": authFailureTrace,
+  "parent-loss": parentLossTrace,
+  "orphaned-child": orphanedChildTrace,
+  "resume-unsupported": resumeUnsupportedTrace,
+  "ambiguous-delivery": ambiguousDeliveryTrace,
   "codex-normal": codexNormalTrace,
 };
 
@@ -99,6 +109,33 @@ describe("mock runtime adapter golden traces", () => {
       message: "Runtime output was rejected by the persistence safety gate.",
     });
     expect(serialized(events)).not.toContain(canary);
+  });
+
+  it.each([
+    ["auth-failure", "auth_lost"],
+    ["parent-loss", "parent_lost"],
+    ["orphaned-child", "orphaned_child"],
+    ["resume-unsupported", "resume_unsupported"],
+    ["ambiguous-delivery", "ambiguous_delivery"],
+  ] as const)("normalizes deferred Gate 5 trace %s truthfully", (name, code) => {
+    const events = mockRuntimeAdapter.normalize(trace(name));
+    expect(events[events.length - 1]).toMatchObject({
+      kind: "runtime_error",
+      code,
+      resultKnown: false,
+      retryable: false,
+    });
+  });
+
+  it("marks ambiguous delivery as non-retryable", () => {
+    const events = mockRuntimeAdapter.normalize(trace("ambiguous-delivery"));
+    expect(events[events.length - 1]).toEqual({
+      kind: "runtime_error",
+      code: "ambiguous_delivery",
+      message: "Runtime delivery may have occurred, but no result can be confirmed.",
+      resultKnown: false,
+      retryable: false,
+    });
   });
 
   it("derives capability flags from trace evidence alone", async () => {
