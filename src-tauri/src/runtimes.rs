@@ -77,7 +77,7 @@ struct ProcessState {
 }
 
 static PROCESS_REGISTRY: OnceLock<Mutex<HashMap<String, ProcessState>>> = OnceLock::new();
-type EventSink = Arc<dyn Fn(NativeRuntimeEvent) + Send + Sync>;
+pub(crate) type EventSink = Arc<dyn Fn(NativeRuntimeEvent) + Send + Sync>;
 
 fn process_registry() -> &'static Mutex<HashMap<String, ProcessState>> {
     PROCESS_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
@@ -199,7 +199,10 @@ fn signal_process_group(_pid: i32, _signal: i32) -> Result<(), String> {
     Err("Runtime process groups are supported only on Unix.".to_string())
 }
 
-async fn run_process(input: RuntimeRunInput, sink: EventSink) -> Result<RuntimeExit, String> {
+pub(crate) async fn run_process(
+    input: RuntimeRunInput,
+    sink: EventSink,
+) -> Result<RuntimeExit, String> {
     let (binary, working_directory) = validate_input(&input)?;
     let sequence = Arc::new(AtomicU64::new(0));
     let mut command = Command::new(binary);

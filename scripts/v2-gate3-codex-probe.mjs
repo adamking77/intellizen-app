@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const codexBinary = "/Users/adamking/.local/bin/codex";
+const repositoryRoot = "/Users/adamking/projects/intellizen-app";
+const tauriManifest = `${repositoryRoot}/src-tauri/Cargo.toml`;
+const nativeProbeBinary =
+  `${repositoryRoot}/src-tauri/target/debug/examples/runtime_probe`;
 const workerProfile =
   "/Users/adamking/Library/Application Support/IntelliZen/worker-profiles/codex-local-primary";
 const expectedVersion = "codex-cli 0.145.0";
@@ -99,6 +103,48 @@ function run(args, { cwd, stdin, env = {} } = {}) {
   });
 }
 
+function runProgram(binary, args, { cwd, stdin, env } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, args, {
+      cwd,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
+    child.stdin.end(stdin ?? "");
+  });
+}
+
+async function buildNativeProbe() {
+  const build = await runProgram(
+    "/Users/adamking/.cargo/bin/cargo",
+    [
+      "build",
+      "--quiet",
+      "--manifest-path",
+      tauriManifest,
+      "--example",
+      "runtime_probe",
+    ],
+    {
+      cwd: repositoryRoot,
+      env: process.env,
+    },
+  );
+  if (build.code !== 0) {
+    throw new Error(`Native probe build failed: ${build.stderr.trim()}`);
+  }
+}
+
 const assignment = await mkdtemp(join(tmpdir(), "intellizen-gate3-assignment."));
 const capabilityToken = randomUUID();
 const broker = await startCapabilityBroker(capabilityToken);
@@ -138,38 +184,58 @@ try {
     "Do not call any other tool and do not modify files.",
     "Return exactly GATE3_OK.",
   ].join("\n");
-  const execution = await run(
-    [
-      "exec",
-      "--strict-config",
-      "--json",
-      "--ephemeral",
-      "--ignore-rules",
-      "--sandbox",
-      "workspace-write",
-      "-c",
-      'approval_policy="never"',
-      "-C",
-      assignment,
-      "-",
-    ],
-    {
-      cwd: assignment,
+  await buildNativeProbe();
+  const execution = await runProgram(nativeProbeBinary, [], {
+    cwd: assignment,
+    env: {
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      LANG: "C.UTF-8",
+    },
+    stdin: JSON.stringify({
+      runId: `gate3-${randomUUID()}`,
+      binary: codexBinary,
+      args: [
+        "exec",
+        "--strict-config",
+        "--json",
+        "--ephemeral",
+        "--ignore-rules",
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        'approval_policy="never"',
+        "-C",
+        assignment,
+        "-",
+      ],
+      workingDirectory: assignment,
       stdin: prompt,
-      env: {
+      timeoutMs: 180_000,
+      environment: {
+        CODEX_HOME: workerProfile,
         INTELLIZEN_WORKER_CAPABILITY_URL: broker.url,
         INTELLIZEN_WORKER_CAPABILITY_TOKEN: capabilityToken,
       },
-    },
-  );
+    }),
+  });
   if (execution.code !== 0) {
-    throw new Error(`Codex probe failed: ${execution.stderr.trim()}`);
+    throw new Error(`Native Codex probe failed: ${execution.stderr.trim()}`);
   }
-  const events = execution.stdout
+  const nativeEvents = execution.stdout
     .trim()
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+  const nativeExit = nativeEvents.find((event) => event.kind === "native_exit");
+  if (
+    nativeExit?.reason !== "completed" ||
+    nativeEvents.at(-2)?.kind !== "completed"
+  ) {
+    throw new Error("The native runner did not report a truthful completed exit.");
+  }
+  const events = nativeEvents
+    .filter((event) => event.kind === "stdout" && typeof event.text === "string")
+    .map((event) => JSON.parse(event.text));
   const message = events.find(
     (event) =>
       event.type === "item.completed" && event.item?.type === "agent_message",
@@ -194,6 +260,7 @@ try {
       {
         result: "passed",
         version: version.stdout.trim(),
+        dispatch_boundary: "src-tauri/src/runtimes.rs",
         worker_mcp_servers: ["intelizen-worker"],
         admin_mcp_servers_visible: [],
         worker_capability_calls: broker.calls,
