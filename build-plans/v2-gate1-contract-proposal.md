@@ -1,7 +1,7 @@
 # IntelliZen V2 Gate 1 Contract Proposal
 
-**Date:** 2026-07-27  
-**Status:** Proposal for review only  
+**Date:** 2026-07-27
+**Status:** Proposal for review only
 **Authorization:** No schema, production data, MCP, or feature changes are authorized
 
 ## Gate 1 outcome

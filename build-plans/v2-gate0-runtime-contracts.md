@@ -1,7 +1,7 @@
 # IntelliZen V2 Installed Runtime Contracts
 
-**Date tested:** 2026-07-27  
-**Purpose:** Pin Gate 3 and Gate 6 adapters to observed local behavior  
+**Date tested:** 2026-07-27
+**Purpose:** Pin Gate 3 and Gate 6 adapters to observed local behavior
 **Test mode:** Non-interactive, no feature writes, no production data writes
 
 ## Result

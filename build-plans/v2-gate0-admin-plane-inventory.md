@@ -1,7 +1,7 @@
 # IntelliZen V2 Admin-Plane Inventory
 
-**Date:** 2026-07-27  
-**Inspection mode:** Read-only configuration and capability inspection  
+**Date:** 2026-07-27
+**Inspection mode:** Read-only configuration and capability inspection
 **Credential values:** Deliberately excluded
 
 ## Boundary

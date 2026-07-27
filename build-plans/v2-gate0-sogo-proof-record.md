@@ -1,7 +1,7 @@
 # What IntelliZen Can Prove for Sogo
 
-**Date:** 2026-07-27  
-**Status:** Final Gate 0 proof boundary  
+**Date:** 2026-07-27
+**Status:** Final Gate 0 proof boundary
 **Source:** `~/projects/intellizen-app-v2/spec/01-integration-strategy.md` section 4
 
 ## Judgment

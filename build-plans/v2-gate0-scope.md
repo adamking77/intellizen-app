@@ -1,8 +1,8 @@
 # IntelliZen V2 Gate 0 Scope Reconciliation
 
-**Date:** 2026-07-27  
-**Status:** Gate 0 review package  
-**Build branch:** `v2-integration`  
+**Date:** 2026-07-27
+**Status:** Gate 0 review package
+**Build branch:** `v2-integration`
 **Implementation scope:** `~/projects/intellizen-app-v2/spec/01` through `06`, as revised by `09-audit-closure.md`
 
 ## Gate 0 call
