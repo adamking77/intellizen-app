@@ -54,3 +54,23 @@ export function saveRuntimeBinding(binding: RuntimeBinding) {
   });
 }
 
+export type RuntimeProfileMutationResult = {
+  dryRun: boolean;
+  writePerformed: boolean;
+  bindingId: string;
+  profilePath: string;
+};
+
+export function previewRuntimeWorkerProfile(bindingId: string) {
+  return invoke<RuntimeProfileMutationResult>(
+    "runtime_binding_prepare_worker_profile",
+    { bindingId, confirmWrite: false },
+  );
+}
+
+export function prepareRuntimeWorkerProfile(bindingId: string) {
+  return invoke<RuntimeProfileMutationResult>(
+    "runtime_binding_prepare_worker_profile",
+    { bindingId, confirmWrite: true },
+  );
+}

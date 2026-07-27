@@ -10,6 +10,10 @@ use tauri::{AppHandle, Manager};
 
 const STORE_VERSION: u32 = 1;
 const STORE_FILE_NAME: &str = "runtime-bindings.json";
+const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
+const WORKER_NODE_BINARY: &str = "/Users/adamking/.local/bin/node";
+const INTELLIZEN_MCP_BUILD: &str =
+    "/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js";
 const ALLOWED_ADAPTERS: &[&str] = &["mock", "hermes", "codex-cli", "claude-cli", "gemini-cli"];
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -66,6 +70,15 @@ pub struct RuntimeBindingMutationResult {
     dry_run: bool,
     write_performed: bool,
     binding: RuntimeBinding,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeProfileMutationResult {
+    dry_run: bool,
+    write_performed: bool,
+    binding_id: String,
+    profile_path: String,
 }
 
 fn runtime_config_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -314,6 +327,67 @@ fn write_store_atomic(path: &Path, store: &RuntimeBindingsStore) -> Result<(), S
     Ok(())
 }
 
+fn codex_worker_config() -> String {
+    format!(
+        r#"[mcp_servers.intelizen-worker]
+command = "{WORKER_NODE_BINARY}"
+args = [
+  "{INTELLIZEN_MCP_BUILD}",
+  "--plane",
+  "worker",
+]
+default_tools_approval_mode = "approve"
+enabled_tools = [
+  "advance_workflow_step",
+  "append_agent_work_note",
+  "list_agent_projects",
+  "list_agent_work",
+  "list_databases",
+  "list_role_assignments",
+  "list_roles",
+  "list_workflow_runs",
+  "list_workflows",
+  "query_records",
+  "report_verification",
+]
+"#
+    )
+}
+
+fn write_secure_text_atomic(path: &Path, contents: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Runtime profile path has no parent.".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Failed to create runtime profile directory: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("Failed to secure runtime profile directory: {error}"))?;
+    }
+    let temporary = parent.join(format!(
+        ".{CODEX_CONFIG_FILE_NAME}.{}.tmp",
+        std::process::id()
+    ));
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|error| format!("Failed to create runtime profile: {error}"))?;
+    file.write_all(contents.as_bytes())
+        .and_then(|_| file.sync_all())
+        .map_err(|error| format!("Failed to persist runtime profile: {error}"))?;
+    fs::rename(&temporary, path)
+        .map_err(|error| format!("Failed to commit runtime profile atomically: {error}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn runtime_bindings_list(app: AppHandle) -> Result<RuntimeBindingsStore, String> {
     read_store(&runtime_config_root(&app)?.join(STORE_FILE_NAME))
@@ -350,6 +424,38 @@ pub fn runtime_bindings_upsert(
         dry_run: false,
         write_performed: true,
         binding,
+    })
+}
+
+#[tauri::command]
+pub fn runtime_binding_prepare_worker_profile(
+    app: AppHandle,
+    binding_id: String,
+    confirm_write: bool,
+) -> Result<RuntimeProfileMutationResult, String> {
+    let root = runtime_config_root(&app)?;
+    let store = read_store(&root.join(STORE_FILE_NAME))?;
+    let binding = store
+        .bindings
+        .iter()
+        .find(|binding| binding.binding_id == binding_id)
+        .cloned()
+        .ok_or_else(|| format!("Runtime binding {binding_id} was not found."))?;
+    let binding = normalize_binding(binding, &root, false)?;
+    if binding.adapter_id != "codex-cli" {
+        return Err("Gate 3 profile preparation supports only codex-cli.".to_string());
+    }
+    let profile_path = PathBuf::from(&binding.worker_profile_home).join(CODEX_CONFIG_FILE_NAME);
+    if confirm_write {
+        canonical_existing_file(WORKER_NODE_BINARY, "worker node binary")?;
+        canonical_existing_file(INTELLIZEN_MCP_BUILD, "IntelliZen MCP build")?;
+        write_secure_text_atomic(&profile_path, &codex_worker_config())?;
+    }
+    Ok(RuntimeProfileMutationResult {
+        dry_run: !confirm_write,
+        write_performed: confirm_write,
+        binding_id,
+        profile_path: profile_path.to_string_lossy().into_owned(),
     })
 }
 
@@ -474,5 +580,16 @@ mod tests {
             );
         }
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn codex_worker_profile_contains_only_the_worker_mcp() {
+        let config = codex_worker_config();
+        assert!(config.contains("[mcp_servers.intelizen-worker]"));
+        assert!(config.contains("--plane"));
+        assert!(config.contains("\"worker\""));
+        assert!(!config.contains("supabase-genzen"));
+        assert!(!config.contains("SERVICE_ROLE"));
+        assert!(!config.contains("api_key"));
     }
 }

@@ -501,6 +501,7 @@ pub fn run() {
             run_exa_search,
             runtime_bindings::runtime_bindings_list,
             runtime_bindings::runtime_bindings_upsert,
+            runtime_bindings::runtime_binding_prepare_worker_profile,
             runtimes::runtime_run,
             runtimes::runtime_cancel
         ])
