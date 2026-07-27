@@ -18,6 +18,7 @@ const SearchView = lazyNamed(() => import("@/views/Search"), "SearchView");
 const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView");
 const GraphView = lazyNamed(() => import("@/views/Graph"), "GraphView");
 const CanvasView = lazyNamed(() => import("@/views/Canvas"), "CanvasView");
+const WorkflowsView = lazyNamed(() => import("@/views/Workflows"), "WorkflowsView");
 const DatabasesView = lazyNamed(() => import("@/views/Databases"), "DatabasesView");
 const DatabaseEditorView = lazyNamed(() => import("@/views/DatabaseEditor"), "DatabaseEditorView");
 const InvestigationView = lazyNamed(
@@ -70,7 +71,11 @@ function App() {
           <Route path="/agent-work" element={<Navigate to="/home" replace />} />
           <Route
             path="/workflows"
-            element={<Navigate to="/databases/c1000000-0000-0000-0000-000000000001" replace />}
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <WorkflowsView />
+              </Suspense>
+            }
           />
           <Route path="/roles" element={<Navigate to="/home" replace />} />
           <Route path="/monitors" element={<Navigate to="/home" replace />} />

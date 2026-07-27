@@ -10,6 +10,7 @@ import {
   Radar,
   Search,
   Settings,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,11 +25,12 @@ type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
 // Observational and orchestration surfaces belong on Home as widgets. Inbox
 // and Monitors are retired in favor of Fiona's daily brief; Agent Work,
-// Workflows, and Roles are represented by database-backed Home views.
+// Agent Work and Roles are represented by database-backed Home views.
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Intel", to: "/intel", key: "intel", icon: Radar },
+  { label: "Workflows", to: "/workflows", key: "workflows", icon: Workflow },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },

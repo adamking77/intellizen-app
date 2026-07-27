@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  Pencil,
   RefreshCw,
   Route,
   Search,
@@ -19,6 +20,8 @@ import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows } from "@/lib/data";
 import type { WorkflowTemplateItem, WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
+import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
+import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 
 type WorkflowStatusFilter = "active" | "inactive" | "all";
 
@@ -118,6 +121,7 @@ export function WorkflowsView() {
   const [ownerFilter, setOwnerFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [designerOpen, setDesignerOpen] = useState(false);
 
   const includeInactive = statusFilter !== "active";
   const workflowQuery = useQuery({
@@ -131,6 +135,11 @@ export function WorkflowsView() {
         limit: 100,
       }),
     refetchInterval: 60_000,
+  });
+  const rolesQuery = useQuery({
+    queryKey: ["workflow-designer", "role-targets"],
+    queryFn: listAgentPanelRoleTargets,
+    staleTime: 30_000,
   });
 
   const workflows = workflowQuery.data ?? [];
@@ -291,8 +300,18 @@ export function WorkflowsView() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
-          {selected ? (
+        <main className={cn("min-w-0 flex-1", designerOpen ? "overflow-hidden" : "overflow-y-auto px-6 py-5")}>
+          {selected && designerOpen ? (
+            <WorkflowDesigner
+              workflow={selected}
+              roleTargets={rolesQuery.data ?? []}
+              onClose={() => setDesignerOpen(false)}
+              onSaved={() => {
+                setDesignerOpen(false);
+                void workflowQuery.refetch();
+              }}
+            />
+          ) : selected ? (
             <div className="mx-auto flex max-w-[1180px] flex-col gap-5">
               <section className="border-b border-[var(--border)] pb-5">
                 <div className="flex items-start justify-between gap-5">
@@ -305,13 +324,19 @@ export function WorkflowsView() {
                     <h1 className="font-ui text-[24px] font-semibold leading-tight text-[var(--text)]">{selected.name}</h1>
                     <p className="mt-2 font-mono text-[11px] text-[var(--overlay-1)]">{selected.workflow_id}</p>
                   </div>
-                  <Link
-                    to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry}`}
-                    className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "shrink-0")}
-                  >
-                    Open registry
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setDesignerOpen(true)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Design
+                    </Button>
+                    <Link
+                      to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry}`}
+                      className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "shrink-0")}
+                    >
+                      Open registry
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 </div>
               </section>
 

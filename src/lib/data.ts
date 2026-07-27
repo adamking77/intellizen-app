@@ -97,6 +97,9 @@ export const GENZEN_WORKSPACE_DATABASE_IDS = {
   tasks: "654acc9c-0270-49e2-86f7-788e25c59a76",
   workflowRegistry: "c1000000-0000-0000-0000-000000000001",
   workflowRuns: "c1000000-0000-0000-0000-000000000002",
+  roles: "c1000000-0000-0000-0000-000000000003",
+  agents: "c1000000-0000-0000-0000-000000000004",
+  roleAssignments: "c1000000-0000-0000-0000-000000000005",
 } as const;
 
 export const WORKFLOW_RUN_VIEW_IDS = {
@@ -4769,6 +4772,62 @@ export async function listWorkflows(input: {
     })
     .slice(0, rowLimit)
     .map(toWorkflowTemplateItem);
+}
+
+export async function saveWorkflowDefinition(input: {
+  workflowRecordId: string;
+  definition: WorkflowDefinitionV1;
+  activate: boolean;
+  confirmWrite?: boolean;
+}) {
+  const validation = validateWorkflowDefinition(input.definition);
+  if (!validation.valid) {
+    throw new Error(
+      `Workflow definition is invalid: ${validation.errors
+        .map((error) => `${error.path}: ${error.message}`)
+        .join("; ")}`,
+    );
+  }
+  const record = await getWorkspaceRecord(input.workflowRecordId);
+  if (record.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry) {
+    throw new Error("Workflow definition target is not a Registry record.");
+  }
+  const nextFields = {
+    ...record.fields,
+    [WORKFLOW_REGISTRY_FIELDS.name]: input.definition.name,
+    [WORKFLOW_REGISTRY_FIELDS.workflowId]: input.definition.id,
+    [WORKFLOW_REGISTRY_FIELDS.trigger]: input.definition.trigger.kind,
+    [WORKFLOW_REGISTRY_FIELDS.definition]:
+      input.definition as unknown as WorkspaceDatabaseFieldValue,
+    [WORKFLOW_REGISTRY_FIELDS.definitionVersion]: input.definition.version,
+    ...(input.activate
+      ? { [WORKFLOW_REGISTRY_FIELDS.status]: "Active" }
+      : {}),
+  };
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true as const,
+      write_performed: false as const,
+      workflow_record_id: record.id,
+      activate: input.activate,
+      definition: input.definition,
+      next_status: nextFields[WORKFLOW_REGISTRY_FIELDS.status] ?? null,
+    };
+  }
+  const updated = await updateWorkspaceRecord(
+    record.id,
+    {
+      fields: nextFields,
+      body: record.body,
+      taxonomy: record.taxonomy,
+    },
+    true,
+  );
+  return {
+    dry_run: false as const,
+    write_performed: true as const,
+    workflow: toWorkflowTemplateItem(updated),
+  };
 }
 
 async function getWorkflowTemplateByWorkflowId(workflowId: string) {
