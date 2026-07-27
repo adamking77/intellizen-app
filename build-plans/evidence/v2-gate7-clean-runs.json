@@ -1,0 +1,162 @@
+{
+  "gate": 7,
+  "result": "passed",
+  "observed_at": "2026-07-27T23:29:58+04:00",
+  "clean_run_count": 3,
+  "consecutive_after_interrupted_run": true,
+  "runs": [
+    {
+      "run_id": "43ffa752-ec72-4b24-a585-1f124b48e415",
+      "status": "Done",
+      "run_version": 24,
+      "approval_id": "15f75d9e-5129-4665-a8f9-7aee4dea52c7",
+      "payload_hash": "6e21747150e6cc7ec912ed17dfd834358b1d240063ffdcb1bb8df800b967c181",
+      "decision": "approved",
+      "decision_maker": "Adam",
+      "payload_status": "passed",
+      "coordinating_assignment_id": "736e104e-2dbe-4a64-a91c-c11a042ade93",
+      "producing_assignment_id": "41df30f0-425c-4008-8f0f-fa25c8701df5",
+      "verifying_assignment_id": "85fe7018-a96c-4d95-b7cb-de09ca615630",
+      "assignments_distinct": true,
+      "verification_label": "independent agent verification",
+      "artifact": {
+        "artifact_ref": "simulation://intellizen/gate4/internal-proof",
+        "action": "simulate-consequential-action",
+        "simulated": true,
+        "external_action": false,
+        "result": "No external action performed."
+      },
+      "dispatcher_lease_released": true
+    },
+    {
+      "run_id": "cc888d72-477a-4431-aac0-d86907ab6e38",
+      "status": "Done",
+      "run_version": 24,
+      "approval_id": "46e8e7c4-e0b9-402a-9775-7b87c63080fa",
+      "payload_hash": "f61329de9ecf97146f5fb6fa4ff796a7794229eb67c522fe4ca009f1ce6047b8",
+      "decision": "approved",
+      "decision_maker": "Adam",
+      "payload_status": "passed",
+      "coordinating_assignment_id": "29ffb38a-cb9e-42ab-a515-d3a086950ec1",
+      "producing_assignment_id": "1808422b-77fd-4125-83f3-a61ceb1ef908",
+      "verifying_assignment_id": "6a090939-ddfb-43b0-a7a7-488aab00de25",
+      "assignments_distinct": true,
+      "verification_label": "independent agent verification",
+      "artifact": {
+        "artifact_ref": "simulation://intellizen/gate4/internal-proof",
+        "action": "simulate-consequential-action",
+        "simulated": true,
+        "external_action": false,
+        "result": "No external action performed."
+      },
+      "dispatcher_lease_released": true
+    },
+    {
+      "run_id": "48830d19-55ea-45cc-8f3c-f5e0fa03aa5e",
+      "status": "Done",
+      "run_version": 24,
+      "approval_id": "b6dd118f-c675-4733-a34d-73c8c9db011d",
+      "payload_hash": "755b52749ccb252a2cca630e464ee940f3427ed8e5e9fb803fa6f87b61974660",
+      "decision": "approved",
+      "decision_maker": "Adam",
+      "payload_status": "passed",
+      "coordinating_assignment_id": "263c2e22-ab22-465a-84e6-b34ddc414a89",
+      "producing_assignment_id": "123277e4-75ca-45f3-b2ae-d9f175fdd27c",
+      "verifying_assignment_id": "2aa391ce-d036-4464-a3d7-7cb37ac29e32",
+      "assignments_distinct": true,
+      "verification_label": "independent agent verification",
+      "artifact": {
+        "artifact_ref": "simulation://intellizen/gate4/internal-proof",
+        "action": "simulate-consequential-action",
+        "simulated": true,
+        "external_action": false,
+        "result": "No external action performed."
+      },
+      "dispatcher_lease_released": true
+    }
+  ],
+  "ordered_event_kinds": [
+    "workflow_run_started",
+    "dispatcher_lease_acquired",
+    "assignment_created",
+    "agent_completed",
+    "workflow_step_advanced",
+    "assignment_created",
+    "agent_completed",
+    "workflow_step_advanced",
+    "workflow_step_started",
+    "condition_evaluated",
+    "workflow_step_advanced",
+    "assignment_created",
+    "agent_completed",
+    "workflow_step_advanced",
+    "workflow_step_started",
+    "verification_recorded",
+    "workflow_step_advanced",
+    "approval_requested",
+    "dispatcher_lease_released",
+    "dispatcher_lease_acquired",
+    "approval_granted",
+    "workflow_step_advanced",
+    "artifact_simulation_started",
+    "workflow_completed",
+    "dispatcher_lease_released"
+  ],
+  "excluded_interrupted_run": {
+    "run_id": "783bc6a3-ccea-43d5-a816-6fa2e60e7df6",
+    "status": "Blocked",
+    "run_version": 25,
+    "approval_id": "d2a92251-710a-4f5a-a26c-f34b4e4dacbb",
+    "payload_hash": "4596e457a11bea881c297486d5a904e5f17414b5b67681fdebda17ea96b2a0ef",
+    "artifact_persisted": false,
+    "completion_persisted": false,
+    "persistence_rejected_receipt": true,
+    "automatic_retry": false,
+    "external_action": false,
+    "dispatcher_lease_released": true,
+    "counted_as_clean": false
+  },
+  "final_verification": {
+    "app_test_files_passed": 39,
+    "app_assertions_passed": 190,
+    "intentional_live_tests_skipped": 1,
+    "mcp_tests_passed": 12,
+    "rust_tests_passed": 17,
+    "persistence_redaction_tests_passed": 10,
+    "typescript": "passed",
+    "clippy_deny_warnings": "passed",
+    "vite_production_build": "passed",
+    "pnpm_smoke": "passed",
+    "secret_value_scan": {
+      "SUPABASE_SERVICE_ROLE_KEY": {
+        "dist_files": 0,
+        "v2_app_bundle_files": 0
+      },
+      "VITE_HERMES_API_KEY": {
+        "dist_files": 0,
+        "v2_app_bundle_files": 0
+      },
+      "VITE_HERMES_WEBHOOK_SECRET": {
+        "dist_files": 0,
+        "v2_app_bundle_files": 0
+      },
+      "HERMES_DASHBOARD_SESSION_TOKEN": {
+        "dist_files": 0,
+        "v2_app_bundle_files": 0
+      },
+      "VITE_INTELLIZEN_LOCAL_ACCESS_KEY": {
+        "dist_files": 0,
+        "v2_app_bundle_files": 0,
+        "classification": "native-host-only local access header"
+      }
+    },
+    "v2_bundle_identifier": "com.genzen.intellizen.v2dev",
+    "production_desktop_running": false,
+    "clean_bundle_runtime_readback": {
+      "home_loaded": true,
+      "workspace_databases_visible": 16,
+      "operations_director_visible": true,
+      "existing_fiona_thread_visible": true
+    }
+  }
+}
