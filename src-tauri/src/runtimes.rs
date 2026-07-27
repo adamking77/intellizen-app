@@ -10,6 +10,7 @@ use std::{
     time::Duration,
 };
 use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
@@ -55,6 +56,18 @@ pub struct NativeRuntimeEvent {
 pub struct RuntimeExit {
     pub reason: String,
     pub exit_code: Option<i32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeDiscovery {
+    adapter_id: String,
+    installed: bool,
+    binary: String,
+    version: String,
+    supported: bool,
+    auth_state: String,
+    worker_profile_home: String,
 }
 
 #[derive(Clone, Copy)]
@@ -356,6 +369,61 @@ pub fn runtime_cancel(run_id: String) -> Result<bool, String> {
     };
     signal_process_group(pid, libc::SIGTERM)?;
     Ok(true)
+}
+
+#[tauri::command]
+pub fn runtime_discover_codex(app: AppHandle) -> Result<RuntimeDiscovery, String> {
+    const CODEX_BINARY: &str = "/Users/adamking/.local/bin/codex";
+    const SUPPORTED_VERSION: &str = "codex-cli 0.145.0";
+    let worker_profile_home = app
+        .path()
+        .home_dir()
+        .map_err(|error| error.to_string())?
+        .join("Library/Application Support/IntelliZen/worker-profiles/codex-local-primary");
+    let binary = PathBuf::from(CODEX_BINARY);
+    if !binary.is_file() {
+        return Ok(RuntimeDiscovery {
+            adapter_id: "codex-cli".to_string(),
+            installed: false,
+            binary: CODEX_BINARY.to_string(),
+            version: String::new(),
+            supported: false,
+            auth_state: "unavailable".to_string(),
+            worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+        });
+    }
+    let version_output = std::process::Command::new(&binary)
+        .arg("--version")
+        .env_clear()
+        .output()
+        .map_err(|error| format!("Failed to inspect Codex version: {error}"))?;
+    let version = String::from_utf8_lossy(&version_output.stdout)
+        .trim()
+        .to_string();
+    let auth_state = if worker_profile_home.is_dir() {
+        let status = std::process::Command::new(&binary)
+            .args(["login", "status"])
+            .env_clear()
+            .env("CODEX_HOME", &worker_profile_home)
+            .status()
+            .map_err(|error| format!("Failed to inspect Codex auth: {error}"))?;
+        if status.success() {
+            "ready"
+        } else {
+            "login_required"
+        }
+    } else {
+        "login_required"
+    };
+    Ok(RuntimeDiscovery {
+        adapter_id: "codex-cli".to_string(),
+        installed: version_output.status.success(),
+        binary: binary.to_string_lossy().into_owned(),
+        supported: version == SUPPORTED_VERSION,
+        version,
+        auth_state: auth_state.to_string(),
+        worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+    })
 }
 
 #[cfg(test)]

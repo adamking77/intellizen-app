@@ -51,3 +51,17 @@ export async function runRuntime(
 export function cancelRuntime(runId: string) {
   return invoke<boolean>("runtime_cancel", { runId });
 }
+
+export type RuntimeDiscovery = {
+  adapterId: "codex-cli";
+  installed: boolean;
+  binary: string;
+  version: string;
+  supported: boolean;
+  authState: "ready" | "login_required" | "unavailable";
+  workerProfileHome: string;
+};
+
+export function discoverCodexRuntime() {
+  return invoke<RuntimeDiscovery>("runtime_discover_codex");
+}
