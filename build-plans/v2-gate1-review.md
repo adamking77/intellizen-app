@@ -1,13 +1,13 @@
 # IntelliZen V2 Gate 1 Review
 
 **Date:** 2026-07-27  
-**Status:** Approved for a later production application; not yet performed
+**Status:** Passed — production application and readback verified
 **Build branch:** `v2-integration`  
 **Migration:** `20260727080103_intellizen_v2_gate1_control_contracts.sql`
 
 ## Gate 1 outcome
 
-The Gate 1 contracts are implemented and locally verified:
+The Gate 1 contracts are implemented, applied, and verified:
 
 - centralized persistence redaction and context-pack evidence hashing;
 - admin/worker MCP planes from the single canonical build;
@@ -18,7 +18,10 @@ The Gate 1 contracts are implemented and locally verified:
 - additive Roles, Agents, Role Assignments, proof-receipt, lease, fencing, idempotency, transition, and approval contracts;
 - transactional schema and RPC verification against an ephemeral PostgreSQL 17 database.
 
-No production data, schema, deployment, publish, or external action changed during this session. Gate 2 has not begun.
+The reviewed additive migration is recorded remotely as
+`20260727092636_intellizen_v2_gate1_control_contracts`. No existing row was
+deleted or rewritten, no credential was stored, and no deployment, publish, or
+external human-visible action occurred.
 
 ## Commits
 
@@ -129,26 +132,45 @@ Before application:
 - security advisor: zero findings;
 - performance advisor: existing informational notices only, unrelated to the unapplied Gate 1 objects.
 
-Advisors must be rerun after the later production application.
+The same advisor checks were rerun after application:
 
-## Application verification contract
+- security advisor: zero findings;
+- performance advisor: the same existing informational notices, plus expected
+  unused-index notices for the two newly created receipt lookup indexes before
+  production traffic has exercised them.
 
-Adam approved this exact migration on 2026-07-27 at 12:38 +04. Production
-application remains a separate session after the overnight minimum has elapsed,
-no earlier than 2026-07-28.
+## Production application verification
 
-That session must:
+Adam approved this exact migration on 2026-07-27 at 12:38 +04 and later
+corrected the stale project-level overnight-delay rule. Immediately before
+application, a second production preflight confirmed:
 
-1. rerun the read-only preflight and stop if its output differs materially;
-2. apply only `20260727080103_intellizen_v2_gate1_control_contracts.sql`;
-3. read back the 3 database rows, 10 seed records, 6 proof columns, constraints, indexes, function signatures, `SECURITY INVOKER` state, and grants;
-4. confirm that existing `workspace.work_events` rows were not rewritten;
-5. run rejection and success probes only against dedicated disposable Workflow Run fixtures;
-6. rerun security and performance advisors;
-7. regenerate `supabase/MIGRATIONS.md` from the remote inventory;
-8. write the application receipt.
+```json
+{
+  "workspace_databases_total": 13,
+  "workspace_records_total": 289,
+  "workspace_work_events_total": 128,
+  "target_database_id_conflicts": 0,
+  "target_record_id_conflicts": 0,
+  "existing_gate1_functions": [],
+  "existing_gate1_constraints": [],
+  "existing_gate1_indexes": []
+}
+```
 
-Gate 1 exits only after those checks pass. Gate 2 remains blocked until then.
+The migration then applied successfully through the Supabase migration API.
+Post-application readback proved:
+
+- 3 control databases, 4 roles, 3 agents, and 3 active assignments;
+- 6 proof columns and 4 validated check constraints;
+- all 4 RPC signatures with the reviewed `SECURITY INVOKER` and grant contract;
+- `chief_engineer -> Keel -> codex-local-primary`;
+- zero disposable test records or test events left behind after rollback;
+- the full schema and transactional RPC suites passed against production inside
+  rollback-only transactions;
+- remote migration history contains
+  `20260727092636_intellizen_v2_gate1_control_contracts`;
+- `supabase/MIGRATIONS.md` now matches the 89-row remote inventory.
 
 ## Integrated verification
 
@@ -175,14 +197,14 @@ The smoke build intentionally used the existing local-only access-key override. 
 
 ## Approval record
 
-**Decision:** Approved by Adam on 2026-07-27 at 12:38 +04 for later production
-application of:
+**Decision:** Approved by Adam on 2026-07-27 at 12:38 +04 and applied after his
+explicit correction removing the stale overnight-delay instruction:
 
 ```text
 supabase/migrations/20260727080103_intellizen_v2_gate1_control_contracts.sql
 ```
 
-This approval authorizes the application-and-readback session described above.
-Adam's standing whole-build instruction separately authorizes automatic continuation
-through Gates 2–7 after each gate's exit checks pass. Only an explicit locked
-human-approval boundary stops that continuation.
+The application and readback passed. Adam's standing whole-build instruction
+authorizes automatic continuation through Gates 2–7 after each gate's exit
+checks pass. Only an explicit locked human-approval boundary stops that
+continuation.
