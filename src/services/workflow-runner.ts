@@ -151,6 +151,8 @@ export type WorkflowApproval = {
   requestedAt: string;
   decision: "approved" | "denied" | "changes_requested" | null;
   decisionMaker: string | null;
+  invalidatedAt?: string | null;
+  invalidationReason?: string | null;
 };
 
 export type WorkflowTransitionRequest = {
@@ -284,6 +286,17 @@ function payloadForReference(
     throw new Error(`Payload reference has no result: ${reference}`);
   }
   return stepResults[match[1]];
+}
+
+export function isWorkflowApprovalGranted(
+  approval: WorkflowApproval,
+  payloadHash: string,
+) {
+  return (
+    approval.decision === "approved" &&
+    approval.payloadHash === payloadHash &&
+    !approval.invalidatedAt
+  );
 }
 
 function nextStepId(step: WorkflowStep, states: Record<string, WorkflowStepState>) {
@@ -882,9 +895,7 @@ export async function runWorkflow(
           if (step.action === "simulate-consequential-action") {
             const payloadHash = await workflowDefinitionHash(payload);
             const granted = Object.values(approvals).some(
-              (approval) =>
-                approval.decision === "approved" &&
-                approval.payloadHash === payloadHash,
+              (approval) => isWorkflowApprovalGranted(approval, payloadHash),
             );
             if (!granted) {
               throw new Error(

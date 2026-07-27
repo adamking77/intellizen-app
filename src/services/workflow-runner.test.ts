@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { WorkflowDefinitionV1, WorkflowRoleAssignStep } from "@/lib/workflow-schema";
 import {
   recoverInterruptedWorkflow,
+  isWorkflowApprovalGranted,
   runWorkflow,
   WorkflowDispatchCoordinator,
   WorkflowDispatchError,
@@ -243,6 +244,30 @@ function fakePort(
 }
 
 describe("workflow runner", () => {
+  it("refuses a historically approved payload after transactional invalidation", () => {
+    expect(
+      isWorkflowApprovalGranted(
+        {
+          approvalId: "approval-fixture",
+          runId: "run-fixture",
+          stepId: "approve",
+          approvalType: "workflow-payload",
+          requiredRole: "gate5_test_only",
+          payloadRef: "steps.verify.result",
+          payloadHash: "b".repeat(64),
+          payloadSnapshot: { fixture: true },
+          requester: "Gate 5 harness",
+          requestedAt: "2026-07-27T12:00:00.000Z",
+          decision: "approved",
+          decisionMaker: "Gate 5 test fixture (not human approval)",
+          invalidatedAt: "2026-07-27T12:01:00.000Z",
+          invalidationReason: "Payload changed after test approval.",
+        },
+        "b".repeat(64),
+      ),
+    ).toBe(false);
+  });
+
   it("runs the Gate 4 workflow over fenced CAS transitions with exact approval binding", async () => {
     const fake = fakePort();
     const result = await runWorkflow(
