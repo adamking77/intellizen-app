@@ -4,6 +4,8 @@ use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+mod runtime_bindings;
+
 const EXA_API_BASE: &str = "https://api.exa.ai";
 const EXA_SEARCH_CONTENTS: &str = "/search";
 const EXA_RESEARCH_PATH: &str = "/research/v1";
@@ -494,7 +496,11 @@ pub fn run() {
                 .body(GENUI_FRAME_HTML.as_bytes().to_vec())
                 .expect("genui frame response")
         })
-        .invoke_handler(tauri::generate_handler![run_exa_search])
+        .invoke_handler(tauri::generate_handler![
+            run_exa_search,
+            runtime_bindings::runtime_bindings_list,
+            runtime_bindings::runtime_bindings_upsert
+        ])
         .on_window_event(|window, event| {
             // macOS convention: closing the main window hides it; the app
             // stays in the Dock and Reopen brings it back. ⌘Q still quits.
