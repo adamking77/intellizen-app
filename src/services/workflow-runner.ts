@@ -108,6 +108,36 @@ export type WorkflowRuntimeResult = {
   } | null;
 };
 
+export type WorkflowDispatchFailureReason =
+  | "auth_lost"
+  | "parent_lost"
+  | "orphaned_child"
+  | "resume_unsupported"
+  | "ambiguous_delivery"
+  | "timed_out"
+  | "cancelled"
+  | "runtime_failed"
+  | "persistence_rejected";
+
+export class WorkflowDispatchError extends Error {
+  readonly reason: WorkflowDispatchFailureReason;
+  readonly retryable: boolean;
+  readonly resultKnown: boolean;
+
+  constructor(input: {
+    reason: WorkflowDispatchFailureReason;
+    message: string;
+    retryable?: boolean;
+    resultKnown?: boolean;
+  }) {
+    super(input.message);
+    this.name = "WorkflowDispatchError";
+    this.reason = input.reason;
+    this.retryable = input.retryable ?? false;
+    this.resultKnown = input.resultKnown ?? false;
+  }
+}
+
 export type WorkflowApproval = {
   approvalId: string;
   runId: string;
@@ -267,6 +297,62 @@ function isTerminalTarget(value: string | null) {
   return value == null || ["complete", "blocked", "escalate"].includes(value);
 }
 
+function safeFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "Runtime dispatch failed.";
+  try {
+    assertPersistenceSafe({ message });
+    return message;
+  } catch {
+    return "Runtime dispatch failed with redacted unsafe detail.";
+  }
+}
+
+function dispatchFailure(error: unknown): WorkflowDispatchError {
+  if (error instanceof WorkflowDispatchError) {
+    return new WorkflowDispatchError({
+      reason: error.reason,
+      message: safeFailureMessage(error),
+      retryable: error.retryable,
+      resultKnown: error.resultKnown,
+    });
+  }
+  if (
+    error instanceof Error &&
+    error.message.startsWith("Persistence rejected:")
+  ) {
+    return new WorkflowDispatchError({
+      reason: "persistence_rejected",
+      message: "Runtime output was rejected before persistence.",
+      retryable: false,
+      resultKnown: false,
+    });
+  }
+  return new WorkflowDispatchError({
+    reason: "ambiguous_delivery",
+    message: safeFailureMessage(error),
+    retryable: false,
+    resultKnown: false,
+  });
+}
+
+function failureStepState(
+  reason: WorkflowDispatchFailureReason,
+): Extract<WorkflowStepState, "abandoned" | "blocked" | "cancelled"> {
+  if (reason === "parent_lost" || reason === "orphaned_child") return "abandoned";
+  if (reason === "cancelled") return "cancelled";
+  return "blocked";
+}
+
+function failureEventKind(reason: WorkflowDispatchFailureReason) {
+  if (reason === "timed_out") return "runtime_timed_out";
+  if (reason === "cancelled") return "runtime_cancelled";
+  if (reason === "parent_lost" || reason === "orphaned_child") {
+    return "runtime_abandoned";
+  }
+  if (reason === "persistence_rejected") return "persistence_rejected";
+  return "runtime_blocked";
+}
+
 async function transitionHash(request: Omit<WorkflowTransitionRequest, "requestHash">) {
   return workflowDefinitionHash(request);
 }
@@ -348,7 +434,7 @@ export async function runWorkflow(
     runId: input.runId,
     expectedRunVersion: input.runVersion,
     dispatcherSession,
-    idempotencyKey: `run:${input.runId}:lease`,
+    idempotencyKey: `run:${input.runId}:lease:${dispatcherSession}`,
     actor: input.actor,
   };
   const lease = await port.acquireLease({
@@ -531,18 +617,100 @@ export async function runWorkflow(
           },
         });
 
-        const runtime = await port.dispatch({
-          runId: input.runId,
-          step,
-          assignment,
-          renderedContext: contextPack.renderedContext,
-        });
-        assertPersistenceSafe({
-          runtimeSessionId: runtime.sessionId,
-          result: runtime.result,
-          artifacts: runtime.artifacts ?? [],
-          usage: runtime.usage ?? null,
-        });
+        let runtime: WorkflowRuntimeResult | null = null;
+        let attempt = 0;
+        while (!runtime && attempt < 2) {
+          try {
+            const dispatched = await port.dispatch({
+              runId: input.runId,
+              step,
+              assignment,
+              renderedContext: contextPack.renderedContext,
+            });
+            assertPersistenceSafe({
+              runtimeSessionId: dispatched.sessionId,
+              result: dispatched.result,
+              artifacts: dispatched.artifacts ?? [],
+              usage: dispatched.usage ?? null,
+            });
+            runtime = dispatched;
+          } catch (error) {
+            const failure = dispatchFailure(error);
+            if (failure.retryable && !failure.resultKnown && attempt === 0) {
+              await transition({
+                expectedStepId: step.id,
+                expectedStepState: "running",
+                nextStepId: step.id,
+                nextStepState: "suspended",
+                nextRunStatus: "Deferred",
+                idempotencyKey: `${idempotencyKey}:retry-scheduled`,
+                actor: input.actor,
+                eventKind: "runtime_retry_scheduled",
+                eventSummary: `${step.title} paused for one safe retry`,
+                eventPayload: {
+                  assignmentId,
+                  reason: failure.reason,
+                  message: failure.message,
+                  retryAttempt: 1,
+                  resultKnown: false,
+                },
+              });
+              await transition({
+                expectedStepId: step.id,
+                expectedStepState: "suspended",
+                nextStepId: step.id,
+                nextStepState: "running",
+                nextRunStatus: "In progress",
+                idempotencyKey: `${idempotencyKey}:retry-started`,
+                actor: input.actor,
+                eventKind: "runtime_retry_started",
+                eventSummary: `${step.title} started its one safe retry`,
+                eventPayload: {
+                  assignmentId,
+                  reason: failure.reason,
+                  retryAttempt: 1,
+                },
+              });
+              attempt += 1;
+              continue;
+            }
+
+            const terminalState = failureStepState(failure.reason);
+            await transition({
+              expectedStepId: step.id,
+              expectedStepState: "running",
+              nextStepId: step.id,
+              nextStepState: terminalState,
+              nextRunStatus: "Blocked",
+              idempotencyKey: `${idempotencyKey}:failure:${failure.reason}`,
+              actor: input.actor,
+              eventKind: failureEventKind(failure.reason),
+              eventSummary: `${step.title} stopped: ${failure.reason}`,
+              eventPayload: {
+                assignmentId,
+                reason: failure.reason,
+                message: failure.message,
+                resultKnown: failure.resultKnown,
+                automaticRetry: false,
+                ...(failure.reason === "ambiguous_delivery"
+                  ? { ambiguityRequiresHumanReview: true }
+                  : {}),
+              },
+            });
+            stepResults[step.id] = {
+              status: terminalState,
+              reason: failure.reason,
+              resultKnown: failure.resultKnown,
+            };
+            stepForcesBlock = true;
+            break;
+          }
+        }
+        if (!runtime) {
+          finalStatus = "blocked";
+          currentStepId = null;
+          continue;
+        }
         assignment.runtimeSessionId = runtime.sessionId;
         stepResults[step.id] = runtime.result;
         const target = nextStepId(step, stepStates);
@@ -837,6 +1005,147 @@ export function approvalPayloadHash(
   stepResults: Record<string, unknown>,
 ) {
   return workflowDefinitionHash(payloadForReference(step.payloadRef, stepResults));
+}
+
+type CoordinatedRun = {
+  fingerprint: string;
+  promise: Promise<WorkflowRunnerResult>;
+};
+
+/**
+ * App-process idempotency boundary for runtime starts. Repeated starts with the
+ * same run payload share one execution; reuse of a run ID with different input
+ * is rejected. Completed entries remain cached for the app lifetime so a late
+ * duplicate UI or realtime delivery cannot dispatch the consequential step
+ * twice.
+ */
+export class WorkflowDispatchCoordinator {
+  private readonly runs = new Map<string, CoordinatedRun>();
+
+  async start(input: WorkflowRunnerInput, port: WorkflowRunnerPort) {
+    const fingerprint = await workflowDefinitionHash(input);
+    const existing = this.runs.get(input.runId);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw new Error(
+          `Workflow run ${input.runId} was started with different input.`,
+        );
+      }
+      return existing.promise;
+    }
+
+    const promise = runWorkflow(input, port);
+    this.runs.set(input.runId, { fingerprint, promise });
+    return promise;
+  }
+}
+
+export type InterruptedWorkflowSnapshot = {
+  runId: string;
+  runVersion: number;
+  currentStepId: string;
+  currentStepState: WorkflowStepState;
+  leaseExpiresAt: string | null;
+  definition: WorkflowDefinitionV1;
+};
+
+export type WorkflowRecoveryResult =
+  | { status: "no_action"; reason: "not_running" | "active_lease" }
+  | { status: "reconcile_required"; reason: "durable_runtime_continues" }
+  | { status: "abandoned"; runVersion: number; fencingToken: number };
+
+/**
+ * Relaunch recovery is intentionally narrow. A local running assignment whose
+ * prior lease expired is marked abandoned with a receipt; it is never resumed
+ * or retried implicitly. Durable runtimes remain available for explicit
+ * reconciliation by their adapter.
+ */
+export async function recoverInterruptedWorkflow(
+  snapshot: InterruptedWorkflowSnapshot,
+  input: { actor: string; now: string },
+  port: Pick<
+    WorkflowRunnerPort,
+    "newId" | "acquireLease" | "transition" | "releaseLease"
+  >,
+): Promise<WorkflowRecoveryResult> {
+  if (snapshot.currentStepState !== "running") {
+    return { status: "no_action", reason: "not_running" };
+  }
+  const step = snapshot.definition.steps.find(
+    (candidate) => candidate.id === snapshot.currentStepId,
+  );
+  if (!step || step.kind !== "role-assign") {
+    return { status: "no_action", reason: "not_running" };
+  }
+  if (step.execution === "durable") {
+    return {
+      status: "reconcile_required",
+      reason: "durable_runtime_continues",
+    };
+  }
+  if (
+    snapshot.leaseExpiresAt &&
+    Date.parse(snapshot.leaseExpiresAt) > Date.parse(input.now)
+  ) {
+    return { status: "no_action", reason: "active_lease" };
+  }
+
+  const dispatcherSession = port.newId();
+  const leaseRequest = {
+    runId: snapshot.runId,
+    expectedRunVersion: snapshot.runVersion,
+    dispatcherSession,
+    idempotencyKey: `run:${snapshot.runId}:recovery:${dispatcherSession}`,
+    actor: input.actor,
+  };
+  const lease = await port.acquireLease({
+    ...leaseRequest,
+    requestHash: await workflowDefinitionHash(leaseRequest),
+  });
+  const transitionWithoutHash = {
+    runId: snapshot.runId,
+    expectedRunVersion: lease.runVersion,
+    expectedStepId: snapshot.currentStepId,
+    expectedStepState: "running" as const,
+    nextStepId: snapshot.currentStepId,
+    nextStepState: "abandoned" as const,
+    nextRunStatus: "Blocked" as const,
+    dispatcherSession,
+    fencingToken: lease.fencingToken,
+    idempotencyKey: `run:${snapshot.runId}:recovery:abandoned:${lease.fencingToken}`,
+    actor: input.actor,
+    eventKind: "runtime_abandoned",
+    eventSummary: `${step.title} abandoned after app process termination`,
+    eventPayload: {
+      reason: "app_process_terminated",
+      resultKnown: false,
+      automaticRetry: false,
+      execution: "ephemeral",
+    },
+  };
+  const transitioned = await port.transition({
+    ...transitionWithoutHash,
+    requestHash: await transitionHash(transitionWithoutHash),
+  });
+  const releaseRequest = {
+    runId: snapshot.runId,
+    dispatcherSession,
+    fencingToken: lease.fencingToken,
+    idempotencyKey: `run:${snapshot.runId}:recovery:release:${lease.fencingToken}`,
+    actor: input.actor,
+  };
+  const released = await port.releaseLease({
+    ...releaseRequest,
+    requestHash: await workflowDefinitionHash(releaseRequest),
+  });
+  if (released.runVersion <= transitioned.runVersion) {
+    throw new Error("Recovery lease release did not advance the run version.");
+  }
+  return {
+    status: "abandoned",
+    runVersion: released.runVersion,
+    fencingToken: lease.fencingToken,
+  };
 }
 
 export function decisionVerificationTarget(

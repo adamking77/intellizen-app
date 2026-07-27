@@ -8,10 +8,11 @@ import { AgentPanel } from "./agent-panel";
 import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, TrafficLights, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider } from "./command-palette";
-import { toastError } from "@/lib/toast";
+import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
+import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
 
 const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
 const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
@@ -40,6 +41,24 @@ export function AppShell() {
   useEffect(() => {
     publishConversationContext(createRouteConversationContext(location));
   }, [location.hash, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    void recoverInterruptedLocalWorkflowsOnLaunch()
+      .then((report) => {
+        if (report.abandoned.length) {
+          toast.info("Interrupted local workflow recovered", {
+            description: `${report.abandoned.length} run${report.abandoned.length === 1 ? "" : "s"} marked abandoned with receipts; none were retried.`,
+          });
+        }
+        if (report.failures.length) {
+          toast.error("Workflow recovery needs attention", {
+            description: `${report.failures.length} run${report.failures.length === 1 ? "" : "s"} could not be reconciled.`,
+          });
+        }
+      })
+      .catch((error) => toastError("Workflow recovery failed", error));
+  }, []);
 
   useEffect(() => {
     const syncDetachedState = () => setAgentPanelDetached(readAgentPanelDetached());
