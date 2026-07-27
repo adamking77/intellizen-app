@@ -1,7 +1,7 @@
 # IntelliZen V2 Gate 4 Review
 
 **Date:** 2026-07-27
-**Status:** Awaiting exact founder approval
+**Status:** Passed
 **Branch:** `v2-integration`
 
 ## Implemented
@@ -88,10 +88,16 @@ definition:
   version 2
 
 status:
-  Needs approval
+  Done
+
+run version:
+  24
 
 approval step:
-  running
+  completed
+
+simulation step:
+  completed
 
 producing assignment:
   7bd876f8-4405-44d3-91d5-72b5dd43e6bc
@@ -106,18 +112,43 @@ verification:
 approval:
   0148018c-a487-4f19-8bf2-9f60d86d84d6
 
+decision:
+  approved by Adam
+
 payload hash:
   6a6e1cf38a22c773c9b7c4ae2d8ae9c3131994483541d7d4ce3fda3238187893
 
 external action:
   false
 
-terminal action if approved:
+terminal action:
   internal simulation only
+
+dispatcher lease:
+  released
 ```
 
-The run is intentionally paused. The payload must not be approved, simulated,
-or closed until Adam explicitly approves that exact hash.
+Adam explicitly approved the exact payload hash. The reviewed no-write preview
+was repeated first, then the confirmation executed the six fenced transitions:
+lease acquisition, exact-payload approval, advance to the artifact step,
+internal simulation start, workflow completion, and lease release.
+
+Independent Supabase readback confirmed:
+
+- the run is `Done` at version 24 and every step is `completed`;
+- the approval object records Adam, the exact approval ID, and the exact payload
+  hash;
+- the producing and verifying assignment IDs are distinct;
+- the persisted verification label is `independent agent verification` with
+  status `passed`;
+- the completion receipt is an internal simulation with
+  `externalAction: false`;
+- the dispatcher lease is absent after the final release;
+- all 25 events are ordered from `workflow_run_started` through the final
+  `dispatcher_lease_released`;
+- no JWT-shaped value, authorization header, assigned credential value, known
+  token prefix, or runtime-adapter test canary appears in the run record or its
+  25 event payloads.
 
 ## Truthful correction
 
@@ -175,13 +206,4 @@ and final blocked state make the ledger truthful without rewriting history.
 - production desktop `/Applications/IntelliZen.app` is excluded from V2
   verification and was not launched.
 
-## Exit work remaining
-
-1. Adam explicitly approves or rejects payload hash
-   `6a6e1cf38a22c773c9b7c4ae2d8ae9c3131994483541d7d4ce3fda3238187893`.
-2. On exact approval only, execute the reviewed no-write preview in
-   `scripts/v2-gate4-resume-approval.mjs`.
-3. Independently read back the approval object, simulation receipt, final
-   `Done` state, released lease, ordered events, and secret-free payloads.
-4. Change this review to `Passed`, rerun the final regression if the committed
-   state changes, and only then begin Gate 5.
+Gate 4 is closed. Gate 5 may begin.
