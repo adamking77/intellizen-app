@@ -1,0 +1,107 @@
+{
+  "schema": "intellizen.workflow/1",
+  "id": "v2-gate4-role-directed-proof",
+  "name": "V2 Gate 4 role-directed proof",
+  "version": 2,
+  "trigger": {
+    "kind": "manual"
+  },
+  "inputs": [
+    {
+      "key": "build_scope",
+      "type": "string"
+    }
+  ],
+  "steps": [
+    {
+      "id": "coordinate",
+      "kind": "role-assign",
+      "title": "Coordinate bounded proof",
+      "role": "operations_director",
+      "resolution": "primary-active-occupant",
+      "instructions": "Coordinate a bounded, draft-only IntelliZen V2 Gate 4 proof. Produce a compact handoff asking the chief engineer for an internal acceptance checklist only. The checklist is descriptive, not an executed test report. Do not send, publish, deploy, contact anyone, or ask for external evidence.",
+      "contextRefs": [
+        "input.build_scope"
+      ],
+      "execution": "durable",
+      "mediatedAuthority": "draft-only",
+      "verification": {
+        "required": false
+      },
+      "timeoutMinutes": 30,
+      "next": "draft"
+    },
+    {
+      "id": "draft",
+      "kind": "role-assign",
+      "title": "Produce bounded draft",
+      "role": "chief_engineer",
+      "resolution": "primary-active-occupant",
+      "instructions": "Using the coordinator handoff, produce the bounded internal acceptance checklist exactly as requested. Clearly label it draft-only and descriptive. Do not claim that checks were executed, do not write application files, and do not perform any external action.",
+      "contextRefs": [
+        "steps.coordinate.result"
+      ],
+      "execution": "ephemeral",
+      "mediatedAuthority": "draft-only",
+      "verification": {
+        "required": true,
+        "method": "verifier-step:verify"
+      },
+      "timeoutMinutes": 30,
+      "next": "draft_completed"
+    },
+    {
+      "id": "draft_completed",
+      "kind": "condition",
+      "title": "Require completed draft",
+      "expr": "steps.draft.state == 'completed'",
+      "then": "verify",
+      "else": "blocked"
+    },
+    {
+      "id": "verify",
+      "kind": "role-assign",
+      "title": "Verify the draft",
+      "role": "verifier",
+      "resolution": "explicit-agent-override",
+      "agentOverride": "keel",
+      "overrideReason": "The locked Gate 1 roster leaves verifier without a standing occupant; Gate 4 pins an active eligible agent and creates a distinct verifier assignment.",
+      "instructions": "Independently cross-check whether the draft faithfully follows the coordinator handoff, is explicitly draft-only, and stays within the no-file-write and no-external-action boundaries. This verification concerns conformance of the draft to the handoff; do not require executed tests or external evidence that the handoff did not request. Return passed only if those criteria are met, otherwise failed or inconclusive. Runtime completion alone is not verification.",
+      "contextRefs": [
+        "steps.coordinate.result",
+        "steps.draft.result"
+      ],
+      "execution": "ephemeral",
+      "mediatedAuthority": "read-only",
+      "verification": {
+        "required": false
+      },
+      "timeoutMinutes": 30,
+      "next": "record_verification"
+    },
+    {
+      "id": "record_verification",
+      "kind": "decision",
+      "title": "Record verification decision",
+      "rationale": "Record the evidence from the distinct verifier assignment without upgrading a self-report or runtime completion.",
+      "next": "approve"
+    },
+    {
+      "id": "approve",
+      "kind": "approval",
+      "title": "Founder approval",
+      "gate": "founder_approval_authority",
+      "payloadRef": "steps.verify.result",
+      "next": "simulate"
+    },
+    {
+      "id": "simulate",
+      "kind": "artifact",
+      "title": "Simulate consequential action",
+      "action": "simulate-consequential-action",
+      "template": "gate4-safe-simulation",
+      "payloadRef": "steps.verify.result",
+      "next": null
+    }
+  ]
+}
