@@ -1,0 +1,62 @@
+{
+  "gate": 7,
+  "status": "awaiting_explicit_approval",
+  "observed_at": "2026-07-27T23:10:00+04:00",
+  "runs": [
+    {
+      "run_id": "783bc6a3-ccea-43d5-a816-6fa2e60e7df6",
+      "run_version": 18,
+      "approval_id": "d2a92251-710a-4f5a-a26c-f34b4e4dacbb",
+      "payload_hash": "4596e457a11bea881c297486d5a904e5f17414b5b67681fdebda17ea96b2a0ef",
+      "payload_status": "passed",
+      "producing_assignment_id": "850b449e-84d8-497f-acff-ab82b0d59a18",
+      "verifying_assignment_id": "bb40d8ee-c1fe-4aa0-a9de-9c21be966f99",
+      "verification_label": "independent agent verification",
+      "external_action": false,
+      "simulated_action_only": true
+    },
+    {
+      "run_id": "43ffa752-ec72-4b24-a585-1f124b48e415",
+      "run_version": 18,
+      "approval_id": "15f75d9e-5129-4665-a8f9-7aee4dea52c7",
+      "payload_hash": "6e21747150e6cc7ec912ed17dfd834358b1d240063ffdcb1bb8df800b967c181",
+      "payload_status": "passed",
+      "producing_assignment_id": "41df30f0-425c-4008-8f0f-fa25c8701df5",
+      "verifying_assignment_id": "85fe7018-a96c-4d95-b7cb-de09ca615630",
+      "verification_label": "independent agent verification",
+      "external_action": false,
+      "simulated_action_only": true
+    },
+    {
+      "run_id": "cc888d72-477a-4431-aac0-d86907ab6e38",
+      "run_version": 18,
+      "approval_id": "46e8e7c4-e0b9-402a-9775-7b87c63080fa",
+      "payload_hash": "f61329de9ecf97146f5fb6fa4ff796a7794229eb67c522fe4ca009f1ce6047b8",
+      "payload_status": "passed",
+      "producing_assignment_id": "1808422b-77fd-4125-83f3-a61ceb1ef908",
+      "verifying_assignment_id": "6a090939-ddfb-43b0-a7a7-488aab00de25",
+      "verification_label": "independent agent verification",
+      "external_action": false,
+      "simulated_action_only": true
+    }
+  ],
+  "dry_run": {
+    "banner": "DRY RUN — NOTHING WRITTEN",
+    "write_performed": false,
+    "expected_run_version": 18,
+    "decision_maker": "Adam",
+    "terminal_action": "simulate-consequential-action",
+    "affected_tables": [
+      "workspace.records",
+      "workspace.work_events"
+    ],
+    "transitions": [
+      "acquire dispatcher lease",
+      "approve exact payload",
+      "advance to simulation",
+      "start safe simulation",
+      "complete workflow",
+      "release dispatcher lease"
+    ]
+  }
+}

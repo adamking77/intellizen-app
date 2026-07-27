@@ -1,0 +1,72 @@
+{
+  "gate": 7,
+  "result": "passed",
+  "observed_at": "2026-07-27T23:11:00+04:00",
+  "real_runtime_timeout": {
+    "adapter": "codex-cli",
+    "version": "codex-cli 0.145.0",
+    "dispatch_boundary": "src-tauri/src/runtimes.rs",
+    "runtime_run_id": "gate5-ffa2dcd0-5435-430a-9fbf-4971f063ca42",
+    "terminal_reason": "timed_out",
+    "terminal_event_observed": true,
+    "result_persisted": false,
+    "orphan_processes": 0,
+    "assignment_modified": false,
+    "production_desktop_launched": false
+  },
+  "database_failures": {
+    "active_lease_and_duplicate_start": {
+      "run_id": "05b45336-413a-4017-b9c4-580b272c4388",
+      "duplicate_returned_original_event": true,
+      "active_takeover_rejected": "Workflow Run already has an active dispatcher lease",
+      "final_run_version": 2
+    },
+    "app_termination_and_stale_fence": {
+      "run_id": "ea1083a0-dedd-415e-8a7f-9133d8ed87d2",
+      "abandoned_transition_version": 7,
+      "final_run_version": 8,
+      "final_status": "Blocked",
+      "final_step_state": "abandoned",
+      "lease_released": true,
+      "stale_transition_rejected": "Stale dispatcher lease"
+    },
+    "approval_payload_invalidation": {
+      "run_id": "89154cc9-014b-46fb-a290-de95386880ae",
+      "approval_id": "7c5984b3-5746-4a68-979a-39ac3832d7a1",
+      "historical_decision": "approved",
+      "invalidated": true,
+      "action_guard_allows": false,
+      "final_run_version": 5
+    },
+    "secret_canary_persisted": false,
+    "external_action": false
+  },
+  "deterministic_matrix": {
+    "app_test_files": [
+      "src/lib/runtime-adapters.test.ts",
+      "src/services/workflow-runner.test.ts"
+    ],
+    "app_tests_passed": 42,
+    "native_process_tree_cancellation": "passed",
+    "covered": [
+      "duplicate runtime start",
+      "duplicate lease delivery",
+      "app termination",
+      "active lease takeover",
+      "stale dispatcher",
+      "malformed runtime output",
+      "auth loss",
+      "timeout",
+      "process-tree cancellation",
+      "prompt injection",
+      "secret canary",
+      "approval payload mutation",
+      "missing role occupant",
+      "verifier identity collision",
+      "parent loss",
+      "orphaned child",
+      "resume unsupported",
+      "ambiguous delivery"
+    ]
+  }
+}
