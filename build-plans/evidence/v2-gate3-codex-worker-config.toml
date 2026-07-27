@@ -5,6 +5,10 @@ args = [
   "--plane",
   "worker",
 ]
+env_vars = [
+  "INTELLIZEN_WORKER_CAPABILITY_URL",
+  "INTELLIZEN_WORKER_CAPABILITY_TOKEN",
+]
 default_tools_approval_mode = "approve"
 enabled_tools = [
   "advance_workflow_step",

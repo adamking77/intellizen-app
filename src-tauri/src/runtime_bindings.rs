@@ -125,9 +125,11 @@ fn canonical_existing_directory(path: &str, label: &str) -> Result<PathBuf, Stri
 }
 
 fn validate_arg_templates(arguments: &[String]) -> Result<(), String> {
-    for argument in arguments {
+    for (index, argument) in arguments.iter().enumerate() {
         let normalized = argument.to_ascii_lowercase();
-        if argument.contains('=')
+        let is_pinned_approval_policy =
+            index > 0 && arguments[index - 1] == "-c" && argument == r#"approval_policy="never""#;
+        if (argument.contains('=') && !is_pinned_approval_policy)
             || normalized.contains("api-key")
             || normalized.contains("access-token")
             || normalized.contains("auth-token")
@@ -336,6 +338,10 @@ args = [
   "--plane",
   "worker",
 ]
+env_vars = [
+  "INTELLIZEN_WORKER_CAPABILITY_URL",
+  "INTELLIZEN_WORKER_CAPABILITY_TOKEN",
+]
 default_tools_approval_mode = "approve"
 enabled_tools = [
   "advance_workflow_step",
@@ -492,6 +498,8 @@ mod tests {
                 "--json".to_string(),
                 "--sandbox".to_string(),
                 "workspace-write".to_string(),
+                "-c".to_string(),
+                r#"approval_policy="never""#.to_string(),
             ],
             working_dir_grants: vec![grant.to_string_lossy().into_owned()],
             provider_permission_mode: "workspace-write".to_string(),
@@ -553,6 +561,12 @@ mod tests {
         assert!(normalize_binding(binding, &root, false)
             .expect_err("credential arg should fail")
             .contains("credential material"));
+
+        let mut binding = fixture(&root);
+        binding.arg_templates.push("TOKEN=value".to_string());
+        assert!(normalize_binding(binding, &root, false)
+            .expect_err("environment assignment should fail")
+            .contains("credential material"));
         fs::remove_dir_all(root).expect("cleanup");
     }
 
@@ -588,6 +602,8 @@ mod tests {
         assert!(config.contains("[mcp_servers.intelizen-worker]"));
         assert!(config.contains("--plane"));
         assert!(config.contains("\"worker\""));
+        assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_URL"));
+        assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_TOKEN"));
         assert!(!config.contains("supabase-genzen"));
         assert!(!config.contains("SERVICE_ROLE"));
         assert!(!config.contains("api_key"));

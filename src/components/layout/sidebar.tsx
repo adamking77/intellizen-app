@@ -228,7 +228,13 @@ export function Sidebar() {
           ><Settings className="h-4 w-4" /></button>
         ) : (
           <>
-            <button type="button" onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings"
+              title="Open settings"
+              className="flex items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"
+            >
               <span
                 aria-hidden
                 className="h-1.5 w-1.5 rounded-full bg-[var(--success)]"
