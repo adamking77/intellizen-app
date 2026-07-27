@@ -1,7 +1,7 @@
 -- IntelliZen V2 Gate 1: organization records and transactional workflow controls.
 --
--- Additive only. This migration is authored for review and must not be applied
--- to production in the session in which it was created.
+-- Additive only. Apply after dry-run review, explicit approval, a production
+-- preflight, and with immediate post-application contract verification.
 
 -- ---------------------------------------------------------------------------
 -- Human-visible organization databases
