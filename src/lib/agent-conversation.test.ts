@@ -8,6 +8,7 @@ import {
   migrateConversationEvent,
   startDirectAssistantText,
   transitionDirectAssistantText,
+  workflowRunActionState,
   type ConversationStreamingEvent,
 } from "./agent-conversation";
 
@@ -98,6 +99,15 @@ describe("durable inbox observations", () => {
 });
 
 describe("local action evidence", () => {
+  it("derives workflow action state from the canonical run status", () => {
+    expect(workflowRunActionState("Queued")).toBe("queued");
+    expect(workflowRunActionState("In progress")).toBe("running");
+    expect(workflowRunActionState("needs_approval")).toBe("needs_approval");
+    expect(workflowRunActionState("Blocked")).toBe("failed");
+    expect(workflowRunActionState("Done")).toBe("completed");
+    expect(workflowRunActionState(undefined)).toBe("queued");
+  });
+
   it("does not infer completion without durable evidence", () => {
     const event = normalizeLocalActionEvent({
       id: "action-1",

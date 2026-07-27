@@ -97,6 +97,17 @@ export type ConversationActionState =
   | "completed"
   | "failed";
 
+export function workflowRunActionState(
+  status: string | null | undefined,
+): ConversationActionState {
+  const normalized = status?.trim().toLowerCase().replace(/\s+/g, "_");
+  if (normalized === "done" || normalized === "completed") return "completed";
+  if (normalized === "needs_approval") return "needs_approval";
+  if (normalized === "blocked" || normalized === "failed") return "failed";
+  if (normalized === "in_progress" || normalized === "running") return "running";
+  return "queued";
+}
+
 export interface ConversationActionEvent extends ConversationEventBase {
   kind: "action";
   actionKind: "tool" | "workflow" | "approval";

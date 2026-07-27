@@ -73,7 +73,11 @@ import {
   dispatchHermesRoleChat,
   streamHermesRoleChat,
 } from "@/services/runtimes/hermes";
-import { normalizeLocalActionEvent, type ConversationActionEvent } from "@/lib/agent-conversation";
+import {
+  normalizeLocalActionEvent,
+  workflowRunActionState,
+  type ConversationActionEvent,
+} from "@/lib/agent-conversation";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import { streamRoleRuntimeChat } from "@/services/runtime-chat";
 import {
@@ -827,9 +831,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         id: `workflow-${result.workflow_run_id}`,
         actionKind: "workflow",
         label: workflow.name,
-        observedState: "completed",
+        observedState: workflowRunActionState(result.status),
         createdAt: occurredAt,
-        summary: result.current_step ?? "Workflow Run created and dispatched.",
+        summary: result.current_step ?? "Workflow Run created.",
         correlation: {
           correlationId: result.workflow_run_id,
           databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns,

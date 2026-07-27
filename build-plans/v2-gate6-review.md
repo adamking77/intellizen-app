@@ -35,6 +35,9 @@ unlocked Mac.
   without fork/join schema semantics;
 - per-run deny-only loopback capability broker for local panel chats that have
   no explicit worker capability grant.
+- Workflow Run action states derived from the returned canonical run status;
+  creating a run no longer displays `Completed` unless the durable status is
+  actually `Done` or `Completed`.
 
 ## Isolation and runtime evidence
 
@@ -120,7 +123,7 @@ Current targeted Gate 6 suite:
 
 ```text
 13 test files passed
-75 tests passed
+76 tests passed
 ```
 
 It covers:
@@ -129,6 +132,7 @@ It covers:
 - worker-isolation acceptance parsing;
 - runtime-binding candidates;
 - ConversationEvent v2;
+- canonical Workflow Run status-to-action-state mapping;
 - per-role selection and storage migration;
 - run-inspector authority and verification labels;
 - save-to-document preview/write separation;
