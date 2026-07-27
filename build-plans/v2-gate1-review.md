@@ -1,7 +1,7 @@
 # IntelliZen V2 Gate 1 Review
 
 **Date:** 2026-07-27  
-**Status:** Migration review — production application not authorized or performed  
+**Status:** Approved for a later production application; not yet performed
 **Build branch:** `v2-integration`  
 **Migration:** `20260727080103_intellizen_v2_gate1_control_contracts.sql`
 
@@ -133,7 +133,9 @@ Advisors must be rerun after the later production application.
 
 ## Application verification contract
 
-Production application is a separate session after Adam approves this exact migration and the overnight minimum has elapsed.
+Adam approved this exact migration on 2026-07-27 at 12:38 +04. Production
+application remains a separate session after the overnight minimum has elapsed,
+no earlier than 2026-07-28.
 
 That session must:
 
@@ -171,9 +173,10 @@ scripts/check-bundle-secrets.sh dist
 
 The smoke build intentionally used the existing local-only access-key override. A value-only scan confirmed that key was present exactly once in the generated bundle, so `dist/` was moved to Trash immediately and is not a release artifact.
 
-## Review decision requested
+## Approval record
 
-Approve or reject the later production application of:
+**Decision:** Approved by Adam on 2026-07-27 at 12:38 +04 for later production
+application of:
 
 ```text
 supabase/migrations/20260727080103_intellizen_v2_gate1_control_contracts.sql
