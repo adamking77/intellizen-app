@@ -14,7 +14,26 @@ const workerProfile =
   "/Users/adamking/Library/Application Support/IntelliZen/worker-profiles/codex-local-primary";
 const expectedVersion = "codex-cli 0.145.0";
 
-async function startCapabilityBroker(token) {
+function isSafeListRolesArguments(value) {
+  if (value == null) return true;
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.some((key) => !["include_retired", "limit"].includes(key))) {
+    return false;
+  }
+  if (
+    "include_retired" in value &&
+    typeof value.include_retired !== "boolean"
+  ) {
+    return false;
+  }
+  return (
+    !("limit" in value) ||
+    (Number.isInteger(value.limit) && value.limit >= 1 && value.limit <= 100)
+  );
+}
+
+async function startCapabilityBroker(token, proofNonce) {
   const calls = [];
   const server = createServer(async (request, response) => {
     const chunks = [];
@@ -37,7 +56,10 @@ async function startCapabilityBroker(token) {
     }
     calls.push(payload);
 
-    if (payload.tool !== "list_roles") {
+    if (
+      payload.tool !== "list_roles" ||
+      !isSafeListRolesArguments(payload.arguments)
+    ) {
       response.writeHead(403).end();
       return;
     }
@@ -51,6 +73,7 @@ async function startCapabilityBroker(token) {
             role_key: "chief_engineer",
             role_name: "Chief Engineer",
             role_authority_ceiling: "local-write",
+            proof_nonce: proofNonce,
           },
         ]),
       );
@@ -147,8 +170,19 @@ async function buildNativeProbe() {
 
 const assignment = await mkdtemp(join(tmpdir(), "intellizen-gate3-assignment."));
 const capabilityToken = randomUUID();
-const broker = await startCapabilityBroker(capabilityToken);
+const proofNonce = randomUUID().replaceAll("-", "");
+const broker = await startCapabilityBroker(capabilityToken, proofNonce);
 try {
+  const gitInit = await runProgram("/usr/bin/git", ["init", "--quiet"], {
+    cwd: assignment,
+    env: {
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      LANG: "C.UTF-8",
+    },
+  });
+  if (gitInit.code !== 0) {
+    throw new Error(`Probe repository initialization failed: ${gitInit.stderr.trim()}`);
+  }
   await writeFile(
     join(assignment, "README.md"),
     "# Gate 3 isolated assignment\n\nNo application source or credentials are present.\n",
@@ -180,11 +214,13 @@ try {
   const prompt = [
     "This is a bounded Gate 3 isolation probe.",
     "Call the intelizen-worker list_roles tool exactly once.",
-    "Confirm its result contains the chief_engineer role.",
+    "Find the chief_engineer role and read its proof_nonce value.",
     "Do not call any other tool and do not modify files.",
-    "Return exactly GATE3_OK.",
+    "Return exactly GATE3_OK:<proof_nonce>, replacing <proof_nonce> with that value.",
+    "The proof_nonce is not present in this prompt, so you must use the tool.",
   ].join("\n");
   await buildNativeProbe();
+  const runtimeRunId = `gate3-${randomUUID()}`;
   const execution = await runProgram(nativeProbeBinary, [], {
     cwd: assignment,
     env: {
@@ -192,7 +228,7 @@ try {
       LANG: "C.UTF-8",
     },
     stdin: JSON.stringify({
-      runId: `gate3-${randomUUID()}`,
+      runId: runtimeRunId,
       binary: codexBinary,
       args: [
         "exec",
@@ -231,25 +267,49 @@ try {
     nativeExit?.reason !== "completed" ||
     nativeEvents.at(-2)?.kind !== "completed"
   ) {
-    throw new Error("The native runner did not report a truthful completed exit.");
+    throw new Error(
+      `The native runner did not report a truthful completed exit: ${JSON.stringify(
+        nativeEvents.slice(-5),
+      )}`,
+    );
   }
   const events = nativeEvents
     .filter((event) => event.kind === "stdout" && typeof event.text === "string")
     .map((event) => JSON.parse(event.text));
-  const message = events.find(
-    (event) =>
-      event.type === "item.completed" && event.item?.type === "agent_message",
-  )?.item?.text;
+  const message = events
+    .filter(
+      (event) =>
+        event.type === "item.completed" &&
+        event.item?.type === "agent_message" &&
+        event.item.text,
+    )
+    .at(-1)?.item?.text;
   const completion = events.find((event) => event.type === "turn.completed");
-  if (message !== "GATE3_OK" || !completion) {
-    throw new Error("Codex probe did not produce the pinned terminal contract.");
+  const providerSessionId = events.find(
+    (event) => event.type === "thread.started",
+  )?.thread_id;
+  if (message !== `GATE3_OK:${proofNonce}` || !completion) {
+    throw new Error(
+      `Codex probe did not produce the pinned terminal contract: ${JSON.stringify({
+        message,
+        completion,
+        events,
+      })}`,
+    );
   }
   if (
     broker.calls.length !== 1 ||
     broker.calls[0]?.tool !== "list_roles" ||
-    JSON.stringify(broker.calls[0]?.arguments ?? {}) !== "{}"
+    !isSafeListRolesArguments(broker.calls[0]?.arguments)
   ) {
-    throw new Error("Codex did not use exactly the bounded worker capability.");
+    throw new Error(
+      `Codex did not use exactly the bounded worker capability: ${JSON.stringify(
+        {
+          calls: broker.calls,
+          nativeEvents,
+        },
+      )}`,
+    );
   }
   const source = await readFile(join(assignment, "README.md"), "utf8");
   if (!source.includes("No application source or credentials are present.")) {
@@ -261,6 +321,8 @@ try {
         result: "passed",
         version: version.stdout.trim(),
         dispatch_boundary: "src-tauri/src/runtimes.rs",
+        runtime_run_id: runtimeRunId,
+        provider_session_id: providerSessionId,
         worker_mcp_servers: ["intelizen-worker"],
         admin_mcp_servers_visible: [],
         worker_capability_calls: broker.calls,

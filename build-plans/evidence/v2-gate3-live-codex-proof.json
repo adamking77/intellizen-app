@@ -1,0 +1,29 @@
+{
+  "result": "passed",
+  "version": "codex-cli 0.145.0",
+  "dispatch_boundary": "src-tauri/src/runtimes.rs",
+  "runtime_run_id": "gate3-5ecc4574-5bed-47c0-9cc8-4aa662743d06",
+  "provider_session_id": "019fa2ff-cb5e-7d51-9b4e-16460522b678",
+  "worker_mcp_servers": [
+    "intelizen-worker"
+  ],
+  "admin_mcp_servers_visible": [],
+  "worker_capability_calls": [
+    {
+      "tool": "list_roles",
+      "arguments": {
+        "include_retired": false,
+        "limit": 50
+      }
+    }
+  ],
+  "assignment_modified": false,
+  "terminal_message": "GATE3_OK:bcb22e9946894a42a2b36aa627804286",
+  "measured_usage": {
+    "input_tokens": 48169,
+    "cached_input_tokens": 16128,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 178,
+    "reasoning_output_tokens": 98
+  }
+}
