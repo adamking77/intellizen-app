@@ -246,7 +246,6 @@ describe("Claude 2.1.220 adapter contract", () => {
 
   it("builds the strict worker-only stdin invocation", () => {
     expect(claudeExecArgs("/tmp/worker.json")).toEqual([
-      "--safe-mode",
       "--mcp-config",
       "/tmp/worker.json",
       "--strict-mcp-config",
@@ -263,6 +262,7 @@ describe("Claude 2.1.220 adapter contract", () => {
       "stream-json",
       "-p",
     ]);
+    expect(claudeExecArgs("/tmp/worker.json")).not.toContain("--safe-mode");
   });
 
   it("normalizes deltas without duplicating the assembled assistant message", () => {

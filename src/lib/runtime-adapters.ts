@@ -418,7 +418,6 @@ export function claudeMcpToolName(tool: string) {
 export function claudeExecArgs(mcpConfigPath: string) {
   const tools = CLAUDE_WORKER_TOOLS.map(claudeMcpToolName).join(",");
   return [
-    "--safe-mode",
     "--mcp-config",
     mcpConfigPath,
     "--strict-mcp-config",

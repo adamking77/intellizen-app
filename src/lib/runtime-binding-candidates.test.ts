@@ -33,6 +33,7 @@ describe("runtime binding candidates", () => {
     expect(candidate.bindingId).toBe("claude-local-primary");
     expect(candidate.argTemplates).toContain("--strict-mcp-config");
     expect(candidate.argTemplates).toContain("--no-session-persistence");
+    expect(candidate.argTemplates).not.toContain("--safe-mode");
     expect(candidate.argTemplates).toContain("/tmp/claude-cli/mcp-worker.json");
     expect(candidate.capabilityEvidence.passed).not.toContain("resume");
     expect(candidate.secretRefs).toEqual([]);

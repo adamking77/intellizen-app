@@ -48,6 +48,9 @@ test("worker plane rejects admin credentials but permits isolated profile homes"
       PATH: "/usr/bin",
       CODEX_HOME: "/tmp/worker/codex",
       CLAUDE_CONFIG_DIR: "/tmp/worker/claude",
+      CLAUDE_CODE_ENTRYPOINT: "sdk-cli",
+      CLAUDE_CODE_SESSION_ID: "00000000-0000-4000-8000-000000000000",
+      CLAUDE_PROJECT_DIR: "/tmp/assignment",
       INTELLIZEN_WORKER_CAPABILITY_TOKEN: "x".repeat(32),
     }),
   );
@@ -58,6 +61,10 @@ test("worker plane rejects admin credentials but permits isolated profile homes"
   assert.throws(
     () => assertWorkerPlaneEnvironment({ VITE_INTELLIZEN_LOCAL_ACCESS_KEY: "not-printed" }),
     /VITE_INTELLIZEN_LOCAL_ACCESS_KEY/,
+  );
+  assert.throws(
+    () => assertWorkerPlaneEnvironment({ CLAUDE_UNREVIEWED_CREDENTIAL: "not-printed" }),
+    /CLAUDE_UNREVIEWED_CREDENTIAL/,
   );
 });
 

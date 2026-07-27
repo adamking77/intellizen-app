@@ -66,8 +66,14 @@ export const WORKER_TOOL_NAMES = new Set([
 ]);
 
 const WORKER_ENV_EXEMPTIONS = new Set([
-  "CODEX_HOME",
+  // Claude 2.1.220 injects these non-credential process descriptors into an
+  // explicitly configured MCP subprocess after IntelliZen sanitizes the
+  // parent environment.
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_SESSION_ID",
   "CLAUDE_CONFIG_DIR",
+  "CLAUDE_PROJECT_DIR",
+  "CODEX_HOME",
   "INTELLIZEN_WORKER_CAPABILITY_URL",
   "INTELLIZEN_WORKER_CAPABILITY_TOKEN",
 ]);
@@ -188,4 +194,3 @@ export function buildRosterChangeProposalPreview(input: {
     },
   );
 }
-

@@ -173,6 +173,7 @@ function mcpServerNames(value) {
 const assignment = await mkdtemp(
   join(tmpdir(), "intellizen-gate6-claude-assignment."),
 );
+const claudeDebugLog = join(assignment, "claude-debug.log");
 const capabilityToken = randomUUID();
 const proofNonce = randomUUID().replaceAll("-", "");
 const broker = await startCapabilityBroker(capabilityToken, proofNonce);
@@ -236,7 +237,6 @@ try {
       runId: runtimeRunId,
       binary: claudeBinary,
       args: [
-        "--safe-mode",
         "--mcp-config",
         workerMcpConfig,
         "--strict-mcp-config",
@@ -247,6 +247,8 @@ try {
         "--permission-mode",
         "dontAsk",
         "--no-session-persistence",
+        "--debug-file",
+        claudeDebugLog,
         "--verbose",
         "--include-partial-messages",
         "--output-format",
@@ -296,11 +298,25 @@ try {
     JSON.stringify(actualTools) !== JSON.stringify([...providerTools].sort()) ||
     init?.permissionMode !== "dontAsk"
   ) {
+    let mcpDiagnostic = [];
+    try {
+      mcpDiagnostic = (await readFile(claudeDebugLog, "utf8"))
+        .split("\n")
+        .filter((line) =>
+          /Worker-plane environment rejected|intelizen-worker.*(?:failed|error)|MCP server.*(?:failed|error)/i.test(
+            line,
+          ),
+        )
+        .slice(-8);
+    } catch {
+      // The system/init payload below remains the authoritative failure.
+    }
     throw new Error(
       `Claude system/init isolation failed: ${JSON.stringify({
-        mcp_servers: actualServers,
+        mcp_servers: init?.mcp_servers ?? actualServers,
         tools: actualTools,
         permissionMode: init?.permissionMode,
+        diagnostic: mcpDiagnostic,
       })}`,
     );
   }
