@@ -585,13 +585,14 @@ mod tests {
     async fn cancellation_marks_truthful_terminal_state() {
         let root = test_root("cancel");
         let (events, sink) = event_sink();
-        let input = shell_input("cancel-test", &root, "sleep 30", 5_000);
+        let input = mock_input("cancel-test", &root, "hang-with-child", 5_000);
         let run = tokio::spawn(run_process(input, sink));
         for _ in 0..100 {
             if process_registry()
                 .lock()
                 .expect("registry")
                 .contains_key("cancel-test")
+                && root.join("child.pid").is_file()
             {
                 break;
             }
@@ -600,6 +601,13 @@ mod tests {
         assert!(runtime_cancel("cancel-test".to_string()).expect("cancel"));
         let exit = run.await.expect("join").expect("runtime exit");
         assert_eq!(exit.reason, "cancelled");
+        let child_pid: i32 = fs::read_to_string(root.join("child.pid"))
+            .expect("child pid")
+            .trim()
+            .parse()
+            .expect("numeric child pid");
+        let alive = unsafe { libc::kill(child_pid, 0) } == 0;
+        assert!(!alive, "cancelled child process survived");
         assert!(events
             .lock()
             .expect("events")
