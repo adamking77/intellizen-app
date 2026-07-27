@@ -5,6 +5,7 @@ import {
   normalizeConversationError,
   normalizeLocalActionEvent,
   normalizeQueuedFallback,
+  migrateConversationEvent,
   startDirectAssistantText,
   transitionDirectAssistantText,
   type ConversationStreamingEvent,
@@ -29,12 +30,14 @@ describe("direct assistant text lifecycle", () => {
 
     const ended = transitionDirectAssistantText(first, { type: "end", observedAt: T2 });
     expect(ended).toMatchObject({
-      version: 1,
+      version: 2,
       kind: "assistant_text",
       text: "Action completed successfully.",
       completedAt: T2,
       source: "hermes-stream",
       correlationId: "turn-1",
+      actorRoleKey: "operations_director",
+      actorAgentKey: "fiona",
     });
   });
 
@@ -180,12 +183,47 @@ describe("errors", () => {
     });
 
     expect(event).toMatchObject({
-      version: 1,
+      version: 2,
       kind: "error",
       message: "Stream disconnected",
       recoverable: true,
       source: "local-ui",
       correlationId: "turn-9",
+    });
+  });
+
+  it("migrates a v1 event with an explicit role/runtime fallback", () => {
+    const migrated = migrateConversationEvent(
+      {
+        id: "legacy-1",
+        version: 1,
+        kind: "assistant_text",
+        text: "Legacy reply",
+        createdAt: T0,
+        completedAt: T1,
+        source: "hermes-stream",
+      },
+      {
+        actorRoleKey: "chief_engineer",
+        actorAgentKey: "keel",
+        runtime: {
+          adapterId: "codex-cli",
+          bindingRef: "codex-local-primary",
+          model: "gpt-5.3-codex",
+          execution: "ephemeral",
+        },
+      },
+    );
+
+    expect(migrated).toMatchObject({
+      version: 2,
+      actorRoleKey: "chief_engineer",
+      actorAgentKey: "keel",
+      runtime: {
+        adapterId: "codex-cli",
+        bindingRef: "codex-local-primary",
+        execution: "ephemeral",
+      },
     });
   });
 });

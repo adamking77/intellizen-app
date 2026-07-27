@@ -6,7 +6,7 @@
  * requires explicit durable evidence.
  */
 
-export const AGENT_CONVERSATION_VERSION = 1 as const;
+export const AGENT_CONVERSATION_VERSION = 2 as const;
 
 export type ConversationEventSource =
   | "local-ui"
@@ -33,6 +33,37 @@ interface ConversationEventBase {
   createdAt: string;
   source: ConversationEventSource;
   correlationId?: string;
+  actorRoleKey: string;
+  actorAgentKey: string;
+  runtime: ConversationRuntimeIdentity;
+}
+
+export interface ConversationRuntimeIdentity {
+  adapterId: "mock" | "hermes" | "codex-cli" | "claude-cli" | "gemini-cli";
+  bindingRef: string;
+  model: string | null;
+  execution: "ephemeral" | "durable";
+}
+
+export interface ConversationActorIdentity {
+  actorRoleKey: string;
+  actorAgentKey: string;
+  runtime: ConversationRuntimeIdentity;
+}
+
+export const FIONA_CONVERSATION_ACTOR: ConversationActorIdentity = {
+  actorRoleKey: "operations_director",
+  actorAgentKey: "fiona",
+  runtime: {
+    adapterId: "hermes",
+    bindingRef: "hermes-fiona",
+    model: null,
+    execution: "durable",
+  },
+};
+
+function eventActor(actor?: ConversationActorIdentity) {
+  return actor ?? FIONA_CONVERSATION_ACTOR;
 }
 
 export interface ConversationUserMessageEvent extends ConversationEventBase {
@@ -113,6 +144,7 @@ export function startDirectAssistantText(input: {
   id: string;
   createdAt: string;
   correlationId?: string;
+  actor?: ConversationActorIdentity;
 }): ConversationStreamingEvent {
   return {
     id: input.id,
@@ -123,6 +155,7 @@ export function startDirectAssistantText(input: {
     updatedAt: input.createdAt,
     source: "hermes-stream",
     correlationId: input.correlationId,
+    ...eventActor(input.actor),
   };
 }
 
@@ -149,6 +182,9 @@ export function transitionDirectAssistantText(
       cancelledAt: observation.observedAt,
       source: current.source,
       correlationId: current.correlationId,
+      actorRoleKey: current.actorRoleKey,
+      actorAgentKey: current.actorAgentKey,
+      runtime: current.runtime,
     };
   }
 
@@ -161,6 +197,9 @@ export function transitionDirectAssistantText(
     completedAt: observation.observedAt,
     source: current.source,
     correlationId: current.correlationId,
+    actorRoleKey: current.actorRoleKey,
+    actorAgentKey: current.actorAgentKey,
+    runtime: current.runtime,
   };
 }
 
@@ -171,6 +210,7 @@ export function normalizeCompletedInboxReply(input: {
   text: string;
   createdAt: string;
   completedAt: string;
+  actor?: ConversationActorIdentity;
 }): ConversationAssistantTextEvent {
   return {
     id: input.id,
@@ -181,6 +221,7 @@ export function normalizeCompletedInboxReply(input: {
     completedAt: input.completedAt,
     source: "fiona-inbox",
     correlationId: input.inboxItemId,
+    ...eventActor(input.actor),
   };
 }
 
@@ -192,6 +233,7 @@ export function normalizeQueuedFallback(input: {
   actionKind: ConversationActionEvent["actionKind"];
   label: string;
   dispatchError?: string | null;
+  actor?: ConversationActorIdentity;
 }): ConversationActionEvent {
   return {
     id: input.id,
@@ -206,6 +248,7 @@ export function normalizeQueuedFallback(input: {
     createdAt: input.createdAt,
     source: "fiona-inbox",
     correlationId: input.inboxItemId,
+    ...eventActor(input.actor),
   };
 }
 
@@ -222,6 +265,7 @@ export function normalizeLocalActionEvent(input: {
   summary: string;
   correlation?: ConversationCorrelation;
   evidence?: ConversationEvidence;
+  actor?: ConversationActorIdentity;
 }): ConversationActionEvent {
   const state = input.observedState === "completed" && !input.evidence
     ? "running"
@@ -246,6 +290,7 @@ export function normalizeLocalActionEvent(input: {
     createdAt: input.createdAt,
     source: "local-ui",
     correlationId: input.correlation?.correlationId,
+    ...eventActor(input.actor),
   };
 }
 
@@ -256,6 +301,7 @@ export function normalizeConversationError(input: {
   source?: ConversationEventSource;
   correlationId?: string;
   recoverable?: boolean;
+  actor?: ConversationActorIdentity;
 }): ConversationErrorEvent {
   return {
     id: input.id,
@@ -266,5 +312,33 @@ export function normalizeConversationError(input: {
     createdAt: input.observedAt,
     source: input.source ?? "local-ui",
     correlationId: input.correlationId,
+    ...eventActor(input.actor),
   };
+}
+
+type WithoutV2Identity<T> = T extends AgentConversationEvent
+  ? Omit<T, "version" | "actorRoleKey" | "actorAgentKey" | "runtime"> & {
+      version: 1;
+    }
+  : never;
+
+type LegacyConversationEventV1 = WithoutV2Identity<AgentConversationEvent>;
+
+export function migrateConversationEvent(
+  event: AgentConversationEvent | LegacyConversationEventV1,
+  fallbackActor: ConversationActorIdentity = FIONA_CONVERSATION_ACTOR,
+): AgentConversationEvent {
+  if (
+    event.version === AGENT_CONVERSATION_VERSION &&
+    "actorRoleKey" in event &&
+    "actorAgentKey" in event &&
+    "runtime" in event
+  ) {
+    return event;
+  }
+  return {
+    ...event,
+    version: AGENT_CONVERSATION_VERSION,
+    ...fallbackActor,
+  } as AgentConversationEvent;
 }

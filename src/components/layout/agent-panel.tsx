@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { emit } from "@tauri-apps/api/event";
-import { ArrowDown, Copy, Headphones, LoaderCircle, Mic, MicOff, PanelRightClose, PanelRightOpen, Paperclip, Pencil, PictureInPicture2, Play, Plus, RefreshCw, RotateCcw, Search, Send, Square, Volume2, X } from "lucide-react";
+import { ArrowDown, Copy, FileText, Headphones, LoaderCircle, Mic, MicOff, PanelRightClose, PanelRightOpen, Paperclip, Pencil, PictureInPicture2, Play, Plus, RefreshCw, RotateCcw, Search, Send, Square, Volume2, X } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { AgentActionEvent } from "@/components/agent/agent-action-event";
+import { AgentPanelComposer } from "@/components/agent/agent-panel-composer";
+import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
+import { AgentPanelThread } from "@/components/agent/agent-panel-thread";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { AppDialog } from "@/components/ui/app-dialog";
+import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
   extractGenuiBlocks,
@@ -22,6 +27,15 @@ import {
   filterAgentPanelChatReceipts,
   latestAgentPanelReplyAt,
 } from "@/lib/agent-panel-chat";
+import {
+  migrateFionaPanelStorage,
+  OPERATIONS_DIRECTOR_ROLE,
+  PANEL_ROLE_CHANNEL,
+  PANEL_SELECTED_ROLE_KEY,
+  PANEL_START_ROLE_KEY,
+  panelRoleStorageKey,
+  resolveInitialPanelRole,
+} from "@/lib/agent-panel-roles";
 import {
   formatChatTextAttachment,
   MAX_CHAT_TEXT_FILE_BYTES,
@@ -44,7 +58,6 @@ import {
 import type { FionaInboxItem } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
-import { PaneResizeEdges } from "@/components/layout/window-chrome";
 import { useWindowSize } from "@/lib/use-window-size";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -55,8 +68,19 @@ import {
   subscribeConversationContext,
   type ConversationContextSnapshot,
 } from "@/lib/conversation-context";
-import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles, sendToAgentChat, streamHermesChat } from "@/services/agent";
+import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles } from "@/services/agent";
+import {
+  dispatchHermesRoleChat,
+  streamHermesRoleChat,
+} from "@/services/runtimes/hermes";
 import { normalizeLocalActionEvent, type ConversationActionEvent } from "@/lib/agent-conversation";
+import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
+import { streamRoleRuntimeChat } from "@/services/runtime-chat";
+import {
+  previewAgentMessageDocument,
+  saveAgentMessageDocument,
+  type AgentMessageDocumentPreview,
+} from "@/services/agent-message-document";
 // Operational evidence may appear inline; canonical monitoring and decisions stay in Databases.
 import {
   getPreferredVoiceInputProvider,
@@ -70,12 +94,8 @@ import {
 import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice";
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
-const CHAT_HISTORY_KEY = "intelizen:agent-panel-chat-history";
-const CHAT_DRAFT_KEY = "intelizen:agent-panel-chat-draft";
 const HERMES_SESSION_KEY = "intelizen:hermes-session-id";
 const SPEAK_REPLIES_KEY = "intelizen:agent-panel-speak-replies";
-const CHAT_CLEARED_KEY = "intelizen:chat-cleared-at";
-const CHAT_LAST_READ_KEY = "intelizen:agent-panel-last-read-at";
 const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 560;
@@ -168,10 +188,26 @@ function readCollapsed(): boolean | null {
   return null; // no explicit choice — follow the cramped auto-collapse
 }
 
-function readChatHistory() {
-  if (typeof window === "undefined") return [];
+function readInitialRoleKey() {
+  if (typeof window === "undefined") return null;
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_KEY) ?? "[]");
+    migrateFionaPanelStorage(window.localStorage);
+    return (
+      window.localStorage.getItem(PANEL_SELECTED_ROLE_KEY) ??
+      window.localStorage.getItem(PANEL_START_ROLE_KEY)
+    );
+  } catch {
+    return null;
+  }
+}
+
+function readChatHistory(roleKey: string | null) {
+  if (typeof window === "undefined") return [];
+  if (!roleKey) return [];
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(panelRoleStorageKey(roleKey, "history")) ?? "[]",
+    );
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((entry): entry is AgentChatEntry =>
@@ -283,23 +319,43 @@ interface AgentPanelProps {
 
 export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const entityFilter = useAppStore((state) => state.entityFilter);
+  const [selectedRoleKey, setSelectedRoleKey] = useState<string | null>(
+    readInitialRoleKey,
+  );
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isCreatingVoiceTask, setIsCreatingVoiceTask] = useState(false);
   const [liveVoice, dispatchLiveVoice] = useReducer(liveVoiceReducer, INITIAL_LIVE_VOICE_STATE);
-  const [chatDraft, setChatDraft] = useState(() => readStoredValue(CHAT_DRAFT_KEY));
+  const [chatDraft, setChatDraft] = useState(() =>
+    selectedRoleKey
+      ? readStoredValue(panelRoleStorageKey(selectedRoleKey, "draft"))
+      : "",
+  );
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [historySearchOpen, setHistorySearchOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
-  const [lastReadAt, setLastReadAt] = useState(() => readStoredValue(CHAT_LAST_READ_KEY, new Date().toISOString()));
+  const [lastReadAt, setLastReadAt] = useState(() =>
+    selectedRoleKey
+      ? readStoredValue(
+          panelRoleStorageKey(selectedRoleKey, "last-read"),
+          new Date().toISOString(),
+        )
+      : new Date().toISOString(),
+  );
   const [speakReplies, setSpeakReplies] = useState(() => {
     try { return window.localStorage.getItem(SPEAK_REPLIES_KEY) === "1"; } catch { return false; }
   });
   const [clearedAt, setClearedAt] = useState<string | null>(() => {
-    try { return window.localStorage.getItem(CHAT_CLEARED_KEY); } catch { return null; }
+    try {
+      return selectedRoleKey
+        ? window.localStorage.getItem(
+            panelRoleStorageKey(selectedRoleKey, "cleared"),
+          )
+        : null;
+    } catch { return null; }
   });
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -311,7 +367,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const pendingSteerRef = useRef<string | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [confirmNewSessionOpen, setConfirmNewSessionOpen] = useState(false);
-  const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() => readChatHistory());
+  const [documentPreview, setDocumentPreview] =
+    useState<AgentMessageDocumentPreview | null>(null);
+  const [isSavingDocument, setIsSavingDocument] = useState(false);
+  const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() =>
+    readChatHistory(selectedRoleKey),
+  );
   const [inlineActions, setInlineActions] = useState<ConversationActionEvent[]>([]);
   const [conversationContext, setConversationContext] = useState<ConversationContextSnapshot | null>(() => readConversationContext());
   const dictationRef = useRef<BrowserDictationSession | null>(null);
@@ -340,12 +401,104 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const draftStorageErrorShownRef = useRef(false);
   const historyStorageErrorShownRef = useRef(false);
   const followLatestRef = useRef(true);
+  const roleChannelRef = useRef<BroadcastChannel | null>(null);
   const [showReturnToLatest, setShowReturnToLatest] = useState(false);
   const { isCramped } = useWindowSize();
   const standalone = mode === "standalone";
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
   const expanded = standalone || !collapsed;
+
+  const rolesQuery = useQuery({
+    queryKey: ["agent-panel", "role-targets"],
+    queryFn: listAgentPanelRoleTargets,
+    staleTime: 30_000,
+    refetchInterval: expanded ? 60_000 : false,
+    enabled: expanded,
+  });
+  const roleTargets = rolesQuery.data ?? [];
+  const selectedRole =
+    roleTargets.find((role) => role.roleKey === selectedRoleKey) ?? null;
+  const targetAgent = selectedRole?.agentKey ?? "";
+  const fionaSelected =
+    selectedRole?.roleKey === OPERATIONS_DIRECTOR_ROLE &&
+    selectedRole.agentKey === "fiona" &&
+    selectedRole.adapterId === "hermes";
+
+  const applyRoleSelection = useCallback(
+    (roleKey: string | null, broadcast = true) => {
+      abortRef.current?.abort();
+      pendingSteerRef.current = null;
+      setSelectedRoleKey(roleKey);
+      setChatEntries(readChatHistory(roleKey));
+      setChatDraft(
+        roleKey
+          ? readStoredValue(panelRoleStorageKey(roleKey, "draft"))
+          : "",
+      );
+      setLastReadAt(
+        roleKey
+          ? readStoredValue(
+              panelRoleStorageKey(roleKey, "last-read"),
+              new Date().toISOString(),
+            )
+          : new Date().toISOString(),
+      );
+      setClearedAt(
+        roleKey
+          ? readStoredValue(panelRoleStorageKey(roleKey, "cleared"), "") || null
+          : null,
+      );
+      setInlineActions([]);
+      setStreamingReply(null);
+      setIsSendingChat(false);
+      setHistorySearchOpen(false);
+      setHistorySearch("");
+      try {
+        if (roleKey) {
+          window.localStorage.setItem(PANEL_SELECTED_ROLE_KEY, roleKey);
+        } else {
+          window.localStorage.removeItem(PANEL_SELECTED_ROLE_KEY);
+        }
+      } catch {
+        /* mounted state remains authoritative */
+      }
+      if (broadcast) {
+        roleChannelRef.current?.postMessage({ roleKey });
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!rolesQuery.isSuccess) return;
+    const resolved = resolveInitialPanelRole({
+      availableRoleKeys: roleTargets.map((role) => role.roleKey),
+      selectedRole: selectedRoleKey,
+      startRole: readStoredValue(PANEL_START_ROLE_KEY) || null,
+    });
+    if (resolved !== selectedRoleKey) applyRoleSelection(resolved);
+  }, [
+    applyRoleSelection,
+    roleTargets,
+    rolesQuery.isSuccess,
+    selectedRoleKey,
+  ]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
+    roleChannelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<{ roleKey?: unknown }>) => {
+      const roleKey =
+        typeof event.data?.roleKey === "string" ? event.data.roleKey : null;
+      applyRoleSelection(roleKey, false);
+    };
+    return () => {
+      roleChannelRef.current = null;
+      channel.close();
+    };
+  }, [applyRoleSelection]);
 
   const workflowsQuery = useQuery({
     queryKey: ["workflows", "agent-panel", "active", entityFilter],
@@ -369,7 +522,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     queryFn: checkHermesApi,
     refetchInterval: expanded ? 60_000 : false,
     staleTime: 30_000,
-    enabled: expanded,
+    enabled: expanded && fionaSelected,
   });
   const profilesQuery = useQuery({
     queryKey: ["hermes-profiles"],
@@ -379,7 +532,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     refetchOnWindowFocus: "always",
     networkMode: "always",
     retry: 1,
-    enabled: expanded,
+    enabled: expanded && fionaSelected,
   });
   const agentChatQuery = useQuery({
     queryKey: ["agent-panel", "chat-receipts"],
@@ -388,7 +541,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     // a message is awaiting its reply.
     refetchInterval: 60_000,
     staleTime: 5_000,
-    enabled: true,
+    enabled: fionaSelected,
   });
   const { isStartingWorkflow, start: startWorkflowFromPanel } = useStartWorkflow({
     onStarted: () => refresh(),
@@ -414,8 +567,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }, [notifyWorkspaceMayHaveChanged, queryClient]);
 
   const workflows = workflowsQuery.data ?? [];
-  const isFetching = workflowsQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching;
-  const error = workflowsQuery.error ?? agentChatQuery.error;
+  const isFetching = workflowsQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching || rolesQuery.isFetching;
+  const error = rolesQuery.error ?? workflowsQuery.error ?? agentChatQuery.error;
   const voiceProviders = getVoiceProviderStatus();
   const voiceInputProvider = getPreferredVoiceInputProvider();
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
@@ -444,7 +597,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   // gateway-scoped, so use direct streaming only when that gateway is truly
   // serving Fiona; otherwise route durably through her inbox instead of
   // presenting another profile as Fiona.
-  const targetAgent = "fiona";
   const fionaDirectLive = hermesApiLive && canonicalAgentName(liveHermesProfile?.name ?? "") === targetAgent;
   const targetProfile = fionaDirectLive ? liveHermesProfile : null;
   const liveVoiceUnavailableReason = !fionaDirectLive
@@ -457,10 +609,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const liveVoiceAvailable = liveVoiceUnavailableReason === null;
   const allRoutedChatEntries = useMemo(
     () =>
-      (agentChatQuery.data ?? [])
+      (fionaSelected ? agentChatQuery.data ?? [] : [])
         .filter(isChatInboxItem)
         .map(inboxItemToChatEntry),
-    [agentChatQuery.data],
+    [agentChatQuery.data, fionaSelected],
   );
   const routedChatEntries = useMemo(() => {
     const currentEntries = allRoutedChatEntries.filter((entry) => !clearedAt || entry.createdAt > clearedAt);
@@ -482,14 +634,17 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     [completedReplies, lastReadAt],
   );
   const markRepliesRead = useCallback(() => {
-    if (!latestReplyAt || latestReplyAt <= lastReadAt) return;
+    if (!selectedRoleKey || !latestReplyAt || latestReplyAt <= lastReadAt) return;
     setLastReadAt(latestReplyAt);
     try {
-      window.localStorage.setItem(CHAT_LAST_READ_KEY, latestReplyAt);
+      window.localStorage.setItem(
+        panelRoleStorageKey(selectedRoleKey, "last-read"),
+        latestReplyAt,
+      );
     } catch {
       /* unread state remains correct for this mounted panel */
     }
-  }, [lastReadAt, latestReplyAt]);
+  }, [lastReadAt, latestReplyAt, selectedRoleKey]);
   const visibleLocalChatEntries = useMemo(() => {
     if (!historySearchOpen) return chatEntries;
     return filterAgentPanelChatReceipts(chatEntries, historySearch);
@@ -567,8 +722,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   useEffect(() => subscribeConversationContext(setConversationContext), []);
 
   useEffect(() => {
+    if (!selectedRoleKey) return;
     try {
-      window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatEntries.slice(0, LOCAL_CHAT_HISTORY_LIMIT)));
+      window.localStorage.setItem(
+        panelRoleStorageKey(selectedRoleKey, "history"),
+        JSON.stringify(chatEntries.slice(0, LOCAL_CHAT_HISTORY_LIMIT)),
+      );
       historyStorageErrorShownRef.current = false;
     } catch (historyError) {
       if (!historyStorageErrorShownRef.current) {
@@ -576,11 +735,15 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         toastError("Local chat history could not be saved", historyError);
       }
     }
-  }, [chatEntries]);
+  }, [chatEntries, selectedRoleKey]);
 
   useEffect(() => {
+    if (!selectedRoleKey) return;
     try {
-      window.localStorage.setItem(CHAT_DRAFT_KEY, chatDraft);
+      window.localStorage.setItem(
+        panelRoleStorageKey(selectedRoleKey, "draft"),
+        chatDraft,
+      );
       draftStorageErrorShownRef.current = false;
     } catch (draftError) {
       if (!draftStorageErrorShownRef.current) {
@@ -588,7 +751,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         toastError("Chat draft could not be saved", draftError);
       }
     }
-  }, [chatDraft]);
+  }, [chatDraft, selectedRoleKey]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -680,8 +843,136 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   async function sendChatMessage(messageOverride?: string, options: SendChatOptions = {}) {
     const message = (messageOverride ?? chatDraft).trim();
-    if (!message || (isSendingChat && !options.steering)) return;
+    if (
+      !message ||
+      !selectedRole ||
+      selectedRole.state !== "ready" ||
+      !targetAgent ||
+      (isSendingChat && !options.steering)
+    ) return;
     const liveVoiceTurnEpoch = options.liveVoice ? liveVoiceEpochRef.current : null;
+
+    if (!fionaSelected) {
+      if (options.liveVoice) {
+        dispatchLiveVoice({
+          type: "FAIL",
+          message: "Live voice is Fiona/Hermes-only in this release.",
+        });
+        return;
+      }
+      const entryId = `runtime-${Date.now()}`;
+      const sentAt = new Date().toISOString();
+      const sentContext = conversationContext;
+      if (!options.preserveDraft) setChatDraft("");
+      setIsSendingChat(true);
+      setStreamingReply("");
+      setChatEntries((current) => [
+        {
+          id: entryId,
+          message,
+          targetAgent,
+          status: "submitted" as ChatEntryStatus,
+          detail: `${selectedRole.adapterId} · ${selectedRole.execution}`,
+          createdAt: sentAt,
+          context: sentContext,
+        },
+        ...current,
+      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT));
+      let accumulated = "";
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const requestHistory = options.historyOverride ?? chatTurns
+        .filter((turn) => Boolean(turn.text))
+        .slice(-12)
+        .map((turn) => ({
+          role: turn.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: turn.text ?? "",
+        }));
+      try {
+        const result = await streamRoleRuntimeChat({
+          role: selectedRole,
+          history: requestHistory,
+          message,
+          signal: controller.signal,
+          onDelta: (delta) => {
+            accumulated += delta;
+            setStreamingReply((current) => (current ?? "") + delta);
+          },
+        });
+        setChatEntries((current) =>
+          current.map((entry) =>
+            entry.id === entryId
+              ? {
+                  ...entry,
+                  reply: result.text || accumulated || null,
+                  repliedAt: new Date().toISOString(),
+                  detail: result.usage
+                    ? `${selectedRole.adapterId} · ${result.usage.inputTokens + result.usage.outputTokens} tokens`
+                    : selectedRole.adapterId ?? "local runtime",
+                }
+              : entry,
+          ),
+        );
+        if (speakReplies && result.text && voiceOutputProvider) {
+          setIsSpeaking(true);
+          void speakWithProvider(result.text, voiceOutputProvider.id).catch(
+            (voiceError) => {
+              setIsSpeaking(false);
+              toastError("Voice output failed", voiceError);
+            },
+          );
+        }
+      } catch (runtimeError) {
+        const stopped =
+          runtimeError instanceof DOMException &&
+          runtimeError.name === "AbortError";
+        setChatEntries((current) =>
+          current.map((entry) =>
+            entry.id === entryId
+              ? stopped
+                ? {
+                    ...entry,
+                    status: "cancelled",
+                    reply: accumulated || null,
+                    repliedAt: new Date().toISOString(),
+                    detail: "Stopped by user",
+                  }
+                : {
+                    ...entry,
+                    status: "failed",
+                    detail:
+                      runtimeError instanceof Error
+                        ? runtimeError.message
+                        : "Runtime failed",
+                  }
+              : entry,
+          ),
+        );
+        if (!stopped) toastError(`${selectedRole.roleName} chat failed`, runtimeError);
+      } finally {
+        const pendingSteer = pendingSteerRef.current;
+        pendingSteerRef.current = null;
+        abortRef.current = null;
+        setStreamingReply(null);
+        setIsSendingChat(false);
+        if (pendingSteer) {
+          queueMicrotask(() =>
+            void sendChatMessage(pendingSteer, {
+              historyOverride: buildSteeredAgentPanelHistory(
+                requestHistory,
+                message,
+                accumulated,
+              ),
+              preserveDraft: true,
+              steering: true,
+            }),
+          );
+        } else {
+          queueMicrotask(() => composerRef.current?.focus());
+        }
+      }
+      return;
+    }
 
     // Streaming path: direct conversation over the Hermes API server.
     if (fionaDirectLive) {
@@ -709,7 +1000,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       try {
         // Stateless continuity: replay the visible thread as history
         // (custom session headers are CORS-blocked by Hermes today).
-        const result = await streamHermesChat({
+        const result = await streamHermesRoleChat({
           message,
           history: requestHistory,
           systemPrompt: `${GENUI_SYSTEM_PROMPT}${contextPromptBlock(sentContext)}`,
@@ -825,7 +1116,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     try {
       setIsSendingChat(true);
       const sentContext = conversationContext;
-      const result = await sendToAgentChat({
+      const result = await dispatchHermesRoleChat({
         message,
         targetAgent,
         profile: targetProfile?.name ?? null,
@@ -901,7 +1192,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       pendingSteerRef.current = message;
       setChatDraft("");
       abortRef.current?.abort();
-      toast.info("Steering Fiona with your update");
+      toast.info(
+        `Steering ${selectedRole?.agentName ?? selectedRole?.roleName ?? "the agent"} with your update`,
+      );
       return;
     }
     void sendChatMessage();
@@ -930,6 +1223,37 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       toast.success("Message copied as markdown");
     } catch (clipboardError) {
       toastError("Message could not be copied", clipboardError);
+    }
+  }
+
+  function prepareMessageDocument(text: string, createdAt: string) {
+    if (!selectedRole?.agentKey) return;
+    try {
+      setDocumentPreview(
+        previewAgentMessageDocument({
+          text,
+          roleKey: selectedRole.roleKey,
+          agentKey: selectedRole.agentKey,
+          createdAt,
+        }),
+      );
+    } catch (previewError) {
+      toastError("Message cannot be saved as a document", previewError);
+    }
+  }
+
+  async function confirmMessageDocument() {
+    if (!documentPreview) return;
+    setIsSavingDocument(true);
+    try {
+      await saveAgentMessageDocument(documentPreview, true);
+      setDocumentPreview(null);
+      toast.success("Message saved to Documents");
+      notifyWorkspaceMayHaveChanged();
+    } catch (saveError) {
+      toastError("Document could not be saved", saveError);
+    } finally {
+      setIsSavingDocument(false);
     }
   }
 
@@ -1349,11 +1673,17 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }
 
   function startNewSession() {
+    if (!selectedRoleKey) return;
     const now = new Date().toISOString();
     try {
-      window.localStorage.removeItem(HERMES_SESSION_KEY);
-      window.localStorage.setItem(CHAT_CLEARED_KEY, now);
-      window.localStorage.removeItem(CHAT_HISTORY_KEY);
+      if (fionaSelected) window.localStorage.removeItem(HERMES_SESSION_KEY);
+      window.localStorage.setItem(
+        panelRoleStorageKey(selectedRoleKey, "cleared"),
+        now,
+      );
+      window.localStorage.removeItem(
+        panelRoleStorageKey(selectedRoleKey, "history"),
+      );
     } catch (storageError) {
       setConfirmNewSessionOpen(false);
       toastError("Could not start a new chat session", storageError);
@@ -1546,51 +1876,55 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }
 
   return (
-    <aside
-      style={
-        standalone
-          ? undefined
-          : { width: panelWidth, background: "var(--mantle)" }
-      }
-      className={cn(
-        "relative flex shrink-0 flex-col border border-[var(--border)]",
-        standalone ? "h-full w-full rounded-none border-0 bg-[var(--mantle)]" : "h-full rounded-2xl",
-      )}
-      onFocusCapture={markRepliesRead}
-      onPointerDown={markRepliesRead}
+    <AgentPanelShell
+      standalone={standalone}
+      width={panelWidth}
+      onResizeStart={startPanelResize}
+      onInteraction={markRepliesRead}
     >
-      {!standalone ? (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize agent panel"
-          onPointerDown={startPanelResize}
-          className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-border)]"
-        />
-      ) : null}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 truncate font-ui text-[13px] font-semibold text-[var(--text)]">
-              Agent Panel
+            <div className="flex items-center gap-1.5">
+              <label className="sr-only" htmlFor={`agent-panel-role-${mode}`}>
+                Conversation role
+              </label>
+              <select
+                id={`agent-panel-role-${mode}`}
+                value={selectedRoleKey ?? ""}
+                onChange={(event) =>
+                  applyRoleSelection(event.target.value || null)
+                }
+                className="min-w-0 max-w-[210px] truncate bg-transparent font-ui text-[13px] font-semibold text-[var(--text)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              >
+                <option value="">Choose role…</option>
+                {roleTargets.map((role) => (
+                  <option key={role.roleKey} value={role.roleKey}>
+                    {role.roleName}
+                    {role.state === "unavailable" ? " · unavailable" : ""}
+                  </option>
+                ))}
+              </select>
               {unreadCount > 0 ? (
                 <span className="rounded-full bg-[var(--accent)] px-1.5 font-mono text-[10px] leading-4 text-[var(--crust)]">
                   {Math.min(unreadCount, 99)} new
                 </span>
               ) : null}
-            </p>
+            </div>
             <p className="flex items-center gap-1.5 truncate font-ui text-[11px] text-[var(--overlay-1)]">
               <span
                 className={cn(
                   "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                  hermesConnected ? "bg-[var(--success)]" : "bg-[var(--overlay-0)]",
+                  selectedRole?.state === "ready"
+                    ? "bg-[var(--success)]"
+                    : "bg-[var(--overlay-0)]",
                 )}
               />
-              {fionaDirectLive
-                ? `Fiona · ${targetProfile?.model ?? "Hermes"}`
-                : hermesConnected
-                  ? "Fiona · durable inbox"
-                  : "Fiona · queuing via inbox"}
+              {selectedRole
+                ? selectedRole.state === "ready"
+                  ? `${selectedRole.agentName ?? selectedRole.agentKey} · ${selectedRole.adapterId}${selectedRole.model ? ` · ${selectedRole.model}` : ""} · ${selectedRole.execution}`
+                  : "No eligible occupant and runtime binding"
+                : "Select a role to begin"}
             </p>
           </div>
         </div>
@@ -1631,9 +1965,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         </div>
       </div>
 
-      <div
-        ref={threadRef}
-        className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3"
+      <AgentPanelThread
+        containerRef={threadRef}
         onScroll={(event) => {
           const node = event.currentTarget;
           const atLatest = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
@@ -1666,7 +1999,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         ) : null}
         {error ? (
           <div className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3">
-            <p className="font-ui text-[12px] font-medium text-[var(--danger)]">Fiona is unavailable</p>
+            <p className="font-ui text-[12px] font-medium text-[var(--danger)]">Agent Panel is unavailable</p>
             <p className="mt-1 line-clamp-3 font-ui text-[11px] text-[var(--subtext-0)]">
               {error instanceof Error ? error.message : "Refresh failed."}
             </p>
@@ -1690,7 +2023,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         ) : conversationTimeline.length === 0 && !agentChatQuery.error ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
             <p className="font-ui text-[12px] text-[var(--subtext-0)]">
-              {historySearchOpen ? "No past messages match this search." : "Message Fiona to get started."}
+              {historySearchOpen
+                ? "No past messages match this search."
+                : !selectedRole
+                  ? "Choose a role to begin."
+                  : selectedRole.state === "unavailable"
+                    ? "This role has no eligible occupant and runtime binding."
+                    : `Message ${selectedRole.agentName ?? selectedRole.roleName} to get started.`}
             </p>
             {!historySearchOpen ? (
               <p className="font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
@@ -1813,6 +2152,19 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                         {turn.text ? (
                           <button
                             type="button"
+                            onClick={() =>
+                              prepareMessageDocument(turn.text ?? "", turn.ts)
+                            }
+                            aria-label="Save to document"
+                            title="Save to document"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                          >
+                            <FileText className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        ) : null}
+                        {turn.text ? (
+                          <button
+                            type="button"
                             onClick={() => void copyMessageMarkdown(turn.text ?? "")}
                             aria-label="Copy markdown"
                             title="Copy markdown"
@@ -1856,7 +2208,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             )}
           </div>
         ) : null}
-      </div>
+      </AgentPanelThread>
 
       {showReturnToLatest ? (
         <div className="flex shrink-0 justify-center border-t border-[var(--border-subtle)] py-1">
@@ -1990,26 +2342,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         </section>
       ) : null}
 
-      <div className="shrink-0 px-3 pb-3 pt-1">
-        {contextRouteLabel(conversationContext) ? (
-          <div className="mb-1.5 flex min-w-0 items-center gap-1 px-1" aria-label="Context that will be sent">
-            <span className="shrink-0 font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">Context</span>
-            <span className="min-w-0 truncate rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--subtext-0)]">
-              {contextRouteLabel(conversationContext)}
-            </span>
-          </div>
-        ) : null}
-        <div
-          className="relative rounded-lg bg-[var(--base)]"
-          onDragOver={(event) => {
-            if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-          }}
-          onDrop={(event) => {
-            if (event.dataTransfer.files.length === 0) return;
-            event.preventDefault();
-            void addTextAttachments(Array.from(event.dataTransfer.files));
-          }}
-        >
+      <AgentPanelComposer
+        contextLabel={contextRouteLabel(conversationContext)}
+        onFiles={(files) => void addTextAttachments(files)}
+      >
           {plusMenuOpen ? (
             <>
               <button
@@ -2116,7 +2452,12 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               }
             }}
             rows={3}
-            placeholder={`Message ${agentDisplayName(targetAgent)}…`}
+            disabled={!selectedRole || selectedRole.state !== "ready"}
+            placeholder={
+              selectedRole?.state === "ready"
+                ? `Message ${selectedRole.agentName ?? selectedRole.roleName}…`
+                : "Choose an available role…"
+            }
             className="max-h-40 min-h-[64px] w-full resize-none bg-transparent px-3 pt-2.5 font-ui text-[12.5px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
           />
           {interimTranscript ? (
@@ -2162,7 +2503,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             >
               <Paperclip className="h-4 w-4" />
             </button>
-            <span className="px-1 font-ui text-[11px] text-[var(--subtext-0)]">Fiona</span>
+            <span className="max-w-24 truncate px-1 font-ui text-[11px] text-[var(--subtext-0)]">
+              {selectedRole?.agentName ?? selectedRole?.roleName ?? "No role"}
+            </span>
             <span className="flex-1" />
             <button
               type="button"
@@ -2205,8 +2548,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                   type="button"
                   onClick={submitComposer}
                   disabled={!chatDraft.trim()}
-                  aria-label="Steer Fiona"
-                  title="Send this update and steer Fiona"
+                  aria-label={`Steer ${selectedRole?.agentName ?? "agent"}`}
+                  title={`Send this update and steer ${selectedRole?.agentName ?? "the agent"}`}
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
                 >
                   <Send className="h-3.5 w-3.5" />
@@ -2216,7 +2559,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               <button
                 type="button"
                 onClick={submitComposer}
-                disabled={!chatDraft.trim() || isSendingChat}
+                disabled={!chatDraft.trim() || isSendingChat || selectedRole?.state !== "ready"}
                 aria-label="Send message"
                 title="Send (Enter)"
                 className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
@@ -2225,8 +2568,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
               </button>
             )}
           </div>
-        </div>
-      </div>
+      </AgentPanelComposer>
       <ConfirmDialog
         open={confirmNewSessionOpen}
         title="Start a new chat session?"
@@ -2235,7 +2577,51 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         onConfirm={startNewSession}
         onCancel={() => setConfirmNewSessionOpen(false)}
       />
-      {!standalone ? <PaneResizeEdges east hideLeft /> : null}
-    </aside>
+      <AppDialog
+        open={documentPreview !== null}
+        onOpenChange={(open) => {
+          if (!open && !isSavingDocument) setDocumentPreview(null);
+        }}
+        title="Save message to Documents?"
+        description="Review the exact internal document payload before writing."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setDocumentPreview(null)}
+              disabled={isSavingDocument}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void confirmMessageDocument()}
+              disabled={isSavingDocument}
+            >
+              {isSavingDocument ? "Saving…" : "Confirm write"}
+            </Button>
+          </>
+        }
+      >
+        {documentPreview ? (
+          <div className="space-y-3">
+            <dl className="grid grid-cols-[72px_1fr] gap-x-3 gap-y-1 font-ui text-[11px]">
+              <dt className="text-[var(--overlay-1)]">Title</dt>
+              <dd className="text-[var(--text)]">{documentPreview.title}</dd>
+              <dt className="text-[var(--overlay-1)]">Path</dt>
+              <dd className="break-all font-mono text-[10px] text-[var(--subtext-0)]">
+                {documentPreview.sourcePath}
+              </dd>
+              <dt className="text-[var(--overlay-1)]">Source</dt>
+              <dd className="text-[var(--subtext-0)]">
+                {documentPreview.roleKey} · {documentPreview.agentKey}
+              </dd>
+            </dl>
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--base)] p-3 font-ui text-[11px] leading-relaxed text-[var(--subtext-0)]">
+              {documentPreview.content}
+            </pre>
+          </div>
+        ) : null}
+      </AppDialog>
+    </AgentPanelShell>
   );
 }

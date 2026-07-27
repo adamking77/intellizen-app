@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { ConversationActionEvent } from "@/lib/agent-conversation";
 import { cn } from "@/lib/utils";
+import { AgentRunInspector } from "@/components/agent/agent-run-inspector";
 
 const STATE_LABELS: Record<ConversationActionEvent["state"], string> = {
   requested: "Requested",
@@ -72,6 +73,10 @@ export function AgentActionEvent({ event }: { event: ConversationActionEvent }) 
               Open canonical record
               <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </button>
+          ) : null}
+          {event.actionKind === "workflow" &&
+          event.canonicalRecord?.recordId ? (
+            <AgentRunInspector workflowRunId={event.canonicalRecord.recordId} />
           ) : null}
         </div>
       ) : null}
