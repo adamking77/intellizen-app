@@ -182,4 +182,7 @@ application of:
 supabase/migrations/20260727080103_intellizen_v2_gate1_control_contracts.sql
 ```
 
-Approval authorizes only the application-and-readback session described above. It does not authorize Gate 2.
+This approval authorizes the application-and-readback session described above.
+Adam's standing whole-build instruction separately authorizes automatic continuation
+through Gates 2–7 after each gate's exit checks pass. Only an explicit locked
+human-approval boundary stops that continuation.
