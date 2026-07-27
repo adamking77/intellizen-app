@@ -1,0 +1,19 @@
+{
+  "result": "passed",
+  "adapter": "codex-cli",
+  "version": "codex-cli 0.145.0",
+  "dispatch_boundary": "src-tauri/src/runtimes.rs",
+  "runtime_run_id": "gate6-panel-5f5f6b4f-6c4d-415c-b57f-bae5af974c5b",
+  "provider_session_id": "019fa393-fb46-7c72-92b4-48d03bf0d749",
+  "terminal_message": "GATE6_PANEL_OK",
+  "explicit_capability_grant": false,
+  "deny_only_broker_injected": true,
+  "assignment_modified": false,
+  "usage": {
+    "input_tokens": 15295,
+    "cached_input_tokens": 0,
+    "output_tokens": 9,
+    "reasoning_output_tokens": 0
+  },
+  "production_desktop_launched": false
+}
