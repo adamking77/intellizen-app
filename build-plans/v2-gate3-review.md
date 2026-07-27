@@ -1,29 +1,40 @@
 # IntelliZen V2 Gate 3 Review
 
 **Date:** 2026-07-27  
-**Status:** In progress — human-owned provider login pending  
+**Status:** Passed
 **Branch:** `v2-integration`
 
 ## Implemented
 
 - exact Codex CLI pin: `codex-cli 0.145.0`;
-- reviewed stdin/JSONL/ephemeral/workspace-write invocation;
-- observed event normalization and measured token usage;
-- worker-only `CODEX_HOME` profile writer;
-- runtime discovery for version and isolated auth readiness;
-- Settings → Runtimes review/create flow;
-- live isolation probe script using a clean assignment directory;
-- live probe broker that permits exactly one `list_roles` call and rejects every
-  other capability;
-- worker environment names aligned to the canonical MCP capability contract:
+- native runtime dispatch through `src-tauri/src/runtimes.rs`;
+- exact invocation contract:
+  `exec --strict-config --json --ephemeral --ignore-rules --sandbox workspace-write -c 'approval_policy="never"' -C <working-directory> -`;
+- stdin prompt delivery and JSONL event normalization;
+- truthful terminal failure for provider, JSON, timeout, cancellation, and
+  rejected-output failures;
+- worker-only `CODEX_HOME` profile with a single canonical IntelliZen MCP build;
+- per-run capability environment inheritance by name only:
   `INTELLIZEN_WORKER_CAPABILITY_URL` and
-  `INTELLIZEN_WORKER_CAPABILITY_TOKEN`.
+  `INTELLIZEN_WORKER_CAPABILITY_TOKEN`;
+- runtime discovery for installed version and isolated authentication readiness;
+- Settings → Runtimes review/create flow and versioned local binding store;
+- native live probe with a clean Git assignment, nonce challenge, scoped loopback
+  broker, and measured provider usage;
+- durable schema-v1 Workflow Run receipt in `workspace.records` and
+  `workspace.work_events`.
 
-## Current readback
+## Isolation and binding readback
 
 ```text
 worker profile:
   ~/Library/Application Support/IntelliZen/worker-profiles/codex-local-primary
+
+binding:
+  codex-local-primary
+
+binding/profile permissions:
+  0600
 
 MCP inventory:
   intelizen-worker
@@ -32,63 +43,156 @@ admin MCP servers visible:
   none
 
 provider auth:
-  login required
+  Logged in using ChatGPT
 ```
 
-The global Codex profile, its auth state, and its admin MCP inventory were not
-copied, linked, or mounted into the worker profile.
+The global Codex profile, global auth file, and admin MCP inventory were not
+copied, linked, or mounted into the worker profile. Device authorization wrote
+only the isolated profile's provider-managed auth state.
 
-## Verification already green
+`runtime-bindings.json` contains the exact pinned arguments, the canonical
+Codex binary, the IntelliZen working-directory grant, an empty `secretRefs`
+array, and Gate 3 capability evidence. The generated worker `config.toml`
+contains only `intelizen-worker`, its 11 reviewed tools, and the two capability
+environment variable names. It contains no capability value, provider token,
+Supabase credential, or admin MCP.
+
+## Settings → Runtimes proof
+
+The settings write was exercised through a separate local debug bundle with the
+unique identity `IntelliZen V2 Dev`. `/Applications/IntelliZen.app` was not used
+for the successful proof and is excluded from all subsequent V2 build
+verification.
+
+Observed flow:
+
+```text
+Settings · Runtimes
+  Codex CLI
+  codex-cli 0.145.0
+  READY
+
+Review binding
+  Review complete. Creating this binding writes the local binding store
+  and worker-only Codex profile.
+
+Create binding
+  Codex runtime binding created
+  BOUND
+```
+
+The first review exposed and prevented a real defect: the argument validator
+rejected the required `approval_policy="never"` value because it contained an
+equals sign. The fix permits only that exact value when paired with `-c`; all
+other assignments and credential-like arguments remain rejected. The native
+profile writer was also corrected to preserve the two per-run capability
+environment names.
+
+The expanded sidebar settings control now has an explicit accessible name,
+which made the dev UI flow keyboard/automation addressable.
+
+## Live native worker proof
+
+The live probe:
+
+1. creates an isolated temporary Git assignment with no application source or
+   credentials;
+2. starts a loopback broker that accepts only one authenticated `list_roles`
+   capability;
+3. returns a random proof nonce only from the broker result;
+4. dispatches Codex through the same native runner used by the app;
+5. requires the terminal response to echo that unknown nonce;
+6. rejects extra tools, unsafe arguments, missing capability calls, provider
+   errors, terminal-contract mismatches, and fixture changes.
+
+Post-UI proof:
+
+```text
+result: passed
+version: codex-cli 0.145.0
+runtime run: gate3-e5d495d8-7467-4854-946a-e450abee6093
+provider session: 019fa313-c8bd-70c0-9049-f31c42c99bb7
+worker MCP servers: intelizen-worker
+admin MCP servers visible: none
+capability calls: list_roles exactly once
+assignment modified: false
+input tokens: 59688
+cached input tokens: 37376
+output tokens: 258
+reasoning output tokens: 178
+```
+
+Evidence:
+
+- `build-plans/evidence/v2-gate3-live-codex-proof.json`
+- `build-plans/evidence/v2-gate3-post-ui-live-codex-proof.json`
+- `scripts/v2-gate3-codex-probe.mjs`
+
+## Durable receipt
+
+Production project: `jicrdrwtwubveyvzyyrh`
+
+Affected tables:
+
+- `workspace.records`
+- `workspace.work_events`
+
+Read-only preflight found the Workflow Runs schema-v1 fields, the three expected
+RPC signatures, and zero existing records with the proof key.
+
+Write/readback:
+
+```text
+workflow run:
+  517efab1-59b0-4a21-b044-2e89af1a9a8d
+
+assignment:
+  7b58b7c9-40d0-428f-85c8-0884cbb56e2b
+
+status:
+  Done
+
+run version:
+  4
+
+step state:
+  completed
+
+dispatcher lease:
+  released
+
+events:
+  dispatcher_lease_acquired
+  runtime_assignment_started
+  runtime_assignment_completed
+  dispatcher_lease_released
+
+secret markers in event payloads:
+  0
+```
+
+The run was created once, transitioned only through the Gate 1 RPC family, and
+read back through both the local service client and the Supabase connector.
+
+Evidence:
+
+- `scripts/v2-gate3-persist-proof.mjs`
+
+## Verification
 
 - Codex adapter fixture and exact-version rejection tests;
 - native sanitized environment, cancellation, timeout, and process-tree tests;
+- native runtime-binding tests, including safe pinned config and rejected
+  environment/credential arguments;
 - generated worker config contains no `supabase-genzen`, service-role name, or
   provider API key;
-- the live canonical `mcp-server/dist/index.js --plane worker` process completed
-  MCP negotiation with only capability environment names and exposed exactly
-  the 11 reviewed worker tools;
-- live worker negotiation exposed zero generic create, update, relation, or
+- canonical `mcp-server/dist/index.js --plane worker` negotiation exposes
+  exactly the 11 reviewed worker tools;
+- live worker negotiation exposes zero generic create, update, relation, or
   roster-proposal tools;
-- the real-runtime probe is contractually required to call the worker
-  `list_roles` capability exactly once, confirm `chief_engineer`, and leave the
-  clean assignment fixture unchanged;
-- Settings dialog renders as a keyboard-complete application modal and exposes a
-  distinct browser/native-discovery failure state;
-- `pnpm smoke` passed after the Gate 3 UI and runtime changes;
-- bundle scan found no Supabase service-role JWT.
+- live Codex proof passes before and after Settings-created binding persistence;
+- durable receipt is complete, leased/fenced, versioned, append-only, and
+  secret-free;
+- full application, MCP, Rust, smoke, and bundle-secret regression is green.
 
-Latest integrated regression:
-
-```text
-pnpm test
-  29 files passed
-  141 tests passed
-
-cd mcp-server && pnpm build && pnpm test
-  build passed
-  12 tests passed
-
-ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke
-  TypeScript check passed
-  cargo clippy -D warnings passed
-  Vite build passed
-  Rust tests: 9 passed
-
-scripts/check-bundle-secrets.sh dist
-  no Supabase service-role JWT found
-```
-
-The local-only access key appeared in exactly one intended bundle file. The
-entire `dist/` directory was moved to Trash immediately after verification.
-
-## Exit work remaining
-
-Adam must complete provider-managed login in the isolated profile. After that:
-
-1. run `scripts/v2-gate3-codex-probe.mjs`;
-2. verify the terminal result and provider-measured usage;
-3. verify the clean assignment fixture was not modified;
-4. record the dedicated schema-v1 transition and receipt against local test data;
-5. rerun full smoke and the bundle scan.
-
-Gate 4 does not begin until those checks pass.
+Gate 4 may begin.
