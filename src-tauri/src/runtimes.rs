@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
+    io::{Read, Write},
+    net::{SocketAddr, TcpListener, TcpStream},
     path::{Component, Path, PathBuf},
     process::Stdio,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex, OnceLock,
     },
+    thread,
     time::Duration,
 };
 use tauri::ipc::Channel;
@@ -179,6 +182,97 @@ fn emit(
     });
 }
 
+struct DenyCapabilityBroker {
+    url: String,
+    token: String,
+    stop: Arc<AtomicBool>,
+    address: SocketAddr,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for DenyCapabilityBroker {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = TcpStream::connect_timeout(&self.address, Duration::from_millis(100));
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+fn capability_token() -> Result<String, String> {
+    let mut bytes = [0_u8; 32];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut file| file.read_exact(&mut bytes))
+        .map_err(|error| format!("Failed to create per-run capability token: {error}"))?;
+    Ok(bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>())
+}
+
+fn deny_capability_request(mut stream: TcpStream, token: &str) {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let mut bytes = [0_u8; 16_384];
+    let count = stream.read(&mut bytes).unwrap_or(0);
+    let request = String::from_utf8_lossy(&bytes[..count]);
+    let authorized = request.lines().any(|line| {
+        line.strip_prefix("Authorization: ")
+            .or_else(|| line.strip_prefix("authorization: "))
+            .is_some_and(|value| value.trim() == format!("Bearer {token}"))
+    });
+    let (status, body) = if authorized {
+        (
+            "403 Forbidden",
+            r#"{"error":"No worker capabilities were granted for this run."}"#,
+        )
+    } else {
+        (
+            "401 Unauthorized",
+            r#"{"error":"Invalid worker capability token."}"#,
+        )
+    };
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len(),
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
+}
+
+fn start_deny_capability_broker() -> Result<DenyCapabilityBroker, String> {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .map_err(|error| format!("Failed to bind worker capability broker: {error}"))?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| format!("Failed to configure worker capability broker: {error}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|error| format!("Failed to read worker capability address: {error}"))?;
+    let token = capability_token()?;
+    let thread_token = token.clone();
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_stop = Arc::clone(&stop);
+    let worker = thread::spawn(move || {
+        while !thread_stop.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((stream, _)) => deny_capability_request(stream, &thread_token),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    Ok(DenyCapabilityBroker {
+        url: format!("http://127.0.0.1:{}/capability", address.port()),
+        token,
+        stop,
+        address,
+        thread: Some(worker),
+    })
+}
+
 #[cfg(unix)]
 fn signal_process_group(pid: i32, signal: i32) -> Result<(), String> {
     let result = unsafe { libc::kill(-pid, signal) };
@@ -204,6 +298,32 @@ pub(crate) async fn run_process(
     sink: EventSink,
 ) -> Result<RuntimeExit, String> {
     let (binary, working_directory) = validate_input(&input)?;
+    let has_profile = input.environment.contains_key("CODEX_HOME")
+        || input.environment.contains_key("CLAUDE_CONFIG_DIR");
+    let has_capability_url = input
+        .environment
+        .contains_key("INTELLIZEN_WORKER_CAPABILITY_URL");
+    let has_capability_token = input
+        .environment
+        .contains_key("INTELLIZEN_WORKER_CAPABILITY_TOKEN");
+    if has_capability_url != has_capability_token {
+        return Err("Worker capability URL and token must be supplied together.".to_string());
+    }
+    let mut runtime_environment = input.environment.clone();
+    let deny_broker = if has_profile && !has_capability_url {
+        let broker = start_deny_capability_broker()?;
+        runtime_environment.insert(
+            "INTELLIZEN_WORKER_CAPABILITY_URL".to_string(),
+            broker.url.clone(),
+        );
+        runtime_environment.insert(
+            "INTELLIZEN_WORKER_CAPABILITY_TOKEN".to_string(),
+            broker.token.clone(),
+        );
+        Some(broker)
+    } else {
+        None
+    };
     let sequence = Arc::new(AtomicU64::new(0));
     let mut command = Command::new(binary);
     command
@@ -212,7 +332,7 @@ pub(crate) async fn run_process(
         .env_clear()
         .env("LANG", "C.UTF-8")
         .env("LC_ALL", "C.UTF-8")
-        .envs(&input.environment)
+        .envs(&runtime_environment)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -338,6 +458,7 @@ pub(crate) async fn run_process(
 
     let exit_code = status.and_then(|status| status.code());
     emit(&sink, &sequence, reason, None, exit_code);
+    drop(deny_broker);
     Ok(RuntimeExit {
         reason: reason.to_string(),
         exit_code,
@@ -611,6 +732,46 @@ mod tests {
         assert!(validate_input(&stale_alias)
             .expect_err("stale broker alias must reject")
             .contains("sanitized allowlist"));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn profile_scoped_runs_receive_a_per_run_deny_broker() {
+        let root = test_root("deny-broker");
+        let profile = root.join("worker-profile");
+        fs::create_dir_all(&profile).expect("worker profile");
+        let (events, sink) = event_sink();
+        let mut input = shell_input(
+            "deny-broker-test",
+            &root,
+            "test -n \"$INTELLIZEN_WORKER_CAPABILITY_URL\" && test ${#INTELLIZEN_WORKER_CAPABILITY_TOKEN} -ge 32 && printf 'broker-ready\\n'",
+            2_000,
+        );
+        input.environment.insert(
+            "CODEX_HOME".to_string(),
+            profile.to_string_lossy().into_owned(),
+        );
+        let exit = run_process(input, sink).await.expect("runtime exit");
+        assert_eq!(exit.reason, "completed");
+        assert!(events
+            .lock()
+            .expect("events")
+            .iter()
+            .any(|event| event.text.as_deref() == Some("broker-ready")));
+
+        let mut partial = shell_input("deny-broker-partial", &root, "true", 2_000);
+        partial.environment.insert(
+            "CODEX_HOME".to_string(),
+            profile.to_string_lossy().into_owned(),
+        );
+        partial.environment.insert(
+            "INTELLIZEN_WORKER_CAPABILITY_URL".to_string(),
+            "http://127.0.0.1:49152/capability".to_string(),
+        );
+        assert!(run_process(partial, Arc::new(|_| {}))
+            .await
+            .expect_err("partial capability pair must reject")
+            .contains("must be supplied together"));
         fs::remove_dir_all(root).expect("cleanup");
     }
 
