@@ -1,0 +1,58 @@
+{
+  "gate": 6,
+  "observed_at": "2026-07-27T17:40:00+04:00",
+  "surface": {
+    "application_path": "/Users/adamking/projects/intellizen-app/src-tauri/target/debug/bundle/macos/IntelliZen V2 Dev.app",
+    "bundle_identifier": "com.genzen.intellizen.v2dev",
+    "production_application_launched": false
+  },
+  "role_chat": {
+    "codex_role": "Chief Engineer",
+    "codex_runtime_label": "Keel · codex-cli · ephemeral",
+    "codex_result": "GATE6_PANEL_OK",
+    "first_codex_attempt_failed_visibly": true,
+    "retry_required_explicit_resend": true,
+    "retry_result": "GATE6_PANEL_OK",
+    "hermes_role": "Operations Director",
+    "hermes_runtime_label": "Fiona · hermes · durable",
+    "hermes_result": "GATE6_HERMES_OK",
+    "hermes_transport": "native host"
+  },
+  "window_state": {
+    "selected_role_before_eject": "Operations Director",
+    "selected_role_after_eject": "Operations Director",
+    "selected_role_after_redock": "Operations Director",
+    "draft_marker_before_eject": "GATE6_DRAFT_PERSIST",
+    "draft_marker_after_eject": "GATE6_DRAFT_PERSIST",
+    "draft_marker_after_redock": "GATE6_DRAFT_PERSIST",
+    "draft_marker_cleared_after_test": true
+  },
+  "interaction": {
+    "global_focus_shortcut": "Command+Shift+A",
+    "focused_control": "Agent Panel composer",
+    "panel_width_check": {
+      "target_css_pixels": 390,
+      "observed_screenshot_pixels": 394,
+      "horizontal_overflow_observed": false,
+      "header_controls_visible": true,
+      "composer_visible": true
+    }
+  },
+  "workflow_designer": {
+    "route": "/workflows",
+    "registry_count": 18,
+    "active_count": 14,
+    "draft_patterns": [
+      "Pattern · Coordinator to specialist",
+      "Pattern · Independent verification",
+      "Pattern · Role handoff",
+      "Pattern · Founder-approved artifact"
+    ],
+    "selected_pattern": "Pattern · Coordinator to specialist",
+    "schema": "intellizen.workflow/1",
+    "graph_step_count": 4,
+    "validation": "VALID",
+    "dry_run_message": "DRY-RUN · DISPATCHES NOTHING Role, approval, and graph checks passed."
+  },
+  "status": "passed"
+}

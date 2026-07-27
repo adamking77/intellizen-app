@@ -4,10 +4,10 @@
 **Status:** Verification pending  
 **Branch:** `v2-integration`
 
-Gate 6 is not closed. The implementation and deterministic verification are
-present, but the isolated Claude worker login and the final visual pass against
-the latest `IntelliZen V2 Dev.app` binary still require Adam's local browser and
-unlocked Mac.
+Gate 6 is not closed. The implementation, deterministic verification, and
+latest-binary visual pass are complete. The isolated Claude worker login still
+requires the already-open OAuth grant before the live `system/init` acceptance
+probe can run.
 
 ## Implemented
 
@@ -108,23 +108,27 @@ CFBundleIdentifier: com.genzen.intellizen.v2dev
 The production app at `/Applications/IntelliZen.app` is excluded and has not
 been launched for Gate 6.
 
-An earlier V2-dev visual pass verified:
+The latest V2-dev visual pass verified:
 
 - role selector states for Operations Director, Chief Engineer, Founder
   Approval Authority, and Verifier;
 - `Chief Engineer · Keel · codex-cli · ephemeral`;
 - selected role and draft survival across eject/re-dock;
+- `Command+Shift+A` focus return to the Agent Panel composer;
+- a 394 px observed panel-width pass for the 390 px target, with the header,
+  controls, and composer visible and no horizontal overflow;
+- one truthful visible Codex failure followed by explicit edit/resend and a
+  successful `GATE6_PANEL_OK` result;
+- one `GATE6_HERMES_OK` result through the native-host Hermes transport;
 - the real `/workflows` route;
 - all four Draft patterns;
 - a valid four-step coordinator-to-specialist graph;
-- dry-run language stating that nothing dispatches;
+- `DRY-RUN · DISPATCHES NOTHING` with role, approval, and graph checks passing;
 - exact JSON and no-authority-expansion save preview;
 - Codex bound and Claude login-required Settings states.
 
-That pass found and fixed the `/workflows` redirect defect. The latest V2-dev
-binary also contains the deny-only panel broker, so it must be relaunched and
-the final role-chat, 390 px, and keyboard-focus checks repeated before closure.
-The Mac is currently locked; no substitute app or browser preview counts.
+The production app remained stopped throughout. Evidence is recorded in
+`build-plans/evidence/v2-gate6-latest-ui-proof.json`.
 
 ## Deterministic verification
 
@@ -188,16 +192,14 @@ the final Claude/UI proof if that proof changes source.
 
 ## Remaining closure actions
 
-1. Adam completes the already-open Claude browser login for the isolated
+1. Adam approves the already-open Claude OAuth grant for the isolated
    `claude-local-primary` profile.
 2. Run the prepared live Claude nonce/capability probe and store its sanitized
    result.
 3. Create the reviewed Claude binding only after the Settings preview and
    explicit confirm-write action.
-4. Unlock macOS, quit and reopen only the exact V2 dev bundle, and repeat the
-   latest-binary role-chat, eject/re-dock, 390 px, and keyboard-focus checks.
-5. Repeat the already-green full app, MCP, Rust, smoke, and secret-scan suite
+4. Repeat the already-green full app, MCP, Rust, smoke, and secret-scan suite
    only if the final Claude/UI proof requires a source change.
-6. Change this review to `Passed` and commit the final Gate 6 evidence package.
+5. Change this review to `Passed` and commit the final Gate 6 evidence package.
 
 Gate 7 must not be credited until every item above is complete.
