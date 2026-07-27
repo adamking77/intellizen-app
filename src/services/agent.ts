@@ -1,6 +1,14 @@
 import { supabase } from "@/lib/supabase";
 import { hermesDashboardConfigured, hermesDashboardFetch } from "@/services/voice";
 import type { GraphEntityType } from "@/lib/types";
+import {
+  checkHermesHostApi,
+  checkHermesHostGateway,
+  getHermesHostRunStatus,
+  startHermesHostRun,
+  streamHermesHostChat,
+  submitHermesHostGateway,
+} from "@/services/hermes-host";
 
 export interface AgentContext {
   type: string;
@@ -41,11 +49,6 @@ export interface GraphExtractionOutput {
   relationships: Array<{ source: string; target: string; relation: string }>;
 }
 
-const hermesGatewayUrl =
-  import.meta.env.VITE_HERMES_GATEWAY_URL?.replace(/\/$/, "") || null;
-const hermesWebhookName = import.meta.env.VITE_HERMES_WEBHOOK_NAME || "intellizen";
-const hermesWebhookSecret = import.meta.env.VITE_HERMES_WEBHOOK_SECRET || "";
-
 export interface HermesProfile {
   name: string;
   isDefault: boolean;
@@ -61,15 +64,10 @@ export const DEFAULT_HERMES_PROFILE = "fiona";
 
 // ── Hermes API server (OpenAI-compatible, streaming) ───────────────────────
 
-const hermesApiUrl = import.meta.env.VITE_HERMES_API_URL?.replace(/\/$/, "") || null;
-const hermesApiKey = import.meta.env.VITE_HERMES_API_KEY || "";
-
 /** True when the streaming chat API is configured and reachable. */
 export async function checkHermesApi(): Promise<boolean> {
-  if (!hermesApiUrl || !hermesApiKey) return false;
   try {
-    const res = await fetch(`${hermesApiUrl}/health`, { signal: AbortSignal.timeout(2_500) });
-    return res.ok;
+    return await checkHermesHostApi();
   } catch {
     return false;
   }
@@ -85,6 +83,15 @@ export interface HermesChatTurn {
   content: string;
 }
 
+export interface HermesRunExecution {
+  runId: string;
+  output: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  } | null;
+}
+
 /**
  * Stream a chat turn from Hermes over /v1/chat/completions (SSE).
  * Continuity is stateless via the messages array (the X-Hermes-Session-Id
@@ -98,63 +105,45 @@ export async function streamHermesChat(input: {
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }): Promise<HermesStreamResult> {
-  if (!hermesApiUrl || !hermesApiKey) throw new Error("Hermes API is not configured.");
+  return streamHermesHostChat(input);
+}
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${hermesApiKey}`,
-  };
-
-  const res = await fetch(`${hermesApiUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers,
-    signal: input.signal,
-    body: JSON.stringify({
-      model: "hermes-agent",
-      stream: true,
-      messages: [
-        ...(input.systemPrompt ? [{ role: "system", content: input.systemPrompt }] : []),
-        ...(input.history ?? []),
-        { role: "user", content: input.message },
-      ],
-    }),
+export async function executeHermesRun(input: {
+  prompt: string;
+  instructions: string;
+  timeoutMs: number;
+}): Promise<HermesRunExecution> {
+  const started = await startHermesHostRun({
+    prompt: input.prompt,
+    instructions: input.instructions,
   });
-  if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Hermes chat failed (${res.status}): ${detail || res.statusText}`);
-  }
 
-  const sessionId = res.headers.get("X-Hermes-Session-Id");
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let text = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      try {
-        const chunk = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (delta) {
-          text += delta;
-          input.onDelta(delta);
-        }
-      } catch {
-        /* keep-alive or non-JSON frame */
-      }
+  const deadline = Date.now() + input.timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const status = await getHermesHostRunStatus(started.runId);
+    if (status.status === "completed") {
+      return {
+        runId: started.runId,
+        output: status.output ?? "",
+        usage: status.usage
+          ? {
+              inputTokens: status.usage.inputTokens,
+              outputTokens: status.usage.outputTokens,
+            }
+          : null,
+      };
+    }
+    if (
+      status.status &&
+      ["failed", "cancelled", "waiting_for_approval"].includes(status.status)
+    ) {
+      throw new Error(
+        `Hermes run ended as ${status.status}: ${status.error ?? "no detail"}`,
+      );
     }
   }
-
-  return { text, sessionId };
+  throw new Error("Hermes run did not reach a terminal state before timeout.");
 }
 
 /**
@@ -162,13 +151,8 @@ export async function streamHermesChat(input: {
  * uses. A 2xx on the CORS preflight means direct dispatch will succeed.
  */
 export async function checkHermesGateway(): Promise<boolean> {
-  if (!hermesGatewayUrl) return false;
   try {
-    const res = await fetch(`${hermesGatewayUrl}/webhooks/${encodeURIComponent(hermesWebhookName)}`, {
-      method: "OPTIONS",
-      signal: AbortSignal.timeout(2_500),
-    });
-    return res.ok || res.status === 204;
+    return await checkHermesHostGateway();
   } catch {
     return false;
   }
@@ -198,21 +182,6 @@ export async function fetchHermesProfiles(): Promise<HermesProfile[]> {
 function randomDeliveryId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `intellizen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-async function hmacSha256Hex(secret: string, body: string) {
-  const encoder = new TextEncoder();
-  const key = await globalThis.crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  return Array.from(new Uint8Array(signature))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function workflowPayload(input: AgentWorkflowInput) {
@@ -270,40 +239,12 @@ async function submitHermesPayload(input: {
   payload: Record<string, unknown>;
   profile?: string | null;
 }) {
-  if (!hermesGatewayUrl) {
-    throw new Error("Hermes gateway URL is not configured.");
-  }
-
-  const body = JSON.stringify(input.payload);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-GitHub-Event": input.event,
-    "X-GitHub-Delivery": randomDeliveryId(),
-  };
-  if (hermesWebhookSecret) {
-    headers["X-Hub-Signature-256"] = `sha256=${await hmacSha256Hex(hermesWebhookSecret, body)}`;
-  }
-
-  // Profile-scoped route when a Hermes profile is selected; default route
-  // otherwise. Both are supported by the Hermes webhook adapter.
-  const routePath = input.profile
-    ? `/p/${encodeURIComponent(input.profile)}/webhooks/${encodeURIComponent(hermesWebhookName)}`
-    : `/webhooks/${encodeURIComponent(hermesWebhookName)}`;
-  const res = await fetch(
-    `${hermesGatewayUrl}${routePath}`,
-    {
-      method: "POST",
-      headers,
-      body,
-    },
-  );
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Hermes webhook failed (${res.status}): ${detail || res.statusText}`);
-  }
-
-  return (await res.json()) as {
+  return (await submitHermesHostGateway({
+    event: input.event,
+    payload: input.payload,
+    profile: input.profile,
+    deliveryId: randomDeliveryId(),
+  })) as {
     message_id?: string;
     messageId?: string;
     delivery_id?: string;
@@ -317,24 +258,10 @@ function dispatchErrorMessage(error: unknown) {
 
 /** Dispatch a workflow through the API server run queue (/v1/runs). */
 async function submitHermesRun(payload: Record<string, unknown>): Promise<string> {
-  if (!hermesApiUrl || !hermesApiKey) throw new Error("Hermes API is not configured.");
-  const res = await fetch(`${hermesApiUrl}/v1/runs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${hermesApiKey}`,
-    },
-    signal: AbortSignal.timeout(8_000),
-    body: JSON.stringify({
-      input: `IntelliZen workflow dispatch. Follow the payload's prompt and context; keep writes bounded to the referenced workflow_run_id and linked records; append receipts for every state change; request approval before anything external-facing or irreversible.\n\nPayload:\n${JSON.stringify(payload, null, 2)}`,
-    }),
+  const run = await startHermesHostRun({
+    prompt: `IntelliZen workflow dispatch. Follow the payload's prompt and context; keep writes bounded to the referenced workflow_run_id and linked records; append receipts for every state change; request approval before anything external-facing or irreversible.\n\nPayload:\n${JSON.stringify(payload, null, 2)}`,
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Hermes run submit failed (${res.status}): ${detail || res.statusText}`);
-  }
-  const body = (await res.json()) as { run_id?: string; id?: string };
-  return body.run_id ?? body.id ?? "run-accepted";
+  return run.runId;
 }
 
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {

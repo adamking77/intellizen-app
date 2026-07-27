@@ -4,6 +4,7 @@ use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+mod hermes;
 mod runtime_bindings;
 mod runtimes;
 
@@ -499,9 +500,17 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
+            hermes::hermes_check_api,
+            hermes::hermes_stream_chat,
+            hermes::hermes_cancel_stream,
+            hermes::hermes_run_start,
+            hermes::hermes_run_status,
+            hermes::hermes_check_gateway,
+            hermes::hermes_gateway_submit,
             runtime_bindings::runtime_bindings_list,
             runtime_bindings::runtime_bindings_upsert,
             runtime_bindings::runtime_binding_prepare_worker_profile,
+            runtimes::runtime_prepare_assignment,
             runtimes::runtime_run,
             runtimes::runtime_cancel,
             runtimes::runtime_discover_codex,

@@ -38,6 +38,15 @@ unlocked Mac.
 - Workflow Run action states derived from the returned canonical run status;
   creating a run no longer displays `Completed` unless the durable status is
   actually `Done` or `Completed`.
+- production schema-v1 start path connected to the fenced in-app dispatcher;
+- unique native-created local assignment directories inside the reviewed
+  binding grant;
+- production artifact guard that permits the approval-bound internal
+  simulation and rejects document/record writes without a separate
+  preview/confirm-write surface.
+- Hermes API and webhook credentials moved out of the webview bundle and
+  behind typed native-host commands for health, streaming, cancellation, runs,
+  and signed gateway submission.
 
 ## Isolation and runtime evidence
 
@@ -122,8 +131,8 @@ The Mac is currently locked; no substitute app or browser preview counts.
 Current targeted Gate 6 suite:
 
 ```text
-13 test files passed
-76 tests passed
+14 test files passed
+78 tests passed
 ```
 
 It covers:
@@ -139,12 +148,25 @@ It covers:
 - local runtime chat terminal handling;
 - Workflow Designer transforms and canonical validation;
 - designer output passed unchanged into the Gate 4 runner;
+- production artifact authority guard and UI-to-runner dispatch seam;
 - attachment, panel-history, and Hermes profile regressions.
 
 Native verification covers the sanitized process boundary, per-run deny broker,
-timeout, cancellation, process-tree cleanup, binding validation, and runtime
-discovery. Full smoke and bundle-secret scans will be repeated after the final
-Claude/UI proof, not inferred from an earlier binary.
+dedicated grant-contained assignment directories, timeout, cancellation,
+process-tree cleanup, binding validation, and runtime discovery. The current
+native suite has 14 passing tests. Full smoke and bundle-secret scans will be
+repeated after the final Claude/UI proof, not inferred from an earlier binary.
+
+The first broad exact-value scan found the Hermes API key and webhook signing
+secret in the frontend output, despite the earlier service-role-only scans
+passing. After the native-host correction, a fresh production build contains:
+
+```text
+Supabase service-role key: 0 files
+Hermes webhook signing secret: 0 files
+Hermes API key: 0 files
+intended local access header: 1 compiled asset
+```
 
 ## Remaining closure actions
 

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
+    fs::{self, OpenOptions},
     io::{Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     path::{Component, Path, PathBuf},
@@ -73,6 +74,13 @@ pub struct RuntimeDiscovery {
     worker_profile_home: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeAssignmentDirectory {
+    assignment_id: String,
+    path: String,
+}
+
 #[derive(Clone, Copy)]
 struct ProcessState {
     pid: i32,
@@ -129,14 +137,16 @@ fn canonical_directory(path: &str, label: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn validate_input(input: &RuntimeRunInput) -> Result<(PathBuf, PathBuf), String> {
-    if input.run_id.is_empty()
-        || input.run_id.len() > 128
-        || !input
-            .run_id
+fn safe_runtime_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-    {
+}
+
+fn validate_input(input: &RuntimeRunInput) -> Result<(PathBuf, PathBuf), String> {
+    if !safe_runtime_identifier(&input.run_id) {
         return Err("runId must be 1-128 safe identifier characters.".to_string());
     }
     if !(MIN_TIMEOUT_MS..=MAX_TIMEOUT_MS).contains(&input.timeout_ms) {
@@ -165,6 +175,54 @@ fn validate_input(input: &RuntimeRunInput) -> Result<(PathBuf, PathBuf), String>
         canonical_file(&input.binary, "binary")?,
         canonical_directory(&input.working_directory, "workingDirectory")?,
     ))
+}
+
+fn prepare_assignment_directory(
+    grant_root: &str,
+    assignment_id: &str,
+) -> Result<RuntimeAssignmentDirectory, String> {
+    if !safe_runtime_identifier(assignment_id) {
+        return Err("assignmentId must be 1-128 safe identifier characters.".to_string());
+    }
+    let grant = canonical_directory(grant_root, "grantRoot")?;
+    let assignments_root = grant.join(".intellizen").join("runtime-assignments");
+    fs::create_dir_all(&assignments_root)
+        .map_err(|error| format!("Failed to create the assignment root: {error}"))?;
+    let assignment = assignments_root.join(assignment_id);
+    fs::create_dir(&assignment)
+        .map_err(|error| format!("Failed to create the dedicated assignment directory: {error}"))?;
+    let canonical = fs::canonicalize(&assignment)
+        .map_err(|error| format!("Failed to resolve the assignment directory: {error}"))?;
+    if !canonical.starts_with(&grant) {
+        let _ = fs::remove_dir(&canonical);
+        return Err("Assignment directory escaped its working-directory grant.".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&canonical, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("Failed to protect the assignment directory: {error}"))?;
+    }
+    let readme = canonical.join("README.md");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&readme)
+        .map_err(|error| format!("Failed to initialize the assignment directory: {error}"))?;
+    file.write_all(
+        b"# IntelliZen runtime assignment\n\nThis directory is isolated to one workflow assignment. Runtime authority is defined by the supplied envelope, not by surrounding repository contents.\n",
+    )
+    .map_err(|error| format!("Failed to initialize the assignment directory: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&readme, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("Failed to protect the assignment marker: {error}"))?;
+    }
+    Ok(RuntimeAssignmentDirectory {
+        assignment_id: assignment_id.to_string(),
+        path: canonical.to_string_lossy().into_owned(),
+    })
 }
 
 fn emit(
@@ -496,6 +554,14 @@ pub fn runtime_cancel(run_id: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub fn runtime_prepare_assignment(
+    grant_root: String,
+    assignment_id: String,
+) -> Result<RuntimeAssignmentDirectory, String> {
+    prepare_assignment_directory(&grant_root, &assignment_id)
+}
+
+#[tauri::command]
 pub fn runtime_discover_codex(app: AppHandle) -> Result<RuntimeDiscovery, String> {
     const CODEX_BINARY: &str = "/Users/adamking/.local/bin/codex";
     const SUPPORTED_VERSION: &str = "codex-cli 0.145.0";
@@ -662,6 +728,28 @@ mod tests {
         let captured = Arc::clone(&events);
         let sink = Arc::new(move |event| captured.lock().expect("event lock").push(event));
         (events, sink)
+    }
+
+    #[test]
+    fn prepares_a_dedicated_assignment_inside_the_grant() {
+        let root = test_root("assignment");
+        let prepared = prepare_assignment_directory(&root.to_string_lossy(), "assignment-safe-1")
+            .expect("assignment");
+        let path = fs::canonicalize(&prepared.path).expect("assignment path");
+        assert!(path.starts_with(fs::canonicalize(&root).expect("grant")));
+        assert!(path.ends_with(".intellizen/runtime-assignments/assignment-safe-1"));
+        assert!(path.join("README.md").is_file());
+        assert!(
+            prepare_assignment_directory(&root.to_string_lossy(), "assignment-safe-1",)
+                .expect_err("duplicate assignment must reject")
+                .contains("dedicated assignment directory")
+        );
+        assert!(
+            prepare_assignment_directory(&root.to_string_lossy(), "../escape")
+                .expect_err("traversal must reject")
+                .contains("safe identifier")
+        );
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[tokio::test]

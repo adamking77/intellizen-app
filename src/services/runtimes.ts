@@ -39,6 +39,21 @@ export type RuntimeExit = {
   exitCode: number | null;
 };
 
+export type RuntimeAssignmentDirectory = {
+  assignmentId: string;
+  path: string;
+};
+
+export function prepareRuntimeAssignment(
+  grantRoot: string,
+  assignmentId: string,
+) {
+  return invoke<RuntimeAssignmentDirectory>("runtime_prepare_assignment", {
+    grantRoot,
+    assignmentId,
+  });
+}
+
 export async function runRuntime(
   input: RuntimeRunInput,
   onEvent: (event: NativeRuntimeEvent) => void,
