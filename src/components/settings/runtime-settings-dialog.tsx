@@ -11,6 +11,7 @@ import {
   type RuntimeBinding,
 } from "@/services/runtime-bindings";
 import { discoverCodexRuntime, type RuntimeDiscovery } from "@/services/runtimes";
+import { isTauriRuntime } from "@/components/layout/window-chrome";
 
 export function RuntimeSettingsDialog({
   open,
@@ -27,6 +28,10 @@ export function RuntimeSettingsDialog({
   useEffect(() => {
     if (!open) return;
     setError(null);
+    if (!isTauriRuntime) {
+      setError("Runtime discovery is available in the IntelliZen desktop app.");
+      return;
+    }
     void Promise.all([discoverCodexRuntime(), listRuntimeBindings()])
       .then(([runtime, store]) => {
         setDiscovery(runtime);
@@ -113,8 +118,9 @@ export function RuntimeSettingsDialog({
         </>
       }
     >
-      {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
-      {!discovery ? (
+      {error ? (
+        <p className="text-sm text-[var(--danger)]">{error}</p>
+      ) : !discovery ? (
         <p className="text-sm text-[var(--subtext-0)]">Inspecting local runtimes…</p>
       ) : (
         <div className="space-y-4">
