@@ -53,7 +53,7 @@ export function cancelRuntime(runId: string) {
 }
 
 export type RuntimeDiscovery = {
-  adapterId: "codex-cli";
+  adapterId: "codex-cli" | "claude-cli";
   installed: boolean;
   binary: string;
   version: string;
@@ -64,4 +64,8 @@ export type RuntimeDiscovery = {
 
 export function discoverCodexRuntime() {
   return invoke<RuntimeDiscovery>("runtime_discover_codex");
+}
+
+export function discoverClaudeRuntime() {
+  return invoke<RuntimeDiscovery>("runtime_discover_claude");
 }

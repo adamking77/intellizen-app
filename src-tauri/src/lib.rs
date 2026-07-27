@@ -504,7 +504,8 @@ pub fn run() {
             runtime_bindings::runtime_binding_prepare_worker_profile,
             runtimes::runtime_run,
             runtimes::runtime_cancel,
-            runtimes::runtime_discover_codex
+            runtimes::runtime_discover_codex,
+            runtimes::runtime_discover_claude
         ])
         .on_window_event(|window, event| {
             // macOS convention: closing the main window hides it; the app

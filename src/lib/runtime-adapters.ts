@@ -15,8 +15,17 @@ export type RuntimeFailureCode =
 
 export type NormalizedRuntimeEvent =
   | { kind: "started"; runId: string }
+  | {
+      kind: "initialized";
+      runId: string;
+      model: string;
+      mcpServers: string[];
+      tools: string[];
+      permissionMode: string;
+    }
   | { kind: "output"; text: string }
   | { kind: "usage"; inputTokens: number; outputTokens: number }
+  | { kind: "provider_event"; eventType: string }
   | { kind: "protocol_error"; message: string }
   | {
       kind: "runtime_error";
@@ -378,9 +387,228 @@ export const codexRuntimeAdapter: RuntimeAdapter = {
   }),
 };
 
+export const CLAUDE_CLI_VERSION = "2.1.220 (Claude Code)";
+
+export const CLAUDE_WORKER_TOOLS = [
+  "advance_workflow_step",
+  "append_agent_work_note",
+  "list_agent_projects",
+  "list_agent_work",
+  "list_databases",
+  "list_role_assignments",
+  "list_roles",
+  "list_workflow_runs",
+  "list_workflows",
+  "query_records",
+  "report_verification",
+] as const;
+
+export function assertClaudeCliVersion(version: string) {
+  if (version.trim() !== CLAUDE_CLI_VERSION) {
+    throw new Error(
+      `Unsupported Claude CLI version. Expected ${CLAUDE_CLI_VERSION}; received ${version.trim() || "unknown"}.`,
+    );
+  }
+}
+
+export function claudeMcpToolName(tool: string) {
+  return `mcp__intelizen-worker__${tool}`;
+}
+
+export function claudeExecArgs(mcpConfigPath: string) {
+  const tools = CLAUDE_WORKER_TOOLS.map(claudeMcpToolName).join(",");
+  return [
+    "--safe-mode",
+    "--mcp-config",
+    mcpConfigPath,
+    "--strict-mcp-config",
+    "--tools",
+    tools,
+    "--allowedTools",
+    tools,
+    "--permission-mode",
+    "dontAsk",
+    "--no-session-persistence",
+    "--verbose",
+    "--include-partial-messages",
+    "--output-format",
+    "stream-json",
+    "-p",
+  ];
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate) => {
+    if (typeof candidate === "string") return [candidate];
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      "name" in candidate &&
+      typeof candidate.name === "string"
+    ) {
+      return [candidate.name];
+    }
+    return [];
+  });
+}
+
+function normalizeClaude(lines: string[]): NormalizedRuntimeEvent[] {
+  const events: NormalizedRuntimeEvent[] = [];
+  let terminalSeen = false;
+
+  for (const line of lines) {
+    let wire: Record<string, unknown>;
+    try {
+      wire = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      events.push(protocolError("Claude emitted malformed JSON."));
+      continue;
+    }
+    const type = typeof wire.type === "string" ? wire.type : "";
+
+    if (type === "system" && wire.subtype === "init") {
+      const runId = typeof wire.session_id === "string" ? wire.session_id : "";
+      if (!runId) {
+        events.push(protocolError("Claude init event is missing session_id."));
+        continue;
+      }
+      events.push({ kind: "started", runId });
+      events.push({
+        kind: "initialized",
+        runId,
+        model: typeof wire.model === "string" ? wire.model : "",
+        mcpServers: stringArray(wire.mcp_servers),
+        tools: stringArray(wire.tools),
+        permissionMode:
+          typeof wire.permissionMode === "string" ? wire.permissionMode : "",
+      });
+      continue;
+    }
+
+    if (type === "stream_event") {
+      const stream = wire.event as Record<string, unknown> | undefined;
+      if (stream?.type === "content_block_delta") {
+        const delta = stream.delta as Record<string, unknown> | undefined;
+        if (delta?.type === "text_delta") {
+          const text = safeText(delta.text, "runtimeOutput");
+          events.push(
+            text === null
+              ? {
+                  kind: "persistence_rejected",
+                  message: "Claude output was rejected by the persistence safety gate.",
+                }
+              : { kind: "output", text },
+          );
+        }
+      }
+      continue;
+    }
+
+    if (type === "assistant") {
+      // Claude emits this assembled snapshot after its deltas. Do not append it
+      // after the same content has already streamed.
+      continue;
+    }
+
+    if (type === "result") {
+      if (terminalSeen) {
+        events.push(protocolError("Claude emitted more than one terminal result."));
+        continue;
+      }
+      terminalSeen = true;
+      const usage = wire.usage as Record<string, unknown> | undefined;
+      if (
+        usage &&
+        Number.isSafeInteger(usage.input_tokens) &&
+        Number.isSafeInteger(usage.output_tokens)
+      ) {
+        events.push({
+          kind: "usage",
+          inputTokens: usage.input_tokens as number,
+          outputTokens: usage.output_tokens as number,
+        });
+      }
+      const failed =
+        wire.is_error === true ||
+        wire.subtype !== "success" ||
+        (typeof wire.terminal_reason === "string" &&
+          wire.terminal_reason !== "completed");
+      const result = safeText(wire.result, "runtimeResult");
+      if (result === null && wire.result != null) {
+        events.push({
+          kind: "persistence_rejected",
+          message: "Claude result was rejected by the persistence safety gate.",
+        });
+      }
+      events.push({
+        kind: "terminal",
+        reason: failed ? "failed" : "completed",
+        ...(result !== null ? { result } : {}),
+      });
+      continue;
+    }
+
+    if (type) {
+      events.push({ kind: "provider_event", eventType: type });
+    } else {
+      events.push(protocolError("Claude event is missing a type."));
+    }
+  }
+  return events;
+}
+
+export function assertClaudeWorkerIsolation(
+  events: NormalizedRuntimeEvent[],
+): Extract<NormalizedRuntimeEvent, { kind: "initialized" }> {
+  const initialized = events.find(
+    (event): event is Extract<NormalizedRuntimeEvent, { kind: "initialized" }> =>
+      event.kind === "initialized",
+  );
+  if (!initialized) {
+    throw new Error("Claude did not emit the required system/init event.");
+  }
+  if (
+    initialized.mcpServers.length !== 1 ||
+    initialized.mcpServers[0] !== "intelizen-worker"
+  ) {
+    throw new Error(
+      `Claude worker isolation failed: expected only intelizen-worker; received ${initialized.mcpServers.join(", ") || "none"}.`,
+    );
+  }
+  const expectedTools = CLAUDE_WORKER_TOOLS.map(claudeMcpToolName).sort();
+  const actualTools = [...initialized.tools].sort();
+  if (
+    expectedTools.length !== actualTools.length ||
+    expectedTools.some((tool, index) => tool !== actualTools[index])
+  ) {
+    throw new Error("Claude worker isolation failed: system/init tool allowlist differed.");
+  }
+  if (initialized.permissionMode !== "dontAsk") {
+    throw new Error(
+      `Claude worker isolation failed: permission mode was ${initialized.permissionMode || "missing"}.`,
+    );
+  }
+  return initialized;
+}
+
+export const claudeRuntimeAdapter: RuntimeAdapter = {
+  id: "claude-cli",
+  normalize: normalizeClaude,
+  deriveCapabilities: (events) => ({
+    structuredOutput: events.some((event) => event.kind === "initialized"),
+    streaming: events.some((event) => event.kind === "output"),
+    cancellation: true,
+    timeout: true,
+    usage: events.some((event) => event.kind === "usage"),
+    resume: false,
+  }),
+};
+
 const registry = new Map<string, RuntimeAdapter>([
   [mockRuntimeAdapter.id, mockRuntimeAdapter],
   [codexRuntimeAdapter.id, codexRuntimeAdapter],
+  [claudeRuntimeAdapter.id, claudeRuntimeAdapter],
 ]);
 
 export function getRuntimeAdapter(id: string): RuntimeAdapter {

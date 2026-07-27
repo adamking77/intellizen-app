@@ -11,6 +11,7 @@ use tauri::{AppHandle, Manager};
 const STORE_VERSION: u32 = 1;
 const STORE_FILE_NAME: &str = "runtime-bindings.json";
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
+const CLAUDE_MCP_CONFIG_FILE_NAME: &str = "mcp-worker.json";
 const WORKER_NODE_BINARY: &str = "/Users/adamking/.local/bin/node";
 const INTELLIZEN_MCP_BUILD: &str =
     "/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js";
@@ -360,6 +361,23 @@ enabled_tools = [
     )
 }
 
+fn claude_worker_config() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "mcpServers": {
+            "intelizen-worker": {
+                "type": "stdio",
+                "command": WORKER_NODE_BINARY,
+                "args": [
+                    INTELLIZEN_MCP_BUILD,
+                    "--plane",
+                    "worker"
+                ]
+            }
+        }
+    }))
+    .expect("static Claude worker config is serializable")
+}
+
 fn write_secure_text_atomic(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path
         .parent()
@@ -448,14 +466,23 @@ pub fn runtime_binding_prepare_worker_profile(
         .cloned()
         .ok_or_else(|| format!("Runtime binding {binding_id} was not found."))?;
     let binding = normalize_binding(binding, &root, false)?;
-    if binding.adapter_id != "codex-cli" {
-        return Err("Gate 3 profile preparation supports only codex-cli.".to_string());
-    }
-    let profile_path = PathBuf::from(&binding.worker_profile_home).join(CODEX_CONFIG_FILE_NAME);
+    let (profile_path, contents) = match binding.adapter_id.as_str() {
+        "codex-cli" => (
+            PathBuf::from(&binding.worker_profile_home).join(CODEX_CONFIG_FILE_NAME),
+            codex_worker_config(),
+        ),
+        "claude-cli" => (
+            PathBuf::from(&binding.worker_profile_home).join(CLAUDE_MCP_CONFIG_FILE_NAME),
+            claude_worker_config(),
+        ),
+        _ => {
+            return Err("Worker profile preparation supports codex-cli and claude-cli.".to_string())
+        }
+    };
     if confirm_write {
         canonical_existing_file(WORKER_NODE_BINARY, "worker node binary")?;
         canonical_existing_file(INTELLIZEN_MCP_BUILD, "IntelliZen MCP build")?;
-        write_secure_text_atomic(&profile_path, &codex_worker_config())?;
+        write_secure_text_atomic(&profile_path, &contents)?;
     }
     Ok(RuntimeProfileMutationResult {
         dry_run: !confirm_write,
@@ -604,6 +631,25 @@ mod tests {
         assert!(config.contains("\"worker\""));
         assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_URL"));
         assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_TOKEN"));
+        assert!(!config.contains("supabase-genzen"));
+        assert!(!config.contains("SERVICE_ROLE"));
+        assert!(!config.contains("api_key"));
+    }
+
+    #[test]
+    fn claude_worker_profile_contains_only_the_worker_mcp() {
+        let config = claude_worker_config();
+        let parsed: serde_json::Value = serde_json::from_str(&config).expect("valid json");
+        let servers = parsed["mcpServers"].as_object().expect("mcp servers");
+        assert_eq!(servers.keys().collect::<Vec<_>>(), vec!["intelizen-worker"]);
+        assert_eq!(
+            parsed["mcpServers"]["intelizen-worker"]["command"],
+            WORKER_NODE_BINARY
+        );
+        assert_eq!(
+            parsed["mcpServers"]["intelizen-worker"]["args"],
+            serde_json::json!([INTELLIZEN_MCP_BUILD, "--plane", "worker"])
+        );
         assert!(!config.contains("supabase-genzen"));
         assert!(!config.contains("SERVICE_ROLE"));
         assert!(!config.contains("api_key"));

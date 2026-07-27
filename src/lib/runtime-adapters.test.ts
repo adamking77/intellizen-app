@@ -12,8 +12,13 @@ import orphanedChildTrace from "@/fixtures/runtime-traces/orphaned-child.jsonl?r
 import resumeUnsupportedTrace from "@/fixtures/runtime-traces/resume-unsupported.jsonl?raw";
 import ambiguousDeliveryTrace from "@/fixtures/runtime-traces/ambiguous-delivery.jsonl?raw";
 import codexNormalTrace from "@/fixtures/runtime-traces/codex-0.145.0-normal.jsonl?raw";
+import claudeNormalTrace from "@/fixtures/runtime-traces/claude-2.1.220-normal.jsonl?raw";
 import {
+  assertClaudeCliVersion,
+  assertClaudeWorkerIsolation,
   assertCodexCliVersion,
+  claudeExecArgs,
+  claudeRuntimeAdapter,
   codexExecArgs,
   codexRuntimeAdapter,
   getRuntimeAdapter,
@@ -35,6 +40,7 @@ const traces = {
   "resume-unsupported": resumeUnsupportedTrace,
   "ambiguous-delivery": ambiguousDeliveryTrace,
   "codex-normal": codexNormalTrace,
+  "claude-normal": claudeNormalTrace,
 };
 
 function trace(name: keyof typeof traces) {
@@ -227,5 +233,71 @@ describe("Codex 0.145.0 adapter contract", () => {
       reason: "failed",
     });
     expect(JSON.stringify(events)).not.toContain(canary);
+  });
+});
+
+describe("Claude 2.1.220 adapter contract", () => {
+  it("pins the exact installed version", () => {
+    expect(() => assertClaudeCliVersion("2.1.220 (Claude Code)")).not.toThrow();
+    expect(() => assertClaudeCliVersion("2.1.221 (Claude Code)")).toThrow(
+      "Unsupported Claude CLI version",
+    );
+  });
+
+  it("builds the strict worker-only stdin invocation", () => {
+    expect(claudeExecArgs("/tmp/worker.json")).toEqual([
+      "--safe-mode",
+      "--mcp-config",
+      "/tmp/worker.json",
+      "--strict-mcp-config",
+      "--tools",
+      expect.stringContaining("mcp__intelizen-worker__list_roles"),
+      "--allowedTools",
+      expect.stringContaining("mcp__intelizen-worker__list_roles"),
+      "--permission-mode",
+      "dontAsk",
+      "--no-session-persistence",
+      "--verbose",
+      "--include-partial-messages",
+      "--output-format",
+      "stream-json",
+      "-p",
+    ]);
+  });
+
+  it("normalizes deltas without duplicating the assembled assistant message", () => {
+    const events = claudeRuntimeAdapter.normalize(trace("claude-normal"));
+    expect(events.filter((event) => event.kind === "output")).toEqual([
+      { kind: "output", text: "GATE6_OK" },
+    ]);
+    expect(events).toContainEqual({
+      kind: "terminal",
+      reason: "completed",
+      result: "GATE6_OK",
+    });
+    expect(claudeRuntimeAdapter.deriveCapabilities(events)).toEqual({
+      structuredOutput: true,
+      streaming: true,
+      cancellation: true,
+      timeout: true,
+      usage: true,
+      resume: false,
+    });
+  });
+
+  it("accepts isolation only from the exact system/init readback", () => {
+    const events = claudeRuntimeAdapter.normalize(trace("claude-normal"));
+    expect(assertClaudeWorkerIsolation(events).mcpServers).toEqual([
+      "intelizen-worker",
+    ]);
+    expect(() =>
+      assertClaudeWorkerIsolation(
+        events.map((event) =>
+          event.kind === "initialized"
+            ? { ...event, mcpServers: ["intelizen-worker", "supabase"] }
+            : event,
+        ),
+      ),
+    ).toThrow("expected only intelizen-worker");
   });
 });

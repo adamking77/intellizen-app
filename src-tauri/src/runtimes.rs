@@ -429,6 +429,61 @@ pub fn runtime_discover_codex(app: AppHandle) -> Result<RuntimeDiscovery, String
     })
 }
 
+#[tauri::command]
+pub fn runtime_discover_claude(app: AppHandle) -> Result<RuntimeDiscovery, String> {
+    const CLAUDE_BINARY: &str = "/Users/adamking/.local/bin/claude";
+    const SUPPORTED_VERSION: &str = "2.1.220 (Claude Code)";
+    let worker_profile_home = app
+        .path()
+        .home_dir()
+        .map_err(|error| error.to_string())?
+        .join("Library/Application Support/IntelliZen/worker-profiles/claude-local-primary");
+    let binary = PathBuf::from(CLAUDE_BINARY);
+    if !binary.is_file() {
+        return Ok(RuntimeDiscovery {
+            adapter_id: "claude-cli".to_string(),
+            installed: false,
+            binary: CLAUDE_BINARY.to_string(),
+            version: String::new(),
+            supported: false,
+            auth_state: "unavailable".to_string(),
+            worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+        });
+    }
+    let version_output = std::process::Command::new(&binary)
+        .arg("--version")
+        .env_clear()
+        .output()
+        .map_err(|error| format!("Failed to inspect Claude version: {error}"))?;
+    let version = String::from_utf8_lossy(&version_output.stdout)
+        .trim()
+        .to_string();
+    let auth_state = if worker_profile_home.is_dir() {
+        let status = std::process::Command::new(&binary)
+            .args(["auth", "status"])
+            .env_clear()
+            .env("CLAUDE_CONFIG_DIR", &worker_profile_home)
+            .status()
+            .map_err(|error| format!("Failed to inspect Claude auth: {error}"))?;
+        if status.success() {
+            "ready"
+        } else {
+            "login_required"
+        }
+    } else {
+        "login_required"
+    };
+    Ok(RuntimeDiscovery {
+        adapter_id: "claude-cli".to_string(),
+        installed: version_output.status.success(),
+        binary: binary.to_string_lossy().into_owned(),
+        supported: version == SUPPORTED_VERSION,
+        version,
+        auth_state: auth_state.to_string(),
+        worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,25 +642,25 @@ mod tests {
         let (events, sink) = event_sink();
         let input = mock_input("cancel-test", &root, "hang-with-child", 5_000);
         let run = tokio::spawn(run_process(input, sink));
+        let mut child_pid = None;
         for _ in 0..100 {
+            child_pid = fs::read_to_string(root.join("child.pid"))
+                .ok()
+                .and_then(|value| value.trim().parse::<i32>().ok());
             if process_registry()
                 .lock()
                 .expect("registry")
                 .contains_key("cancel-test")
-                && root.join("child.pid").is_file()
+                && child_pid.is_some()
             {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+        let child_pid = child_pid.expect("numeric child pid before cancellation");
         assert!(runtime_cancel("cancel-test".to_string()).expect("cancel"));
         let exit = run.await.expect("join").expect("runtime exit");
         assert_eq!(exit.reason, "cancelled");
-        let child_pid: i32 = fs::read_to_string(root.join("child.pid"))
-            .expect("child pid")
-            .trim()
-            .parse()
-            .expect("numeric child pid");
         let alive = unsafe { libc::kill(child_pid, 0) } == 0;
         assert!(!alive, "cancelled child process survived");
         assert!(events
