@@ -91,8 +91,8 @@ try {
       cwd: assignment,
       stdin: prompt,
       env: {
-        INTELLIZEN_WORKER_BROKER_URL: "http://127.0.0.1:9",
-        INTELLIZEN_WORKER_BROKER_TOKEN: randomUUID(),
+        INTELLIZEN_WORKER_CAPABILITY_URL: "http://127.0.0.1:9",
+        INTELLIZEN_WORKER_CAPABILITY_TOKEN: randomUUID(),
       },
     },
   );

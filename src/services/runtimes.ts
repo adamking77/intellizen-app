@@ -25,8 +25,8 @@ export type RuntimeRunInput = {
     Record<
       | "CLAUDE_CONFIG_DIR"
       | "CODEX_HOME"
-      | "INTELLIZEN_WORKER_BROKER_TOKEN"
-      | "INTELLIZEN_WORKER_BROKER_URL"
+      | "INTELLIZEN_WORKER_CAPABILITY_TOKEN"
+      | "INTELLIZEN_WORKER_CAPABILITY_URL"
       | "NO_COLOR"
       | "TERM",
       string

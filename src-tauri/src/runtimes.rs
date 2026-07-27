@@ -22,8 +22,8 @@ const TERMINATION_GRACE_MS: u64 = 1_000;
 const ALLOWED_ENVIRONMENT: &[&str] = &[
     "CLAUDE_CONFIG_DIR",
     "CODEX_HOME",
-    "INTELLIZEN_WORKER_BROKER_TOKEN",
-    "INTELLIZEN_WORKER_BROKER_URL",
+    "INTELLIZEN_WORKER_CAPABILITY_TOKEN",
+    "INTELLIZEN_WORKER_CAPABILITY_URL",
     "NO_COLOR",
     "TERM",
 ];
@@ -532,6 +532,26 @@ mod tests {
         );
         assert!(validate_input(&rejected)
             .expect_err("admin credential must reject")
+            .contains("sanitized allowlist"));
+
+        let mut capability = shell_input("environment-capability", &root, "true", 2_000);
+        capability.environment.insert(
+            "INTELLIZEN_WORKER_CAPABILITY_URL".to_string(),
+            "http://127.0.0.1:49152/capability".to_string(),
+        );
+        capability.environment.insert(
+            "INTELLIZEN_WORKER_CAPABILITY_TOKEN".to_string(),
+            "opaque-runtime-value".to_string(),
+        );
+        validate_input(&capability).expect("capability environment");
+
+        let mut stale_alias = shell_input("environment-stale-alias", &root, "true", 2_000);
+        stale_alias.environment.insert(
+            "INTELLIZEN_WORKER_BROKER_URL".to_string(),
+            "http://127.0.0.1:49152/capability".to_string(),
+        );
+        assert!(validate_input(&stale_alias)
+            .expect_err("stale broker alias must reject")
             .contains("sanitized allowlist"));
         fs::remove_dir_all(root).expect("cleanup");
     }
