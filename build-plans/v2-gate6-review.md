@@ -1,13 +1,12 @@
 # IntelliZen V2 Gate 6 Review
 
 **Date:** 2026-07-27  
-**Status:** Verification pending  
+**Status:** Passed
 **Branch:** `v2-integration`
 
-Gate 6 is not closed. The implementation, deterministic verification, and
-latest-binary visual pass are complete. The isolated Claude worker login still
-requires the already-open OAuth grant before the live `system/init` acceptance
-probe can run.
+Gate 6 is closed. The implementation, deterministic verification,
+latest-binary visual pass, isolated Claude worker probe, and reviewed local
+binding are complete.
 
 ## Implemented
 
@@ -69,23 +68,26 @@ Evidence:
 - `build-plans/evidence/v2-gate6-live-panel-proof.json`
 - `scripts/v2-gate6-panel-probe.mjs`
 
-The isolated Claude profile currently reports:
+The isolated Claude profile reports authenticated provider state and the live
+probe passed:
 
-```json
-{
-  "loggedIn": false,
-  "authMethod": "none",
-  "apiProvider": "firstParty"
-}
+```text
+adapter: claude-cli 2.1.220
+worker MCP servers: intelizen-worker only
+worker tools: 11 reviewed tools
+admin MCP servers visible: none
+permission mode: dontAsk
+capability calls: list_roles exactly once
+assignment modified: false
+terminal result: GATE6_OK:<nonce returned only by the capability broker>
 ```
 
-The installed Claude CLI exposes browser login only; `claude auth login --help`
-has no device-code option. A login process is already waiting on the isolated
-profile. No global Claude credential has been copied, linked, or inherited.
+No global Claude configuration or credential was copied, linked, or inherited.
+Provider login material remains under Claude's control inside the isolated
+profile.
 
-The Claude live probe is prepared at
-`scripts/v2-gate6-claude-probe.mjs`. It will accept Gate 6 only when the actual
-`system/init` event reports:
+The live probe at `scripts/v2-gate6-claude-probe.mjs` accepted Gate 6 only after
+the actual `system/init` event reported:
 
 - exactly one MCP server, `intelizen-worker`;
 - exactly the 11 reviewed worker tools;
@@ -95,6 +97,25 @@ The Claude live probe is prepared at
 - no admin MCP server;
 - no assignment modification;
 - a successful terminal result with measured usage.
+
+The first authenticated run failed closed because Claude 2.1.220 interprets
+`--safe-mode` as disabling even the explicitly supplied MCP server. Removing
+that flag made `intelizen-worker` visible. The next run identified three
+non-credential process descriptors injected by Claude into its MCP child; the
+worker guard now admits only those exact names and continues to reject
+unreviewed `CLAUDE_*` and secret-shaped environment variables. The final live
+run passed.
+
+Evidence:
+
+- `build-plans/evidence/v2-gate6-live-claude-proof.json`
+- `scripts/v2-gate6-claude-probe.mjs`
+
+Settings → Runtimes showed Claude `READY`, displayed the reviewed local-binding
+preview, and wrote `claude-local-primary` only after Adam's explicit approval.
+The rebuilt V2 dev bundle now shows Claude `BOUND`. Readback confirms
+`--strict-mcp-config`, no `--safe-mode`, no secret references, and the exact
+worker profile.
 
 ## Product-surface evidence
 
@@ -125,18 +146,18 @@ The latest V2-dev visual pass verified:
 - a valid four-step coordinator-to-specialist graph;
 - `DRY-RUN · DISPATCHES NOTHING` with role, approval, and graph checks passing;
 - exact JSON and no-authority-expansion save preview;
-- Codex bound and Claude login-required Settings states.
+- Codex and Claude bound Settings states.
 
 The production app remained stopped throughout. Evidence is recorded in
 `build-plans/evidence/v2-gate6-latest-ui-proof.json`.
 
 ## Deterministic verification
 
-Current targeted Gate 6 suite:
+Current targeted Claude adapter/binding suite:
 
 ```text
-14 test files passed
-78 tests passed
+2 test files passed
+26 tests passed
 ```
 
 It covers:
@@ -185,21 +206,29 @@ pnpm smoke: passed
 V2 dev app debug bundle: passed
 ```
 
-The exact-value scan also passed against the rebuilt V2 dev app bundle. Its
-plist still reads `IntelliZen V2 Dev` and
-`com.genzen.intellizen.v2dev`. These checks will be repeated once more after
-the final Claude/UI proof if that proof changes source.
+The exact-value scan also passed against the final rebuilt V2 dev app bundle.
+Its plist still reads `IntelliZen V2 Dev` and
+`com.genzen.intellizen.v2dev`. The production app remained stopped.
 
-## Remaining closure actions
+Final Gate 6 verification:
 
-1. Adam approves the already-open Claude OAuth grant for the isolated
-   `claude-local-primary` profile.
-2. Run the prepared live Claude nonce/capability probe and store its sanitized
-   result.
-3. Create the reviewed Claude binding only after the Settings preview and
-   explicit confirm-write action.
-4. Repeat the already-green full app, MCP, Rust, smoke, and secret-scan suite
-   only if the final Claude/UI proof requires a source change.
-5. Change this review to `Passed` and commit the final Gate 6 evidence package.
+```text
+app: 38 test files passed, 187 assertions passed
+intentional live Gate 4 skip: 1
+MCP: 12 tests passed
+Rust: 14 tests passed
+Claude adapter/binding target: 26 tests passed
+Claude live isolation probe: passed
+TypeScript: passed
+clippy -D warnings: passed
+Vite production build: passed
+pnpm smoke: passed
+V2 dev app debug bundle: passed
+service-role exact value: dist 0, app 0
+Hermes API key exact value: dist 0, app 0
+Hermes webhook secret exact value: dist 0, app 0
+Hermes dashboard token exact value: dist 0, app 0
+intended local access header: dist 1, app 0
+```
 
-Gate 7 must not be credited until every item above is complete.
+Gate 7 may now begin.

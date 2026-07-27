@@ -1,0 +1,43 @@
+{
+  "result": "passed",
+  "observed_at": "2026-07-27T22:58:00+04:00",
+  "version": "2.1.220 (Claude Code)",
+  "dispatch_boundary": "src-tauri/src/runtimes.rs",
+  "runtime_run_id": "gate6-claude-4c9c6cd2-652c-48ab-82ed-e314555ed3c3",
+  "provider_session_id": "53ad5d12-852c-499e-8e9c-dad5f2c6ea78",
+  "worker_mcp_servers": [
+    "intelizen-worker"
+  ],
+  "worker_tools": [
+    "mcp__intelizen-worker__advance_workflow_step",
+    "mcp__intelizen-worker__append_agent_work_note",
+    "mcp__intelizen-worker__list_agent_projects",
+    "mcp__intelizen-worker__list_agent_work",
+    "mcp__intelizen-worker__list_databases",
+    "mcp__intelizen-worker__list_role_assignments",
+    "mcp__intelizen-worker__list_roles",
+    "mcp__intelizen-worker__list_workflow_runs",
+    "mcp__intelizen-worker__list_workflows",
+    "mcp__intelizen-worker__query_records",
+    "mcp__intelizen-worker__report_verification"
+  ],
+  "admin_mcp_servers_visible": [],
+  "worker_capability_calls": [
+    {
+      "tool": "list_roles",
+      "arguments": {}
+    }
+  ],
+  "assignment_modified": false,
+  "terminal_message": "GATE6_OK:6bff23d90832428ebf162c0ac7abf94a",
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 7496,
+    "cache_read_input_tokens": 7325,
+    "output_tokens": 81,
+    "web_search_requests": 0,
+    "web_fetch_requests": 0,
+    "service_tier": "standard"
+  },
+  "resume": false
+}
