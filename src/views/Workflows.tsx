@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
   FileText,
@@ -18,18 +19,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows } from "@/lib/data";
 import { isActiveWorkflowRun } from "@/lib/active-work";
-import type { WorkflowTemplateItem, WorkspaceDatabaseFieldValue } from "@/lib/types";
+import type { WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
+import {
+  buildWorkflowCatalog,
+  type WorkflowCatalogItem,
+  type WorkflowCatalogState,
+} from "@/lib/workflow-catalog";
 
-type WorkflowStatusFilter = "active" | "inactive" | "all";
+type WorkflowLane = "executable" | "sop-only";
+type WorkflowStateFilter = "all" | Exclude<WorkflowCatalogState, "sop-only">;
 
-const STATUS_FILTERS: Array<{ id: WorkflowStatusFilter; label: string }> = [
-  { id: "active", label: "Active" },
-  { id: "inactive", label: "Inactive" },
+const STATE_FILTERS: Array<{ id: WorkflowStateFilter; label: string }> = [
   { id: "all", label: "All" },
+  { id: "runnable", label: "Runnable" },
+  { id: "blocked", label: "Blocked" },
+  { id: "draft", label: "Draft" },
+  { id: "needs-review", label: "Needs review" },
 ];
 
 function formatValue(value: WorkspaceDatabaseFieldValue) {
@@ -54,10 +63,19 @@ function normalizeSnippet(value: string | null | undefined) {
   return value?.trim() || "Not recorded.";
 }
 
-function workflowStatusVariant(status: string | null | undefined): "success" | "secondary" | "warning" {
-  if (status === "Active") return "success";
-  if (status === "Draft") return "warning";
-  return "secondary";
+function catalogStateVariant(
+  state: WorkflowCatalogState,
+): "success" | "secondary" | "warning" | "destructive" | "info" {
+  if (state === "runnable") return "success";
+  if (state === "blocked") return "destructive";
+  if (state === "draft" || state === "needs-review") return "warning";
+  return "info";
+}
+
+function catalogStateLabel(state: WorkflowCatalogState) {
+  if (state === "sop-only") return "SOP only";
+  if (state === "needs-review") return "Needs review";
+  return state[0].toUpperCase() + state.slice(1);
 }
 
 function InfoCell({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -69,24 +87,16 @@ function InfoCell({ label, value }: { label: string; value: string | number | nu
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
-      <div className="font-mono text-[20px] leading-none text-[var(--text)]">{value}</div>
-      <div className="mt-1 font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">{label}</div>
-    </div>
-  );
-}
-
 function WorkflowCard({
-  workflow,
+  item,
   selected,
   onSelect,
 }: {
-  workflow: WorkflowTemplateItem;
+  item: WorkflowCatalogItem;
   selected: boolean;
   onSelect: () => void;
 }) {
+  const workflow = item.workflow;
   return (
     <button
       type="button"
@@ -103,8 +113,8 @@ function WorkflowCard({
           <p className="line-clamp-2 font-ui text-[13px] font-semibold leading-snug text-[var(--text)]">{workflow.name}</p>
           <p className="mt-1 truncate font-mono text-[10px] text-[var(--overlay-1)]">{workflow.workflow_id}</p>
         </div>
-        <Badge variant={workflowStatusVariant(workflow.status)} className="shrink-0">
-          {workflow.status ?? "Unset"}
+        <Badge variant={catalogStateVariant(item.state)} className="shrink-0">
+          {catalogStateLabel(item.state)}
         </Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -112,26 +122,30 @@ function WorkflowCard({
         {workflow.default_actor ? <Badge variant="outline">{workflow.default_actor}</Badge> : null}
         {workflow.entity ? <Badge variant="neutral">{workflow.entity}</Badge> : null}
       </div>
+      {item.blockers[0] ? (
+        <p className="mt-3 line-clamp-2 font-ui text-[10.5px] leading-snug text-[var(--danger)]">
+          {item.blockers[0].message}
+        </p>
+      ) : null}
     </button>
   );
 }
 
 export function WorkflowsView() {
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const [statusFilter, setStatusFilter] = useState<WorkflowStatusFilter>("active");
+  const [lane, setLane] = useState<WorkflowLane>("executable");
+  const [stateFilter, setStateFilter] = useState<WorkflowStateFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [designerOpen, setDesignerOpen] = useState(false);
 
-  const includeInactive = statusFilter !== "active";
   const workflowQuery = useQuery({
-    queryKey: ["workflow-registry", "screen", entityFilter, statusFilter, ownerFilter],
+    queryKey: ["workflow-registry", "screen", entityFilter, ownerFilter],
     queryFn: () =>
       listWorkflows({
         entity: entityFilter,
-        includeInactive,
-        status: statusFilter === "inactive" ? "Inactive" : null,
+        includeInactive: true,
         ownerRole: ownerFilter || null,
         limit: 100,
       }),
@@ -149,15 +163,30 @@ export function WorkflowsView() {
   });
 
   const workflows = workflowQuery.data ?? [];
+  const catalog = useMemo(
+    () => buildWorkflowCatalog(workflows, rolesQuery.data ?? []),
+    [rolesQuery.data, workflows],
+  );
   const ownerOptions = useMemo(
     () => Array.from(new Set(workflows.map((workflow) => workflow.owner_role).filter((value): value is string => Boolean(value)))).sort(),
     [workflows],
   );
 
-  const filteredWorkflows = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return workflows;
-    return workflows.filter((workflow) =>
+    return catalog.filter((item) => {
+      if (lane === "sop-only" && item.state !== "sop-only") return false;
+      if (lane === "executable" && item.state === "sop-only") return false;
+      if (
+        lane === "executable" &&
+        stateFilter !== "all" &&
+        item.state !== stateFilter
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      const workflow = item.workflow;
+      return (
       [
         workflow.name,
         workflow.workflow_id,
@@ -169,21 +198,26 @@ export function WorkflowsView() {
         workflow.expected_output,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [search, workflows]);
+        .some((value) => String(value).toLowerCase().includes(query))
+      );
+    });
+  }, [catalog, lane, search, stateFilter]);
 
   useEffect(() => {
-    if (filteredWorkflows.length === 0) {
+    if (filteredItems.length === 0) {
       setSelectedId(null);
       return;
     }
-    if (!selectedId || !filteredWorkflows.some((workflow) => workflow.id === selectedId)) {
-      setSelectedId(filteredWorkflows[0].id);
+    if (!selectedId || !filteredItems.some((item) => item.workflow.id === selectedId)) {
+      setSelectedId(filteredItems[0].workflow.id);
     }
-  }, [filteredWorkflows, selectedId]);
+  }, [filteredItems, selectedId]);
 
-  const selected = filteredWorkflows.find((workflow) => workflow.id === selectedId) ?? filteredWorkflows[0] ?? null;
+  const selectedItem =
+    filteredItems.find((item) => item.workflow.id === selectedId) ??
+    filteredItems[0] ??
+    null;
+  const selected = selectedItem?.workflow ?? null;
   const selectedActiveRun = useMemo(
     () =>
       (activeRunsQuery.data ?? []).find(
@@ -193,12 +227,13 @@ export function WorkflowsView() {
       ) ?? null,
     [activeRunsQuery.data, selected?.id],
   );
-  const metrics = useMemo(() => ({
-    total: workflows.length,
-    active: workflows.filter((workflow) => workflow.status === "Active").length,
-    approvalGated: workflows.filter((workflow) => Boolean(workflow.approval_gates)).length,
-    linkedRuns: workflows.reduce((count, workflow) => count + workflow.run_ids.length, 0),
-  }), [workflows]);
+  const laneCounts = useMemo(
+    () => ({
+      executable: catalog.filter((item) => item.state !== "sop-only").length,
+      sopOnly: catalog.filter((item) => item.state === "sop-only").length,
+    }),
+    [catalog],
+  );
 
   if (workflowQuery.error) {
     return (
@@ -219,7 +254,7 @@ export function WorkflowsView() {
         <div>
           <span className="text-label">Workflows</span>
           <p className="mt-1 font-ui text-[12px] text-[var(--overlay-1)]">
-            SOP-backed templates · Workflow Registry records
+            Executable definitions and canonical SOP records
           </p>
         </div>
         <Button
@@ -237,33 +272,52 @@ export function WorkflowsView() {
         </Button>
       </div>
 
-      <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4 lg:grid-cols-4">
-        <Metric label="Templates" value={metrics.total} />
-        <Metric label="Active" value={metrics.active} />
-        <Metric label="Approval gated" value={metrics.approvalGated} />
-        <Metric label="Linked runs" value={metrics.linkedRuns} />
-      </div>
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside className="flex h-[46%] w-full shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)] lg:h-auto lg:w-[390px] lg:border-b-0 lg:border-r">
           <div className="space-y-3 border-b border-[var(--border)] p-4">
-            <div className="grid grid-cols-3 gap-1 rounded-full border border-[var(--border)] bg-[var(--mantle)] p-1">
-              {STATUS_FILTERS.map((filter) => (
+            <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1">
+              {([
+                { id: "executable" as const, label: "Executable", count: laneCounts.executable },
+                { id: "sop-only" as const, label: "SOP only", count: laneCounts.sopOnly },
+              ]).map((filter) => (
                 <button
                   key={filter.id}
                   type="button"
-                  onClick={() => setStatusFilter(filter.id)}
+                  onClick={() => {
+                    setLane(filter.id);
+                    setStateFilter("all");
+                  }}
                   className={cn(
-                    "h-7 min-w-0 rounded-full px-2 font-ui text-[11px] font-medium transition-colors",
-                    statusFilter === filter.id
+                    "h-8 min-w-0 rounded px-2 font-ui text-[11px] font-medium transition-colors",
+                    lane === filter.id
                       ? "bg-[var(--base)] text-[var(--text)]"
                       : "text-[var(--overlay-1)] hover:text-[var(--subtext-0)]",
                   )}
                 >
-                  {filter.label}
+                  {filter.label} · {filter.count}
                 </button>
               ))}
             </div>
+
+            {lane === "executable" ? (
+              <div className="flex flex-wrap gap-1.5" aria-label="Execution state filters">
+                {STATE_FILTERS.map((filter) => (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setStateFilter(filter.id)}
+                    className={cn(
+                      "rounded-full border px-2 py-1 font-ui text-[10px] transition-colors",
+                      stateFilter === filter.id
+                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text)]"
+                        : "border-[var(--border)] text-[var(--overlay-1)] hover:text-[var(--text)]",
+                    )}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5">
               <Search className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
@@ -296,14 +350,14 @@ export function WorkflowsView() {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading workflows...
               </div>
-            ) : filteredWorkflows.length > 0 ? (
+            ) : filteredItems.length > 0 ? (
               <div className="space-y-2">
-                {filteredWorkflows.map((workflow) => (
+                {filteredItems.map((item) => (
                   <WorkflowCard
-                    key={workflow.id}
-                    workflow={workflow}
-                    selected={workflow.id === selected?.id}
-                    onSelect={() => setSelectedId(workflow.id)}
+                    key={item.workflow.id}
+                    item={item}
+                    selected={item.workflow.id === selected?.id}
+                    onSelect={() => setSelectedId(item.workflow.id)}
                   />
                 ))}
               </div>
@@ -316,7 +370,7 @@ export function WorkflowsView() {
         </aside>
 
         <main className={cn("min-w-0 flex-1", designerOpen ? "overflow-hidden" : "overflow-y-auto px-6 py-5")}>
-          {selected && designerOpen ? (
+          {selected && selectedItem?.executable && designerOpen ? (
             <WorkflowDesigner
               workflow={selected}
               roleTargets={rolesQuery.data ?? []}
@@ -332,7 +386,9 @@ export function WorkflowsView() {
                 <div className="flex items-start justify-between gap-5">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge variant={workflowStatusVariant(selected.status)}>{selected.status ?? "Unset"}</Badge>
+                      <Badge variant={catalogStateVariant(selectedItem?.state ?? "sop-only")}>
+                        {catalogStateLabel(selectedItem?.state ?? "sop-only")}
+                      </Badge>
                       {selected.entity ? <Badge variant="neutral">{selected.entity}</Badge> : null}
                       <Badge variant="outline">{formatElapsed(selected.updated_at)}</Badge>
                     </div>
@@ -340,15 +396,17 @@ export function WorkflowsView() {
                     <p className="mt-2 font-mono text-[11px] text-[var(--overlay-1)]">{selected.workflow_id}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setDesignerOpen(true)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      Design
-                    </Button>
+                    {selectedItem?.executable ? (
+                      <Button size="sm" variant="outline" onClick={() => setDesignerOpen(true)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Design
+                      </Button>
+                    ) : null}
                     <Link
                       to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry}`}
                       className={cn(buttonVariants({ size: "sm", variant: "accent-outline" }), "shrink-0")}
                     >
-                      Open registry
+                      Open canonical record
                       <ArrowUpRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
@@ -367,6 +425,40 @@ export function WorkflowsView() {
                   </Link>
                 ) : null}
               </section>
+
+              {selectedItem?.state === "sop-only" ? (
+                <section className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--overlay-1)]" />
+                    <div>
+                      <p className="font-ui text-[12px] font-semibold text-[var(--text)]">
+                        Canonical SOP record
+                      </p>
+                      <p className="mt-1 font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
+                        This record has no validated schema-v1 definition. It is reference material and cannot enter the designer or runner.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {selectedItem && selectedItem.blockers.length > 0 ? (
+                <section className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-4 py-3">
+                  <div className="flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--danger)]">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Exact blockers
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {selectedItem.blockers.map((blocker, index) => (
+                      <li key={`${blocker.kind}-${blocker.stepId ?? index}`} className="font-ui text-[11px] leading-relaxed text-[var(--subtext-0)]">
+                        <span className="font-semibold capitalize text-[var(--text)]">{blocker.kind}</span>
+                        {" · "}
+                        {blocker.message}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
               <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <InfoCell label="Owner role" value={selected.owner_role} />

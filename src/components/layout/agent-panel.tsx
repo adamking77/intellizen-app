@@ -41,6 +41,7 @@ import {
   resolveInitialPanelRole,
 } from "@/lib/agent-panel-roles";
 import { TEAM_ROSTER_CHANNEL } from "@/lib/team-roster";
+import { runnableWorkflows } from "@/lib/workflow-catalog";
 import {
   formatChatTextAttachment,
   MAX_CHAT_TEXT_FILE_BYTES,
@@ -600,7 +601,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     };
   }, [notifyWorkspaceMayHaveChanged, queryClient]);
 
-  const workflows = workflowsQuery.data ?? [];
+  const workflows = useMemo(
+    () =>
+      runnableWorkflows(
+        workflowsQuery.data ?? [],
+        rolesQuery.data ?? [],
+      ),
+    [rolesQuery.data, workflowsQuery.data],
+  );
   const isFetching = workflowsQuery.isFetching || activeWorkQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching || rolesQuery.isFetching;
   const error = rolesQuery.error ?? activeWorkQuery.error ?? workflowsQuery.error ?? agentChatQuery.error;
   const voiceProviders = getVoiceProviderStatus();
@@ -2346,7 +2354,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
                   Run workflow
                 </p>
                 {workflows.length === 0 ? (
-                  <p className="px-3 py-1.5 font-ui text-[11px] text-[var(--overlay-1)]">No active workflows.</p>
+                  <p className="px-3 py-1.5 font-ui text-[11px] text-[var(--overlay-1)]">No runnable workflows.</p>
                 ) : (
                   workflows.map((workflow) => (
                     <button
