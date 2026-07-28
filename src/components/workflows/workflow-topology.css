@@ -1,0 +1,187 @@
+.workflow-topology {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  background: var(--crust);
+}
+
+.workflow-topology-compact {
+  min-height: 230px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workflow-topology-static-shell {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--crust);
+  background-image: radial-gradient(var(--border) 0.7px, transparent 0.7px);
+  background-size: 22px 22px;
+}
+
+.workflow-topology-static {
+  position: relative;
+  margin: 0 auto;
+  transform-origin: top center;
+}
+
+.workflow-topology-static-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.workflow-topology-static-node {
+  position: absolute;
+  min-height: 106px;
+  z-index: 1;
+}
+
+.workflow-topology-node {
+  position: relative;
+  width: 210px;
+  min-height: 92px;
+  border: 1px solid var(--border-strong);
+  background: var(--base);
+  color: var(--text);
+  padding: 11px 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.workflow-topology-node.workflow-topology-static-node {
+  position: absolute;
+}
+
+.workflow-topology-node.is-selected {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-node-trigger {
+  width: 150px;
+  min-height: 72px;
+  border-radius: 999px;
+}
+
+.workflow-node-action {
+  border-radius: 7px;
+}
+
+.workflow-node-handoff {
+  border-radius: 7px 22px 22px 7px;
+  border-left-width: 4px;
+}
+
+.workflow-node-decision {
+  border-radius: 2px 18px;
+  border-style: double;
+  border-width: 3px;
+}
+
+.workflow-node-approval {
+  border-radius: 7px;
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.workflow-node-artifact {
+  border-radius: 3px;
+  border-bottom-width: 4px;
+}
+
+.workflow-node-verification {
+  border-radius: 999px 999px 10px 10px;
+  border-top-width: 4px;
+}
+
+.workflow-node-terminal {
+  width: 150px;
+  min-height: 72px;
+  border-radius: 999px;
+  border-width: 3px;
+}
+
+.workflow-node-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--overlay-1);
+}
+
+.workflow-node-state {
+  margin-left: auto;
+  color: var(--subtext-0);
+}
+
+.workflow-node-title {
+  margin-top: 9px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.workflow-node-role,
+.workflow-node-execution,
+.workflow-node-blocker {
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.25;
+  color: var(--overlay-1);
+}
+
+.workflow-node-execution {
+  text-transform: uppercase;
+}
+
+.workflow-node-blocker {
+  color: var(--danger);
+}
+
+.workflow-node-state-ready,
+.workflow-node-state-completed,
+.workflow-node-state-verified {
+  border-color: color-mix(in srgb, var(--success) 62%, var(--border));
+}
+
+.workflow-node-state-running {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.workflow-node-state-blocked,
+.workflow-node-state-failed {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+  background: color-mix(in srgb, var(--danger) 6%, var(--base));
+}
+
+.workflow-node-state-needs-approval {
+  border-color: color-mix(in srgb, var(--warning) 70%, var(--border));
+  background: color-mix(in srgb, var(--warning) 6%, var(--base));
+}
+
+.workflow-topology .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--base);
+  background: var(--accent);
+}
+
+.workflow-topology .react-flow__controls {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.workflow-topology .react-flow__controls-button {
+  border-bottom-color: var(--border);
+  background: var(--mantle);
+  color: var(--text);
+}

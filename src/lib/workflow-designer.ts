@@ -137,6 +137,30 @@ export function updateWorkflowDesignerStep(
   };
 }
 
+export function connectWorkflowDesignerEdge(
+  definition: WorkflowDefinitionV1,
+  input: {
+    sourceStepId: string;
+    target: string;
+    handle: "next" | "then" | "else";
+  },
+): WorkflowDefinitionV1 {
+  const source = definition.steps.find(
+    (step) => step.id === input.sourceStepId,
+  );
+  if (!source) return definition;
+  if (source.kind === "condition") {
+    return updateWorkflowDesignerStep(definition, {
+      ...source,
+      [input.handle === "else" ? "else" : "then"]: input.target,
+    });
+  }
+  return updateWorkflowDesignerStep(definition, {
+    ...source,
+    next: input.target,
+  });
+}
+
 const AUTHORITY = [
   "read-only",
   "draft-only",

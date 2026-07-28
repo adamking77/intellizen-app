@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Braces, GitBranch, Plus, Save, ShieldCheck, X } from "lucide-react";
+import { Braces, MessageSquareText, Plus, Save, ShieldCheck, X } from "lucide-react";
 
+import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
+import { PANEL_ROLE_CHANNEL } from "@/lib/agent-panel-roles";
 import { saveWorkflowDefinition } from "@/lib/data";
 import type { WorkflowTemplateItem } from "@/lib/types";
 import {
   addWorkflowDesignerStep,
+  connectWorkflowDesignerEdge,
   createWorkflowDesignerDraft,
   parseWorkflowDesignerJson,
   updateWorkflowDesignerStep,
@@ -23,6 +26,7 @@ import {
   type WorkflowRoleAssignStep,
   type WorkflowStep,
 } from "@/lib/workflow-schema";
+import { buildWorkflowTopology } from "@/lib/workflow-topology";
 import { cn } from "@/lib/utils";
 
 const STEP_KINDS: Array<{ id: DesignerStepKind; label: string }> = [
@@ -93,6 +97,13 @@ export function WorkflowDesigner({
     workflow.workflow_id,
   ]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
+    channel.postMessage({ collapsed: true });
+    channel.close();
+  }, []);
+
   const validation = validateWorkflowDefinition(definition);
   const selectedStep =
     definition.steps.find((step) => step.id === selectedStepId) ??
@@ -103,6 +114,16 @@ export function WorkflowDesigner({
     "blocked",
     "escalate",
   ];
+  const topology = useMemo(
+    () =>
+      buildWorkflowTopology({
+        definition,
+        roleTargets,
+        mode: dryRun ? "dry-run" : "definition",
+        dryRun,
+      }),
+    [definition, dryRun, roleTargets],
+  );
 
   function commit(next: WorkflowDefinitionV1) {
     setDefinition(next);
@@ -118,6 +139,27 @@ export function WorkflowDesigner({
     const next = addWorkflowDesignerStep(definition, addKind);
     commit(next);
     setSelectedStepId(next.steps[next.steps.length - 1].id);
+  }
+
+  function connectEdge(
+    sourceStepId: string,
+    target: string,
+    handle: "next" | "then" | "else",
+  ) {
+    commit(
+      connectWorkflowDesignerEdge(definition, {
+        sourceStepId,
+        target,
+        handle,
+      }),
+    );
+  }
+
+  function askRole(roleKey: string) {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
+    channel.postMessage({ roleKey, open: true });
+    channel.close();
   }
 
   function runDryRun() {
@@ -137,11 +179,35 @@ export function WorkflowDesigner({
         },
       ]),
     );
+    for (const step of definition.steps) {
+      if (
+        step.kind !== "role-assign" ||
+        step.resolution !== "explicit-agent-override"
+      ) {
+        continue;
+      }
+      const target = roleTargets.find(
+        (role) => role.agentKey === step.agentOverride,
+      );
+      roleResolutions[step.role] = {
+        role: step.role,
+        roleStatus: roleTargets.some((role) => role.roleKey === step.role)
+          ? "active"
+          : "retired",
+        agent: target?.agentKey ?? null,
+        agentStatus: target?.agentKey ? "active" : null,
+        bindingRef: target?.bindingRef ?? null,
+        adapterId: target?.adapterId ?? null,
+        authReady: target?.state === "ready",
+        execution: target?.execution ?? null,
+        resolution: "explicit-agent-override",
+      };
+    }
     setDryRun(
       dryRunWorkflowDefinition({
         definition,
         roleResolutions,
-        knownApprovalRoles: ["founder_approval_authority"],
+        knownApprovalRoles: roleTargets.map((role) => role.roleKey),
       }),
     );
   }
@@ -233,70 +299,70 @@ export function WorkflowDesigner({
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:grid lg:grid-cols-[minmax(320px,1fr)_360px]">
-        <main className="min-h-[360px] overflow-auto border-b border-[var(--border)] p-4 lg:border-b-0 lg:border-r">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[220px_minmax(520px,1fr)_340px]">
+        <aside className="min-h-0 overflow-y-auto border-b border-[var(--border)] bg-[var(--mantle)] p-3 xl:border-b-0 xl:border-r">
+          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+            Workflow outline
+          </p>
+          <div className="mt-3 space-y-1.5">
+            {definition.steps.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setSelectedStepId(step.id)}
+                className={cn(
+                  "w-full rounded-md border px-2.5 py-2 text-left transition-colors",
+                  selectedStep?.id === step.id
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
+                )}
+              >
+                <span className="block font-mono text-[9px] text-[var(--overlay-1)]">
+                  {index + 1} · {step.kind}
+                </span>
+                <span className="mt-1 block font-ui text-[11px] font-semibold leading-snug text-[var(--text)]">
+                  {step.title}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 border-t border-[var(--border)] pt-3">
             <select
               value={addKind}
               onChange={(event) => setAddKind(event.target.value as DesignerStepKind)}
               aria-label="Step kind"
-              className="h-8 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[11px] text-[var(--text)]"
+              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[11px] text-[var(--text)]"
             >
               {STEP_KINDS.map((kind) => (
                 <option key={kind.id} value={kind.id}>{kind.label}</option>
               ))}
             </select>
-            <Button size="sm" variant="outline" onClick={addStep}>
+            <Button className="mt-2 w-full" size="sm" variant="outline" onClick={addStep}>
               <Plus className="h-3.5 w-3.5" />
               Add step
             </Button>
           </div>
-
-          <div
-            className="mx-auto max-w-[620px] rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-4"
-            aria-label="Workflow graph canvas"
-          >
-            {definition.steps.map((step, index) => {
-              const targets =
-                step.kind === "condition"
-                  ? [`true → ${step.then}`, `false → ${step.else}`]
-                  : [step.next ? `next → ${step.next}` : "terminal"];
-              return (
-                <div key={step.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStepId(step.id)}
-                    className={cn(
-                      "w-full rounded-md border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
-                      selectedStep?.id === step.id
-                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-                        : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-[10px] text-[var(--overlay-1)]">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-ui text-[12px] font-semibold text-[var(--text)]">{step.title}</span>
-                        <span className="mt-1 block font-mono text-[10px] text-[var(--overlay-1)]">{step.id} · {step.kind}</span>
-                      </span>
-                      {step.kind === "role-assign" ? <Badge variant="info">{step.role}</Badge> : null}
-                    </div>
-                  </button>
-                  {index < definition.steps.length - 1 || targets[0] !== "terminal" ? (
-                    <div className="flex min-h-10 items-center justify-center gap-2 font-mono text-[9px] text-[var(--overlay-1)]">
-                      <GitBranch className="h-3 w-3" aria-hidden="true" />
-                      {targets.join(" · ")}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+          <div className="mt-4 border-t border-[var(--border)] pt-3">
+            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+              Validation
+            </p>
+            <p className={cn("mt-1 font-ui text-[10.5px]", validation.valid ? "text-[var(--success)]" : "text-[var(--danger)]")}>
+              {validation.valid ? "Schema and graph valid" : `${validation.errors.length} issues`}
+            </p>
           </div>
+        </aside>
+
+        <main className="relative min-h-[440px] overflow-hidden border-b border-[var(--border)] xl:border-b-0 xl:border-r">
+          <WorkflowTopology
+            topology={topology}
+            selectedStepId={selectedStepId}
+            editable={!dryRun}
+            onSelectStep={setSelectedStepId}
+            onConnectEdge={connectEdge}
+          />
 
           {dryRun ? (
-            <section className="mx-auto mt-4 max-w-[620px] border-t border-[var(--border)] pt-3">
+            <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
               <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
                 Dry-run · dispatches nothing
               </p>
@@ -318,6 +384,16 @@ export function WorkflowDesigner({
                   );
                 })}
               </ol>
+              {dryRun.errors.length > 0 ? (
+                <ul className="mt-2 space-y-1 font-ui text-[10px] text-[var(--danger)]">
+                  {dryRun.errors.map((error) => (
+                    <li key={`${error.path}-${error.code}`}>{error.path} · {error.message}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <Button className="mt-2" size="sm" variant="ghost" onClick={() => setDryRun(null)}>
+                Return to design
+              </Button>
             </section>
           ) : null}
         </main>
@@ -367,6 +443,16 @@ export function WorkflowDesigner({
                       ))}
                     </select>
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => askRole(selectedStep.role)}
+                  >
+                    <MessageSquareText className="h-3.5 w-3.5" />
+                    Ask this role
+                  </Button>
                   <div>
                     <label
                       htmlFor="workflow-step-instructions"

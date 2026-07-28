@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addWorkflowDesignerStep,
+  connectWorkflowDesignerEdge,
   createWorkflowDesignerDraft,
   workflowAuthorityDiff,
 } from "@/lib/workflow-designer";
@@ -104,5 +105,31 @@ describe("workflow designer schema output", () => {
       authorityExpanded: true,
       addedApprovalGates: ["founder_approval_authority"],
     });
+  });
+
+  it("round-trips direct edge edits through the existing schema", () => {
+    const withCondition = addWorkflowDesignerStep(
+      addWorkflowDesignerStep(
+        createWorkflowDesignerDraft({
+          id: "edge-proof",
+          name: "Edge proof",
+          ownerRole: "chief_engineer",
+        }),
+        "condition",
+      ),
+      "artifact",
+    );
+    const condition = withCondition.steps.find(
+      (step) => step.kind === "condition",
+    );
+    if (!condition) throw new Error("fixture");
+    const connected = connectWorkflowDesignerEdge(withCondition, {
+      sourceStepId: condition.id,
+      target: "blocked",
+      handle: "else",
+    });
+    const updated = connected.steps.find((step) => step.id === condition.id);
+    expect(updated).toMatchObject({ kind: "condition", else: "blocked" });
+    expect(validateWorkflowDefinition(connected).valid).toBe(true);
   });
 });

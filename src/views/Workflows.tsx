@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -23,12 +23,18 @@ import type { WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
+import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import {
   buildWorkflowCatalog,
   type WorkflowCatalogItem,
   type WorkflowCatalogState,
 } from "@/lib/workflow-catalog";
+import { buildWorkflowTopology } from "@/lib/workflow-topology";
+import {
+  validateWorkflowDefinition,
+  type WorkflowDefinitionV1,
+} from "@/lib/workflow-schema";
 
 type WorkflowLane = "executable" | "sop-only";
 type WorkflowStateFilter = "all" | Exclude<WorkflowCatalogState, "sop-only">;
@@ -61,6 +67,54 @@ function formatElapsed(iso: string | null | undefined) {
 
 function normalizeSnippet(value: string | null | undefined) {
   return value?.trim() || "Not recorded.";
+}
+
+function hasRecordedValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  }
+  return Boolean(value);
+}
+
+function workflowApprovalLabel(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "No approval decision";
+  }
+  const decisions = Object.values(value as Record<string, unknown>)
+    .map((entry) =>
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>).decision
+        : null,
+    )
+    .filter((decision): decision is string => typeof decision === "string");
+  if (decisions.length === 0) return "Approval state recorded";
+  return `Approval · ${decisions.join(", ")}`;
+}
+
+function workflowVerificationLabel(
+  definition: WorkflowDefinitionV1 | null,
+  stepStates: unknown,
+) {
+  const verifierSteps =
+    definition?.steps.filter(
+      (step) => step.kind === "role-assign" && step.role === "verifier",
+    ) ?? [];
+  if (
+    !stepStates ||
+    typeof stepStates !== "object" ||
+    Array.isArray(stepStates) ||
+    verifierSteps.length === 0
+  ) {
+    return "Verification pending";
+  }
+  const states = stepStates as Record<string, unknown>;
+  const recorded = verifierSteps
+    .map((step) => states[step.id])
+    .filter((state): state is string => typeof state === "string");
+  return recorded.length > 0
+    ? `Verification · ${recorded.join(", ")}`
+    : "Verification pending";
 }
 
 function catalogStateVariant(
@@ -133,6 +187,8 @@ function WorkflowCard({
 
 export function WorkflowsView() {
   const entityFilter = useAppStore((state) => state.entityFilter);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRunId = searchParams.get("run");
   const [lane, setLane] = useState<WorkflowLane>("executable");
   const [stateFilter, setStateFilter] = useState<WorkflowStateFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState("");
@@ -158,7 +214,7 @@ export function WorkflowsView() {
   });
   const activeRunsQuery = useQuery({
     queryKey: ["active-work", "workflow-screen"],
-    queryFn: () => listWorkflowRuns({ includeCompleted: false, limit: 100 }),
+    queryFn: () => listWorkflowRuns({ includeCompleted: true, limit: 100 }),
     refetchInterval: 15_000,
   });
 
@@ -213,7 +269,27 @@ export function WorkflowsView() {
     }
   }, [filteredItems, selectedId]);
 
+  const selectedRun =
+    (activeRunsQuery.data ?? []).find((run) => run.id === requestedRunId) ??
+    null;
+  useEffect(() => {
+    if (!selectedRun?.workflow_record_id) return;
+    const runWorkflow = catalog.find(
+      (item) => item.workflow.id === selectedRun.workflow_record_id,
+    );
+    if (!runWorkflow) return;
+    setLane(runWorkflow.state === "sop-only" ? "sop-only" : "executable");
+    setStateFilter("all");
+    setSelectedId(runWorkflow.workflow.id);
+    setDesignerOpen(false);
+  }, [catalog, selectedRun]);
+
   const selectedItem =
+    (selectedRun?.workflow_record_id
+      ? catalog.find(
+          (item) => item.workflow.id === selectedRun.workflow_record_id,
+        )
+      : null) ??
     filteredItems.find((item) => item.workflow.id === selectedId) ??
     filteredItems[0] ??
     null;
@@ -227,6 +303,30 @@ export function WorkflowsView() {
       ) ?? null,
     [activeRunsQuery.data, selected?.id],
   );
+  const liveRunDefinition = useMemo(() => {
+    if (!selectedRun) return null;
+    const validation = validateWorkflowDefinition(
+      selectedRun.definition_snapshot,
+    );
+    return validation.valid
+      ? (selectedRun.definition_snapshot as WorkflowDefinitionV1)
+      : null;
+  }, [selectedRun]);
+  const selectedTopology = useMemo(() => {
+    const definition = liveRunDefinition ?? selectedItem?.definition;
+    if (!definition) return null;
+    return buildWorkflowTopology({
+      definition,
+      roleTargets: rolesQuery.data ?? [],
+      mode: liveRunDefinition ? "run" : "definition",
+      run: liveRunDefinition ? selectedRun : null,
+    });
+  }, [
+    liveRunDefinition,
+    rolesQuery.data,
+    selectedItem?.definition,
+    selectedRun,
+  ]);
   const laneCounts = useMemo(
     () => ({
       executable: catalog.filter((item) => item.state !== "sop-only").length,
@@ -273,7 +373,8 @@ export function WorkflowsView() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <aside className="flex h-[46%] w-full shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)] lg:h-auto lg:w-[390px] lg:border-b-0 lg:border-r">
+        {!designerOpen ? (
+          <aside className="flex h-[46%] w-full shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)] lg:h-auto lg:w-[390px] lg:border-b-0 lg:border-r">
           <div className="space-y-3 border-b border-[var(--border)] p-4">
             <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1">
               {([
@@ -367,7 +468,8 @@ export function WorkflowsView() {
               </div>
             )}
           </div>
-        </aside>
+          </aside>
+        ) : null}
 
         <main className={cn("min-w-0 flex-1", designerOpen ? "overflow-hidden" : "overflow-y-auto px-6 py-5")}>
           {selected && selectedItem?.executable && designerOpen ? (
@@ -457,6 +559,67 @@ export function WorkflowsView() {
                       </li>
                     ))}
                   </ul>
+                </section>
+              ) : null}
+
+              {selectedTopology ? (
+                <section>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+                        {selectedRun ? "Live run topology" : "Topology preview"}
+                      </p>
+                      <p className="mt-1 font-ui text-[11px] text-[var(--subtext-0)]">
+                        {selectedRun
+                          ? selectedRun.name
+                          : "The same graph enters design, dry-run, and run modes."}
+                      </p>
+                    </div>
+                    {selectedRun ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSearchParams({})}
+                      >
+                        Close run
+                      </Button>
+                    ) : null}
+                  </div>
+                  {selectedRun ? (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      <Badge variant="info">
+                        Execution · {selectedRun.status ?? "Unknown"}
+                      </Badge>
+                      <Badge variant={selectedRun.receipt ? "success" : "secondary"}>
+                        {selectedRun.receipt ? "Receipt recorded" : "Receipt pending"}
+                      </Badge>
+                      <Badge variant={hasRecordedValue(selectedRun.approvals) ? "warning" : "secondary"}>
+                        {workflowApprovalLabel(selectedRun.approvals)}
+                      </Badge>
+                      <Badge variant={hasRecordedValue(selectedRun.step_states) ? "success" : "secondary"}>
+                        {workflowVerificationLabel(
+                          liveRunDefinition,
+                          selectedRun.step_states,
+                        )}
+                      </Badge>
+                      <Badge variant={selectedRun.completed_at ? "success" : "secondary"}>
+                        {selectedRun.completed_at ? "Completion recorded" : "Not completed"}
+                      </Badge>
+                    </div>
+                  ) : null}
+                  <WorkflowTopology
+                    key={
+                      selectedRun
+                        ? `run-${selectedRun.id}`
+                        : `definition-${selected.id}`
+                    }
+                    topology={selectedTopology}
+                    compact={!selectedRun}
+                  />
+                </section>
+              ) : selectedRun ? (
+                <section className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[11px] text-[var(--overlay-1)]">
+                  This run has no valid schema-v1 snapshot, so it cannot be represented as an executable topology.
                 </section>
               ) : null}
 

@@ -502,12 +502,19 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
     roleChannelRef.current = channel;
-    channel.onmessage = (event: MessageEvent<{ roleKey?: unknown }>) => {
-      const roleKey =
-        typeof event.data?.roleKey === "string" ? event.data.roleKey : null;
-      applyRoleSelection(roleKey, false);
+    channel.onmessage = (event: MessageEvent<{ roleKey?: unknown; open?: unknown; collapsed?: unknown }>) => {
+      if (typeof event.data?.roleKey === "string") {
+        applyRoleSelection(event.data.roleKey, false);
+      }
       if (event.data && "open" in event.data && event.data.open === true) {
         setUserCollapsed(false);
+      }
+      if (
+        event.data &&
+        "collapsed" in event.data &&
+        event.data.collapsed === true
+      ) {
+        setUserCollapsed(true);
       }
     };
     return () => {
