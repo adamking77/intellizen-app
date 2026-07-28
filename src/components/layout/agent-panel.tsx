@@ -37,6 +37,7 @@ import {
   panelRoleStorageKey,
   resolveInitialPanelRole,
 } from "@/lib/agent-panel-roles";
+import { TEAM_ROSTER_CHANNEL } from "@/lib/team-roster";
 import {
   formatChatTextAttachment,
   MAX_CHAT_TEXT_FILE_BYTES,
@@ -413,6 +414,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
   const expanded = standalone || !collapsed;
+  const queryClient = useQueryClient();
 
   const rolesQuery = useQuery({
     queryKey: ["agent-panel", "role-targets"],
@@ -498,6 +500,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       const roleKey =
         typeof event.data?.roleKey === "string" ? event.data.roleKey : null;
       applyRoleSelection(roleKey, false);
+      if (event.data && "open" in event.data && event.data.open === true) {
+        setUserCollapsed(false);
+      }
     };
     return () => {
       roleChannelRef.current = null;
@@ -505,14 +510,26 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     };
   }, [applyRoleSelection]);
 
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(TEAM_ROSTER_CHANNEL);
+    channel.onmessage = () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-panel", "role-targets"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-panel-role-targets"],
+      });
+    };
+    return () => channel.close();
+  }, [queryClient]);
+
   const workflowsQuery = useQuery({
     queryKey: ["workflows", "agent-panel", "active", entityFilter],
     queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: false, limit: 24 }),
     staleTime: 60_000,
     enabled: expanded,
   });
-  const queryClient = useQueryClient();
-
   const notifyWorkspaceMayHaveChanged = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
     void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });

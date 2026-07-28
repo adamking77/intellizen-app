@@ -4,6 +4,8 @@ import {
   type AgentPanelRoleRecord,
 } from "@/lib/agent-panel-roles";
 import { supabase } from "@/lib/supabase";
+import { applyTeamReviewFixture } from "@/lib/team-roster";
+import { readTeamReviewFixture } from "@/services/team-review-fixture";
 import { listRuntimeBindings } from "@/services/runtime-bindings";
 
 export async function listAgentPanelRoleTargets() {
@@ -31,9 +33,12 @@ export async function listAgentPanelRoleTargets() {
     agents: rows.filter(
       (record) => record.database_id === GENZEN_WORKSPACE_DATABASE_IDS.agents,
     ),
-    assignments: rows.filter(
-      (record) =>
-        record.database_id === GENZEN_WORKSPACE_DATABASE_IDS.roleAssignments,
+    assignments: applyTeamReviewFixture(
+      rows.filter(
+        (record) =>
+          record.database_id === GENZEN_WORKSPACE_DATABASE_IDS.roleAssignments,
+      ),
+      readTeamReviewFixture(),
     ),
     bindings: store.bindings,
   });

@@ -10,6 +10,7 @@ import {
   Radar,
   Search,
   Settings,
+  UsersRound,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Intel", to: "/intel", key: "intel", icon: Radar },
   { label: "Workflows", to: "/workflows", key: "workflows", icon: Workflow },
+  { label: "Team", to: "/team", key: "team", icon: UsersRound },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
