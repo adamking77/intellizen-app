@@ -5,8 +5,6 @@ import {
 import type { RuntimeBinding } from "@/services/runtime-bindings";
 import type { RuntimeDiscovery } from "@/services/runtimes";
 
-const PROJECT_GRANT = "/Users/adamking/projects/intellizen-app";
-
 export function normalizeRuntimeModelPolicy(
   defaultModel: string,
   allowedModels: string | string[],
@@ -50,7 +48,7 @@ export function runtimeBindingCandidate(
         "{workingDirectory}",
         "-",
       ],
-      workingDirGrants: [PROJECT_GRANT],
+      workingDirGrants: [],
       providerPermissionMode: "workspace-write",
       envPolicy: "sanitized",
       workerProfileHome: discovery.workerProfileHome,
@@ -71,7 +69,7 @@ export function runtimeBindingCandidate(
     argTemplates: claudeExecArgs(
       `${discovery.workerProfileHome}/mcp-worker.json`,
     ),
-    workingDirGrants: [PROJECT_GRANT],
+    workingDirGrants: [],
     providerPermissionMode: "dontAsk",
     envPolicy: "sanitized",
     workerProfileHome: discovery.workerProfileHome,

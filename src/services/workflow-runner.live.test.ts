@@ -2,10 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdtemp } from "node:fs/promises";
 import { createServer } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
@@ -24,7 +25,7 @@ import {
 } from "./workflow-runner";
 
 const execFileAsync = promisify(execFile);
-const projectRoot = "/Users/adamking/projects/intellizen-app";
+const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const runLive = process.env.RUN_GATE4_LIVE === "1";
 const liveIt = runLive ? it : it.skip;
 
@@ -328,7 +329,10 @@ describe("Gate 4 live role-directed proof", () => {
       ) as WorkflowDefinitionV1;
       const bindingsStore = JSON.parse(
         await readFile(
-          "/Users/adamking/Library/Application Support/IntelliZen/runtime-bindings.json",
+          join(
+            homedir(),
+            "Library/Application Support/IntelliZen/runtime-bindings.json",
+          ),
           "utf8",
         ),
       ) as {

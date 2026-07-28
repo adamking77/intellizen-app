@@ -12,7 +12,7 @@ function discovery(
   return {
     adapterId,
     installed: true,
-    binary: `/Users/adamking/.local/bin/${adapterId === "codex-cli" ? "codex" : "claude"}`,
+    binary: `/opt/local/bin/${adapterId === "codex-cli" ? "codex" : "claude"}`,
     resolutionSource: "PATH",
     version:
       adapterId === "codex-cli"
@@ -52,6 +52,7 @@ describe("runtime binding candidates", () => {
     expect(candidate.bindingId).toBe("codex-local-primary");
     expect(candidate.argTemplates).toContain("--strict-config");
     expect(candidate.providerPermissionMode).toBe("workspace-write");
+    expect(candidate.workingDirGrants).toEqual([]);
   });
 
   it("uses an isolated strict Claude MCP config with no resume claim", () => {

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
+    env,
     fs::{self, OpenOptions},
     io::Write,
     path::{Component, Path, PathBuf},
@@ -12,9 +13,8 @@ const STORE_VERSION: u32 = 1;
 const STORE_FILE_NAME: &str = "runtime-bindings.json";
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
 const CLAUDE_MCP_CONFIG_FILE_NAME: &str = "mcp-worker.json";
-const WORKER_NODE_BINARY: &str = "/Users/adamking/.local/bin/node";
-const INTELLIZEN_MCP_BUILD: &str =
-    "/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js";
+const WORKER_NODE_ENV: &str = "INTELLIZEN_WORKER_NODE_BINARY";
+const INTELLIZEN_MCP_ENV: &str = "INTELLIZEN_MCP_BUILD";
 const ALLOWED_ADAPTERS: &[&str] = &["codex-cli", "claude-cli"];
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -54,6 +54,12 @@ pub struct RuntimeBinding {
 pub struct RuntimeBindingsStore {
     pub version: u32,
     pub bindings: Vec<RuntimeBinding>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WorkerRuntimeDependencies {
+    node_binary: PathBuf,
+    mcp_build: PathBuf,
 }
 
 impl Default for RuntimeBindingsStore {
@@ -106,6 +112,24 @@ fn canonical_existing_file(path: &str, label: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("{label} could not be resolved: {error}"))?;
     if !canonical.is_file() {
         return Err(format!("{label} must resolve to a file."));
+    }
+    Ok(canonical)
+}
+
+fn canonical_executable_file(path: &Path, label: &str) -> Result<PathBuf, String> {
+    let canonical = canonical_existing_file(&path.to_string_lossy(), label)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if fs::metadata(&canonical)
+            .map_err(|error| format!("{label} metadata could not be read: {error}"))?
+            .permissions()
+            .mode()
+            & 0o111
+            == 0
+        {
+            return Err(format!("{label} is not executable."));
+        }
     }
     Ok(canonical)
 }
@@ -330,12 +354,120 @@ fn write_store_atomic(path: &Path, store: &RuntimeBindingsStore) -> Result<(), S
     Ok(())
 }
 
-fn codex_worker_config() -> String {
+fn configured_dependency(
+    variable: &str,
+    label: &str,
+    read_env: &dyn Fn(&str) -> Option<String>,
+    executable: bool,
+) -> Result<Option<PathBuf>, String> {
+    let Some(value) = read_env(variable) else {
+        return Ok(None);
+    };
+    if value.trim().is_empty() {
+        return Err(format!(
+            "{variable} is set but empty. Set it to an absolute {label} path or remove it."
+        ));
+    }
+    let resolved = if executable {
+        canonical_executable_file(Path::new(&value), label)
+    } else {
+        canonical_existing_file(&value, label)
+    }
+    .map_err(|error| format!("{variable} is invalid: {error}"))?;
+    Ok(Some(resolved))
+}
+
+fn resolve_worker_runtime_dependencies_with(
+    binding: &RuntimeBinding,
+    read_env: &dyn Fn(&str) -> Option<String>,
+    current_dir: Option<&Path>,
+    current_exe: Option<&Path>,
+) -> Result<WorkerRuntimeDependencies, String> {
+    let node_binary = if let Some(configured) =
+        configured_dependency(WORKER_NODE_ENV, "worker Node.js binary", read_env, true)?
+    {
+        configured
+    } else {
+        let mut candidates = Vec::new();
+        if let Some(path) = read_env("PATH") {
+            candidates.extend(env::split_paths(&path).map(|root| root.join("node")));
+        }
+        candidates.extend([
+            PathBuf::from("/opt/homebrew/bin/node"),
+            PathBuf::from("/usr/local/bin/node"),
+            PathBuf::from("/usr/bin/node"),
+        ]);
+        candidates
+            .iter()
+            .find_map(|candidate| canonical_executable_file(candidate, "worker Node.js binary").ok())
+            .ok_or_else(|| {
+                format!(
+                    "Worker Node.js binary was not found. Install Node.js or set {WORKER_NODE_ENV} to its absolute executable path."
+                )
+            })?
+    };
+
+    let mcp_build = if let Some(configured) =
+        configured_dependency(INTELLIZEN_MCP_ENV, "IntelliZen MCP build", read_env, false)?
+    {
+        configured
+    } else {
+        let mut roots = BTreeSet::new();
+        for grant in &binding.working_dir_grants {
+            roots.insert(PathBuf::from(grant));
+        }
+        if let Some(directory) = current_dir {
+            roots.insert(directory.to_path_buf());
+        }
+        if let Some(executable) = current_exe {
+            if let Some(parent) = executable.parent() {
+                roots.insert(parent.to_path_buf());
+            }
+        }
+        roots
+            .iter()
+            .map(|root| root.join("mcp-server").join("dist").join("index.js"))
+            .find_map(|candidate| {
+                canonical_existing_file(&candidate.to_string_lossy(), "IntelliZen MCP build").ok()
+            })
+            .ok_or_else(|| {
+                format!(
+                    "IntelliZen worker MCP build was not found in any reviewed working-directory grant or application path. Run `pnpm --dir mcp-server build` in the IntelliZen checkout, or set {INTELLIZEN_MCP_ENV} to the absolute dist/index.js path."
+                )
+            })?
+    };
+
+    Ok(WorkerRuntimeDependencies {
+        node_binary,
+        mcp_build,
+    })
+}
+
+fn resolve_worker_runtime_dependencies(
+    binding: &RuntimeBinding,
+) -> Result<WorkerRuntimeDependencies, String> {
+    let current_dir = env::current_dir().ok();
+    let current_exe = env::current_exe().ok();
+    resolve_worker_runtime_dependencies_with(
+        binding,
+        &|key| env::var(key).ok(),
+        current_dir.as_deref(),
+        current_exe.as_deref(),
+    )
+}
+
+fn json_string(path: &Path) -> String {
+    serde_json::to_string(&path.to_string_lossy()).expect("path string is serializable")
+}
+
+fn codex_worker_config(dependencies: &WorkerRuntimeDependencies) -> String {
+    let node_binary = json_string(&dependencies.node_binary);
+    let mcp_build = json_string(&dependencies.mcp_build);
     format!(
         r#"[mcp_servers.intelizen-worker]
-command = "{WORKER_NODE_BINARY}"
+command = {node_binary}
 args = [
-  "{INTELLIZEN_MCP_BUILD}",
+  {mcp_build},
   "--plane",
   "worker",
 ]
@@ -361,14 +493,14 @@ enabled_tools = [
     )
 }
 
-fn claude_worker_config() -> String {
+fn claude_worker_config(dependencies: &WorkerRuntimeDependencies) -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "mcpServers": {
             "intelizen-worker": {
                 "type": "stdio",
-                "command": WORKER_NODE_BINARY,
+                "command": dependencies.node_binary,
                 "args": [
-                    INTELLIZEN_MCP_BUILD,
+                    dependencies.mcp_build,
                     "--plane",
                     "worker"
                 ]
@@ -425,6 +557,7 @@ pub fn runtime_bindings_upsert(
 ) -> Result<RuntimeBindingMutationResult, String> {
     let root = runtime_config_root(&app)?;
     let binding = normalize_binding(binding, &root, confirm_write)?;
+    resolve_worker_runtime_dependencies(&binding)?;
     if !confirm_write {
         return Ok(RuntimeBindingMutationResult {
             dry_run: true,
@@ -466,22 +599,21 @@ pub fn runtime_binding_prepare_worker_profile(
         .cloned()
         .ok_or_else(|| format!("Runtime binding {binding_id} was not found."))?;
     let binding = normalize_binding(binding, &root, false)?;
+    let dependencies = resolve_worker_runtime_dependencies(&binding)?;
     let (profile_path, contents) = match binding.adapter_id.as_str() {
         "codex-cli" => (
             PathBuf::from(&binding.worker_profile_home).join(CODEX_CONFIG_FILE_NAME),
-            codex_worker_config(),
+            codex_worker_config(&dependencies),
         ),
         "claude-cli" => (
             PathBuf::from(&binding.worker_profile_home).join(CLAUDE_MCP_CONFIG_FILE_NAME),
-            claude_worker_config(),
+            claude_worker_config(&dependencies),
         ),
         _ => {
             return Err("Worker profile preparation supports codex-cli and claude-cli.".to_string())
         }
     };
     if confirm_write {
-        canonical_existing_file(WORKER_NODE_BINARY, "worker node binary")?;
-        canonical_existing_file(INTELLIZEN_MCP_BUILD, "IntelliZen MCP build")?;
         write_secure_text_atomic(&profile_path, &contents)?;
     }
     Ok(RuntimeProfileMutationResult {
@@ -542,6 +674,29 @@ mod tests {
                 default: "gpt-5.3-codex".to_string(),
                 allowed: vec!["gpt-5.3-codex".to_string()],
             },
+        }
+    }
+
+    fn executable_fixture(path: &Path) {
+        fs::create_dir_all(path.parent().expect("fixture parent")).expect("fixture directory");
+        fs::write(path, b"fixture").expect("fixture file");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+                .expect("fixture executable");
+        }
+    }
+
+    fn dependency_fixture(root: &Path) -> WorkerRuntimeDependencies {
+        let node = root.join("bin").join("node");
+        let mcp = root.join("mcp-server").join("dist").join("index.js");
+        executable_fixture(&node);
+        fs::create_dir_all(mcp.parent().expect("MCP parent")).expect("MCP directory");
+        fs::write(&mcp, b"fixture").expect("MCP fixture");
+        WorkerRuntimeDependencies {
+            node_binary: fs::canonicalize(node).expect("canonical node"),
+            mcp_build: fs::canonicalize(mcp).expect("canonical MCP"),
         }
     }
 
@@ -624,34 +779,147 @@ mod tests {
     }
 
     #[test]
+    fn discovers_worker_dependencies_from_path_and_reviewed_grant() {
+        let root = test_root("dependency-discovery");
+        fs::create_dir_all(root.join("worker-profiles")).expect("worker root");
+        let dependencies = dependency_fixture(&root);
+        let mut binding = fixture(&root);
+        binding.working_dir_grants = vec![root.to_string_lossy().into_owned()];
+        let path = dependencies
+            .node_binary
+            .parent()
+            .expect("node parent")
+            .to_string_lossy()
+            .into_owned();
+        let resolved = resolve_worker_runtime_dependencies_with(
+            &binding,
+            &|key| (key == "PATH").then(|| path.clone()),
+            None,
+            None,
+        )
+        .expect("discover dependencies");
+        assert_eq!(resolved, dependencies);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn explicit_worker_dependency_configuration_is_validated_without_fallback() {
+        let root = test_root("dependency-config");
+        fs::create_dir_all(root.join("worker-profiles")).expect("worker root");
+        let dependencies = dependency_fixture(&root);
+        let binding = fixture(&root);
+        let read_env = |key: &str| match key {
+            WORKER_NODE_ENV => Some(dependencies.node_binary.to_string_lossy().into_owned()),
+            INTELLIZEN_MCP_ENV => Some(dependencies.mcp_build.to_string_lossy().into_owned()),
+            _ => None,
+        };
+        assert_eq!(
+            resolve_worker_runtime_dependencies_with(&binding, &read_env, None, None)
+                .expect("configured dependencies"),
+            dependencies
+        );
+
+        let invalid = |key: &str| match key {
+            WORKER_NODE_ENV => Some(root.join("missing-node").to_string_lossy().into_owned()),
+            "PATH" => Some(
+                dependencies
+                    .node_binary
+                    .parent()
+                    .expect("node parent")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            _ => None,
+        };
+        let error = resolve_worker_runtime_dependencies_with(&binding, &invalid, None, None)
+            .expect_err("invalid explicit path");
+        assert!(error.contains(WORKER_NODE_ENV));
+        assert!(error.contains("could not be resolved"));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn missing_worker_dependencies_fail_with_actionable_configuration() {
+        let root = test_root("dependency-missing");
+        fs::create_dir_all(root.join("worker-profiles")).expect("worker root");
+        let mut binding = fixture(&root);
+        binding.working_dir_grants = vec![root.join("work").to_string_lossy().into_owned()];
+        let error = resolve_worker_runtime_dependencies_with(
+            &binding,
+            &|_| None,
+            Some(&root.join("elsewhere")),
+            None,
+        )
+        .expect_err("dependencies should be missing");
+        assert!(
+            error.contains(WORKER_NODE_ENV) || error.contains(INTELLIZEN_MCP_ENV),
+            "{error}"
+        );
+        assert!(error.contains("not found"), "{error}");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn mcp_discovery_does_not_escape_above_the_reviewed_grant() {
+        let root = test_root("dependency-grant-boundary");
+        fs::create_dir_all(root.join("worker-profiles")).expect("worker root");
+        let dependencies = dependency_fixture(&root);
+        let mut binding = fixture(&root);
+        binding.working_dir_grants = vec![root.join("work").to_string_lossy().into_owned()];
+        let node_path = dependencies
+            .node_binary
+            .parent()
+            .expect("node parent")
+            .to_string_lossy()
+            .into_owned();
+        let error = resolve_worker_runtime_dependencies_with(
+            &binding,
+            &|key| (key == "PATH").then(|| node_path.clone()),
+            None,
+            None,
+        )
+        .expect_err("parent MCP build must not be selected");
+        assert!(error.contains(INTELLIZEN_MCP_ENV), "{error}");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn codex_worker_profile_contains_only_the_worker_mcp() {
-        let config = codex_worker_config();
+        let root = test_root("codex-profile");
+        let dependencies = dependency_fixture(&root);
+        let config = codex_worker_config(&dependencies);
         assert!(config.contains("[mcp_servers.intelizen-worker]"));
         assert!(config.contains("--plane"));
         assert!(config.contains("\"worker\""));
+        assert!(config.contains(&dependencies.node_binary.to_string_lossy().into_owned()));
+        assert!(config.contains(&dependencies.mcp_build.to_string_lossy().into_owned()));
         assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_URL"));
         assert!(config.contains("INTELLIZEN_WORKER_CAPABILITY_TOKEN"));
         assert!(!config.contains("supabase-genzen"));
         assert!(!config.contains("SERVICE_ROLE"));
         assert!(!config.contains("api_key"));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
     fn claude_worker_profile_contains_only_the_worker_mcp() {
-        let config = claude_worker_config();
+        let root = test_root("claude-profile");
+        let dependencies = dependency_fixture(&root);
+        let config = claude_worker_config(&dependencies);
         let parsed: serde_json::Value = serde_json::from_str(&config).expect("valid json");
         let servers = parsed["mcpServers"].as_object().expect("mcp servers");
         assert_eq!(servers.keys().collect::<Vec<_>>(), vec!["intelizen-worker"]);
         assert_eq!(
             parsed["mcpServers"]["intelizen-worker"]["command"],
-            WORKER_NODE_BINARY
+            dependencies.node_binary.to_string_lossy().as_ref()
         );
         assert_eq!(
             parsed["mcpServers"]["intelizen-worker"]["args"],
-            serde_json::json!([INTELLIZEN_MCP_BUILD, "--plane", "worker"])
+            serde_json::json!([dependencies.mcp_build, "--plane", "worker"])
         );
         assert!(!config.contains("supabase-genzen"));
         assert!(!config.contains("SERVICE_ROLE"));
         assert!(!config.contains("api_key"));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }

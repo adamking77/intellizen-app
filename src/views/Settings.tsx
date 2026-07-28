@@ -150,16 +150,16 @@ export function SettingsView() {
   async function reviewBinding(adapterId: "codex-cli" | "claude-cli") {
     const runtime = runtimeQuery.data?.find((item) => item.adapterId === adapterId);
     if (!runtime) return;
-    const result = await previewRuntimeBinding(runtimeBindingCandidate(runtime.discovery));
-    setReviewed(result.binding);
+    setReviewed(runtimeBindingCandidate(runtime.discovery));
   }
 
   async function createReviewedBinding() {
     if (!reviewed) return;
     setSaving(true);
     try {
-      await saveRuntimeBinding(reviewed);
-      await prepareRuntimeWorkerProfile(reviewed.bindingId);
+      const preview = await previewRuntimeBinding(reviewed);
+      await saveRuntimeBinding(preview.binding);
+      await prepareRuntimeWorkerProfile(preview.binding.bindingId);
       setReviewed(null);
       await refresh();
       toast.success("Local runtime binding created");
@@ -295,6 +295,27 @@ export function SettingsView() {
                   <p className="font-ui text-sm font-semibold text-[var(--text)]">Reviewed local change</p>
                   <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Create <span className="font-mono text-[var(--accent)]">{reviewed.bindingId}</span>, its provider-owned worker profile, and no Supabase record.</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <label className="text-xs text-[var(--subtext-0)] md:col-span-2">
+                      Working-directory grant
+                      <input
+                        value={reviewed.workingDirGrants[0] ?? ""}
+                        onChange={(event) =>
+                          setReviewed((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  workingDirGrants: event.target.value
+                                    ? [event.target.value]
+                                    : [],
+                                }
+                              : null,
+                          )
+                        }
+                        placeholder="/absolute/path/to/reviewed/workspace"
+                        className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--base)] px-3 py-2 font-mono text-xs text-[var(--text)]"
+                      />
+                      <span className="mt-1 block leading-5">The worker is confined to this reviewed local workspace. IntelliZen also discovers its MCP build from this checkout.</span>
+                    </label>
                     <label className="text-xs text-[var(--subtext-0)]">
                       Default model
                       <input
@@ -324,7 +345,7 @@ export function SettingsView() {
                       />
                     </label>
                   </div>
-                  <div className="mt-4 flex gap-2"><Button onClick={() => void createReviewedBinding()} disabled={saving}>{saving ? "Creating…" : "Create local binding"}</Button><Button variant="ghost" onClick={() => setReviewed(null)}>Cancel</Button></div>
+                  <div className="mt-4 flex gap-2"><Button onClick={() => void createReviewedBinding()} disabled={saving || !reviewed.workingDirGrants[0]}>{saving ? "Creating…" : "Create local binding"}</Button><Button variant="ghost" onClick={() => setReviewed(null)}>Cancel</Button></div>
                 </section>
               ) : null}
             </div>

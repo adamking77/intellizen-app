@@ -76,6 +76,17 @@ begin
     raise exception 'Gate 1 work-event proof columns are incomplete';
   end if;
 
+  if not exists (
+    select 1
+    from workspace.databases as database,
+      jsonb_array_elements(database.schema) as field
+    where database.id = 'c1000000-0000-0000-0000-000000000002'
+      and field->>'id' = 'run_definition_hash'
+      and field->>'type' = 'text'
+  ) then
+    raise exception 'Workflow Runs schema is missing the definition identity field';
+  end if;
+
   select count(*)
   into v_count
   from pg_indexes
