@@ -26,6 +26,7 @@ const InvestigationView = lazyNamed(
   "InvestigationView",
 );
 const ReportsView = lazyNamed(() => import("@/views/Reports"), "ReportsView");
+const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView");
 
 function RouteLoadingFallback() {
   return (
@@ -128,6 +129,14 @@ function App() {
             }
           />
           <Route path="/reports" element={<Navigate to="/docs" replace />} />
+          <Route
+            path="/settings"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <SettingsView />
+              </Suspense>
+            }
+          />
         </Route>
       </Routes>
     </Router>

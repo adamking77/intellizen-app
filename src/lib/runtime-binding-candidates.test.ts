@@ -10,13 +10,20 @@ function discovery(
     adapterId,
     installed: true,
     binary: `/Users/adamking/.local/bin/${adapterId === "codex-cli" ? "codex" : "claude"}`,
+    resolutionSource: "PATH",
     version:
       adapterId === "codex-cli"
         ? "codex-cli 0.145.0"
         : "2.1.220 (Claude Code)",
     supported: true,
+    supportRange:
+      adapterId === "codex-cli"
+        ? ">=0.145.0 <0.146.0"
+        : ">=2.1.220 <2.2.0",
     authState: "ready",
     workerProfileHome: `/tmp/${adapterId}`,
+    checkedAtMs: 1,
+    remediation: "No action required.",
   };
 }
 

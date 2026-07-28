@@ -3,6 +3,7 @@ import type { RuntimeBinding } from "@/services/runtime-bindings";
 export const PANEL_START_ROLE_KEY = "intelizen:agent-panel:panel_start_role";
 export const PANEL_SELECTED_ROLE_KEY = "intelizen:agent-panel:selected-role";
 export const PANEL_ROLE_CHANNEL = "intelizen:agent-panel-role";
+export const PANEL_SPEAK_REPLIES_KEY = "intelizen:agent-panel-speak-replies";
 export const OPERATIONS_DIRECTOR_ROLE = "operations_director";
 
 export interface AgentPanelRoleRecord {

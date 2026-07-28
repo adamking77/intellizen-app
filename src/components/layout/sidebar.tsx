@@ -18,8 +18,12 @@ import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrom
 import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { deriveSystemHealth } from "@/lib/runtime-catalog";
+import {
+  inspectRuntimeCatalog,
+  inspectSettingsConnections,
+} from "@/services/runtime-catalog";
 import { useAppStore } from "@/store";
-import { RuntimeSettingsDialog } from "@/components/settings/runtime-settings-dialog";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
@@ -64,7 +68,21 @@ export function Sidebar() {
   const { isCramped } = useWindowSize();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const runtimeQuery = useQuery({
+    queryKey: ["settings-runtime-catalog"],
+    queryFn: inspectRuntimeCatalog,
+    staleTime: 15_000,
+  });
+  const connectionQuery = useQuery({
+    queryKey: ["settings-connections"],
+    queryFn: inspectSettingsConnections,
+    staleTime: 15_000,
+  });
+  const health = deriveSystemHealth({
+    runtimes: runtimeQuery.data,
+    connections: connectionQuery.data,
+    loading: runtimeQuery.isLoading || connectionQuery.isLoading,
+  });
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
 
@@ -79,7 +97,6 @@ export function Sidebar() {
 
   const toggle = () => setUserCollapsed(!collapsed);
   return (
-    <>
     <aside
       style={{
         width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED,
@@ -221,30 +238,35 @@ export function Sidebar() {
         )}
       >
         {collapsed ? (
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
+          <NavLink
+            to="/settings?section=runtimes"
             aria-label="Open settings"
-            title="Systems nominal"
+            title={health.label}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          ><Settings className="h-4 w-4" /></button>
+          ><Settings className="h-4 w-4" /></NavLink>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
+            <NavLink
+              to="/settings?section=runtimes"
               aria-label="Open settings"
               title="Open settings"
               className="flex items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"
             >
               <span
                 aria-hidden
-                className="h-1.5 w-1.5 rounded-full bg-[var(--success)]"
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  health.state === "ready"
+                    ? "bg-[var(--success)]"
+                    : health.state === "checking"
+                      ? "bg-[var(--overlay-1)]"
+                      : "bg-[var(--warning)]",
+                )}
               />
               <span className="font-ui text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--overlay-1)]">
-                Systems nominal
+                {health.label}
               </span>
-            </button>
+            </NavLink>
             <span className="font-mono text-[10px] text-[var(--overlay-1)]">
               {APP_VERSION}
             </span>
@@ -253,7 +275,5 @@ export function Sidebar() {
       </div>
       <PaneResizeEdges west />
     </aside>
-    <RuntimeSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-    </>
   );
 }

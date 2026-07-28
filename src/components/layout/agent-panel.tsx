@@ -31,6 +31,7 @@ import {
   migrateFionaPanelStorage,
   OPERATIONS_DIRECTOR_ROLE,
   PANEL_ROLE_CHANNEL,
+  PANEL_SPEAK_REPLIES_KEY,
   PANEL_SELECTED_ROLE_KEY,
   PANEL_START_ROLE_KEY,
   panelRoleStorageKey,
@@ -99,7 +100,7 @@ import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice"
 
 const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const HERMES_SESSION_KEY = "intelizen:hermes-session-id";
-const SPEAK_REPLIES_KEY = "intelizen:agent-panel-speak-replies";
+const SPEAK_REPLIES_KEY = PANEL_SPEAK_REPLIES_KEY;
 const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 560;

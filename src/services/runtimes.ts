@@ -71,10 +71,14 @@ export type RuntimeDiscovery = {
   adapterId: "codex-cli" | "claude-cli";
   installed: boolean;
   binary: string;
+  resolutionSource: "PATH" | "known location" | "not found";
   version: string;
   supported: boolean;
+  supportRange: string;
   authState: "ready" | "login_required" | "unavailable";
   workerProfileHome: string;
+  checkedAtMs: number;
+  remediation: string;
 };
 
 export function discoverCodexRuntime() {

@@ -11,7 +11,7 @@ use std::{
         Arc, Mutex, OnceLock,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
@@ -68,10 +68,14 @@ pub struct RuntimeDiscovery {
     adapter_id: String,
     installed: bool,
     binary: String,
+    resolution_source: String,
     version: String,
     supported: bool,
+    support_range: String,
     auth_state: String,
     worker_profile_home: String,
+    checked_at_ms: u64,
+    remediation: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -563,96 +567,226 @@ pub fn runtime_prepare_assignment(
 
 #[tauri::command]
 pub fn runtime_discover_codex(app: AppHandle) -> Result<RuntimeDiscovery, String> {
-    const CODEX_BINARY: &str = "/Users/adamking/.local/bin/codex";
-    const SUPPORTED_VERSION: &str = "codex-cli 0.145.0";
-    let worker_profile_home = app
-        .path()
-        .home_dir()
-        .map_err(|error| error.to_string())?
-        .join("Library/Application Support/IntelliZen/worker-profiles/codex-local-primary");
-    let binary = PathBuf::from(CODEX_BINARY);
-    if !binary.is_file() {
-        return Ok(RuntimeDiscovery {
-            adapter_id: "codex-cli".to_string(),
-            installed: false,
-            binary: CODEX_BINARY.to_string(),
-            version: String::new(),
-            supported: false,
-            auth_state: "unavailable".to_string(),
-            worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
-        });
-    }
-    let version_output = std::process::Command::new(&binary)
-        .arg("--version")
-        .env_clear()
-        .output()
-        .map_err(|error| format!("Failed to inspect Codex version: {error}"))?;
-    let version = String::from_utf8_lossy(&version_output.stdout)
-        .trim()
-        .to_string();
-    let auth_state = if worker_profile_home.is_dir() {
-        let status = std::process::Command::new(&binary)
-            .args(["login", "status"])
-            .env_clear()
-            .env("CODEX_HOME", &worker_profile_home)
-            .status()
-            .map_err(|error| format!("Failed to inspect Codex auth: {error}"))?;
-        if status.success() {
-            "ready"
-        } else {
-            "login_required"
-        }
-    } else {
-        "login_required"
-    };
-    Ok(RuntimeDiscovery {
-        adapter_id: "codex-cli".to_string(),
-        installed: version_output.status.success(),
-        binary: binary.to_string_lossy().into_owned(),
-        supported: version == SUPPORTED_VERSION,
-        version,
-        auth_state: auth_state.to_string(),
-        worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
-    })
+    discover_runtime(
+        &app,
+        RuntimeDiscoverySpec {
+            adapter_id: "codex-cli",
+            command: "codex",
+            binding_id: "codex-local-primary",
+            version_args: &["--version"],
+            auth_args: &["login", "status"],
+            profile_variable: "CODEX_HOME",
+            minimum_version: [0, 145, 0],
+            maximum_version_exclusive: [0, 146, 0],
+            support_range: ">=0.145.0 <0.146.0",
+            sign_in_hint: "Run `codex login` in Terminal, then re-check.",
+            install_hint: "Install Codex CLI, then re-check.",
+        },
+    )
 }
 
 #[tauri::command]
 pub fn runtime_discover_claude(app: AppHandle) -> Result<RuntimeDiscovery, String> {
-    const CLAUDE_BINARY: &str = "/Users/adamking/.local/bin/claude";
-    const SUPPORTED_VERSION: &str = "2.1.220 (Claude Code)";
-    let worker_profile_home = app
-        .path()
-        .home_dir()
-        .map_err(|error| error.to_string())?
-        .join("Library/Application Support/IntelliZen/worker-profiles/claude-local-primary");
-    let binary = PathBuf::from(CLAUDE_BINARY);
-    if !binary.is_file() {
+    discover_runtime(
+        &app,
+        RuntimeDiscoverySpec {
+            adapter_id: "claude-cli",
+            command: "claude",
+            binding_id: "claude-local-primary",
+            version_args: &["--version"],
+            auth_args: &["auth", "status"],
+            profile_variable: "CLAUDE_CONFIG_DIR",
+            minimum_version: [2, 1, 220],
+            maximum_version_exclusive: [2, 2, 0],
+            support_range: ">=2.1.220 <2.2.0",
+            sign_in_hint: "Run `claude login` in Terminal, then re-check.",
+            install_hint: "Install Claude Code, then re-check.",
+        },
+    )
+}
+
+struct RuntimeDiscoverySpec<'a> {
+    adapter_id: &'a str,
+    command: &'a str,
+    binding_id: &'a str,
+    version_args: &'a [&'a str],
+    auth_args: &'a [&'a str],
+    profile_variable: &'a str,
+    minimum_version: [u64; 3],
+    maximum_version_exclusive: [u64; 3],
+    support_range: &'a str,
+    sign_in_hint: &'a str,
+    install_hint: &'a str,
+}
+
+struct ProbeOutput {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
+
+fn checked_at_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn known_binary_candidates(home: &Path, command: &str) -> Vec<PathBuf> {
+    vec![
+        home.join(".local/bin").join(command),
+        home.join(".cargo/bin").join(command),
+        PathBuf::from("/opt/homebrew/bin").join(command),
+        PathBuf::from("/usr/local/bin").join(command),
+        PathBuf::from("/usr/bin").join(command),
+    ]
+}
+
+fn resolve_runtime_binary(home: &Path, command: &str) -> Option<(PathBuf, String)> {
+    if let Some(path) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path) {
+            let candidate = directory.join(command);
+            if candidate.is_file() {
+                if let Ok(canonical) = fs::canonicalize(candidate) {
+                    return Some((canonical, "PATH".to_string()));
+                }
+            }
+        }
+    }
+    for candidate in known_binary_candidates(home, command) {
+        if candidate.is_file() {
+            if let Ok(canonical) = fs::canonicalize(candidate) {
+                return Some((canonical, "known location".to_string()));
+            }
+        }
+    }
+    None
+}
+
+fn probe_command(
+    binary: &Path,
+    args: &[&str],
+    environment: &[(&str, &Path)],
+    timeout: Duration,
+) -> Result<ProbeOutput, String> {
+    let mut command = std::process::Command::new(binary);
+    command
+        .args(args)
+        .env_clear()
+        .env("LANG", "C.UTF-8")
+        .env("LC_ALL", "C.UTF-8")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (name, value) in environment {
+        command.env(name, value);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Failed to probe {}: {error}", binary.display()))?;
+    let started = Instant::now();
+    let status = loop {
+        match child
+            .try_wait()
+            .map_err(|error| format!("Failed to inspect runtime probe: {error}"))?
+        {
+            Some(status) => break status,
+            None if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "Runtime probe timed out after {}ms.",
+                    timeout.as_millis()
+                ));
+            }
+            None => thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        pipe.read_to_string(&mut stdout)
+            .map_err(|error| format!("Failed to read runtime probe output: {error}"))?;
+    }
+    if let Some(mut pipe) = child.stderr.take() {
+        pipe.read_to_string(&mut stderr)
+            .map_err(|error| format!("Failed to read runtime probe error output: {error}"))?;
+    }
+    Ok(ProbeOutput {
+        success: status.success(),
+        stdout: stdout.trim().to_string(),
+        stderr: stderr.trim().to_string(),
+    })
+}
+
+fn numeric_version(value: &str) -> Option<[u64; 3]> {
+    let start = value.find(|character: char| character.is_ascii_digit())?;
+    let version = value[start..]
+        .split_whitespace()
+        .next()?
+        .trim_matches(|character: char| !character.is_ascii_digit() && character != '.');
+    let mut parts = version
+        .split('.')
+        .map(|part| part.parse::<u64>().ok());
+    Some([parts.next()??, parts.next()??, parts.next()??])
+}
+
+fn version_supported(version: &str, minimum: [u64; 3], maximum: [u64; 3]) -> bool {
+    numeric_version(version).is_some_and(|parsed| parsed >= minimum && parsed < maximum)
+}
+
+fn discover_runtime(
+    app: &AppHandle,
+    spec: RuntimeDiscoverySpec<'_>,
+) -> Result<RuntimeDiscovery, String> {
+    let home = app.path().home_dir().map_err(|error| error.to_string())?;
+    let worker_profile_home = home
+        .join("Library/Application Support/IntelliZen/worker-profiles")
+        .join(spec.binding_id);
+    let checked_at_ms = checked_at_ms();
+    let Some((binary, resolution_source)) =
+        resolve_runtime_binary(&home, spec.command)
+    else {
         return Ok(RuntimeDiscovery {
-            adapter_id: "claude-cli".to_string(),
+            adapter_id: spec.adapter_id.to_string(),
             installed: false,
-            binary: CLAUDE_BINARY.to_string(),
+            binary: String::new(),
+            resolution_source: "not found".to_string(),
             version: String::new(),
             supported: false,
+            support_range: spec.support_range.to_string(),
             auth_state: "unavailable".to_string(),
             worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+            checked_at_ms,
+            remediation: spec.install_hint.to_string(),
         });
-    }
-    let version_output = std::process::Command::new(&binary)
-        .arg("--version")
-        .env_clear()
-        .output()
-        .map_err(|error| format!("Failed to inspect Claude version: {error}"))?;
-    let version = String::from_utf8_lossy(&version_output.stdout)
-        .trim()
-        .to_string();
+    };
+
+    let version_probe = probe_command(
+        &binary,
+        spec.version_args,
+        &[],
+        Duration::from_secs(3),
+    )?;
+    let version = if version_probe.stdout.is_empty() {
+        version_probe.stderr
+    } else {
+        version_probe.stdout
+    };
+    let installed = version_probe.success;
+    let supported = installed
+        && version_supported(
+            &version,
+            spec.minimum_version,
+            spec.maximum_version_exclusive,
+        );
     let auth_state = if worker_profile_home.is_dir() {
-        let status = std::process::Command::new(&binary)
-            .args(["auth", "status"])
-            .env_clear()
-            .env("CLAUDE_CONFIG_DIR", &worker_profile_home)
-            .status()
-            .map_err(|error| format!("Failed to inspect Claude auth: {error}"))?;
-        if status.success() {
+        let auth_probe = probe_command(
+            &binary,
+            spec.auth_args,
+            &[(spec.profile_variable, worker_profile_home.as_path())],
+            Duration::from_secs(5),
+        )?;
+        if auth_probe.success {
             "ready"
         } else {
             "login_required"
@@ -660,14 +794,28 @@ pub fn runtime_discover_claude(app: AppHandle) -> Result<RuntimeDiscovery, Strin
     } else {
         "login_required"
     };
+    let remediation = if !supported {
+        format!(
+            "Installed version is outside the supported range {}.",
+            spec.support_range
+        )
+    } else if auth_state != "ready" {
+        spec.sign_in_hint.to_string()
+    } else {
+        "No action required.".to_string()
+    };
     Ok(RuntimeDiscovery {
-        adapter_id: "claude-cli".to_string(),
-        installed: version_output.status.success(),
+        adapter_id: spec.adapter_id.to_string(),
+        installed,
         binary: binary.to_string_lossy().into_owned(),
-        supported: version == SUPPORTED_VERSION,
+        resolution_source,
         version,
+        supported,
+        support_range: spec.support_range.to_string(),
         auth_state: auth_state.to_string(),
         worker_profile_home: worker_profile_home.to_string_lossy().into_owned(),
+        checked_at_ms,
+        remediation,
     })
 }
 
@@ -719,6 +867,43 @@ mod tests {
             timeout_ms,
             environment: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn parses_and_bounds_supported_runtime_versions() {
+        assert_eq!(numeric_version("codex-cli 0.145.0"), Some([0, 145, 0]));
+        assert_eq!(
+            numeric_version("2.1.220 (Claude Code)"),
+            Some([2, 1, 220])
+        );
+        assert!(version_supported(
+            "codex-cli 0.145.3",
+            [0, 145, 0],
+            [0, 146, 0]
+        ));
+        assert!(!version_supported(
+            "codex-cli 0.146.0",
+            [0, 145, 0],
+            [0, 146, 0]
+        ));
+    }
+
+    #[test]
+    fn runtime_resolution_uses_path_before_known_locations() {
+        let root = test_root("resolution");
+        let binary = root.join("codex");
+        fs::write(&binary, b"fixture").expect("binary fixture");
+        let original_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", &root);
+        let resolved = resolve_runtime_binary(&root, "codex").expect("resolved binary");
+        if let Some(path) = original_path {
+            std::env::set_var("PATH", path);
+        } else {
+            std::env::remove_var("PATH");
+        }
+        assert_eq!(resolved.0, fs::canonicalize(&binary).expect("canonical"));
+        assert_eq!(resolved.1, "PATH");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     type CapturedEvents = Arc<StdMutex<Vec<NativeRuntimeEvent>>>;
