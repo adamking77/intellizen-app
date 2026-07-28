@@ -9,6 +9,29 @@ applying new migrations.
 
 Snapshot: 2026-07-27 — 89 remote-applied migrations, 9 schemas.
 
+Local pending hardening as of 2026-07-28 (not applied remotely):
+
+- `20260728114149_harden_append_only_receipt_permissions` revokes default
+  PUBLIC/authenticated execute on `append_record_section`, hardens its
+  `search_path`, explicitly preserves `anon`/`service_role` execution, and
+  removes service-role DELETE from `record_revisions`.
+- `20260728115305_transactional_consequential_work_receipts` adds the atomic
+  record-section + work-event RPC used for approval, verification, and
+  external-action receipts, executable only by `anon` and `service_role`.
+
+Post-apply authority verification is defined in
+`supabase/tests/v2_audit_receipt_contract.sql`.
+
+The local filenames for the two already-applied July contracts now match the
+authoritative remote versions: `20260703090922` and `20260727092636`. Credential
+hash material is intentionally not migration source and must be provisioned
+through a reviewed machine-local administration path.
+
+The superseded local migration remains in existing git history and contains the
+previous access-key hash. Rotate that key before release; history rewriting, if
+required, is a separate destructive operation and is not part of this pending
+migration set.
+
 | Version | Name |
 |---|---|
 | 20260412152429 | init_intellizen_v1_schema |

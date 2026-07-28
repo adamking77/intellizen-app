@@ -1,5 +1,5 @@
 -- Gate 1 transactional RPC verification.
--- Run only after applying 20260727080103 to a local/test database.
+-- Run only after applying 20260727092636 to a local/test database.
 -- The transaction always rolls back.
 
 begin;

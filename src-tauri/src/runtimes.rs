@@ -1,3 +1,4 @@
+use crate::runtime_auth::{classify_auth_state, version_supported};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -718,22 +719,6 @@ fn probe_command(
     })
 }
 
-fn numeric_version(value: &str) -> Option<[u64; 3]> {
-    let start = value.find(|character: char| character.is_ascii_digit())?;
-    let version = value[start..]
-        .split_whitespace()
-        .next()?
-        .trim_matches(|character: char| !character.is_ascii_digit() && character != '.');
-    let mut parts = version
-        .split('.')
-        .map(|part| part.parse::<u64>().ok());
-    Some([parts.next()??, parts.next()??, parts.next()??])
-}
-
-fn version_supported(version: &str, minimum: [u64; 3], maximum: [u64; 3]) -> bool {
-    numeric_version(version).is_some_and(|parsed| parsed >= minimum && parsed < maximum)
-}
-
 fn discover_runtime(
     app: &AppHandle,
     spec: RuntimeDiscoverySpec<'_>,
@@ -743,9 +728,7 @@ fn discover_runtime(
         .join("Library/Application Support/IntelliZen/worker-profiles")
         .join(spec.binding_id);
     let checked_at_ms = checked_at_ms();
-    let Some((binary, resolution_source)) =
-        resolve_runtime_binary(&home, spec.command)
-    else {
+    let Some((binary, resolution_source)) = resolve_runtime_binary(&home, spec.command) else {
         return Ok(RuntimeDiscovery {
             adapter_id: spec.adapter_id.to_string(),
             installed: false,
@@ -761,12 +744,7 @@ fn discover_runtime(
         });
     };
 
-    let version_probe = probe_command(
-        &binary,
-        spec.version_args,
-        &[],
-        Duration::from_secs(3),
-    )?;
+    let version_probe = probe_command(&binary, spec.version_args, &[], Duration::from_secs(3))?;
     let version = if version_probe.stdout.is_empty() {
         version_probe.stderr
     } else {
@@ -786,21 +764,27 @@ fn discover_runtime(
             &[(spec.profile_variable, worker_profile_home.as_path())],
             Duration::from_secs(5),
         )?;
-        if auth_probe.success {
-            "ready"
-        } else {
-            "login_required"
-        }
+        classify_auth_state(
+            true,
+            auth_probe.success,
+            &auth_probe.stdout,
+            &auth_probe.stderr,
+        )
     } else {
-        "login_required"
+        classify_auth_state(false, false, "", "")
     };
     let remediation = if !supported {
         format!(
             "Installed version is outside the supported range {}.",
             spec.support_range
         )
-    } else if auth_state != "ready" {
+    } else if auth_state == "login_required" {
         spec.sign_in_hint.to_string()
+    } else if auth_state == "config_invalid" {
+        "Worker profile configuration is invalid; inspect or recreate the reviewed profile."
+            .to_string()
+    } else if auth_state == "unknown" {
+        "Prepare the reviewed worker profile, then re-check authentication.".to_string()
     } else {
         "No action required.".to_string()
     };
@@ -822,6 +806,7 @@ fn discover_runtime(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime_auth::numeric_version;
     use std::{
         fs,
         sync::Mutex as StdMutex,
@@ -872,10 +857,7 @@ mod tests {
     #[test]
     fn parses_and_bounds_supported_runtime_versions() {
         assert_eq!(numeric_version("codex-cli 0.145.0"), Some([0, 145, 0]));
-        assert_eq!(
-            numeric_version("2.1.220 (Claude Code)"),
-            Some([2, 1, 220])
-        );
+        assert_eq!(numeric_version("2.1.220 (Claude Code)"), Some([2, 1, 220]));
         assert!(version_supported(
             "codex-cli 0.145.3",
             [0, 145, 0],

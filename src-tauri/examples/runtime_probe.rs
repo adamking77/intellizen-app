@@ -1,4 +1,7 @@
 #[allow(dead_code)]
+#[path = "../src/runtime_auth.rs"]
+mod runtime_auth;
+#[allow(dead_code)]
 #[path = "../src/runtimes.rs"]
 mod runtimes;
 

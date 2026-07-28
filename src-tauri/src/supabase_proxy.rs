@@ -90,10 +90,9 @@ fn parse_env(contents: &str) -> HashMap<String, String> {
 
 fn config_file_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     let home = app.path().home_dir().map_err(|error| error.to_string())?;
-    Ok(vec![
-        home.join("Library/Application Support/IntelliZen/admin-runtime.env"),
-        PathBuf::from("/Users/adamking/projects/intellizen-app/.env.local"),
-    ])
+    Ok(vec![home.join(
+        "Library/Application Support/IntelliZen/admin-runtime.env",
+    )])
 }
 
 fn config_value(values: &HashMap<String, String>, names: &[&str]) -> Option<String> {

@@ -1,4 +1,6 @@
 -- Harden publishable-key access for the local IntelliZen desktop app.
+-- Remote-applied version: 20260703090922
+-- Local filename matches the remote migration history entry.
 --
 -- The frontend now uses the anon key so service-role credentials are never
 -- bundled into a DMG. That makes the anon key insufficient as an access
@@ -51,23 +53,8 @@ $$;
 revoke all on function system.intellizen_local_access_ok() from public;
 grant execute on function system.intellizen_local_access_ok() to anon, authenticated, service_role;
 
-update system.config
-set content = 'd49ad3b20e2d20091508e695b6cb3e471dbdfcd168a093d11e350b415034932b',
-    file_type = 'settings',
-    updated_at = now()
-where file_path = 'secrets/intellizen-local-access-sha256';
-
-insert into system.config (file_path, content, file_type, updated_at)
-select
-  'secrets/intellizen-local-access-sha256',
-  'd49ad3b20e2d20091508e695b6cb3e471dbdfcd168a093d11e350b415034932b',
-  'settings',
-  now()
-where not exists (
-  select 1
-  from system.config
-  where file_path = 'secrets/intellizen-local-access-sha256'
-);
+-- The local-access hash is machine configuration, not schema. Provision it
+-- separately through the reviewed admin path; never commit a credential hash.
 
 do $$
 declare

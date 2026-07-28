@@ -7,7 +7,7 @@ use sha2::Sha256;
 use std::{
     collections::HashMap,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
@@ -121,12 +121,15 @@ fn parse_env(contents: &str) -> HashMap<String, String> {
         .collect()
 }
 
+fn config_file_candidates_for_home(home: &Path) -> Vec<PathBuf> {
+    vec![home.join(
+        "Library/Application Support/IntelliZen/admin-runtime.env",
+    )]
+}
+
 fn config_file_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     let home = app.path().home_dir().map_err(|error| error.to_string())?;
-    Ok(vec![
-        home.join("Library/Application Support/IntelliZen/admin-runtime.env"),
-        PathBuf::from("/Users/adamking/projects/intellizen-app/.env.local"),
-    ])
+    Ok(config_file_candidates_for_home(&home))
 }
 
 fn config_value(values: &HashMap<String, String>, names: &[&str]) -> Option<String> {
@@ -544,5 +547,15 @@ mod tests {
         assert!(!values
             .keys()
             .any(|key| key.starts_with("INTELLIZEN_COMPILED_")));
+    }
+
+    #[test]
+    fn reads_runtime_credentials_only_from_application_support() {
+        assert_eq!(
+            config_file_candidates_for_home(Path::new("/Users/tester")),
+            vec![PathBuf::from(
+                "/Users/tester/Library/Application Support/IntelliZen/admin-runtime.env"
+            )],
+        );
     }
 }

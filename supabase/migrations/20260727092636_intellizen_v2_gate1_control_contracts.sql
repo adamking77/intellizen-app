@@ -1,4 +1,6 @@
 -- IntelliZen V2 Gate 1: organization records and transactional workflow controls.
+-- Remote-applied version: 20260727092636
+-- Local filename matches the exact remote migration version applied on 2026-07-27.
 --
 -- Additive only. Apply after dry-run review, explicit approval, a production
 -- preflight, and with immediate post-application contract verification.

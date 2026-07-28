@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod hermes;
+mod runtime_auth;
 mod runtime_bindings;
 mod runtimes;
 mod supabase_proxy;
