@@ -31,7 +31,7 @@ import {
   readPreference,
   writePreference,
 } from "@/lib/settings-preferences";
-import { inspectWorkflowReceiptIntegrity } from "@/lib/data";
+import { inspectWorkflowReceiptIntegrity } from "@/lib/data/work-receipts";
 import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/toast";
 import {

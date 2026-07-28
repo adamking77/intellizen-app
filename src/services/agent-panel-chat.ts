@@ -4,7 +4,10 @@ import {
   type AgentChatWidget,
 } from "@/lib/agent-widgets";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
-import type { ConversationContextSnapshot } from "@/lib/conversation-context";
+import {
+  conversationContextRouteLabel,
+  type ConversationContextSnapshot,
+} from "@/lib/conversation-context";
 import {
   sendToAgentChat,
   streamHermesChat,
@@ -61,11 +64,6 @@ function contextPromptBlock(context: ConversationContextSnapshot | null) {
     null,
     2,
   )}`;
-}
-
-function contextRouteLabel(context: ConversationContextSnapshot | null) {
-  if (!context) return null;
-  return `${context.route.pathname}${context.route.search}${context.route.hash}`;
 }
 
 export async function sendAgentPanelChatMessage(
@@ -127,7 +125,7 @@ export async function sendAgentPanelChatMessage(
     profile: input.targetProfileName,
     context: {
       type: "agent_panel_chat",
-      route: contextRouteLabel(input.context) ?? undefined,
+      route: conversationContextRouteLabel(input.context) ?? undefined,
       payload: {
         target_agent: input.targetAgent,
         conversation_context: input.context,

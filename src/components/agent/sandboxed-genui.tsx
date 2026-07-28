@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 
-import { runSandboxQuery, type SandboxQueryInput } from "@/lib/data";
+import {
+  runSandboxQuery,
+  type SandboxQueryInput,
+} from "@/lib/data/sandbox-query";
 import { cn } from "@/lib/utils";
 
 /**

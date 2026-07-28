@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildRunInspector } from "@/lib/run-inspector";
-import type { WorkEventItem } from "@/lib/data";
+import type { WorkEventItem } from "@/lib/data/work-receipts";
 
 function event(
   event_kind: string,

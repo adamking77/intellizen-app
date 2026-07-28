@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fingerprint, Play, RefreshCw } from "lucide-react";
 
-import { listIntelClaims, listIntelEntities, OPERATOR_ACTOR } from "@/lib/data";
+import { OPERATOR_ACTOR } from "@/lib/data";
+import {
+  listIntelClaims,
+  listIntelEntities,
+} from "@/lib/data/osint";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import type { IntelEntityType } from "@/lib/types";
 import { cn } from "@/lib/utils";

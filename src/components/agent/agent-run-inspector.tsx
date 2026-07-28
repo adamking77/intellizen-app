@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, GitBranch, ShieldCheck } from "lucide-react";
 
-import { listWorkEvents } from "@/lib/data";
+import { listWorkEvents } from "@/lib/data/work-receipts";
 import { buildRunInspector } from "@/lib/run-inspector";
 import { cn } from "@/lib/utils";
 

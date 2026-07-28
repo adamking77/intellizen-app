@@ -1,4 +1,4 @@
-import type { WorkEventItem } from "@/lib/data";
+import type { WorkEventItem } from "@/lib/data/work-receipts";
 
 export interface RunInspectorNode {
   assignmentId: string;

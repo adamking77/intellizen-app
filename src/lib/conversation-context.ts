@@ -23,6 +23,13 @@ export interface ConversationContextSnapshot {
   updatedAt: string;
 }
 
+export function conversationContextRouteLabel(
+  context: ConversationContextSnapshot | null | undefined,
+) {
+  if (!context) return null;
+  return `${context.route.pathname}${context.route.search}${context.route.hash}`;
+}
+
 interface RouteLocationInput {
   pathname: string;
   search?: string;

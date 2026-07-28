@@ -5,11 +5,11 @@ import { History, Link2, ListTree, RotateCcw } from "lucide-react";
 import {
   listDeletedRecords,
   listRecordRevisions,
-  listWorkEvents,
   restoreDeletedRecord,
   restoreRecordRevision,
   type RecordRevisionItem,
 } from "@/lib/data";
+import { listWorkEvents } from "@/lib/data/work-receipts";
 import { getRecordTitle } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,

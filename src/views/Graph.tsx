@@ -4,6 +4,16 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { NodePicker } from "@/components/graph/node-picker";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
+  GraphOverflowItem as OverflowItem,
+  GraphRailTab as RailTab,
+  GraphSettingToggle as SettingToggleRow,
+  GraphSlider as SliderRow,
+  GraphStatBlock as StatBlock,
+  GraphStatChip as StatChip,
+  GraphToolbarButton as ToolbarBtn,
+  GraphTopbarIconButton as TopbarIconBtn,
+} from "@/components/graph/graph-controls";
+import {
   Building2,
   CalendarClock,
   ChevronRight,
@@ -67,22 +77,33 @@ import {
 } from "@/lib/graph-geometry";
 import { useWindowSize } from "@/lib/use-window-size";
 import {
-  createGraphEdge,
-  createGraphNode,
+  filterGraph,
+  findGraphShortestPath,
+  graphEgoNetwork,
+  graphNeighborhood,
+  graphRelations,
+  graphSnapshotsEqual,
+  type GraphSnapshot,
+} from "@/lib/graph-model";
+import {
   createGraphExportVaultFile,
-  deleteGraphEdges,
-  deleteGraphNodes,
-  listGraphEdges,
-  listGraphNodes,
   listInvestigations,
   listProjectSignals,
   listProjects,
   OPERATOR_ACTOR,
   startWorkflow,
+} from "@/lib/data";
+import {
+  createGraphEdge,
+  createGraphNode,
+  deleteGraphEdges,
+  deleteGraphNodes,
+  listGraphEdges,
+  listGraphNodes,
   updateGraphEdge,
   updateGraphNode,
   updateGraphNodePosition,
-} from "@/lib/data";
+} from "@/lib/data/graph";
 import {
   ensureInvestigationDirectory,
   ensureProjectDirectory,
@@ -185,23 +206,6 @@ type EdgeDragState = {
   sourceNodeId: string;
   sourceAnchor: NodeAnchorSide;
 } | null;
-
-type GraphSnapshot = {
-  projectId: number | null;
-  nodes: Array<{
-    nodeId: string;
-    label: string;
-    entityType: GraphEntityType;
-    x: number;
-    y: number;
-  }>;
-  edges: Array<{
-    edgeId: string;
-    sourceNodeId: string;
-    targetNodeId: string;
-    label: string | null;
-  }>;
-};
 
 type InsightNode = {
   id: string;
@@ -661,35 +665,12 @@ export function GraphView() {
     };
   }
 
-  function snapshotsEqual(a: GraphSnapshot, b: GraphSnapshot) {
-    if (a.projectId !== b.projectId) return false;
-    if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false;
-    const nodeSigA = a.nodes
-      .map((node) => `${node.nodeId}|${node.label}|${node.entityType}|${node.x}|${node.y}`)
-      .sort()
-      .join(";");
-    const nodeSigB = b.nodes
-      .map((node) => `${node.nodeId}|${node.label}|${node.entityType}|${node.x}|${node.y}`)
-      .sort()
-      .join(";");
-    if (nodeSigA !== nodeSigB) return false;
-    const edgeSigA = a.edges
-      .map((edge) => `${edge.edgeId}|${edge.sourceNodeId}|${edge.targetNodeId}|${edge.label ?? ""}`)
-      .sort()
-      .join(";");
-    const edgeSigB = b.edges
-      .map((edge) => `${edge.edgeId}|${edge.sourceNodeId}|${edge.targetNodeId}|${edge.label ?? ""}`)
-      .sort()
-      .join(";");
-    return edgeSigA === edgeSigB;
-  }
-
   function recordHistory() {
     if (isApplyingHistoryRef.current) return;
 
     const snapshot = captureSnapshot();
     const last = pastSnapshotsRef.current[pastSnapshotsRef.current.length - 1];
-    if (last && snapshotsEqual(last, snapshot)) return;
+    if (last && graphSnapshotsEqual(last, snapshot)) return;
 
     const next = [...pastSnapshotsRef.current, snapshot];
     pastSnapshotsRef.current = next.length > 40 ? next.slice(next.length - 40) : next;
@@ -884,125 +865,53 @@ export function GraphView() {
 
   const selectedNodeNeighborIds = useMemo(() => {
     if (focusMode !== "selection" || activeSelectedNodeIds.length === 0) return EMPTY_STRING_SET;
-
-    const seedSet = new Set(activeSelectedNodeIds);
-    const neighbors = new Set<string>(activeSelectedNodeIds);
-    for (const edge of edges) {
-      if (seedSet.has(edge.source_node_id)) neighbors.add(edge.target_node_id);
-      if (seedSet.has(edge.target_node_id)) neighbors.add(edge.source_node_id);
-    }
-    return neighbors;
+    return graphNeighborhood(edges, activeSelectedNodeIds);
   }, [activeSelectedNodeIds, edges, focusMode]);
 
   // Construct mode: selected node + its direct neighbors, always — no focusMode guard
   const constructFocusIds = useMemo(() => {
     if (activeSelectedNodeIds.length === 0) return EMPTY_STRING_SET;
-    const ids = new Set<string>(activeSelectedNodeIds);
-    for (const edge of edges) {
-      if (ids.has(edge.source_node_id)) ids.add(edge.target_node_id);
-      if (ids.has(edge.target_node_id)) ids.add(edge.source_node_id);
-    }
-    return ids;
+    return graphNeighborhood(edges, activeSelectedNodeIds);
   }, [activeSelectedNodeIds, edges]);
 
-  const selectedNodeRelations = useMemo(() => {
-    if (!selectedNodeId) return [];
+  const selectedNodeRelations = useMemo(
+    () => graphRelations(nodes, edges, selectedNodeId),
+    [edges, nodes, selectedNodeId],
+  );
 
-    const relations = edges
-      .filter(
-        (edge) =>
-          edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId,
-      )
-      .map((edge) => {
-        const incoming = edge.target_node_id === selectedNodeId;
-        const otherNodeId = incoming ? edge.source_node_id : edge.target_node_id;
-        return {
-          edgeId: edge.edge_id,
-          otherNodeId,
-          otherLabel: findNodeLabel(nodes, otherNodeId),
-          label: edge.label ?? "unlabeled",
-          direction: incoming ? "in" : "out",
-        };
-      })
-      .sort((a, b) => a.otherLabel.localeCompare(b.otherLabel));
+  const egoNodeIdSet = useMemo(
+    () => graphEgoNetwork(edges, egoCenterNodeId, egoDepth),
+    [edges, egoCenterNodeId, egoDepth],
+  );
 
-    return relations;
-  }, [edges, nodes, selectedNodeId]);
-
-  const egoNodeIdSet = useMemo(() => {
-    if (!egoCenterNodeId) return null;
-    const maxDepth = clamp(Math.round(egoDepth), 1, 4);
-    const adjacency = new Map<string, string[]>();
-
-    for (const edge of edges) {
-      if (!adjacency.has(edge.source_node_id)) adjacency.set(edge.source_node_id, []);
-      if (!adjacency.has(edge.target_node_id)) adjacency.set(edge.target_node_id, []);
-      adjacency.get(edge.source_node_id)?.push(edge.target_node_id);
-      adjacency.get(edge.target_node_id)?.push(edge.source_node_id);
-    }
-
-    const visited = new Set<string>([egoCenterNodeId]);
-    const queue: Array<{ nodeId: string; depth: number }> = [{ nodeId: egoCenterNodeId, depth: 0 }];
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-      if (current.depth >= maxDepth) continue;
-
-      for (const nextNodeId of adjacency.get(current.nodeId) ?? []) {
-        if (visited.has(nextNodeId)) continue;
-        visited.add(nextNodeId);
-        queue.push({ nodeId: nextNodeId, depth: current.depth + 1 });
-      }
-    }
-    return visited;
-  }, [edges, egoCenterNodeId, egoDepth]);
-
-  const filteredNodes = useMemo(() => {
-    const query = nodeSearch.trim().toLowerCase();
-
-    return visualNodes.filter((node) => {
-      if (!entityTypeFilters[node.entity_type]) return false;
-      if (focusMode === "selection" && selectedNodeNeighborIds.size > 0 && !selectedNodeNeighborIds.has(node.node_id)) {
-        return false;
-      }
-      if (egoNodeIdSet && !egoNodeIdSet.has(node.node_id)) return false;
-      if (query && !node.label.toLowerCase().includes(query)) return false;
-      return true;
-    });
-  }, [
-    egoNodeIdSet,
-    entityTypeFilters,
-    focusMode,
-    nodeSearch,
-    selectedNodeNeighborIds,
-    visualNodes,
-  ]);
-
+  const filteredGraph = useMemo(
+    () =>
+      filterGraph({
+        nodes: visualNodes,
+        edges,
+        entityTypeFilters,
+        focusNodeIds:
+          focusMode === "selection" ? selectedNodeNeighborIds : null,
+        egoNodeIds: egoNodeIdSet,
+        search: nodeSearch,
+      }),
+    [
+      edges,
+      egoNodeIdSet,
+      entityTypeFilters,
+      focusMode,
+      nodeSearch,
+      selectedNodeNeighborIds,
+      visualNodes,
+    ],
+  );
+  const filteredNodes = filteredGraph.nodes;
+  const filteredEdges = filteredGraph.edges;
+  const nodeDegreeById = filteredGraph.degreeByNodeId;
   const visibleNodeIds = useMemo(
     () => new Set(filteredNodes.map((node) => node.node_id)),
     [filteredNodes],
   );
-
-  const filteredEdges = useMemo(
-    () =>
-      edges.filter(
-        (edge) =>
-          visibleNodeIds.has(edge.source_node_id) && visibleNodeIds.has(edge.target_node_id),
-      ),
-    [edges, visibleNodeIds],
-  );
-
-  const nodeDegreeById = useMemo(() => {
-    const degreeMap = new Map<string, number>();
-    for (const node of filteredNodes) {
-      degreeMap.set(node.node_id, 0);
-    }
-    for (const edge of filteredEdges) {
-      degreeMap.set(edge.source_node_id, (degreeMap.get(edge.source_node_id) ?? 0) + 1);
-      degreeMap.set(edge.target_node_id, (degreeMap.get(edge.target_node_id) ?? 0) + 1);
-    }
-    return degreeMap;
-  }, [filteredEdges, filteredNodes]);
 
   const renderedFilteredNodes = useMemo(
     () => filteredNodes,
@@ -1065,30 +974,7 @@ export function GraphView() {
     return { nodes: nodesData, links: linksData };
   }, [filteredEdges, filteredNodes, insightNodeColors, nodeDegreeById]);
 
-  const graphMetrics = useMemo(() => {
-    const typeCounts = {
-      person: 0,
-      organisation: 0,
-      location: 0,
-      event: 0,
-    } satisfies Record<GraphEntityType, number>;
-
-    for (const node of filteredNodes) {
-      typeCounts[node.entity_type] += 1;
-    }
-
-    const labeledEdges = filteredEdges.filter((edge) => Boolean(edge.label?.trim())).length;
-    const edgeDensity =
-      filteredNodes.length > 1
-        ? filteredEdges.length / ((filteredNodes.length * (filteredNodes.length - 1)) / 2)
-        : 0;
-
-    return {
-      typeCounts,
-      labeledEdges,
-      edgeDensity,
-    };
-  }, [filteredEdges, filteredNodes]);
+  const graphMetrics = filteredGraph.metrics;
 
   useEffect(() => {
     if (!selectedNodeId || nodes.some((node) => node.node_id === selectedNodeId)) return;
@@ -1301,66 +1187,26 @@ export function GraphView() {
       setErrorMessage("Choose both start and end nodes to find a route.");
       return;
     }
-    if (pathFromNodeId === pathToNodeId) {
-      setShortestPathNodeIds([pathFromNodeId]);
-      setShortestPathEdgeIds([]);
-      setStatusMessage("Start and end are the same node.");
-      return;
-    }
-
-    const adjacency = new Map<string, Array<{ nodeId: string; edgeId: string }>>();
-    for (const edge of edges) {
-      if (!adjacency.has(edge.source_node_id)) adjacency.set(edge.source_node_id, []);
-      if (!adjacency.has(edge.target_node_id)) adjacency.set(edge.target_node_id, []);
-      adjacency.get(edge.source_node_id)?.push({ nodeId: edge.target_node_id, edgeId: edge.edge_id });
-      adjacency.get(edge.target_node_id)?.push({ nodeId: edge.source_node_id, edgeId: edge.edge_id });
-    }
-
-    const queue = [pathFromNodeId];
-    const visited = new Set<string>([pathFromNodeId]);
-    const previousByNode = new Map<string, { nodeId: string; edgeId: string }>();
-
-    while (queue.length > 0) {
-      const currentNodeId = queue.shift();
-      if (!currentNodeId) continue;
-      if (currentNodeId === pathToNodeId) break;
-
-      for (const next of adjacency.get(currentNodeId) ?? []) {
-        if (visited.has(next.nodeId)) continue;
-        visited.add(next.nodeId);
-        previousByNode.set(next.nodeId, { nodeId: currentNodeId, edgeId: next.edgeId });
-        queue.push(next.nodeId);
-      }
-    }
-
-    if (!previousByNode.has(pathToNodeId)) {
+    const path = findGraphShortestPath(edges, pathFromNodeId, pathToNodeId);
+    if (!path) {
       setShortestPathNodeIds([]);
       setShortestPathEdgeIds([]);
       setErrorMessage("No path found between those nodes.");
       return;
     }
-
-    const nodePath: string[] = [pathToNodeId];
-    const edgePath: string[] = [];
-    let cursor = pathToNodeId;
-    while (cursor !== pathFromNodeId) {
-      const previous = previousByNode.get(cursor);
-      if (!previous) break;
-      edgePath.push(previous.edgeId);
-      nodePath.push(previous.nodeId);
-      cursor = previous.nodeId;
-    }
-
-    const orderedNodePath = nodePath.reverse();
-    const orderedEdgePath = edgePath.reverse();
-    setShortestPathNodeIds(orderedNodePath);
-    setShortestPathEdgeIds(orderedEdgePath);
+    setShortestPathNodeIds(path.nodeIds);
+    setShortestPathEdgeIds(path.edgeIds);
     setSelectedNodeId(pathToNodeId);
-    setSelectedNodeIds(orderedNodePath);
-    setSelectedEdgeId(orderedEdgePath[orderedEdgePath.length - 1] ?? null);
-    setSelectedEdgeIds(orderedEdgePath);
+    setSelectedNodeIds(path.nodeIds);
+    setSelectedEdgeId(path.edgeIds[path.edgeIds.length - 1] ?? null);
+    setSelectedEdgeIds(path.edgeIds);
     setErrorMessage(null);
-    setStatusMessage(`Route found: ${orderedNodePath.length - 1} hop${orderedNodePath.length - 1 === 1 ? "" : "s"}.`);
+    const hops = path.nodeIds.length - 1;
+    setStatusMessage(
+      path.nodeIds.length === 1
+        ? "Start and end are the same node."
+        : `Route found: ${hops} hop${hops === 1 ? "" : "s"}.`,
+    );
     centerViewportOnNode(pathToNodeId);
   }
 
@@ -3711,245 +3557,5 @@ export function GraphView() {
         ) : null}
       </AppDialog>
     </div>
-  );
-}
-
-// ============================================================
-// Topbar / rail / toolbar primitives
-// ============================================================
-
-function TopbarIconBtn({
-  children,
-  onClick,
-  title,
-  disabled,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      disabled={disabled}
-      className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)]",
-        "transition-colors duration-150",
-        "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--overlay-1)]",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function OverflowItem({
-  label,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[12px] transition-colors duration-150",
-        disabled
-          ? "cursor-not-allowed text-[var(--overlay-0)]"
-          : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function RailTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full px-2.5 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
-        active
-          ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
-          : "text-[var(--subtext-0)] hover:text-[var(--text)]",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ToolbarBtn({
-  children,
-  onClick,
-  title,
-  active,
-  disabled,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-  active?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full px-2 transition-colors duration-150",
-        active
-          ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-          : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SettingToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      className="flex min-h-9 items-center justify-between rounded-lg px-2.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-    >
-      <span className="text-meta text-[var(--subtext-1)]">{label}</span>
-      <span
-        aria-hidden
-        className={cn(
-          "relative h-5 w-9 rounded-full border transition-colors duration-150",
-          checked
-            ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-            : "border-[var(--border)] bg-[var(--base)]",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-3.5 w-3.5 rounded-full transition-[left,background-color] duration-150",
-            checked ? "left-[17px] bg-[var(--accent)]" : "left-0.5 bg-[var(--overlay-1)]",
-          )}
-        />
-      </span>
-    </button>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 rounded-md border px-2 py-1",
-        accent
-          ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-          : "border-[var(--border)] bg-[color-mix(in_srgb,var(--mantle)_85%,transparent)]",
-      )}
-    >
-      <span
-        className={cn(
-          "font-ui text-[10px] font-semibold uppercase tracking-[0.14em]",
-          accent ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
-        )}
-      >
-        {label}
-      </span>
-      <span
-        className={cn(
-          "font-mono text-[11px] tabular-nums",
-          accent ? "text-[var(--accent)]" : "text-[var(--text)]",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function StatBlock({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-        {label}
-      </span>
-      <span className="font-mono text-[16px] tabular-nums text-[var(--text)]">{value}</span>
-    </div>
-  );
-}
-
-function SliderRow({
-  label,
-  value,
-  displayValue,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  displayValue: string;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <span className="text-meta">{label}</span>
-        <span className="font-mono text-[11px] text-[var(--overlay-1)]">{displayValue}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="accent-[var(--accent)]"
-      />
-    </label>
   );
 }
