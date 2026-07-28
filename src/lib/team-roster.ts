@@ -15,6 +15,13 @@ export type TeamReviewFixture = {
   confirmedAt: string;
 };
 
+export function publishTeamRosterChanged(fixture: TeamReviewFixture | null) {
+  if (typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(TEAM_ROSTER_CHANNEL);
+  channel.postMessage({ kind: "roster-refresh", fixture });
+  channel.close();
+}
+
 export type TeamRole = {
   roleKey: string;
   roleName: string;
@@ -185,7 +192,11 @@ export function buildTeamModel(input: {
       const recentWork = workflowRunsForRole(
         input.runs,
         roleKey,
-        fieldString(agent?.fields.agent_display_name),
+        {
+          recordId: agent?.id ?? null,
+          agentKey: fieldString(agent?.fields.agent_key),
+          displayName: fieldString(agent?.fields.agent_display_name),
+        },
       ).slice(0, 4);
       const ready = Boolean(
         agent &&

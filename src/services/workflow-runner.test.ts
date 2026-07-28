@@ -354,7 +354,7 @@ describe("workflow runner", () => {
     expect(fake.transitions[fake.transitions.length - 1]).toMatchObject({
       eventKind: "blocked",
       eventPayload: {
-        reason: "role unavailable",
+        reason: "role_unavailable",
         requestedRole: "chief_engineer",
         noFallThrough: true,
       },
@@ -600,6 +600,51 @@ describe("workflow runner", () => {
     await expect(
       coordinator.start({ ...input, actor: "Different actor" }, fake.port),
     ).rejects.toThrow("started with different input");
+  });
+
+  it("evicts a rejected coordinated run so the same immutable input can retry", async () => {
+    const fake = fakePort();
+    const coordinator = new WorkflowDispatchCoordinator();
+    const acquireLease = vi
+      .fn(fake.port.acquireLease)
+      .mockRejectedValueOnce(new Error("transient Supabase failure"));
+    const port = { ...fake.port, acquireLease };
+    const input = {
+      runId: "20000000-0000-4000-8000-000000000028",
+      runVersion: 0,
+      actor: "Adam",
+      definition,
+      inputs: {},
+    } as const;
+
+    await expect(coordinator.start(input, port)).rejects.toThrow(
+      "transient Supabase failure",
+    );
+    await expect(coordinator.start(input, port)).resolves.toMatchObject({
+      status: "completed",
+    });
+    expect(acquireLease).toHaveBeenCalledTimes(2);
+  });
+
+  it("pairs every transition idempotency version with its CAS version", async () => {
+    const fake = fakePort();
+    await runWorkflow(
+      {
+        runId: "20000000-0000-4000-8000-000000000029",
+        runVersion: 0,
+        actor: "Adam",
+        definition,
+        inputs: {},
+      },
+      fake.port,
+    );
+
+    for (const transition of fake.transitions) {
+      const match = transition.idempotencyKey.match(/:v(\d+):/);
+      expect(match?.[1], transition.idempotencyKey).toBe(
+        String(transition.expectedRunVersion),
+      );
+    }
   });
 
   it("marks an expired ephemeral run abandoned on relaunch and releases the new lease", async () => {

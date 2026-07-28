@@ -35,8 +35,6 @@ import type {
   UpdateWorkflowRunInput,
   FionaInboxItem,
   GraphEntityType,
-  IntelClaim,
-  IntelEntity,
   InternalSearchResult,
   GraphEdgeRecord,
   GraphNodeRecord,
@@ -82,8 +80,10 @@ import {
 } from "@/lib/workflow-schema";
 import { supabase } from "@/lib/supabase";
 import { submitWorkflow } from "@/services/agent";
+import { GENZEN_WORKSPACE_DATABASE_IDS } from "@/lib/workspace-ids";
 
 export { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
+export { GENZEN_WORKSPACE_DATABASE_IDS } from "@/lib/workspace-ids";
 
 const SYSTEM_WORKSPACE_DATABASE_ICONS = {
   operations: "intel-system:operations",
@@ -91,16 +91,6 @@ const SYSTEM_WORKSPACE_DATABASE_ICONS = {
 } as const;
 const DOCUMENTS_WORKSPACE_DATABASE_ICON = "intel-system:documents";
 const HOME_PINS_WORKSPACE_DATABASE_ICON = "intel-system:home-pins";
-
-export const GENZEN_WORKSPACE_DATABASE_IDS = {
-  bizOps: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
-  tasks: "654acc9c-0270-49e2-86f7-788e25c59a76",
-  workflowRegistry: "c1000000-0000-0000-0000-000000000001",
-  workflowRuns: "c1000000-0000-0000-0000-000000000002",
-  roles: "c1000000-0000-0000-0000-000000000003",
-  agents: "c1000000-0000-0000-0000-000000000004",
-  roleAssignments: "c1000000-0000-0000-0000-000000000005",
-} as const;
 
 export const WORKFLOW_RUN_VIEW_IDS = {
   runBoard: "c2000000-0000-0000-0000-000000000102",
@@ -3729,7 +3719,7 @@ export async function updateWorkspaceRecord(
     }
   }
 
-  return updateWorkspaceRecordFields(id, nextFields, input.body ?? current.body, input.taxonomy);
+  return updateWorkspaceRecordFields(id, nextFields, input.body, input.taxonomy);
 }
 
 function asStringArray(value: WorkspaceDatabaseFieldValue): string[] {
@@ -3797,9 +3787,9 @@ interface WorkEventInput {
 }
 
 /**
- * Insert into the append-only workspace.work_events audit log. Best-effort:
- * the body-section receipt remains the primary record, so an audit failure
- * warns instead of failing the operation.
+ * Insert non-consequential telemetry into the append-only work event log.
+ * Consequential workflow evidence uses append_record_section_with_event so
+ * the state change and receipt commit in one transaction.
  */
 async function recordWorkEvent(input: WorkEventInput) {
   const { error } = await supabase.schema("workspace").from("work_events").insert([
@@ -3815,6 +3805,37 @@ async function recordWorkEvent(input: WorkEventInput) {
     },
   ]);
   if (error) console.warn(`work_events insert failed (${input.eventKind}):`, error.message);
+}
+
+const CONSEQUENTIAL_WORK_EVENT_KINDS = new Set([
+  "approval_request",
+  "approval_decision",
+  "verification",
+  "external_action",
+]);
+
+async function appendRecordSectionWithEventAtomic(
+  recordId: string,
+  section: string,
+  fieldsPatch: Record<string, WorkspaceDatabaseFieldValue>,
+  event: WorkEventInput,
+) {
+  const { data, error } = await supabase
+    .schema("workspace")
+    .rpc("append_record_section_with_event", {
+      p_record_id: recordId,
+      p_section: section,
+      p_fields_patch: fieldsPatch,
+      p_workflow_run_id: event.workflowRunId ?? null,
+      p_event_kind: event.eventKind,
+      p_actor: event.actor,
+      p_durable_role: event.durableRole ?? null,
+      p_decision_role: event.decisionRole ?? null,
+      p_summary: event.summary ?? null,
+      p_payload: event.payload ?? {},
+    });
+  if (error) throw error;
+  return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
 function firstRelationId(value: WorkspaceDatabaseFieldValue) {
@@ -3905,8 +3926,6 @@ async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, 
         ...record.fields,
         [fieldId]: Array.from(new Set([...existing, relatedRecordId])),
       },
-      body: record.body,
-      taxonomy: record.taxonomy,
     },
     true,
   );
@@ -4631,21 +4650,7 @@ Details: see the Workflow Runs record receipt timeline.`;
     };
   }
 
-  const updatedRun = await appendRecordSectionAtomic(run.id, section, fieldsPatch);
-
-  let syncedTask: AgentWorkItem | null = null;
-  if (syncTask && taskId) {
-    const taskPatch: Record<string, WorkspaceDatabaseFieldValue> | undefined = taskState
-      ? {
-          [AGENT_TASK_FIELDS.status]: taskState.status,
-          [AGENT_TASK_FIELDS.stage]: taskState.stage,
-        }
-      : undefined;
-    const updatedTask = await appendRecordSectionAtomic(taskId, taskPointerSection, taskPatch);
-    syncedTask = toAgentWorkItem(updatedTask);
-  }
-
-  await recordWorkEvent({
+  const event: WorkEventInput = {
     recordId: taskId ?? run.id,
     workflowRunId: run.id,
     eventKind: input.eventKind ?? "workflow_run_update",
@@ -4660,9 +4665,29 @@ Details: see the Workflow Runs record receipt timeline.`;
       verification: input.verification ?? [],
       actions_taken: input.actionsTaken ?? [],
       next_step: input.nextStep ?? null,
-      synced_task_id: syncedTask?.id ?? null,
+      synced_task_id: syncTask ? taskId : null,
     },
-  });
+  };
+  const consequential =
+    CONSEQUENTIAL_WORK_EVENT_KINDS.has(event.eventKind) ||
+    Boolean(input.verification?.length);
+  const updatedRun = consequential
+    ? await appendRecordSectionWithEventAtomic(run.id, section, fieldsPatch, event)
+    : await appendRecordSectionAtomic(run.id, section, fieldsPatch);
+
+  let syncedTask: AgentWorkItem | null = null;
+  if (syncTask && taskId) {
+    const taskPatch: Record<string, WorkspaceDatabaseFieldValue> | undefined = taskState
+      ? {
+          [AGENT_TASK_FIELDS.status]: taskState.status,
+          [AGENT_TASK_FIELDS.stage]: taskState.stage,
+        }
+      : undefined;
+    const updatedTask = await appendRecordSectionAtomic(taskId, taskPointerSection, taskPatch);
+    syncedTask = toAgentWorkItem(updatedTask);
+  }
+
+  if (!consequential) await recordWorkEvent(event);
 
   return {
     dry_run: false,
@@ -4818,8 +4843,6 @@ export async function saveWorkflowDefinition(input: {
     record.id,
     {
       fields: nextFields,
-      body: record.body,
-      taxonomy: record.taxonomy,
     },
     true,
   );
@@ -5040,8 +5063,6 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         ...workflow.fields,
         [WORKFLOW_REGISTRY_FIELDS.runs]: Array.from(new Set([...existingRuns, created.id])),
       },
-      body: workflow.body,
-      taxonomy: workflow.taxonomy,
     },
     true,
   );
@@ -5170,283 +5191,11 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
   };
 }
 
-// ============================
-// Sandboxed GenUI query gate (Tier 2)
-// ============================
+export * from "@/lib/data/sandbox-query";
 
-// The ONLY capability exposed to agent-generated HTML: read-only Supabase
-// queries against an explicit table/column allowlist with hard row caps.
-// No raw SQL, no writes, no tables outside this map.
-const SANDBOX_QUERY_ALLOWLIST: Record<
-  string,
-  { schema: string; table: string; columns: string[]; filterColumns: string[] }
-> = {
-  workspace_records: {
-    schema: "workspace",
-    table: "records",
-    columns: ["id", "database_id", "fields", "created_at", "updated_at"],
-    filterColumns: ["id", "database_id"],
-  },
-  work_events: {
-    schema: "workspace",
-    table: "work_events",
-    columns: ["id", "record_id", "workflow_run_id", "event_kind", "actor", "durable_role", "summary", "created_at"],
-    filterColumns: ["record_id", "workflow_run_id", "event_kind", "actor"],
-  },
-  signals: {
-    schema: "intel",
-    table: "signals",
-    columns: ["id", "title", "url", "source", "status", "published_at", "source_reliability", "info_credibility", "created_at"],
-    filterColumns: ["id", "status", "source"],
-  },
-  entities: {
-    schema: "intel",
-    table: "entities",
-    columns: ["id", "entity_type", "name", "aliases", "summary", "confidence", "first_case_id", "updated_at"],
-    filterColumns: ["id", "entity_type", "first_case_id"],
-  },
-  claims: {
-    schema: "intel",
-    table: "claims",
-    columns: ["id", "case_id", "claim", "entity_ids", "source_reliability", "info_credibility", "claim_origin", "event_date", "created_at"],
-    filterColumns: ["id", "case_id", "claim_origin"],
-  },
-};
+export * from "@/lib/data/osint";
 
-export interface SandboxQueryInput {
-  table: string;
-  filters?: Array<{ column: string; op: "eq" | "in"; value: unknown }>;
-  orderBy?: { column: string; ascending?: boolean };
-  limit?: number;
-}
-
-export async function runSandboxQuery(input: SandboxQueryInput): Promise<Array<Record<string, unknown>>> {
-  const spec = SANDBOX_QUERY_ALLOWLIST[input.table];
-  if (!spec) throw new Error(`Table not available to sandboxed UI: ${input.table}`);
-
-  let query = supabase
-    .schema(spec.schema)
-    .from(spec.table)
-    .select(spec.columns.join(", "))
-    .limit(Math.min(Math.max(input.limit ?? 50, 1), 200));
-
-  for (const filter of input.filters ?? []) {
-    if (!spec.filterColumns.includes(filter.column)) {
-      throw new Error(`Filter column not allowed: ${filter.column}`);
-    }
-    if (filter.op === "eq") {
-      query = query.eq(filter.column, filter.value as string);
-    } else if (filter.op === "in" && Array.isArray(filter.value)) {
-      query = query.in(filter.column, (filter.value as unknown[]).slice(0, 50) as string[]);
-    }
-  }
-  if (input.orderBy && spec.columns.includes(input.orderBy.column)) {
-    query = query.order(input.orderBy.column, { ascending: input.orderBy.ascending ?? false });
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as unknown as Array<Record<string, unknown>>;
-}
-
-// ============================
-// OSINT entity layer (Phase C)
-// ============================
-
-const ENTITY_SELECT =
-  "id, entity_type, name, aliases, external_ids, summary, confidence, first_case_id, created_at, updated_at";
-
-export async function listIntelEntities(input: { caseId?: string; search?: string; limit?: number } = {}) {
-  const limit = input.limit ?? 50;
-  if (input.caseId) {
-    // Entities linked to this case via signal provenance or first sighting.
-    const { data: links, error: linksError } = await supabase
-      .schema("intel").from("entity_signals")
-      .select("entity_id")
-      .eq("case_id", input.caseId)
-      .limit(500);
-    if (linksError) throw linksError;
-    const linkedIds = Array.from(new Set(((links ?? []) as Array<{ entity_id: string }>).map((row) => row.entity_id)));
-    let query = supabase
-      .schema("intel").from("entities")
-      .select(ENTITY_SELECT)
-      .order("updated_at", { ascending: false })
-      .limit(limit);
-    query = linkedIds.length
-      ? query.or(`id.in.(${linkedIds.join(",")}),first_case_id.eq.${input.caseId}`)
-      : query.eq("first_case_id", input.caseId);
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data ?? []) as IntelEntity[];
-  }
-
-  let query = supabase
-    .schema("intel").from("entities")
-    .select(ENTITY_SELECT)
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-  if (input.search?.trim()) {
-    query = query.ilike("name", `%${input.search.trim()}%`);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as IntelEntity[];
-}
-
-/** Upsert a canonical entity by (type, case-insensitive name); merges aliases. */
-export async function upsertIntelEntity(input: {
-  entityType: IntelEntity["entity_type"];
-  name: string;
-  aliases?: string[];
-  externalIds?: Record<string, unknown>;
-  summary?: string | null;
-  confidence?: IntelEntity["confidence"];
-  caseId?: string | null;
-}) {
-  const name = input.name.trim();
-  if (!name) throw new Error("Entity name is required.");
-  const { data: existing, error: existingError } = await supabase
-    .schema("intel").from("entities")
-    .select(ENTITY_SELECT)
-    .eq("entity_type", input.entityType)
-    .ilike("name", name)
-    .limit(1);
-  if (existingError) throw existingError;
-
-  const match = (existing ?? [])[0] as IntelEntity | undefined;
-  if (match) {
-    const mergedAliases = Array.from(new Set([...match.aliases, ...(input.aliases ?? [])]));
-    const { data, error } = await supabase
-      .schema("intel").from("entities")
-      .update({
-        aliases: mergedAliases,
-        external_ids: { ...match.external_ids, ...(input.externalIds ?? {}) },
-        ...(input.summary !== undefined ? { summary: input.summary } : {}),
-        ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
-      })
-      .eq("id", match.id)
-      .select(ENTITY_SELECT)
-      .single();
-    if (error) throw error;
-    return { entity: data as IntelEntity, created: false };
-  }
-
-  const { data, error } = await supabase
-    .schema("intel").from("entities")
-    .insert([
-      {
-        entity_type: input.entityType,
-        name,
-        aliases: input.aliases ?? [],
-        external_ids: input.externalIds ?? {},
-        summary: input.summary ?? null,
-        confidence: input.confidence ?? null,
-        first_case_id: input.caseId ?? null,
-      },
-    ])
-    .select(ENTITY_SELECT)
-    .single();
-  if (error) throw error;
-  return { entity: data as IntelEntity, created: true };
-}
-
-export async function linkEntitySignal(input: { entityId: string; signalId: number; caseId?: string | null; note?: string | null }) {
-  const { error } = await supabase
-    .schema("intel").from("entity_signals")
-    .upsert(
-      [{ entity_id: input.entityId, signal_id: input.signalId, case_id: input.caseId ?? null, note: input.note ?? null }],
-      { onConflict: "entity_id,signal_id" },
-    );
-  if (error) throw error;
-}
-
-const CLAIM_SELECT =
-  "id, case_id, claim, entity_ids, source_reliability, info_credibility, claim_origin, event_date, supporting_signal_ids, contradicting_signal_ids, recorded_by, created_at";
-
-export async function listIntelClaims(input: { caseId?: string; entityId?: string; limit?: number } = {}) {
-  let query = supabase
-    .schema("intel").from("claims")
-    .select(CLAIM_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(input.limit ?? 50);
-  if (input.caseId) query = query.eq("case_id", input.caseId);
-  if (input.entityId) query = query.contains("entity_ids", [input.entityId]);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as IntelClaim[];
-}
-
-/** Record a graded claim. Claims are append-only; supersede with a new claim. */
-export async function createIntelClaim(input: {
-  claim: string;
-  recordedBy: string;
-  caseId?: string | null;
-  entityIds?: string[];
-  sourceReliability?: IntelClaim["source_reliability"];
-  infoCredibility?: number | null;
-  claimOrigin?: IntelClaim["claim_origin"];
-  eventDate?: string | null;
-  supportingSignalIds?: number[];
-  contradictingSignalIds?: number[];
-}) {
-  const claim = input.claim.trim();
-  if (!claim) throw new Error("Claim text is required.");
-  const { data, error } = await supabase
-    .schema("intel").from("claims")
-    .insert([
-      {
-        claim,
-        recorded_by: input.recordedBy,
-        case_id: input.caseId ?? null,
-        entity_ids: input.entityIds ?? [],
-        source_reliability: input.sourceReliability ?? null,
-        info_credibility: input.infoCredibility ?? null,
-        claim_origin: input.claimOrigin ?? null,
-        event_date: input.eventDate ?? null,
-        supporting_signal_ids: input.supportingSignalIds ?? [],
-        contradicting_signal_ids: input.contradictingSignalIds ?? [],
-      },
-    ])
-    .select(CLAIM_SELECT)
-    .single();
-  if (error) throw error;
-  return data as IntelClaim;
-}
-
-// ============================
-// Record activity, history, and templates (Phase B)
-// ============================
-
-export interface WorkEventItem {
-  id: string;
-  record_id: string | null;
-  workflow_run_id: string | null;
-  event_kind: string;
-  actor: string;
-  durable_role: string | null;
-  decision_role: string | null;
-  summary: string | null;
-  payload: Record<string, unknown>;
-  created_at: string;
-}
-
-export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; limit?: number }) {
-  let query = supabase
-    .schema("workspace").from("work_events")
-    .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, created_at")
-    .order("created_at", { ascending: false })
-    .limit(input.limit ?? 30);
-  if (input.recordId && input.workflowRunId) {
-    query = query.or(`record_id.eq.${input.recordId},workflow_run_id.eq.${input.workflowRunId}`);
-  } else if (input.recordId) {
-    query = query.eq("record_id", input.recordId);
-  } else if (input.workflowRunId) {
-    query = query.eq("workflow_run_id", input.workflowRunId);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as WorkEventItem[];
-}
+export * from "@/lib/data/work-receipts";
 
 export interface RecordRevisionItem {
   id: string;

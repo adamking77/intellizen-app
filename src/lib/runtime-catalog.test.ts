@@ -52,4 +52,18 @@ describe("runtime catalog", () => {
     const [runtime] = buildRuntimeCatalog({ discoveries: [discovery], bindings: [binding], roleTargets: [] });
     expect(deriveSystemHealth({ runtimes: [runtime], connections: [], loading: false })).toMatchObject({ state: "attention", problemCount: 1 });
   });
+
+  it.each([
+    ["unknown", "has not been prepared or probed"],
+    ["config_invalid", "configuration is invalid"],
+    ["login_required", "requires provider sign-in"],
+  ] as const)("keeps %s authentication diagnostics distinct", (authState, copy) => {
+    const [runtime] = buildRuntimeCatalog({
+      discoveries: [{ ...discovery, authState }],
+      bindings: [binding],
+      roleTargets: [{ bindingRef: binding.bindingId } as AgentPanelRoleTarget],
+    });
+    expect(runtime.authenticated).toBe(false);
+    expect(runtime.blockers.join(" ")).toContain(copy);
+  });
 });

@@ -20,8 +20,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  PANEL_ROLE_CHANNEL,
   PANEL_SELECTED_ROLE_KEY,
+  publishAgentPanelRoleMessage,
 } from "@/lib/agent-panel-roles";
 import {
   buildAgentCreationPreview,
@@ -208,11 +208,7 @@ export function TeamView() {
     } catch {
       /* mounted panel selection still receives the broadcast */
     }
-    if (typeof BroadcastChannel !== "undefined") {
-      const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
-      channel.postMessage({ roleKey, open: true });
-      channel.close();
-    }
+    publishAgentPanelRoleMessage({ roleKey, open: true });
     toast.success(`Agent Panel switched to ${team?.roles.find((role) => role.roleKey === roleKey)?.roleName ?? roleKey}`);
   }
 

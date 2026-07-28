@@ -43,6 +43,24 @@ export function runtimeChatResultFromEvents(events: NormalizedRuntimeEvent[]) {
   if (rejected?.kind === "persistence_rejected") {
     throw new Error(rejected.message);
   }
+  const runtimeError = events.find(
+    (
+      event,
+    ): event is Extract<NormalizedRuntimeEvent, { kind: "runtime_error" }> =>
+      event.kind === "runtime_error",
+  );
+  if (runtimeError) {
+    throw new Error(`${runtimeError.code}: ${runtimeError.message}`);
+  }
+  const protocolError = events.find(
+    (
+      event,
+    ): event is Extract<NormalizedRuntimeEvent, { kind: "protocol_error" }> =>
+      event.kind === "protocol_error",
+  );
+  if (protocolError) {
+    throw new Error(protocolError.message);
+  }
   const terminal = [...events]
     .reverse()
     .find(
@@ -66,6 +84,9 @@ export function runtimeChatResultFromEvents(events: NormalizedRuntimeEvent[]) {
       (event): event is Extract<NormalizedRuntimeEvent, { kind: "usage" }> =>
         event.kind === "usage",
     );
+  const providerEvents = events.flatMap((event) =>
+    event.kind === "provider_event" ? [event.eventType] : [],
+  );
   return {
     sessionId: session?.runId ?? "",
     text:
@@ -83,6 +104,9 @@ export function runtimeChatResultFromEvents(events: NormalizedRuntimeEvent[]) {
           outputTokens: usage.outputTokens,
         }
       : null,
+    diagnostics: {
+      providerEvents,
+    },
   };
 }
 

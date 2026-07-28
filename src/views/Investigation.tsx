@@ -29,6 +29,7 @@ import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useWindowSize } from "@/lib/use-window-size";
 import { useAppStore } from "@/store";
+import { formatElapsed } from "@/lib/format-elapsed";
 import {
   addSignalToInvestigation,
   bulkAddSignalsToInvestigation,
@@ -115,19 +116,6 @@ function hasRequiredPhaseGates(phase: number, phaseGates: Record<string, boolean
 
 function isCaseComplete(inv: { current_phase: number; phase_gates: Record<string, boolean> | null | undefined }) {
   return (inv.phase_gates ?? {})[PHASE_GATE_KEYS[2]] === true;
-}
-
-function formatElapsed(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 0) return "just now";
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
 }
 
 // ─── View ─────────────────────────────────────────────────────────────────────

@@ -46,7 +46,18 @@ export function buildRuntimeCatalog(input: {
       installed && !supported
         ? `Installed version is outside ${discovery.supportRange}.`
         : null,
-      installed && !authenticated ? "Worker profile requires provider sign-in." : null,
+      installed && discovery.authState === "login_required"
+        ? "Worker profile requires provider sign-in."
+        : null,
+      installed && discovery.authState === "config_invalid"
+        ? "Worker profile configuration is invalid."
+        : null,
+      installed && discovery.authState === "unknown"
+        ? "Worker profile has not been prepared or probed."
+        : null,
+      installed && discovery.authState === "unavailable"
+        ? "Authentication state is unavailable."
+        : null,
       !bound ? "No reviewed local runtime binding exists." : null,
       bound && !assigned ? "Binding is not assigned to an active role." : null,
     ].filter((value): value is string => Boolean(value));

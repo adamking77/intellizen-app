@@ -1,6 +1,6 @@
 import {
   TEAM_REVIEW_FIXTURE_KEY,
-  TEAM_ROSTER_CHANNEL,
+  publishTeamRosterChanged,
   type TeamReviewFixture,
 } from "@/lib/team-roster";
 
@@ -26,19 +26,12 @@ export function readTeamReviewFixture(): TeamReviewFixture | null {
   }
 }
 
-function announceRosterChange(fixture: TeamReviewFixture | null) {
-  if (typeof BroadcastChannel === "undefined") return;
-  const channel = new BroadcastChannel(TEAM_ROSTER_CHANNEL);
-  channel.postMessage({ kind: "roster-refresh", fixture });
-  channel.close();
-}
-
 export function saveTeamReviewFixture(fixture: TeamReviewFixture) {
   window.localStorage.setItem(TEAM_REVIEW_FIXTURE_KEY, JSON.stringify(fixture));
-  announceRosterChange(fixture);
+  publishTeamRosterChanged(fixture);
 }
 
 export function clearTeamReviewFixture() {
   window.localStorage.removeItem(TEAM_REVIEW_FIXTURE_KEY);
-  announceRosterChange(null);
+  publishTeamRosterChanged(null);
 }

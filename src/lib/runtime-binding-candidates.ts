@@ -7,6 +7,27 @@ import type { RuntimeDiscovery } from "@/services/runtimes";
 
 const PROJECT_GRANT = "/Users/adamking/projects/intellizen-app";
 
+export function normalizeRuntimeModelPolicy(
+  defaultModel: string,
+  allowedModels: string | string[],
+) {
+  const normalizedDefault = defaultModel.trim();
+  const allowed = Array.from(
+    new Set(
+      (Array.isArray(allowedModels)
+        ? allowedModels
+        : allowedModels.split(",")
+      )
+        .map((model) => model.trim())
+        .filter(Boolean),
+    ),
+  );
+  if (normalizedDefault && !allowed.includes(normalizedDefault)) {
+    allowed.unshift(normalizedDefault);
+  }
+  return { default: normalizedDefault, allowed };
+}
+
 export function runtimeBindingCandidate(
   discovery: RuntimeDiscovery,
 ): RuntimeBinding {

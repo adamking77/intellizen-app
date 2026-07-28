@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { runtimeBindingCandidate } from "@/lib/runtime-binding-candidates";
+import {
+  normalizeRuntimeModelPolicy,
+  runtimeBindingCandidate,
+} from "@/lib/runtime-binding-candidates";
 import type { RuntimeDiscovery } from "@/services/runtimes";
 
 function discovery(
@@ -28,6 +31,22 @@ function discovery(
 }
 
 describe("runtime binding candidates", () => {
+  it("normalizes a reviewed deny-by-default model allowlist", () => {
+    expect(normalizeRuntimeModelPolicy("", "")).toEqual({
+      default: "",
+      allowed: [],
+    });
+    expect(
+      normalizeRuntimeModelPolicy(
+        "gpt-5.3-codex",
+        "gpt-5.3-codex, gpt-5.3-codex, gpt-5.2-codex",
+      ),
+    ).toEqual({
+      default: "gpt-5.3-codex",
+      allowed: ["gpt-5.3-codex", "gpt-5.2-codex"],
+    });
+  });
+
   it("keeps the Codex worker sandbox and strict config", () => {
     const candidate = runtimeBindingCandidate(discovery("codex-cli"));
     expect(candidate.bindingId).toBe("codex-local-primary");

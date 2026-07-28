@@ -16,7 +16,6 @@ import claudeNormalTrace from "@/fixtures/runtime-traces/claude-2.1.220-normal.j
 import {
   assertClaudeCliVersion,
   assertClaudeWorkerIsolation,
-  assertCodexCliVersion,
   claudeExecArgs,
   claudeRuntimeAdapter,
   codexExecArgs,
@@ -144,23 +143,6 @@ describe("mock runtime adapter golden traces", () => {
     });
   });
 
-  it("derives capability flags from trace evidence alone", async () => {
-    const names: (keyof typeof traces)[] = [
-      "normal",
-      "cancelled",
-      "timeout",
-    ];
-    const events = names.flatMap((name) => mockRuntimeAdapter.normalize(trace(name)));
-    expect(mockRuntimeAdapter.deriveCapabilities(events)).toEqual({
-      structuredOutput: true,
-      streaming: true,
-      cancellation: true,
-      timeout: true,
-      usage: true,
-      resume: false,
-    });
-  });
-
   it("fails closed for an unregistered adapter", () => {
     expect(() => getRuntimeAdapter("unknown")).toThrow(
       "Unsupported runtime adapter: unknown.",
@@ -168,14 +150,7 @@ describe("mock runtime adapter golden traces", () => {
   });
 });
 
-describe("Codex 0.145.0 adapter contract", () => {
-  it("pins the exact installed version", () => {
-    expect(() => assertCodexCliVersion("codex-cli 0.145.0")).not.toThrow();
-    expect(() => assertCodexCliVersion("codex-cli 0.146.0")).toThrow(
-      "Unsupported Codex CLI version",
-    );
-  });
-
+describe("Codex adapter contract", () => {
   it("builds the reviewed stdin and sandbox invocation", () => {
     expect(codexExecArgs("/tmp/assignment")).toEqual([
       "exec",
@@ -274,14 +249,6 @@ describe("Claude 2.1.220 adapter contract", () => {
       kind: "terminal",
       reason: "completed",
       result: "GATE6_OK",
-    });
-    expect(claudeRuntimeAdapter.deriveCapabilities(events)).toEqual({
-      structuredOutput: true,
-      streaming: true,
-      cancellation: true,
-      timeout: true,
-      usage: true,
-      resume: false,
     });
   });
 

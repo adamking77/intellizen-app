@@ -20,7 +20,10 @@ import {
   PANEL_SPEAK_REPLIES_KEY,
   PANEL_START_ROLE_KEY,
 } from "@/lib/agent-panel-roles";
-import { runtimeBindingCandidate } from "@/lib/runtime-binding-candidates";
+import {
+  normalizeRuntimeModelPolicy,
+  runtimeBindingCandidate,
+} from "@/lib/runtime-binding-candidates";
 import {
   ALLOW_RUN_OVERRIDE_KEY,
   DEFAULT_EXECUTION_KEY,
@@ -28,7 +31,9 @@ import {
   readPreference,
   writePreference,
 } from "@/lib/settings-preferences";
+import { inspectWorkflowReceiptIntegrity } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/toast";
 import {
   prepareRuntimeWorkerProfile,
   previewRuntimeBinding,
@@ -119,6 +124,12 @@ export function SettingsView() {
     queryFn: listAgentPanelRoleTargets,
     staleTime: 15_000,
   });
+  const receiptIntegrityQuery = useQuery({
+    queryKey: ["workflow-receipt-integrity"],
+    queryFn: inspectWorkflowReceiptIntegrity,
+    enabled: section === "diagnostics",
+    staleTime: 15_000,
+  });
   const roles = useMemo(
     () => (rolesQuery.data ?? []).filter((role) => role.state === "ready"),
     [rolesQuery.data],
@@ -153,10 +164,27 @@ export function SettingsView() {
       await refresh();
       toast.success("Local runtime binding created");
     } catch (error) {
-      toast.error(String(error));
+      toast.error(errorMessage(error));
     } finally {
       setSaving(false);
     }
+  }
+
+  function updateReviewedModelPolicy(
+    defaultModel: string,
+    allowedModels: string | string[],
+  ) {
+    setReviewed((current) =>
+      current
+        ? {
+            ...current,
+            modelPolicy: normalizeRuntimeModelPolicy(
+              defaultModel,
+              allowedModels,
+            ),
+          }
+        : null,
+    );
   }
 
   const observedReceipt = JSON.stringify(
@@ -164,6 +192,7 @@ export function SettingsView() {
       observedAt: new Date().toISOString(),
       runtimes: runtimeQuery.data,
       connections: connectionQuery.data,
+      receiptIntegrity: receiptIntegrityQuery.data,
     },
     null,
     2,
@@ -216,7 +245,7 @@ export function SettingsView() {
           {section === "runtimes" ? (
             <div className="space-y-4">
               {runtimeQuery.isLoading ? <p className="text-sm text-[var(--subtext-0)]">Inspecting local runtimes…</p> : null}
-              {runtimeQuery.error ? <p className="text-sm text-[var(--danger)]">{String(runtimeQuery.error)}</p> : null}
+              {runtimeQuery.error ? <p className="text-sm text-[var(--danger)]">{errorMessage(runtimeQuery.error)}</p> : null}
               {(runtimeQuery.data ?? []).map((runtime) => (
                 <section key={runtime.adapterId} className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -265,6 +294,36 @@ export function SettingsView() {
                 <section className="rounded-lg border border-[var(--accent-border)] bg-[var(--mantle)] p-5">
                   <p className="font-ui text-sm font-semibold text-[var(--text)]">Reviewed local change</p>
                   <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Create <span className="font-mono text-[var(--accent)]">{reviewed.bindingId}</span>, its provider-owned worker profile, and no Supabase record.</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <label className="text-xs text-[var(--subtext-0)]">
+                      Default model
+                      <input
+                        value={reviewed.modelPolicy.default}
+                        onChange={(event) =>
+                          updateReviewedModelPolicy(
+                            event.target.value,
+                            reviewed.modelPolicy.allowed,
+                          )
+                        }
+                        placeholder="Provider-managed default"
+                        className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--base)] px-3 py-2 font-mono text-xs text-[var(--text)]"
+                      />
+                    </label>
+                    <label className="text-xs text-[var(--subtext-0)]">
+                      Allowed model overrides
+                      <input
+                        value={reviewed.modelPolicy.allowed.join(", ")}
+                        onChange={(event) =>
+                          updateReviewedModelPolicy(
+                            reviewed.modelPolicy.default,
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Comma-separated; empty denies overrides"
+                        className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--base)] px-3 py-2 font-mono text-xs text-[var(--text)]"
+                      />
+                    </label>
+                  </div>
                   <div className="mt-4 flex gap-2"><Button onClick={() => void createReviewedBinding()} disabled={saving}>{saving ? "Creating…" : "Create local binding"}</Button><Button variant="ghost" onClick={() => setReviewed(null)}>Cancel</Button></div>
                 </section>
               ) : null}
@@ -290,7 +349,30 @@ export function SettingsView() {
           ) : null}
 
           {section === "diagnostics" ? (
-            <section className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-ui text-sm font-semibold text-[var(--text)]">Observed-state receipt</h2><p className="mt-1 text-xs text-[var(--subtext-0)]">No credentials or secret values are included.</p></div><Button variant="outline" onClick={() => void navigator.clipboard.writeText(observedReceipt).then(() => toast.success("Diagnostics copied"))}><Clipboard className="mr-2 h-3.5 w-3.5" />Copy</Button></div><pre className="mt-4 max-h-[460px] overflow-auto rounded bg-[var(--base)] p-4 font-mono text-[10px] leading-5 text-[var(--subtext-0)]">{observedReceipt}</pre></section>
+            <div className="space-y-4">
+              <section className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-ui text-sm font-semibold text-[var(--text)]">Workflow transition coverage</h2>
+                    <p className="mt-1 text-xs text-[var(--subtext-0)]">Detects schema-v1 run versions written outside the transactional transition RPC or missing from append-only history.</p>
+                  </div>
+                  <Button variant="outline" onClick={() => void receiptIntegrityQuery.refetch()} disabled={receiptIntegrityQuery.isFetching}>
+                    <RefreshCw className={cn("mr-2 h-3.5 w-3.5", receiptIntegrityQuery.isFetching && "animate-spin")} />
+                    Check
+                  </Button>
+                </div>
+                {receiptIntegrityQuery.error ? <p className="mt-4 text-xs text-[var(--danger)]">{errorMessage(receiptIntegrityQuery.error)}</p> : null}
+                {receiptIntegrityQuery.data ? (
+                  <dl className="mt-4 grid gap-3 font-mono text-[11px] md:grid-cols-4">
+                    <div><dt className="text-[var(--overlay-1)]">Runs</dt><dd className="mt-1 text-[var(--text)]">{receiptIntegrityQuery.data.runCount}</dd></div>
+                    <div><dt className="text-[var(--overlay-1)]">Expected</dt><dd className="mt-1 text-[var(--text)]">{receiptIntegrityQuery.data.expectedTransitionCount}</dd></div>
+                    <div><dt className="text-[var(--overlay-1)]">Observed</dt><dd className="mt-1 text-[var(--text)]">{receiptIntegrityQuery.data.observedTransitionCount}</dd></div>
+                    <div><dt className="text-[var(--overlay-1)]">Runs missing versions</dt><dd className={cn("mt-1", receiptIntegrityQuery.data.runsWithGaps.length ? "text-[var(--danger)]" : "text-[var(--success)]")}>{receiptIntegrityQuery.data.runsWithGaps.length}</dd></div>
+                  </dl>
+                ) : null}
+              </section>
+              <section className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-ui text-sm font-semibold text-[var(--text)]">Observed-state receipt</h2><p className="mt-1 text-xs text-[var(--subtext-0)]">No credentials or secret values are included.</p></div><Button variant="outline" onClick={() => void navigator.clipboard.writeText(observedReceipt).then(() => toast.success("Diagnostics copied"))}><Clipboard className="mr-2 h-3.5 w-3.5" />Copy</Button></div><pre className="mt-4 max-h-[460px] overflow-auto rounded bg-[var(--base)] p-4 font-mono text-[10px] leading-5 text-[var(--subtext-0)]">{observedReceipt}</pre></section>
+            </div>
           ) : null}
         </div>
       </main>

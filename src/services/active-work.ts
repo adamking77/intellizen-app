@@ -10,7 +10,11 @@ export async function inspectActiveWork() {
   return Object.fromEntries(
     roles.map((role) => [
       role.roleKey,
-      activeWorkForRole(runs, role.roleKey, role.agentName),
+      activeWorkForRole(runs, role.roleKey, {
+        recordId: role.agentRecordId,
+        agentKey: role.agentKey,
+        displayName: role.agentName,
+      }),
     ]),
   );
 }

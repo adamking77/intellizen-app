@@ -48,19 +48,32 @@ describe("active work", () => {
   it("excludes terminal runs", () => {
     expect(isActiveWorkflowRun(run({ status: "Done" }))).toBe(false);
     expect(isActiveWorkflowRun(run({ status: "In progress" }))).toBe(true);
+    expect(isActiveWorkflowRun(run({ status: "Renamed upstream" }))).toBe(false);
   });
 
-  it("resolves work through role ownership or the current occupant", () => {
+  it("resolves work through role ownership and exact persisted actor identities", () => {
     const work = activeWorkForRole(
       [
         run({ id: "role-owned", owner_role: "chief_engineer" }),
-        run({ id: "agent-owned", owner_role: null, actor: "Keel" }),
+        run({ id: "record-id-owned", owner_role: null, actor: "agent-keel" }),
+        run({ id: "agent-key-owned", owner_role: null, actor: "keel" }),
+        run({ id: "display-name-owned", owner_role: null, actor: "Keel" }),
+        run({ id: "wrong-case", owner_role: null, actor: "KEEL" }),
         run({ id: "finished", status: "Done" }),
       ],
       "chief_engineer",
-      "Keel",
+      {
+        recordId: "agent-keel",
+        agentKey: "keel",
+        displayName: "Keel",
+      },
     );
-    expect(work.map((item) => item.id)).toEqual(["role-owned", "agent-owned"]);
+    expect(work.map((item) => item.id)).toEqual([
+      "role-owned",
+      "record-id-owned",
+      "agent-key-owned",
+      "display-name-owned",
+    ]);
     expect(work[0].workflowRecordId).toBeNull();
     expect(work[0].canonicalPath).toBe("/workflows?run=role-owned");
   });

@@ -6,7 +6,7 @@ import { AppDialog } from "@/components/ui/app-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
-import { PANEL_ROLE_CHANNEL } from "@/lib/agent-panel-roles";
+import { publishAgentPanelRoleMessage } from "@/lib/agent-panel-roles";
 import { saveWorkflowDefinition } from "@/lib/data";
 import type { WorkflowTemplateItem } from "@/lib/types";
 import {
@@ -98,10 +98,7 @@ export function WorkflowDesigner({
   ]);
 
   useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
-    channel.postMessage({ collapsed: true });
-    channel.close();
+    publishAgentPanelRoleMessage({ collapsed: true });
   }, []);
 
   const validation = validateWorkflowDefinition(definition);
@@ -156,10 +153,7 @@ export function WorkflowDesigner({
   }
 
   function askRole(roleKey: string) {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
-    channel.postMessage({ roleKey, open: true });
-    channel.close();
+    publishAgentPanelRoleMessage({ roleKey, open: true });
   }
 
   function runDryRun() {

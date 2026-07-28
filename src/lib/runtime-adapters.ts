@@ -37,19 +37,9 @@ export type NormalizedRuntimeEvent =
   | { kind: "persistence_rejected"; message: string }
   | { kind: "terminal"; reason: RuntimeTerminalReason; result?: string };
 
-export type RuntimeCapabilities = {
-  structuredOutput: boolean;
-  streaming: boolean;
-  cancellation: boolean;
-  timeout: boolean;
-  usage: boolean;
-  resume: boolean;
-};
-
 export type RuntimeAdapter = {
   id: string;
   normalize(lines: string[]): NormalizedRuntimeEvent[];
-  deriveCapabilities(events: NormalizedRuntimeEvent[]): RuntimeCapabilities;
 };
 
 type MockWireEvent =
@@ -240,38 +230,10 @@ function normalizeMock(lines: string[]): NormalizedRuntimeEvent[] {
   return events;
 }
 
-function deriveMockCapabilities(
-  events: NormalizedRuntimeEvent[],
-): RuntimeCapabilities {
-  return {
-    structuredOutput: events.some((event) => event.kind === "started"),
-    streaming: events.some((event) => event.kind === "output"),
-    cancellation: events.some(
-      (event) => event.kind === "terminal" && event.reason === "cancelled",
-    ),
-    timeout: events.some(
-      (event) => event.kind === "terminal" && event.reason === "timed_out",
-    ),
-    usage: events.some((event) => event.kind === "usage"),
-    resume: false,
-  };
-}
-
 export const mockRuntimeAdapter: RuntimeAdapter = {
   id: "mock",
   normalize: normalizeMock,
-  deriveCapabilities: deriveMockCapabilities,
 };
-
-export const CODEX_CLI_VERSION = "codex-cli 0.145.0";
-
-export function assertCodexCliVersion(version: string) {
-  if (version.trim() !== CODEX_CLI_VERSION) {
-    throw new Error(
-      `Unsupported Codex CLI version. Expected ${CODEX_CLI_VERSION}; received ${version.trim() || "unknown"}.`,
-    );
-  }
-}
 
 export function codexExecArgs(workingDirectory: string) {
   return [
@@ -377,14 +339,6 @@ function normalizeCodex(lines: string[]): NormalizedRuntimeEvent[] {
 export const codexRuntimeAdapter: RuntimeAdapter = {
   id: "codex-cli",
   normalize: normalizeCodex,
-  deriveCapabilities: (events) => ({
-    structuredOutput: events.some((event) => event.kind === "started"),
-    streaming: events.some((event) => event.kind === "output"),
-    cancellation: true,
-    timeout: true,
-    usage: events.some((event) => event.kind === "usage"),
-    resume: false,
-  }),
 };
 
 export const CLAUDE_CLI_VERSION = "2.1.220 (Claude Code)";
@@ -594,14 +548,6 @@ export function assertClaudeWorkerIsolation(
 export const claudeRuntimeAdapter: RuntimeAdapter = {
   id: "claude-cli",
   normalize: normalizeClaude,
-  deriveCapabilities: (events) => ({
-    structuredOutput: events.some((event) => event.kind === "initialized"),
-    streaming: events.some((event) => event.kind === "output"),
-    cancellation: true,
-    timeout: true,
-    usage: events.some((event) => event.kind === "usage"),
-    resume: false,
-  }),
 };
 
 const registry = new Map<string, RuntimeAdapter>([

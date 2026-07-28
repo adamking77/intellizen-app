@@ -108,10 +108,26 @@ export async function streamHermesChat(input: {
   return streamHermesHostChat(input);
 }
 
+function waitForHermesPoll(signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new DOMException("Hermes run was cancelled.", "AbortError"));
+    };
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, 1_000);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export async function executeHermesRun(input: {
   prompt: string;
   instructions: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<HermesRunExecution> {
   const started = await startHermesHostRun({
     prompt: input.prompt,
@@ -120,7 +136,10 @@ export async function executeHermesRun(input: {
 
   const deadline = Date.now() + input.timeoutMs;
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    if (input.signal?.aborted) {
+      throw new DOMException("Hermes run was cancelled.", "AbortError");
+    }
+    await waitForHermesPoll(input.signal);
     const status = await getHermesHostRunStatus(started.runId);
     if (status.status === "completed") {
       return {
@@ -140,6 +159,13 @@ export async function executeHermesRun(input: {
     ) {
       throw new Error(
         `Hermes run ended as ${status.status}: ${status.error ?? "no detail"}`,
+      );
+    }
+    if (!status.status || status.status === "unknown") {
+      throw new Error(
+        `Hermes run ${started.runId} returned an unknown status${
+          status.error ? `: ${status.error}` : "."
+        }`,
       );
     }
   }

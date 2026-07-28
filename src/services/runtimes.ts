@@ -75,7 +75,12 @@ export type RuntimeDiscovery = {
   version: string;
   supported: boolean;
   supportRange: string;
-  authState: "ready" | "login_required" | "unavailable";
+  authState:
+    | "ready"
+    | "login_required"
+    | "config_invalid"
+    | "unknown"
+    | "unavailable";
   workerProfileHome: string;
   checkedAtMs: number;
   remediation: string;

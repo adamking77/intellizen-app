@@ -1,4 +1,10 @@
-import type { WorkflowRunItem } from "@/lib/types";
+/**
+ * Canonical working-state projection.
+ *
+ * Every surface that presents active workflow work should read this module,
+ * so status semantics, identity matching, and deep links do not drift.
+ */
+import type { WorkflowRunItem, WorkflowRunStatus } from "@/lib/types";
 
 export type ActiveWorkState =
   | "working"
@@ -19,47 +25,83 @@ export type ActiveWorkItem = {
   canonicalPath: string;
 };
 
-const TERMINAL_STATUSES = new Set(["done", "deferred", "cancelled", "failed"]);
+export type WorkflowActorIdentity = {
+  recordId?: string | null;
+  agentKey?: string | null;
+  displayName?: string | null;
+};
 
-export function activeWorkState(status: string | null): ActiveWorkState {
-  const normalized = (status ?? "").trim().toLowerCase();
-  if (normalized.includes("approval")) return "awaiting-approval";
-  if (normalized.includes("block")) return "blocked";
-  if (normalized.includes("queue") || normalized.includes("not started")) {
-    return "queued";
+const WORKFLOW_RUN_STATUSES = new Set<WorkflowRunStatus>([
+  "Queued",
+  "In progress",
+  "Blocked",
+  "Needs approval",
+  "Done",
+  "Deferred",
+]);
+const TERMINAL_STATUSES = new Set<WorkflowRunStatus>([
+  "Done",
+  "Deferred",
+]);
+
+function workflowRunStatus(status: string | null): WorkflowRunStatus | null {
+  const normalized = status?.trim();
+  return normalized && WORKFLOW_RUN_STATUSES.has(normalized as WorkflowRunStatus)
+    ? (normalized as WorkflowRunStatus)
+    : null;
+}
+
+export function activeWorkState(
+  status: WorkflowRunStatus | null,
+): ActiveWorkState {
+  switch (status) {
+    case "Needs approval":
+      return "awaiting-approval";
+    case "Blocked":
+      return "blocked";
+    case "Queued":
+      return "queued";
+    default:
+      return "working";
   }
-  return "working";
 }
 
 export function isActiveWorkflowRun(run: WorkflowRunItem) {
-  return !TERMINAL_STATUSES.has((run.status ?? "").trim().toLowerCase());
+  const status = workflowRunStatus(run.status);
+  return status !== null && !TERMINAL_STATUSES.has(status);
 }
 
 export function workflowRunsForRole(
   runs: WorkflowRunItem[],
   roleKey: string,
-  agentName?: string | null,
+  agentIdentity?: WorkflowActorIdentity | null,
 ) {
-  const normalizedAgent = agentName?.trim().toLowerCase() ?? "";
+  const actorIdentifiers = new Set(
+    [
+      agentIdentity?.recordId,
+      agentIdentity?.agentKey,
+      agentIdentity?.displayName,
+    ].filter((value): value is string => Boolean(value?.trim())),
+  );
   return runs.filter(
     (run) =>
       run.owner_role === roleKey ||
-      (normalizedAgent && run.actor?.trim().toLowerCase() === normalizedAgent),
+      (run.actor !== null && actorIdentifiers.has(run.actor)),
   );
 }
 
 export function activeWorkForRole(
   runs: WorkflowRunItem[],
   roleKey: string,
-  agentName?: string | null,
+  agentIdentity?: WorkflowActorIdentity | null,
 ): ActiveWorkItem[] {
-  return workflowRunsForRole(runs, roleKey, agentName)
+  return workflowRunsForRole(runs, roleKey, agentIdentity)
     .filter(isActiveWorkflowRun)
     .map((run) => ({
       id: run.id,
       workflowRecordId: run.workflow_record_id,
       title: run.name,
-      state: activeWorkState(run.status),
+      state: activeWorkState(workflowRunStatus(run.status)),
       status: run.status ?? "In progress",
       currentStep: run.current_step,
       roleKey: run.owner_role,

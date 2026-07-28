@@ -10,6 +10,7 @@ import {
   type WorkflowStepState,
   type WorkflowTransitionRequest,
 } from "@/services/workflow-runner";
+import { requiredNonNegativeInteger } from "@/lib/validated-number";
 
 type WorkflowRunRow = {
   id: string;
@@ -28,13 +29,6 @@ export type WorkflowRecoveryReport = {
 function requiredString(value: unknown, label: string) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${label} is missing.`);
-  }
-  return value;
-}
-
-function requiredNumber(value: unknown, label: string) {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${label} is invalid.`);
   }
   return value;
 }
@@ -59,8 +53,8 @@ function recoveryPort(): Pick<
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Recovered run version"),
-        fencingToken: requiredNumber(data?.fencing_token, "Recovered fencing token"),
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Recovered run version"),
+        fencingToken: requiredNonNegativeInteger(data?.fencing_token, "Recovered fencing token"),
       };
     },
     transition: async (input: WorkflowTransitionRequest) => {
@@ -86,8 +80,8 @@ function recoveryPort(): Pick<
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Recovered run version"),
-        fencingToken: requiredNumber(data?.fencing_token, "Recovered fencing token"),
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Recovered run version"),
+        fencingToken: requiredNonNegativeInteger(data?.fencing_token, "Recovered fencing token"),
       };
     },
     releaseLease: async (input) => {
@@ -103,7 +97,7 @@ function recoveryPort(): Pick<
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Released run version"),
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Released run version"),
       };
     },
   };
@@ -159,7 +153,7 @@ export function recoverInterruptedLocalWorkflowsOnLaunch() {
         const result = await recoverInterruptedWorkflow(
           {
             runId: row.id,
-            runVersion: requiredNumber(fields.run_version, "Run version"),
+            runVersion: requiredNonNegativeInteger(fields.run_version, "Run version"),
             currentStepId,
             currentStepState,
             leaseExpiresAt:
@@ -194,5 +188,8 @@ export function recoverInterruptedLocalWorkflowsOnLaunch() {
     }
     return report;
   })();
+  void launchRecovery.catch(() => {
+    launchRecovery = null;
+  });
   return launchRecovery;
 }

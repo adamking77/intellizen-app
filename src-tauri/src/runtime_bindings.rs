@@ -15,7 +15,7 @@ const CLAUDE_MCP_CONFIG_FILE_NAME: &str = "mcp-worker.json";
 const WORKER_NODE_BINARY: &str = "/Users/adamking/.local/bin/node";
 const INTELLIZEN_MCP_BUILD: &str =
     "/Users/adamking/projects/intellizen-app/mcp-server/dist/index.js";
-const ALLOWED_ADAPTERS: &[&str] = &["mock", "hermes", "codex-cli", "claude-cli", "gemini-cli"];
+const ALLOWED_ADAPTERS: &[&str] = &["codex-cli", "claude-cli"];
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

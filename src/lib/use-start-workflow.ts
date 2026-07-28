@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { OPERATOR_ACTOR, startWorkflow } from "@/lib/data";
 import type { StartWorkflowInput } from "@/lib/types";
@@ -16,6 +16,7 @@ type StartWorkflowRequest = Omit<StartWorkflowInput, "requestedBy" | "confirmWri
  */
 export function useStartWorkflow(options: { onStarted?: () => Promise<unknown> | void } = {}) {
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
+  const dispatchControllerRef = useRef<AbortController | null>(null);
 
   async function start(request: StartWorkflowRequest) {
     if (isStartingWorkflow) return null;
@@ -36,7 +37,9 @@ export function useStartWorkflow(options: { onStarted?: () => Promise<unknown> |
         result.run?.schema_version === "intellizen.workflow/1"
       ) {
         try {
-          const dispatch = await dispatchWorkflowRun(result.run);
+          const controller = new AbortController();
+          dispatchControllerRef.current = controller;
+          const dispatch = await dispatchWorkflowRun(result.run, controller.signal);
           if (dispatch) {
             const currentStep =
               dispatch.status === "needs_approval"
@@ -71,9 +74,14 @@ export function useStartWorkflow(options: { onStarted?: () => Promise<unknown> |
       toastError("Workflow start failed", startError);
       return null;
     } finally {
+      dispatchControllerRef.current = null;
       setIsStartingWorkflow(false);
     }
   }
 
-  return { isStartingWorkflow, start };
+  return {
+    isStartingWorkflow,
+    start,
+    cancel: () => dispatchControllerRef.current?.abort(),
+  };
 }

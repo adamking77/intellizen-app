@@ -38,6 +38,8 @@ import {
   saveRecordAsTemplate,
   updateWorkflowRun,
 } from "@/lib/data";
+import { runnableWorkflows } from "@/lib/workflow-catalog";
+import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useAppStore } from "@/store";
@@ -284,7 +286,16 @@ export function DatabasePeekPanel({
     staleTime: 60_000,
     enabled: canStartRecordWorkflow,
   });
-  const workflows = workflowsQuery.data ?? [];
+  const workflowRolesQuery = useQuery({
+    queryKey: ["agent-panel", "role-targets"],
+    queryFn: listAgentPanelRoleTargets,
+    staleTime: 30_000,
+    enabled: canStartRecordWorkflow,
+  });
+  const workflows = runnableWorkflows(
+    workflowsQuery.data ?? [],
+    workflowRolesQuery.data ?? [],
+  );
   const selectedWorkflow = workflows.find((workflow) => workflow.workflow_id === selectedWorkflowId) ?? workflows[0] ?? null;
   const activeWorkflowId = selectedWorkflowId || selectedWorkflow?.workflow_id || "";
 

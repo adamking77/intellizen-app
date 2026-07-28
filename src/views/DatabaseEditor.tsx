@@ -941,7 +941,7 @@ export function DatabaseEditorView({
           timelineLabelField:
             type === "timeline" ? activeView.timelineLabelField ?? defaultTimelineFields.timelineLabelField : activeView.timelineLabelField,
           timelineColorField:
-            type === "timeline" ? activeView.timelineColorField : activeView.timelineColorField,
+            activeView.timelineColorField,
           timelineViewMode:
             type === "timeline" ? activeView.timelineViewMode ?? defaultTimelineFields.timelineViewMode : activeView.timelineViewMode,
         },

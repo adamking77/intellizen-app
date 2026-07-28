@@ -1,10 +1,27 @@
 import type { RuntimeBinding } from "@/services/runtime-bindings";
+import {
+  builtinBindingRefForRoleOccupant,
+  effectiveRuntimeBindings,
+} from "@/services/runtime-bindings";
 
 export const PANEL_START_ROLE_KEY = "intelizen:agent-panel:panel_start_role";
 export const PANEL_SELECTED_ROLE_KEY = "intelizen:agent-panel:selected-role";
 export const PANEL_ROLE_CHANNEL = "intelizen:agent-panel-role";
 export const PANEL_SPEAK_REPLIES_KEY = "intelizen:agent-panel-speak-replies";
 export const OPERATIONS_DIRECTOR_ROLE = "operations_director";
+
+export interface AgentPanelRoleMessage {
+  roleKey?: string;
+  open?: boolean;
+  collapsed?: boolean;
+}
+
+export function publishAgentPanelRoleMessage(message: AgentPanelRoleMessage) {
+  if (typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel(PANEL_ROLE_CHANNEL);
+  channel.postMessage(message);
+  channel.close();
+}
 
 export interface AgentPanelRoleRecord {
   id: string;
@@ -43,12 +60,18 @@ export function buildAgentPanelRoleTargets(input: {
   const assignments = new Map(
     input.assignments.flatMap((assignment) => {
       if (assignment.fields.role_assignment_status !== "active") return [];
+      if (assignment.fields.role_assignment_local_review_fixture === true) {
+        return [];
+      }
       const roleId = firstRelation(assignment.fields.role_assignment_role);
       return roleId ? [[roleId, assignment] as const] : [];
     }),
   );
   const bindings = new Map(
-    input.bindings.map((binding) => [binding.bindingId, binding]),
+    effectiveRuntimeBindings(input.bindings).map((binding) => [
+      binding.bindingId,
+      binding,
+    ]),
   );
 
   return input.roles
@@ -66,13 +89,13 @@ export function buildAgentPanelRoleTargets(input: {
       const agent = agentId ? agents.get(agentId) : null;
       const bindingRef =
         fieldString(assignment?.fields.role_assignment_binding_ref) ??
-        (roleKey === OPERATIONS_DIRECTOR_ROLE && agent?.fields.agent_key === "fiona"
-          ? "hermes-fiona"
-          : null);
+        builtinBindingRefForRoleOccupant(
+          roleKey,
+          fieldString(agent?.fields.agent_key),
+        );
       const binding = bindingRef ? bindings.get(bindingRef) : null;
       const adapterId =
-        binding?.adapterId ??
-        (bindingRef === "hermes-fiona" ? "hermes" : null);
+        binding?.adapterId ?? null;
       const execution =
         adapterId === "hermes"
           ? "durable"

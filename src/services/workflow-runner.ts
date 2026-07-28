@@ -11,6 +11,7 @@ import {
   type WorkflowRoleAssignStep,
   type WorkflowStep,
 } from "@/lib/workflow-schema";
+import type { WorkflowRunStatus } from "@/lib/types";
 
 export type WorkflowStepState =
   | "queued"
@@ -22,14 +23,6 @@ export type WorkflowStepState =
   | "failed"
   | "cancelled"
   | "abandoned";
-
-export type WorkflowRunStatus =
-  | "Queued"
-  | "In progress"
-  | "Blocked"
-  | "Needs approval"
-  | "Done"
-  | "Deferred";
 
 export type ResolvedWorkflowRole = {
   role: string;
@@ -46,12 +39,34 @@ export type ResolvedWorkflowRole = {
   agent: string;
   agentRecordId: string;
   bindingRef: string;
-  adapterId: "mock" | "hermes" | "codex-cli" | "claude-cli" | "gemini-cli";
+  adapterId: "hermes" | "codex-cli" | "claude-cli";
   resolvedModel: string | null;
   execution: "ephemeral" | "durable";
   providerAuthority: string;
   unmanagedAuthority: string;
 };
+
+export type WorkflowRoleResolutionBlocker = {
+  blocked: true;
+  reason:
+    | "role_unavailable"
+    | "role_contract_invalid"
+    | "agent_unavailable"
+    | "binding_unavailable"
+    | "binding_unsupported"
+    | "model_not_allowed";
+  message: string;
+};
+
+export type WorkflowRoleResolution =
+  | ResolvedWorkflowRole
+  | WorkflowRoleResolutionBlocker;
+
+function isRoleResolutionBlocker(
+  resolution: WorkflowRoleResolution,
+): resolution is WorkflowRoleResolutionBlocker {
+  return "blocked" in resolution && resolution.blocked;
+}
 
 export type DelegationEnvelopeV1 = {
   schema: "intellizen.envelope/1";
@@ -197,12 +212,14 @@ export type WorkflowRunnerPort = {
     requestHash: string;
     actor: string;
   }): Promise<{ runVersion: number }>;
-  resolveRole(step: WorkflowRoleAssignStep): Promise<ResolvedWorkflowRole | null>;
+  resolveRole(
+    step: WorkflowRoleAssignStep,
+  ): Promise<WorkflowRoleResolution | null>;
   dispatch(input: {
     runId: string;
     step: WorkflowRoleAssignStep;
     assignment: WorkflowAssignmentSnapshot;
-    renderedContext: string;
+    renderedContext: string; signal?: AbortSignal;
   }): Promise<WorkflowRuntimeResult>;
   decideApproval(
     approval: WorkflowApproval,
@@ -228,7 +245,7 @@ export type WorkflowRunnerInput = {
   sourcePaths?: string[];
   sourceTools?: string[];
   contextSources?: ContextSource[];
-  maxContextBytes?: number;
+  maxContextBytes?: number; signal?: AbortSignal;
 };
 
 export type WorkflowRunnerResult = {
@@ -496,7 +513,12 @@ export async function runWorkflow(
 
       if (step.kind === "role-assign") {
         const resolution = await port.resolveRole(step);
-        if (!resolution) {
+        if (!resolution || isRoleResolutionBlocker(resolution)) {
+          const blocker = resolution || {
+            blocked: true as const,
+            reason: "role_unavailable" as const,
+            message: `No active occupant is available for ${step.role}.`,
+          };
           await transition({
             expectedStepId: step.id,
             expectedStepState: "queued",
@@ -506,9 +528,10 @@ export async function runWorkflow(
             idempotencyKey: `run:${input.runId}:step:${step.id}:v${stepVersion}:role-unavailable`,
             actor: input.actor,
             eventKind: "blocked",
-            eventSummary: `Role unavailable: ${step.role}`,
+            eventSummary: blocker.message,
             eventPayload: {
-              reason: "role unavailable",
+              reason: blocker.reason,
+              message: blocker.message,
               requestedRole: step.role,
               noFallThrough: true,
             },
@@ -638,7 +661,7 @@ export async function runWorkflow(
               runId: input.runId,
               step,
               assignment,
-              renderedContext: contextPack.renderedContext,
+              renderedContext: contextPack.renderedContext, signal: input.signal,
             });
             assertPersistenceSafe({
               runtimeSessionId: dispatched.sessionId,
@@ -734,7 +757,7 @@ export async function runWorkflow(
           nextStepId: step.id,
           nextStepState: "completed",
           nextRunStatus: isFinal ? "Done" : "In progress",
-          idempotencyKey: `${idempotencyKey}:completed`,
+          idempotencyKey: `run:${input.runId}:step:${step.id}:v${runVersion}:completed`,
           actor: resolution.agent,
           eventKind: isFinal ? "workflow_completed" : "agent_completed",
           eventSummary: `${step.title} completed`,
@@ -1047,6 +1070,12 @@ export class WorkflowDispatchCoordinator {
 
     const promise = runWorkflow(input, port);
     this.runs.set(input.runId, { fingerprint, promise });
+    void promise.catch(() => {
+      const current = this.runs.get(input.runId);
+      if (current?.promise === promise) {
+        this.runs.delete(input.runId);
+      }
+    });
     return promise;
   }
 }

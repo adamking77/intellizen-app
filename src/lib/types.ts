@@ -101,7 +101,13 @@ export interface FionaInboxItem {
 
 export type AgentWorkSource = "workspace.records";
 export type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
-export type WorkflowRunStatus = "Queued" | "In progress" | "Blocked" | "Needs approval" | "Done" | "Deferred";
+export type WorkflowRunStatus =
+  | "Queued"
+  | "In progress"
+  | "Blocked"
+  | "Needs approval"
+  | "Done"
+  | "Deferred";
 
 export interface AgentWorkItem {
   id: string;

@@ -10,12 +10,15 @@ import {
 } from "@/lib/runtime-adapters";
 import { supabase } from "@/lib/supabase";
 import type { WorkflowRunItem } from "@/lib/types";
+import { requiredNonNegativeInteger } from "@/lib/validated-number";
 import {
   validateWorkflowDefinition,
   type WorkflowDefinitionV1,
   type WorkflowRoleAssignStep,
 } from "@/lib/workflow-schema";
 import {
+  builtinBindingRefForRoleOccupant,
+  effectiveRuntimeBindings,
   listRuntimeBindings,
   type RuntimeBinding,
 } from "@/services/runtime-bindings";
@@ -24,11 +27,12 @@ import {
   prepareRuntimeAssignment,
   runRuntime,
 } from "@/services/runtimes";
-import { runHermesWorkflowAssignment } from "@/services/runtimes/hermes";
+import { executeHermesRun as runHermesWorkflowAssignment } from "@/services/agent";
 import {
   WorkflowDispatchCoordinator,
   WorkflowDispatchError,
   type ResolvedWorkflowRole,
+  type WorkflowRoleResolutionBlocker,
   type WorkflowRunnerPort,
   type WorkflowTransitionRequest,
 } from "@/services/workflow-runner";
@@ -40,13 +44,6 @@ type WorkspaceRoleRecord = {
 };
 
 const productionCoordinator = new WorkflowDispatchCoordinator();
-
-function requiredNumber(value: unknown, label: string) {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${label} is invalid.`);
-  }
-  return value;
-}
 
 function fieldString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -163,24 +160,31 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
   const bindingsById = new Map(
     bindings.map((binding) => [binding.bindingId, binding]),
   );
+  const blocked = (
+    reason: WorkflowRoleResolutionBlocker["reason"],
+    message: string,
+  ): WorkflowRoleResolutionBlocker => ({ blocked: true, reason, message });
 
   return async (
     step: WorkflowRoleAssignStep,
-  ): Promise<ResolvedWorkflowRole | null> => {
+  ): Promise<ResolvedWorkflowRole | WorkflowRoleResolutionBlocker> => {
     const role = roles.get(step.role);
     const authority = authorityCeiling(role?.fields.role_authority_ceiling);
     const gate = ownerGate(role?.fields.role_owner_gate);
     const delegation = delegationPolicy(
       role?.fields.role_delegation_policy,
     );
-    if (
-      !role ||
-      role.fields.role_status !== "active" ||
-      !authority ||
-      !gate ||
-      !delegation
-    ) {
-      return null;
+    if (!role || role.fields.role_status !== "active") {
+      return blocked(
+        "role_unavailable",
+        `Role ${step.role} is missing or inactive.`,
+      );
+    }
+    if (!authority || !gate || !delegation) {
+      return blocked(
+        "role_contract_invalid",
+        `Role ${step.role} has an incomplete authority contract.`,
+      );
     }
 
     let assignment = assignmentForRole(role.id);
@@ -193,15 +197,32 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
       agent = agents.get(step.agentOverride ?? "");
       assignment = agent ? assignmentForAgent(agent.id) : undefined;
     }
-    if (!agent || agent.fields.agent_status !== "active") return null;
+    if (!agent || agent.fields.agent_status !== "active") {
+      return blocked(
+        "agent_unavailable",
+        `Role ${step.role} has no active eligible occupant.`,
+      );
+    }
     const agentKey = fieldString(agent.fields.agent_key);
-    if (!agentKey) return null;
+    if (!agentKey) {
+      return blocked(
+        "agent_unavailable",
+        `Role ${step.role} resolves to an agent without a stable key.`,
+      );
+    }
 
-    if (
-      step.role === "operations_director" &&
-      agentKey === "fiona" &&
-      step.resolution === "primary-active-occupant"
-    ) {
+    const bindingRef =
+      fieldString(assignment?.fields.role_assignment_binding_ref) ??
+      builtinBindingRefForRoleOccupant(step.role, agentKey);
+    const binding = bindingRef ? bindingsById.get(bindingRef) : null;
+    if (!binding) {
+      return blocked(
+        "binding_unavailable",
+        `Agent ${agentKey} has no available runtime binding for ${step.role}.`,
+      );
+    }
+
+    if (binding.adapterId === "hermes") {
       return {
         role: step.role,
         roleRecordId: role.id,
@@ -212,7 +233,7 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
           role.fields.role_verification_eligible === true,
         agent: agentKey,
         agentRecordId: agent.id,
-        bindingRef: "hermes-fiona",
+        bindingRef: binding.bindingId,
         adapterId: "hermes",
         resolvedModel: null,
         execution: "durable",
@@ -221,22 +242,21 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
       };
     }
 
-    const bindingRef = fieldString(
-      assignment?.fields.role_assignment_binding_ref,
-    );
-    const binding = bindingRef ? bindingsById.get(bindingRef) : null;
-    if (
-      !binding ||
-      !["codex-cli", "claude-cli"].includes(binding.adapterId)
-    ) {
-      return null;
+    if (!["codex-cli", "claude-cli"].includes(binding.adapterId)) {
+      return blocked(
+        "binding_unsupported",
+        `Runtime binding ${binding.bindingId} uses unsupported adapter ${binding.adapterId}.`,
+      );
     }
     const resolvedModel = step.modelOverride ?? binding.modelPolicy.default;
     if (
       step.modelOverride &&
       !binding.modelPolicy.allowed.includes(step.modelOverride)
     ) {
-      return null;
+      return blocked(
+        "model_not_allowed",
+        `Model ${step.modelOverride} is not allowed by runtime binding ${binding.bindingId}.`,
+      );
     }
     return {
       role: step.role,
@@ -279,6 +299,20 @@ function workflowPrompt(input: {
 }
 
 function normalizedRuntimeResult(events: NormalizedRuntimeEvent[]) {
+  const runtimeError = events.find(
+    (
+      event,
+    ): event is Extract<NormalizedRuntimeEvent, { kind: "runtime_error" }> =>
+      event.kind === "runtime_error",
+  );
+  if (runtimeError) {
+    throw new WorkflowDispatchError({
+      reason: runtimeError.code,
+      message: runtimeError.message,
+      resultKnown: runtimeError.resultKnown,
+      retryable: runtimeError.retryable,
+    });
+  }
   const result = runtimeChatResultFromEvents(events);
   if (!result.sessionId) {
     throw new Error("Runtime assignment did not return a provider session ID.");
@@ -288,6 +322,21 @@ function normalizedRuntimeResult(events: NormalizedRuntimeEvent[]) {
     result: parseStructuredResult(result.text),
     usage: result.usage,
   };
+}
+
+export function runtimeInvocationFailure(
+  error: unknown,
+  processSpawned: boolean,
+) {
+  return new WorkflowDispatchError({
+    reason: processSpawned ? "ambiguous_delivery" : "runtime_failed",
+    message:
+      error instanceof Error
+        ? error.message
+        : "The local runtime could not be invoked.",
+    resultKnown: false,
+    retryable: !processSpawned,
+  });
 }
 
 async function productionPort(
@@ -314,8 +363,8 @@ async function productionPort(
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Run version"),
-        fencingToken: requiredNumber(
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
+        fencingToken: requiredNonNegativeInteger(
           data?.fencing_token,
           "Dispatcher fencing token",
         ),
@@ -344,8 +393,8 @@ async function productionPort(
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Run version"),
-        fencingToken: requiredNumber(
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
+        fencingToken: requiredNonNegativeInteger(
           data?.fencing_token,
           "Dispatcher fencing token",
         ),
@@ -364,18 +413,20 @@ async function productionPort(
         });
       if (error) throw new Error(error.message);
       return {
-        runVersion: requiredNumber(data?.run_version, "Run version"),
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
       };
     },
     resolveRole,
-    dispatch: async ({ step, assignment, renderedContext }) => {
-      if (assignment.selectedBinding === "hermes-fiona") {
+    dispatch: async ({ step, assignment, renderedContext, signal }) => {
+      const binding = bindingsById.get(assignment.selectedBinding);
+      if (binding?.adapterId === "hermes") {
         try {
           const runtime = await runHermesWorkflowAssignment({
             prompt: workflowPrompt({ renderedContext, step }),
             instructions:
               "Execute one bounded internal IntelliZen workflow assignment. Stay inside the supplied envelope.",
             timeoutMs: step.timeoutMinutes * 60_000,
+            signal,
           });
           return {
             sessionId: runtime.runId,
@@ -394,7 +445,6 @@ async function productionPort(
         }
       }
 
-      const binding = bindingsById.get(assignment.selectedBinding);
       if (
         !binding ||
         (binding.adapterId !== "codex-cli" &&
@@ -414,41 +464,53 @@ async function productionPort(
           resultKnown: false,
         });
       }
-      const prepared = await prepareRuntimeAssignment(
-        grantRoot,
-        assignment.assignmentId,
-      );
+      let prepared;
+      try {
+        prepared = await prepareRuntimeAssignment(
+          grantRoot,
+          assignment.assignmentId,
+        );
+      } catch (error) {
+        throw runtimeInvocationFailure(error, false);
+      }
       const adapter = getRuntimeAdapter(binding.adapterId);
       const stdout: string[] = [];
       const runId = `workflow-${assignment.assignmentId}`;
-      const exit = await runRuntime(
-        {
-          runId,
-          binary: binding.canonicalBinary,
-          args:
-            binding.adapterId === "codex-cli"
-              ? codexExecArgs(prepared.path)
-              : binding.argTemplates,
-          workingDirectory: prepared.path,
-          stdin: workflowPrompt({ renderedContext, step }),
-          timeoutMs: step.timeoutMinutes * 60_000,
-          environment:
-            binding.adapterId === "codex-cli"
-              ? {
-                  CODEX_HOME: binding.workerProfileHome,
-                  NO_COLOR: "1",
-                  TERM: "dumb",
-                }
-              : {
-                  CLAUDE_CONFIG_DIR: binding.workerProfileHome,
-                  NO_COLOR: "1",
-                  TERM: "dumb",
-                },
-        },
-        (event) => {
-          if (event.kind === "stdout" && event.text) stdout.push(event.text);
-        },
-      );
+      let processSpawned = false;
+      let exit;
+      try {
+        exit = await runRuntime(
+          {
+            runId,
+            binary: binding.canonicalBinary,
+            args:
+              binding.adapterId === "codex-cli"
+                ? codexExecArgs(prepared.path)
+                : binding.argTemplates,
+            workingDirectory: prepared.path,
+            stdin: workflowPrompt({ renderedContext, step }),
+            timeoutMs: step.timeoutMinutes * 60_000,
+            environment:
+              binding.adapterId === "codex-cli"
+                ? {
+                    CODEX_HOME: binding.workerProfileHome,
+                    NO_COLOR: "1",
+                    TERM: "dumb",
+                  }
+                : {
+                    CLAUDE_CONFIG_DIR: binding.workerProfileHome,
+                    NO_COLOR: "1",
+                    TERM: "dumb",
+                  },
+          },
+          (event) => {
+            if (event.kind === "spawned") processSpawned = true;
+            if (event.kind === "stdout" && event.text) stdout.push(event.text);
+          },
+        );
+      } catch (error) {
+        throw runtimeInvocationFailure(error, processSpawned);
+      }
       if (exit.reason === "timed_out") {
         throw new WorkflowDispatchError({
           reason: "timed_out",
@@ -506,7 +568,10 @@ function parsedRunContext(value: string | null) {
   }
 }
 
-export async function dispatchWorkflowRun(run: WorkflowRunItem) {
+export async function dispatchWorkflowRun(
+  run: WorkflowRunItem,
+  signal?: AbortSignal,
+) {
   if (
     run.schema_version !== "intellizen.workflow/1" ||
     run.run_version == null
@@ -526,7 +591,9 @@ export async function dispatchWorkflowRun(run: WorkflowRunItem) {
     !Array.isArray(context.context)
       ? (context.context as Record<string, unknown>)
       : {};
-  const bindings = (await listRuntimeBindings()).bindings;
+  const bindings = effectiveRuntimeBindings(
+    (await listRuntimeBindings()).bindings,
+  );
   const port = await productionPort(bindings);
   return productionCoordinator.start(
     {
@@ -542,6 +609,7 @@ export async function dispatchWorkflowRun(run: WorkflowRunItem) {
           .filter(Boolean) ?? [],
       sourcePaths: [],
       sourceTools: [],
+      signal,
     },
     port,
   );

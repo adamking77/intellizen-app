@@ -13,7 +13,7 @@ export type RuntimeModelPolicy = {
 
 export type RuntimeBinding = {
   bindingId: string;
-  adapterId: "mock" | "hermes" | "codex-cli" | "claude-cli" | "gemini-cli";
+  adapterId: "hermes" | "codex-cli" | "claude-cli";
   canonicalBinary: string;
   argTemplates: string[];
   workingDirGrants: string[];
@@ -29,6 +29,44 @@ export type RuntimeBindingsStore = {
   version: 1;
   bindings: RuntimeBinding[];
 };
+
+export const HERMES_FIONA_BINDING_ID = "hermes-fiona";
+
+export const HERMES_FIONA_BINDING: RuntimeBinding = {
+  bindingId: HERMES_FIONA_BINDING_ID,
+  adapterId: "hermes",
+  canonicalBinary: "intellizen-native-hermes-host",
+  argTemplates: [],
+  workingDirGrants: [],
+  providerPermissionMode: "profile-scoped",
+  envPolicy: "sanitized",
+  workerProfileHome: "provider-managed:fiona",
+  secretRefs: [],
+  capabilityEvidence: {
+    suiteVersion: "native-hermes-host-v1",
+    passed: ["structured-output", "stream", "cancel", "timeout", "usage"],
+    cliVersion: "native-host",
+  },
+  modelPolicy: { default: "", allowed: [] },
+};
+
+export function effectiveRuntimeBindings(bindings: RuntimeBinding[]) {
+  return [
+    HERMES_FIONA_BINDING,
+    ...bindings.filter(
+      (binding) => binding.bindingId !== HERMES_FIONA_BINDING_ID,
+    ),
+  ];
+}
+
+export function builtinBindingRefForRoleOccupant(
+  roleKey: string,
+  agentKey: string | null,
+) {
+  return roleKey === "operations_director" && agentKey === "fiona"
+    ? HERMES_FIONA_BINDING_ID
+    : null;
+}
 
 export type RuntimeBindingMutationResult = {
   dryRun: boolean;
@@ -60,13 +98,6 @@ export type RuntimeProfileMutationResult = {
   bindingId: string;
   profilePath: string;
 };
-
-export function previewRuntimeWorkerProfile(bindingId: string) {
-  return invoke<RuntimeProfileMutationResult>(
-    "runtime_binding_prepare_worker_profile",
-    { bindingId, confirmWrite: false },
-  );
-}
 
 export function prepareRuntimeWorkerProfile(bindingId: string) {
   return invoke<RuntimeProfileMutationResult>(

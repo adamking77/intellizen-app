@@ -66,6 +66,46 @@ describe("Agent Panel role routing", () => {
     ).toBeNull();
   });
 
+  it("never treats a local review fixture as a dispatch-ready assignment", () => {
+    const [target] = buildAgentPanelRoleTargets({
+      roles: [
+        {
+          id: "role-keel",
+          fields: {
+            role_key: "chief_engineer",
+            role_name: "Chief Engineer",
+            role_status: "active",
+          },
+        },
+      ],
+      agents: [
+        {
+          id: "agent-keel",
+          fields: { agent_key: "keel", agent_display_name: "Keel" },
+        },
+      ],
+      assignments: [
+        {
+          id: "local-review-fixture:role-keel",
+          fields: {
+            role_assignment_role: ["role-keel"],
+            role_assignment_agent: ["agent-keel"],
+            role_assignment_binding_ref: "codex-local-primary",
+            role_assignment_status: "active",
+            role_assignment_local_review_fixture: true,
+          },
+        },
+      ],
+      bindings: [codexBinding],
+    });
+
+    expect(target).toMatchObject({
+      roleKey: "chief_engineer",
+      agentKey: null,
+      state: "unavailable",
+    });
+  });
+
   it("migrates the Fiona legacy keys once into operations_director", () => {
     const values = new Map<string, string>([
       ["intelizen:agent-panel-chat-history", "[1]"],

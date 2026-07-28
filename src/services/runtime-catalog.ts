@@ -2,8 +2,12 @@ import { buildRuntimeCatalog, type ConnectionFact } from "@/lib/runtime-catalog"
 import { supabase } from "@/lib/supabase";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import { checkHermesHostApi, checkHermesHostGateway } from "@/services/hermes-host";
-import { listRuntimeBindings } from "@/services/runtime-bindings";
+import {
+  effectiveRuntimeBindings,
+  listRuntimeBindings,
+} from "@/services/runtime-bindings";
 import { discoverClaudeRuntime, discoverCodexRuntime } from "@/services/runtimes";
+import { errorMessage } from "@/lib/toast";
 
 export async function inspectRuntimeCatalog() {
   const [codex, claude, store, roles] = await Promise.all([
@@ -14,7 +18,7 @@ export async function inspectRuntimeCatalog() {
   ]);
   return buildRuntimeCatalog({
     discoveries: [codex, claude],
-    bindings: store.bindings,
+    bindings: effectiveRuntimeBindings(store.bindings),
     roleTargets: roles,
   });
 }
@@ -30,7 +34,7 @@ async function connectionFact(
     const ready = await check();
     return { id, label, ready, detail: ready ? readyDetail : failedDetail };
   } catch (error) {
-    return { id, label, ready: false, detail: String(error) };
+    return { id, label, ready: false, detail: errorMessage(error) };
   }
 }
 

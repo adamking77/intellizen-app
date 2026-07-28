@@ -35,11 +35,40 @@ describe("runtime role chat", () => {
       sessionId: "session-1",
       text: "Done.",
       usage: { inputTokens: 10, outputTokens: 2 },
+      diagnostics: { providerEvents: [] },
     });
     expect(() =>
       runtimeChatResultFromEvents([
         { kind: "terminal", reason: "failed" },
       ]),
     ).toThrow("without a completed result");
+  });
+
+  it("surfaces provider protocol and runtime failures instead of a generic terminal error", () => {
+    expect(() =>
+      runtimeChatResultFromEvents([
+        { kind: "protocol_error", message: "Codex emitted malformed JSON." },
+      ]),
+    ).toThrow("Codex emitted malformed JSON");
+    expect(() =>
+      runtimeChatResultFromEvents([
+        {
+          kind: "runtime_error",
+          code: "auth_lost",
+          message: "Provider authentication expired.",
+          resultKnown: false,
+          retryable: false,
+        },
+      ]),
+    ).toThrow("auth_lost: Provider authentication expired");
+  });
+
+  it("preserves provider events as runtime diagnostics", () => {
+    expect(
+      runtimeChatResultFromEvents([
+        { kind: "provider_event", eventType: "rate_limit_event" },
+        { kind: "terminal", reason: "completed", result: "Done." },
+      ]).diagnostics.providerEvents,
+    ).toEqual(["rate_limit_event"]);
   });
 });
