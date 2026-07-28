@@ -39,7 +39,7 @@ interface ConversationEventBase {
 }
 
 export interface ConversationRuntimeIdentity {
-  adapterId: "mock" | "hermes" | "codex-cli" | "claude-cli" | "gemini-cli";
+  adapterId: "hermes" | "codex-cli" | "claude-cli";
   bindingRef: string;
   model: string | null;
   execution: "ephemeral" | "durable";

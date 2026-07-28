@@ -16,11 +16,8 @@ import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import {
-  extractGenuiBlocks,
-  GENUI_SYSTEM_PROMPT,
   parseAgentChatResult,
   stripGenuiForStreaming,
-  type AgentChatWidget as AgentChatWidgetModel,
 } from "@/lib/agent-widgets";
 import { WORKSPACE_REMOTE_WRITE_EVENT } from "@/lib/workspace-events";
 import { selectActiveHermesProfile } from "@/lib/hermes-profiles";
@@ -31,7 +28,6 @@ import {
   latestAgentPanelReplyAt,
 } from "@/lib/agent-panel-chat";
 import {
-  migrateFionaPanelStorage,
   OPERATIONS_DIRECTOR_ROLE,
   PANEL_ROLE_CHANNEL,
   PANEL_SPEAK_REPLIES_KEY,
@@ -62,6 +58,21 @@ import {
   OPERATOR_ACTOR,
 } from "@/lib/data";
 import type { FionaInboxItem } from "@/lib/types";
+import {
+  AGENT_PANEL_COLLAPSED_KEY,
+  AGENT_PANEL_WIDTH_KEY,
+  appendToAgentPanelDraft,
+  entriesToTurns,
+  LOCAL_CHAT_HISTORY_LIMIT,
+  persistAgentPanelDraft,
+  persistAgentPanelHistory,
+  readAgentPanelChatHistory,
+  readAgentPanelCollapsed,
+  readAgentPanelValue,
+  readInitialAgentPanelRole,
+  type AgentChatEntry,
+  type ChatEntryStatus,
+} from "@/lib/agent-panel-persistence";
 import { toast, toastError } from "@/lib/toast";
 import { useStartWorkflow } from "@/lib/use-start-workflow";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -76,17 +87,18 @@ import {
 } from "@/lib/conversation-context";
 import { checkHermesApi, DEFAULT_HERMES_PROFILE, fetchHermesProfiles } from "@/services/agent";
 import {
-  dispatchHermesRoleChat,
-  streamHermesRoleChat,
-} from "@/services/runtimes/hermes";
-import {
   normalizeLocalActionEvent,
   workflowRunActionState,
   type ConversationActionEvent,
 } from "@/lib/agent-conversation";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
+import { sendAgentPanelChatMessage } from "@/services/agent-panel-chat";
+import {
+  AgentPanelVoicePlayback,
+  joinVoiceDraft,
+  transcribeVoiceDraft,
+} from "@/services/agent-panel-voice";
 import { inspectActiveWork } from "@/services/active-work";
-import { streamRoleRuntimeChat } from "@/services/runtime-chat";
 import {
   previewAgentMessageDocument,
   saveAgentMessageDocument,
@@ -97,21 +109,15 @@ import {
   getPreferredVoiceInputProvider,
   getPreferredVoiceOutputProvider,
   getVoiceProviderStatus,
-  speakWithHermes,
   startBrowserDictation,
-  supportsBrowserSpeechSynthesis,
   transcribeWithHermes,
 } from "@/services/voice";
 import type { BrowserDictationSession, VoiceProviderId } from "@/services/voice";
 
-const STORAGE_KEY = "intelizen:agent-panel-collapsed";
 const HERMES_SESSION_KEY = "intelizen:hermes-session-id";
 const SPEAK_REPLIES_KEY = PANEL_SPEAK_REPLIES_KEY;
-const PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
 const PANEL_MIN_WIDTH = 300;
 const PANEL_MAX_WIDTH = 560;
-const LOCAL_CHAT_HISTORY_LIMIT = 40;
-type ChatEntryStatus = "submitted" | "queued" | "failed" | "cancelled";
 interface SendChatOptions {
   historyOverride?: Array<{ role: "user" | "assistant"; content: string }>;
   preserveDraft?: boolean;
@@ -119,136 +125,21 @@ interface SendChatOptions {
   liveVoice?: boolean;
 }
 
-interface AgentChatEntry {
-  id: string;
-  message: string;
-  targetAgent: string;
-  status: ChatEntryStatus;
-  detail: string;
-  createdAt: string;
-  /** When the agent's reply landed (inbox row updated_at). */
-  repliedAt?: string | null;
-  /** Agent reply text parsed from the completed inbox result. */
-  reply?: string | null;
-  /** In-chat GenUI widget (agent-native data-widget contract). */
-  widget?: AgentChatWidgetModel | null;
-  widgets?: AgentChatWidgetModel[];
-  /** Exact bounded app context included with this message. */
-  context?: ConversationContextSnapshot | null;
-}
-
-/** One rendered message in the thread: a user turn or an agent turn. */
-interface ChatTurn {
-  id: string;
-  role: "user" | "agent";
-  speaker: string;
-  text: string | null;
-  widgets?: AgentChatWidgetModel[];
-  status?: ChatEntryStatus;
-  detail?: string;
-  context?: ConversationContextSnapshot | null;
-  ts: string;
-}
-
-const TIME_DIVIDER_GAP_MS = 15 * 60_000;
-
-/** Flatten request/response rows into a chronological message stream. */
-function entriesToTurns(entries: AgentChatEntry[]): ChatTurn[] {
-  const turns: ChatTurn[] = [];
-  for (const entry of entries) {
-    turns.push({
-      id: `${entry.id}-user`,
-      role: "user",
-      speaker: "You",
-      text: entry.message,
-      status: entry.status,
-      detail: entry.detail,
-      context: entry.context ?? null,
-      ts: entry.createdAt,
-    });
-    const widgets = entry.widgets ?? (entry.widget ? [entry.widget] : []);
-    if (entry.reply || widgets.length > 0 || entry.status === "cancelled") {
-      turns.push({
-        id: `${entry.id}-agent`,
-        role: "agent",
-        speaker: entry.targetAgent,
-        text: entry.reply ?? null,
-        widgets,
-        status: entry.status === "cancelled" ? "cancelled" : undefined,
-        detail: entry.status === "cancelled" ? entry.detail : undefined,
-        ts: entry.repliedAt ?? entry.createdAt,
-      });
-    }
-  }
-  return turns
-    .sort((left, right) => new Date(left.ts).getTime() - new Date(right.ts).getTime())
-    .slice(-40);
-}
-
-interface ChatPayloadContext {
-  kind?: unknown;
-  target_agent?: unknown;
-  message?: unknown;
-}
-
-function readCollapsed(): boolean | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (raw === "1") return true;
-  if (raw === "0") return false;
-  return null; // no explicit choice — follow the cramped auto-collapse
-}
-
-function readInitialRoleKey() {
+function panelStorage() {
   if (typeof window === "undefined") return null;
   try {
-    migrateFionaPanelStorage(window.localStorage);
-    return (
-      window.localStorage.getItem(PANEL_SELECTED_ROLE_KEY) ??
-      window.localStorage.getItem(PANEL_START_ROLE_KEY)
-    );
+    return window.localStorage;
   } catch {
     return null;
   }
 }
 
-function readChatHistory(roleKey: string | null) {
-  if (typeof window === "undefined") return [];
-  if (!roleKey) return [];
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(panelRoleStorageKey(roleKey, "history")) ?? "[]",
-    );
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry): entry is AgentChatEntry =>
-        Boolean(entry) &&
-        typeof entry.id === "string" &&
-        typeof entry.message === "string" &&
-        typeof entry.targetAgent === "string" &&
-        typeof entry.status === "string" &&
-        typeof entry.detail === "string" &&
-        typeof entry.createdAt === "string",
-      )
-      .slice(0, LOCAL_CHAT_HISTORY_LIMIT);
-  } catch {
-    return [];
-  }
-}
+const TIME_DIVIDER_GAP_MS = 15 * 60_000;
 
-function readStoredValue(key: string, fallback = "") {
-  if (typeof window === "undefined") return fallback;
-  try {
-    return window.localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function appendToDraft(current: string, addition: string) {
-  const trimmed = addition.trim();
-  if (!trimmed) return current;
-  return `${current.trim()}${current.trim() ? "\n\n" : ""}${trimmed}`;
+interface ChatPayloadContext {
+  kind?: unknown;
+  target_agent?: unknown;
+  message?: unknown;
 }
 
 function formatRunTime(value: string | null) {
@@ -280,15 +171,6 @@ function agentDisplayName(value: string) {
 function contextRouteLabel(context: ConversationContextSnapshot | null | undefined) {
   if (!context) return null;
   return `${context.route.pathname}${context.route.search}${context.route.hash}`;
-}
-
-function contextPromptBlock(context: ConversationContextSnapshot | null) {
-  if (!context) return "";
-  return `\n\nIntelliZen visible context (bounded; do not infer broader access):\n${JSON.stringify({
-    version: context.version,
-    route: context.route,
-    references: context.selections,
-  }, null, 2)}`;
 }
 
 function isChatInboxItem(item: FionaInboxItem) {
@@ -332,17 +214,26 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const navigate = useNavigate();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [selectedRoleKey, setSelectedRoleKey] = useState<string | null>(
-    readInitialRoleKey,
+    () => readInitialAgentPanelRole(panelStorage()),
   );
-  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
+  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() =>
+    readAgentPanelCollapsed(panelStorage()),
+  );
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const voicePlaybackRef = useRef<AgentPanelVoicePlayback | null>(null);
+  if (!voicePlaybackRef.current) {
+    voicePlaybackRef.current = new AgentPanelVoicePlayback(setIsSpeaking);
+  }
   const [isCreatingVoiceTask, setIsCreatingVoiceTask] = useState(false);
   const [liveVoice, dispatchLiveVoice] = useReducer(liveVoiceReducer, INITIAL_LIVE_VOICE_STATE);
   const [chatDraft, setChatDraft] = useState(() =>
     selectedRoleKey
-      ? readStoredValue(panelRoleStorageKey(selectedRoleKey, "draft"))
+      ? readAgentPanelValue(
+          panelStorage(),
+          panelRoleStorageKey(selectedRoleKey, "draft"),
+        )
       : "",
   );
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -351,7 +242,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const [historySearch, setHistorySearch] = useState("");
   const [lastReadAt, setLastReadAt] = useState(() =>
     selectedRoleKey
-      ? readStoredValue(
+      ? readAgentPanelValue(
+          panelStorage(),
           panelRoleStorageKey(selectedRoleKey, "last-read"),
           new Date().toISOString(),
         )
@@ -371,7 +263,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   });
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
-      const stored = Number(window.localStorage.getItem(PANEL_WIDTH_KEY));
+      const stored = Number(
+        window.localStorage.getItem(AGENT_PANEL_WIDTH_KEY),
+      );
       return Number.isFinite(stored) && stored >= PANEL_MIN_WIDTH ? Math.min(stored, PANEL_MAX_WIDTH) : 336;
     } catch { return 336; }
   });
@@ -383,7 +277,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     useState<AgentMessageDocumentPreview | null>(null);
   const [isSavingDocument, setIsSavingDocument] = useState(false);
   const [chatEntries, setChatEntries] = useState<AgentChatEntry[]>(() =>
-    readChatHistory(selectedRoleKey),
+    readAgentPanelChatHistory(panelStorage(), selectedRoleKey),
   );
   const [inlineActions, setInlineActions] = useState<ConversationActionEvent[]>([]);
   const [conversationContext, setConversationContext] = useState<ConversationContextSnapshot | null>(() => readConversationContext());
@@ -395,9 +289,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const hermesPreviewErrorShownRef = useRef(false);
   /** Draft text present when dictation started; live transcript appends after it. */
   const dictationBaseDraftRef = useRef("");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const speechGenerationRef = useRef(0);
-  const speechCompletionRef = useRef<(() => void) | null>(null);
   const liveVoiceDictationRef = useRef<BrowserDictationSession | null>(null);
   const liveVoiceRecorderRef = useRef<MediaRecorder | null>(null);
   const liveVoiceStreamRef = useRef<MediaStream | null>(null);
@@ -443,15 +334,19 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       abortRef.current?.abort();
       pendingSteerRef.current = null;
       setSelectedRoleKey(roleKey);
-      setChatEntries(readChatHistory(roleKey));
+      setChatEntries(readAgentPanelChatHistory(panelStorage(), roleKey));
       setChatDraft(
         roleKey
-          ? readStoredValue(panelRoleStorageKey(roleKey, "draft"))
+          ? readAgentPanelValue(
+              panelStorage(),
+              panelRoleStorageKey(roleKey, "draft"),
+            )
           : "",
       );
       setLastReadAt(
         roleKey
-          ? readStoredValue(
+          ? readAgentPanelValue(
+              panelStorage(),
               panelRoleStorageKey(roleKey, "last-read"),
               new Date().toISOString(),
             )
@@ -459,7 +354,11 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       );
       setClearedAt(
         roleKey
-          ? readStoredValue(panelRoleStorageKey(roleKey, "cleared"), "") || null
+          ? readAgentPanelValue(
+              panelStorage(),
+              panelRoleStorageKey(roleKey, "cleared"),
+              "",
+            ) || null
           : null,
       );
       setInlineActions([]);
@@ -488,7 +387,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     const resolved = resolveInitialPanelRole({
       availableRoleKeys: roleTargets.map((role) => role.roleKey),
       selectedRole: selectedRoleKey,
-      startRole: readStoredValue(PANEL_START_ROLE_KEY) || null,
+      startRole:
+        readAgentPanelValue(panelStorage(), PANEL_START_ROLE_KEY) || null,
     });
     if (resolved !== selectedRoleKey) applyRoleSelection(resolved);
   }, [
@@ -781,9 +681,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       liveVoiceDictationRef.current?.stop();
       if (liveVoiceRecorderRef.current?.state === "recording") liveVoiceRecorderRef.current.stop();
       liveVoiceStreamRef.current?.getTracks().forEach((track) => track.stop());
-      audioRef.current?.pause();
-      speechCompletionRef.current?.();
-      if (supportsBrowserSpeechSynthesis()) window.speechSynthesis.cancel();
+      voicePlaybackRef.current?.stop();
     };
   }, []);
 
@@ -792,9 +690,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   useEffect(() => {
     if (!selectedRoleKey) return;
     try {
-      window.localStorage.setItem(
-        panelRoleStorageKey(selectedRoleKey, "history"),
-        JSON.stringify(chatEntries.slice(0, LOCAL_CHAT_HISTORY_LIMIT)),
+      persistAgentPanelHistory(
+        window.localStorage,
+        selectedRoleKey,
+        chatEntries,
       );
       historyStorageErrorShownRef.current = false;
     } catch (historyError) {
@@ -808,10 +707,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   useEffect(() => {
     if (!selectedRoleKey) return;
     try {
-      window.localStorage.setItem(
-        panelRoleStorageKey(selectedRoleKey, "draft"),
-        chatDraft,
-      );
+      persistAgentPanelDraft(window.localStorage, selectedRoleKey, chatDraft);
       draftStorageErrorShownRef.current = false;
     } catch (draftError) {
       if (!draftStorageErrorShownRef.current) {
@@ -833,7 +729,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       if (!standalone) {
         setUserCollapsed(false);
         try {
-          window.localStorage.setItem(STORAGE_KEY, "0");
+          window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "0");
         } catch {
           /* the panel still opens for this session */
         }
@@ -850,7 +746,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     setUserCollapsed(() => {
       const next = !collapsed;
       try {
-        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+        window.localStorage.setItem(
+          AGENT_PANEL_COLLAPSED_KEY,
+          next ? "1" : "0",
+        );
       } catch {
         /* ignore */
       }
@@ -917,339 +816,236 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       selectedRole.state !== "ready" ||
       !targetAgent ||
       (isSendingChat && !options.steering)
-    ) return;
-    const liveVoiceTurnEpoch = options.liveVoice ? liveVoiceEpochRef.current : null;
+    ) {
+      return;
+    }
+    if (options.liveVoice && !fionaSelected) {
+      dispatchLiveVoice({
+        type: "FAIL",
+        message: "Live voice is Fiona/Hermes-only in this release.",
+      });
+      return;
+    }
+    if (options.liveVoice && !fionaDirectLive) {
+      dispatchLiveVoice({
+        type: "FAIL",
+        message:
+          "Fiona's live streaming connection is unavailable. Voice turns are not queued.",
+      });
+      return;
+    }
 
-    if (!fionaSelected) {
-      if (options.liveVoice) {
-        dispatchLiveVoice({
-          type: "FAIL",
-          message: "Live voice is Fiona/Hermes-only in this release.",
-        });
-        return;
-      }
-      const entryId = `runtime-${Date.now()}`;
-      const sentAt = new Date().toISOString();
-      const sentContext = conversationContext;
-      if (!options.preserveDraft) setChatDraft("");
-      setIsSendingChat(true);
-      setStreamingReply("");
-      setChatEntries((current) => [
+    const liveVoiceTurnEpoch = options.liveVoice
+      ? liveVoiceEpochRef.current
+      : null;
+    const entryId = `panel-${Date.now()}`;
+    const sentAt = new Date().toISOString();
+    const sentContext = conversationContext;
+    const requestHistory =
+      options.historyOverride ??
+      chatTurns
+        .filter((turn) => Boolean(turn.text))
+        .slice(-12)
+        .map((turn) => ({
+          role:
+            turn.role === "user"
+              ? ("user" as const)
+              : ("assistant" as const),
+          content: turn.text ?? "",
+        }));
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let accumulated = "";
+    let completedLiveVoiceTurn = false;
+    const optimisticStatus: ChatEntryStatus =
+      fionaSelected && !fionaDirectLive ? "queued" : "submitted";
+
+    if (!options.preserveDraft) setChatDraft("");
+    setIsSendingChat(true);
+    setStreamingReply("");
+    setChatEntries((current) =>
+      [
         {
           id: entryId,
           message,
           targetAgent,
-          status: "submitted" as ChatEntryStatus,
-          detail: `${selectedRole.adapterId} · ${selectedRole.execution}`,
+          status: optimisticStatus,
+          detail:
+            fionaSelected && !fionaDirectLive
+              ? "durable inbox"
+              : selectedRole.adapterId ?? "runtime",
           createdAt: sentAt,
           context: sentContext,
         },
         ...current,
-      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT));
-      let accumulated = "";
-      const controller = new AbortController();
-      abortRef.current = controller;
-      const requestHistory = options.historyOverride ?? chatTurns
-        .filter((turn) => Boolean(turn.text))
-        .slice(-12)
-        .map((turn) => ({
-          role: turn.role === "user" ? ("user" as const) : ("assistant" as const),
-          content: turn.text ?? "",
-        }));
-      try {
-        const result = await streamRoleRuntimeChat({
-          role: selectedRole,
-          history: requestHistory,
-          message,
-          signal: controller.signal,
-          onDelta: (delta) => {
-            accumulated += delta;
-            setStreamingReply((current) => (current ?? "") + delta);
-          },
-        });
+      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT),
+    );
+
+    try {
+      const result = await sendAgentPanelChatMessage({
+        role: selectedRole,
+        targetAgent,
+        history: requestHistory,
+        message,
+        context: sentContext,
+        fionaSelected,
+        fionaDirectLive,
+        targetProfileName: targetProfile?.name ?? null,
+        signal: controller.signal,
+        onDelta: (delta) => {
+          accumulated += delta;
+          setStreamingReply((current) => (current ?? "") + delta);
+        },
+        voiceInputProviderId: voiceInputProvider?.id ?? null,
+        voiceOutputProviderId: voiceOutputProvider?.id ?? null,
+        voiceProviders,
+      });
+
+      if (result.kind === "queued") {
+        const receipt = result.messageId ?? result.inboxItemId;
         setChatEntries((current) =>
           current.map((entry) =>
             entry.id === entryId
               ? {
                   ...entry,
-                  reply: result.text || accumulated || null,
-                  repliedAt: new Date().toISOString(),
-                  detail: result.usage
-                    ? `${selectedRole.adapterId} · ${result.usage.inputTokens + result.usage.outputTokens} tokens`
-                    : selectedRole.adapterId ?? "local runtime",
+                  status: result.status,
+                  detail: receipt ?? result.status,
                 }
               : entry,
           ),
         );
-        if (speakReplies && result.text && voiceOutputProvider) {
+        toast.success(
+          result.status === "submitted"
+            ? "Message sent to Fiona"
+            : "Message queued for Fiona",
+          { description: receipt ?? undefined },
+        );
+      } else {
+        const reply = result.text || accumulated;
+        setChatEntries((current) =>
+          current.map((entry) =>
+            entry.id === entryId
+              ? {
+                  ...entry,
+                  reply: reply || null,
+                  widget: result.widgets[0] ?? null,
+                  widgets: result.widgets,
+                  repliedAt: new Date().toISOString(),
+                  detail: result.usage
+                    ? `${selectedRole.adapterId} · ${
+                        result.usage.inputTokens + result.usage.outputTokens
+                      } tokens`
+                    : result.provider,
+                }
+              : entry,
+          ),
+        );
+        if (result.provider === "hermes") notifyWorkspaceMayHaveChanged();
+
+        if (options.liveVoice) {
+          if (!reply || !voiceOutputProvider) {
+            dispatchLiveVoice({
+              type: "FAIL",
+              message: "Fiona returned no speakable reply.",
+            });
+          } else {
+            dispatchLiveVoice({ type: "SPEAKING" });
+            setIsSpeaking(true);
+            try {
+              await speakWithProvider(reply, voiceOutputProvider.id);
+              completedLiveVoiceTurn =
+                liveVoiceTurnEpoch === liveVoiceEpochRef.current;
+            } catch (voiceError) {
+              setIsSpeaking(false);
+              if (liveVoiceTurnEpoch === liveVoiceEpochRef.current) {
+                dispatchLiveVoice({
+                  type: "FAIL",
+                  message:
+                    voiceError instanceof Error
+                      ? voiceError.message
+                      : "Fiona's speech output failed.",
+                });
+                toastError("Voice output failed", voiceError);
+              }
+            }
+          }
+        } else if (speakReplies && reply && voiceOutputProvider) {
           setIsSpeaking(true);
-          void speakWithProvider(result.text, voiceOutputProvider.id).catch(
+          void speakWithProvider(reply, voiceOutputProvider.id).catch(
             (voiceError) => {
               setIsSpeaking(false);
               toastError("Voice output failed", voiceError);
             },
           );
         }
-      } catch (runtimeError) {
-        const stopped =
-          runtimeError instanceof DOMException &&
-          runtimeError.name === "AbortError";
-        setChatEntries((current) =>
-          current.map((entry) =>
-            entry.id === entryId
-              ? stopped
-                ? {
-                    ...entry,
-                    status: "cancelled",
-                    reply: accumulated || null,
-                    repliedAt: new Date().toISOString(),
-                    detail: "Stopped by user",
-                  }
-                : {
-                    ...entry,
-                    status: "failed",
-                    detail:
-                      runtimeError instanceof Error
-                        ? runtimeError.message
-                        : "Runtime failed",
-                  }
-              : entry,
-          ),
-        );
-        if (!stopped) toastError(`${selectedRole.roleName} chat failed`, runtimeError);
-      } finally {
-        const pendingSteer = pendingSteerRef.current;
-        pendingSteerRef.current = null;
-        abortRef.current = null;
-        setStreamingReply(null);
-        setIsSendingChat(false);
-        if (pendingSteer) {
-          queueMicrotask(() =>
-            void sendChatMessage(pendingSteer, {
-              historyOverride: buildSteeredAgentPanelHistory(
-                requestHistory,
-                message,
-                accumulated,
-              ),
-              preserveDraft: true,
-              steering: true,
-            }),
-          );
-        } else {
-          queueMicrotask(() => composerRef.current?.focus());
-        }
       }
-      return;
-    }
-
-    // Streaming path: direct conversation over the Hermes API server.
-    if (fionaDirectLive) {
-      const entryId = `api-${Date.now()}`;
-      const sentAt = new Date().toISOString();
-      const sentContext = conversationContext;
-      if (!options.preserveDraft) setChatDraft("");
-      setIsSendingChat(true);
-      setStreamingReply("");
-      setChatEntries((current) => [
-        { id: entryId, message, targetAgent, status: "submitted" as ChatEntryStatus, detail: "hermes api", createdAt: sentAt, context: sentContext },
-        ...current,
-      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT));
-      let accumulated = "";
-      let completedLiveVoiceTurn = false;
-      const controller = new AbortController();
-      abortRef.current = controller;
-      const requestHistory = options.historyOverride ?? chatTurns
-        .filter((turn) => Boolean(turn.text))
-        .slice(-12)
-        .map((turn) => ({
-          role: turn.role === "user" ? ("user" as const) : ("assistant" as const),
-          content: turn.text ?? "",
-        }));
-      try {
-        // Stateless continuity: replay the visible thread as history
-        // (custom session headers are CORS-blocked by Hermes today).
-        const result = await streamHermesRoleChat({
-          message,
-          history: requestHistory,
-          systemPrompt: `${GENUI_SYSTEM_PROMPT}${contextPromptBlock(sentContext)}`,
-          signal: controller.signal,
-          onDelta: (delta) => {
-            accumulated += delta;
-            setStreamingReply((current) => (current ?? "") + delta);
-          },
-        });
-        const { text: cleanReply, widgets } = extractGenuiBlocks(result.text);
-        setChatEntries((current) =>
-          current.map((entry) =>
-            entry.id === entryId
+    } catch (sendError) {
+      const stopped =
+        sendError instanceof DOMException && sendError.name === "AbortError";
+      setChatEntries((current) =>
+        current.map((entry) =>
+          entry.id === entryId
+            ? stopped
               ? {
                   ...entry,
-                  reply: cleanReply || null,
-                  widget: widgets[0] ?? null,
-                  widgets,
+                  status: "cancelled",
+                  reply: accumulated || null,
                   repliedAt: new Date().toISOString(),
+                  detail: "Stopped by user",
                 }
-              : entry,
-          ),
-        );
-        notifyWorkspaceMayHaveChanged();
+              : {
+                  ...entry,
+                  status: "failed",
+                  detail:
+                    sendError instanceof Error
+                      ? sendError.message
+                      : "Runtime failed",
+                }
+            : entry,
+        ),
+      );
+      if (!stopped) {
         if (options.liveVoice) {
-          if (!cleanReply || !voiceOutputProvider) {
-            dispatchLiveVoice({ type: "FAIL", message: "Fiona returned no speakable reply." });
-          } else {
-            dispatchLiveVoice({ type: "SPEAKING" });
-            setIsSpeaking(true);
-            try {
-              await speakWithProvider(cleanReply, voiceOutputProvider.id);
-              completedLiveVoiceTurn = liveVoiceTurnEpoch === liveVoiceEpochRef.current;
-            } catch (voiceError) {
-              setIsSpeaking(false);
-              if (liveVoiceTurnEpoch === liveVoiceEpochRef.current) {
-                dispatchLiveVoice({
-                  type: "FAIL",
-                  message: voiceError instanceof Error ? voiceError.message : "Fiona's speech output failed.",
-                });
-                toastError("Voice output failed", voiceError);
-              }
-            }
-          }
-        } else if (speakReplies && cleanReply && voiceOutputProvider) {
-          setIsSpeaking(true);
-          void speakWithProvider(cleanReply, voiceOutputProvider.id).catch((voiceError) => {
-            setIsSpeaking(false);
-            toastError("Voice output failed", voiceError);
+          dispatchLiveVoice({
+            type: "FAIL",
+            message:
+              sendError instanceof Error
+                ? sendError.message
+                : "Fiona's voice reply failed.",
           });
         }
-      } catch (streamError) {
-        const stopped = streamError instanceof DOMException && streamError.name === "AbortError";
-        setChatEntries((current) =>
-          current.map((entry) =>
-            entry.id === entryId
-              ? stopped
-                ? {
-                    ...entry,
-                    status: "cancelled" as ChatEntryStatus,
-                    reply: accumulated || null,
-                    repliedAt: new Date().toISOString(),
-                    detail: "Stopped by user",
-                  }
-                : { ...entry, status: "failed" as ChatEntryStatus, detail: streamError instanceof Error ? streamError.message : "Stream failed" }
-              : entry,
-          ),
-        );
-        if (!stopped) {
-          if (options.liveVoice) {
-            dispatchLiveVoice({
-              type: "FAIL",
-              message: streamError instanceof Error ? streamError.message : "Fiona's voice reply failed.",
-            });
+        toastError(`${selectedRole.roleName} chat failed`, sendError);
+      }
+    } finally {
+      const pendingSteer = pendingSteerRef.current;
+      pendingSteerRef.current = null;
+      abortRef.current = null;
+      setStreamingReply(null);
+      setIsSendingChat(false);
+
+      if (options.liveVoice) {
+        if (completedLiveVoiceTurn) {
+          dispatchLiveVoice({ type: "TURN_COMPLETE" });
+          if (liveVoiceShouldListenRef.current) {
+            const epoch = liveVoiceEpochRef.current;
+            queueMicrotask(() => void startLiveVoiceListening(epoch));
           }
-          toastError("Hermes chat failed", streamError);
         }
-      } finally {
-        const pendingSteer = pendingSteerRef.current;
-        pendingSteerRef.current = null;
-        abortRef.current = null;
-        setStreamingReply(null);
-        setIsSendingChat(false);
-        if (options.liveVoice) {
-          if (completedLiveVoiceTurn) {
-            dispatchLiveVoice({ type: "TURN_COMPLETE" });
-            if (liveVoiceShouldListenRef.current) {
-              const epoch = liveVoiceEpochRef.current;
-              queueMicrotask(() => void startLiveVoiceListening(epoch));
-            }
-          }
-        } else if (pendingSteer) {
-          queueMicrotask(() => void sendChatMessage(pendingSteer, {
-            historyOverride: buildSteeredAgentPanelHistory(requestHistory, message, accumulated),
+      } else if (pendingSteer) {
+        queueMicrotask(() =>
+          void sendChatMessage(pendingSteer, {
+            historyOverride: buildSteeredAgentPanelHistory(
+              requestHistory,
+              message,
+              accumulated,
+            ),
             preserveDraft: true,
             steering: true,
-          }));
-        } else {
-          queueMicrotask(() => composerRef.current?.focus());
-        }
+          }),
+        );
+      } else {
+        queueMicrotask(() => composerRef.current?.focus());
       }
-      return;
-    }
-
-    if (options.liveVoice) {
-      dispatchLiveVoice({
-        type: "FAIL",
-        message: "Fiona's live streaming connection is unavailable. Voice turns are not queued.",
-      });
-      return;
-    }
-
-    try {
-      setIsSendingChat(true);
-      const sentContext = conversationContext;
-      const result = await dispatchHermesRoleChat({
-        message,
-        targetAgent,
-        profile: targetProfile?.name ?? null,
-        context: {
-          type: "agent_panel_chat",
-          route: contextRouteLabel(sentContext) ?? undefined,
-          payload: {
-            target_agent: targetAgent,
-            conversation_context: sentContext,
-            context_references: sentContext?.selections ?? [],
-            voice_input_provider: voiceInputProvider?.id ?? null,
-            voice_output_provider: voiceOutputProvider?.id ?? null,
-            voice_providers: voiceProviders.map((provider) => ({
-              id: provider.id,
-              configured: provider.configured,
-              can_transcribe: provider.canTranscribe,
-              can_speak: provider.canSpeak,
-            })),
-            available_actions: [
-              "send_message",
-              "start_workflow",
-              "request_approval",
-              "resolve_approval",
-              "add_receipt",
-            ],
-          },
-        },
-        submit: true,
-      });
-      const status: ChatEntryStatus = result.status === "submitted" ? "submitted" : "queued";
-      setChatEntries((current) => [
-        {
-          id: result.messageId ?? result.inboxItemId ?? `chat-${Date.now()}`,
-          message,
-          targetAgent,
-          status,
-          detail: result.messageId ?? result.inboxItemId ?? status,
-          createdAt: new Date().toISOString(),
-          context: sentContext,
-        },
-        ...current,
-      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT));
-      if (!options.preserveDraft) setChatDraft("");
-      queueMicrotask(() => composerRef.current?.focus());
-      toast.success(status === "submitted" ? "Message sent to Fiona" : "Message queued for Fiona", {
-        description: result.messageId ?? result.inboxItemId,
-      });
-    } catch (chatError) {
-      const status: ChatEntryStatus = "failed";
-      setChatEntries((current) => [
-        {
-          id: `failed-${Date.now()}`,
-          message,
-          targetAgent,
-          status,
-          detail: chatError instanceof Error ? chatError.message : "Send failed",
-          createdAt: new Date().toISOString(),
-          context: conversationContext,
-        },
-        ...current,
-      ].slice(0, LOCAL_CHAT_HISTORY_LIMIT));
-      toastError("Fiona chat failed", chatError);
-    } finally {
-      setIsSendingChat(false);
-      queueMicrotask(() => composerRef.current?.focus());
     }
   }
 
@@ -1353,7 +1149,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     }
 
     if (formatted.length > 0) {
-      setChatDraft((current) => formatted.reduce(appendToDraft, current));
+      setChatDraft((current) =>
+        formatted.reduce(appendToAgentPanelDraft, current),
+      );
       toast.success(formatted.length === 1 ? "Text file added" : `${formatted.length} text files added`);
       queueMicrotask(() => composerRef.current?.focus());
     }
@@ -1366,20 +1164,16 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     setChatDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${normalized}`);
   }
 
-  function joinDraft(base: string, addition: string) {
-    return `${base}${base && addition ? " " : ""}${addition.trim()}`;
-  }
-
   async function transcribeHermesRecording(audio: Blob) {
     const base = dictationBaseDraftRef.current;
     try {
-      const result = await transcribeWithHermes(audio);
+      const result = await transcribeVoiceDraft(audio, base);
       if (!result.transcript) {
         setChatDraft(base);
         toast.error("No speech detected");
         return;
       }
-      setChatDraft(joinDraft(base, result.transcript));
+      setChatDraft(result.draft);
     } catch (transcribeError) {
       setChatDraft(base);
       toastError("Hermes transcription failed", transcribeError);
@@ -1414,7 +1208,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           return;
         }
         if (recorderRef.current?.state !== "recording") return;
-        if (result?.transcript) setChatDraft(joinDraft(dictationBaseDraftRef.current, result.transcript));
+        if (result?.transcript) {
+          setChatDraft(
+            joinVoiceDraft(
+              dictationBaseDraftRef.current,
+              result.transcript,
+            ),
+          );
+        }
       } while (hermesPreviewDirtyRef.current && recorderRef.current?.state === "recording");
     } finally {
       hermesPreviewBusyRef.current = false;
@@ -1565,7 +1366,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       const session = startBrowserDictation({
         onFinal: (text) => {
           if (epoch !== liveVoiceEpochRef.current) return;
-          liveVoiceTranscriptRef.current = joinDraft(liveVoiceTranscriptRef.current, text);
+          liveVoiceTranscriptRef.current = joinVoiceDraft(
+            liveVoiceTranscriptRef.current,
+            text,
+          );
           dispatchLiveVoice({ type: "TRANSCRIPT", final: text, interim: "" });
         },
         onInterim: (text) => {
@@ -1779,76 +1583,11 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }
 
   function stopSpeaking() {
-    speechGenerationRef.current += 1;
-    audioRef.current?.pause();
-    audioRef.current = null;
-    speechCompletionRef.current?.();
-    speechCompletionRef.current = null;
-    if (supportsBrowserSpeechSynthesis()) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
+    voicePlaybackRef.current?.stop();
   }
 
-  async function speakWithProvider(text: string, providerId: VoiceProviderId) {
-    const generation = ++speechGenerationRef.current;
-    if (providerId === "hermes") {
-      const result = await speakWithHermes(text);
-      if (generation !== speechGenerationRef.current) return;
-      const audio = new Audio(result.dataUrl);
-      audioRef.current = audio;
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          if (speechCompletionRef.current === finish) speechCompletionRef.current = null;
-          audioRef.current = null;
-          setIsSpeaking(false);
-          resolve();
-        };
-        const fail = (error: Error) => {
-          if (settled) return;
-          settled = true;
-          if (speechCompletionRef.current === finish) speechCompletionRef.current = null;
-          audioRef.current = null;
-          setIsSpeaking(false);
-          reject(error);
-        };
-        speechCompletionRef.current = finish;
-        audio.onended = finish;
-        audio.onerror = () => fail(new Error("The generated audio could not be played."));
-        void audio.play().catch((error) => fail(error instanceof Error ? error : new Error("The generated audio could not be played.")));
-      });
-      return;
-    }
-
-    if (!supportsBrowserSpeechSynthesis()) throw new Error("Speech output unavailable.");
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.94;
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        if (speechCompletionRef.current === finish) speechCompletionRef.current = null;
-        setIsSpeaking(false);
-        resolve();
-      };
-      speechCompletionRef.current = finish;
-      utterance.onend = finish;
-      utterance.onerror = (event) => {
-        if (settled) return;
-        settled = true;
-        if (speechCompletionRef.current === finish) speechCompletionRef.current = null;
-        setIsSpeaking(false);
-        reject(new Error(event.error || "Speech synthesis stopped unexpectedly."));
-      };
-      window.speechSynthesis.cancel();
-      if (generation !== speechGenerationRef.current) {
-        finish();
-        return;
-      }
-      window.speechSynthesis.speak(utterance);
-    });
+  function speakWithProvider(text: string, providerId: VoiceProviderId) {
+    return voicePlaybackRef.current!.speak(text, providerId);
   }
 
   async function createTaskFromComposer() {
@@ -1934,7 +1673,10 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       window.removeEventListener("pointerup", onUp);
       setPanelWidth((current) => {
         try {
-          window.localStorage.setItem(PANEL_WIDTH_KEY, String(current));
+          window.localStorage.setItem(
+            AGENT_PANEL_WIDTH_KEY,
+            String(current),
+          );
         } catch { /* ignore */ }
         return current;
       });
