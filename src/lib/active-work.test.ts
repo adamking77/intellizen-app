@@ -28,6 +28,7 @@ function run(input: Partial<WorkflowRunItem>): WorkflowRunItem {
     completed_at: null,
     schema_version: null,
     definition_snapshot: null,
+    definition_hash: null,
     current_step_id: null,
     step_states: null,
     approvals: null,

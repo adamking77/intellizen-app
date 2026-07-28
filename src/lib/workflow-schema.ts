@@ -1,6 +1,8 @@
 export {
+  assertWorkflowDefinitionIdentity,
   canonicalWorkflowJson,
   dryRunWorkflowDefinition,
+  validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
   workflowDefinitionHash,
 } from "../../shared/workflow-schema.mjs";

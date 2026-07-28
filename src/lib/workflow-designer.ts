@@ -1,7 +1,6 @@
-import {
-  validateWorkflowDefinition,
-  type WorkflowDefinitionV1,
-  type WorkflowStep,
+import type {
+  WorkflowDefinitionV1,
+  WorkflowStep,
 } from "@/lib/workflow-schema";
 
 export type DesignerStepKind = WorkflowStep["kind"];
@@ -203,17 +202,4 @@ export function workflowAuthorityDiff(
       (before === null || AUTHORITY.indexOf(after) > AUTHORITY.indexOf(before)),
     addedApprovalGates,
   };
-}
-
-export function parseWorkflowDesignerJson(value: string) {
-  const definition = JSON.parse(value) as WorkflowDefinitionV1;
-  const validation = validateWorkflowDefinition(definition);
-  if (!validation.valid) {
-    throw new Error(
-      validation.errors
-        .map((error) => `${error.path}: ${error.message}`)
-        .join("; "),
-    );
-  }
-  return definition;
 }

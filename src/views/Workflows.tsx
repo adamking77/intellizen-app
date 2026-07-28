@@ -17,6 +17,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows } from "@/lib/data";
 import { isActiveWorkflowRun } from "@/lib/active-work";
 import { formatElapsed } from "@/lib/format-elapsed";
@@ -24,6 +25,7 @@ import type { WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
+import { WorkflowDefinitionDriftPanel } from "@/components/workflows/workflow-definition-drift-panel";
 import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import {
@@ -33,9 +35,17 @@ import {
 } from "@/lib/workflow-catalog";
 import { buildWorkflowTopology } from "@/lib/workflow-topology";
 import {
+  validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
   type WorkflowDefinitionV1,
 } from "@/lib/workflow-schema";
+import {
+  inspectWorkflowDefinitionDrift,
+  resolveWorkflowDefinitionDrift,
+  type WorkflowDriftResolution,
+  type WorkflowDriftResponse,
+} from "@/lib/workflow-definition-drift";
+import { useStartWorkflow } from "@/lib/use-start-workflow";
 
 type WorkflowLane = "executable" | "sop-only";
 type WorkflowStateFilter = "all" | Exclude<WorkflowCatalogState, "sop-only">;
@@ -184,6 +194,11 @@ export function WorkflowsView() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [designerOpen, setDesignerOpen] = useState(false);
+  const [designerSeed, setDesignerSeed] =
+    useState<WorkflowDefinitionV1 | null>(null);
+  const [driftResolution, setDriftResolution] =
+    useState<WorkflowDriftResolution | null>(null);
+  const [migrationReviewOpen, setMigrationReviewOpen] = useState(false);
 
   const workflowQuery = useQuery({
     queryKey: ["workflow-registry", "screen", entityFilter, ownerFilter],
@@ -205,6 +220,9 @@ export function WorkflowsView() {
     queryKey: ["active-work", "workflow-screen"],
     queryFn: () => listWorkflowRuns({ includeCompleted: true, limit: 100 }),
     refetchInterval: 15_000,
+  });
+  const workflowStarter = useStartWorkflow({
+    onStarted: () => activeRunsQuery.refetch(),
   });
 
   const workflows = workflowQuery.data ?? [];
@@ -316,6 +334,101 @@ export function WorkflowsView() {
     selectedItem?.definition,
     selectedRun,
   ]);
+  const definitionDriftQuery = useQuery({
+    queryKey: [
+      "workflow-definition-drift",
+      selectedRun?.id,
+      selectedRun?.definition_hash,
+      selectedRun?.updated_at,
+      selectedItem?.workflow.updated_at,
+    ],
+    enabled: Boolean(
+      selectedRun &&
+        liveRunDefinition &&
+        selectedItem?.definition,
+    ),
+    queryFn: async () => {
+      const currentDefinition = selectedItem?.definition ?? null;
+      const runDefinition = liveRunDefinition;
+      const [runHash, currentHash] = await Promise.all([
+        selectedRun?.definition_hash
+          ? Promise.resolve(selectedRun.definition_hash)
+          : runDefinition
+            ? validatedWorkflowDefinitionHash(runDefinition)
+            : Promise.resolve(null),
+        currentDefinition
+          ? validatedWorkflowDefinitionHash(currentDefinition)
+          : Promise.resolve(null),
+      ]);
+      return inspectWorkflowDefinitionDrift({
+        runDefinition,
+        currentDefinition,
+        runHash,
+        currentHash,
+      });
+    },
+  });
+  const definitionDrift =
+    definitionDriftQuery.data ??
+    inspectWorkflowDefinitionDrift({
+      runDefinition: liveRunDefinition,
+      currentDefinition: selectedItem?.definition ?? null,
+      runHash: selectedRun?.definition_hash ?? null,
+      currentHash: null,
+    });
+
+  useEffect(() => {
+    setDriftResolution(null);
+    setDesignerSeed(null);
+    setMigrationReviewOpen(false);
+  }, [selectedRun?.id]);
+
+  function handleDriftResponse(response: WorkflowDriftResponse) {
+    if (
+      !selectedRun ||
+      !liveRunDefinition ||
+      definitionDrift.state !== "drifted"
+    ) {
+      return;
+    }
+    const resolution = resolveWorkflowDefinitionDrift({
+      drift: definitionDrift,
+      response,
+      runId: selectedRun.id,
+      runDefinition: liveRunDefinition,
+    });
+    setDriftResolution(resolution);
+    if (resolution.response === "clone-definition") {
+      setDesignerSeed(resolution.definition);
+      setDesignerOpen(true);
+    } else if (resolution.response === "reviewed-migration") {
+      setMigrationReviewOpen(true);
+    }
+  }
+
+  async function confirmReviewedMigration() {
+    if (
+      !selected ||
+      !selectedRun ||
+      driftResolution?.response !== "reviewed-migration"
+    ) {
+      return;
+    }
+    const result = await workflowStarter.start({
+      workflowId: selected.workflow_id,
+      triggerSource: "ui",
+      sourceRecords: [selectedRun.id],
+      context: {
+        definition_migration: {
+          source_run_id: selectedRun.id,
+          source_definition_hash: driftResolution.sourceHash,
+          target_definition_hash: driftResolution.targetHash,
+          reviewed: true,
+        },
+      },
+    });
+    if (result) setMigrationReviewOpen(false);
+  }
   const laneCounts = useMemo(
     () => ({
       executable: catalog.filter((item) => item.state !== "sop-only").length,
@@ -465,7 +578,11 @@ export function WorkflowsView() {
             <WorkflowDesigner
               workflow={selected}
               roleTargets={rolesQuery.data ?? []}
-              onClose={() => setDesignerOpen(false)}
+              initialDefinition={designerSeed}
+              onClose={() => {
+                setDesignerOpen(false);
+                setDesignerSeed(null);
+              }}
               onSaved={() => {
                 setDesignerOpen(false);
                 void workflowQuery.refetch();
@@ -488,7 +605,10 @@ export function WorkflowsView() {
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {selectedItem?.executable ? (
-                      <Button size="sm" variant="outline" onClick={() => setDesignerOpen(true)}>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        setDesignerSeed(null);
+                        setDesignerOpen(true);
+                      }}>
                         <Pencil className="h-3.5 w-3.5" />
                         Design
                       </Button>
@@ -550,6 +670,12 @@ export function WorkflowsView() {
                   </ul>
                 </section>
               ) : null}
+
+              <WorkflowDefinitionDriftPanel
+                drift={definitionDrift}
+                resolution={driftResolution}
+                onResolve={handleDriftResponse}
+              />
 
               {selectedTopology ? (
                 <section>
@@ -705,6 +831,50 @@ export function WorkflowsView() {
           )}
         </main>
       </div>
+      <AppDialog
+        open={migrationReviewOpen}
+        onOpenChange={(open) => {
+          if (!workflowStarter.isStartingWorkflow) setMigrationReviewOpen(open);
+        }}
+        title="Create reviewed replacement run?"
+        description="The historical run remains pinned and unchanged. This creates a new run from the current Registry definition."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setMigrationReviewOpen(false)}
+              disabled={workflowStarter.isStartingWorkflow}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void confirmReviewedMigration()}
+              disabled={workflowStarter.isStartingWorkflow}
+            >
+              {workflowStarter.isStartingWorkflow
+                ? "Creating replacement…"
+                : "Confirm reviewed migration"}
+            </Button>
+          </>
+        }
+      >
+        {driftResolution?.response === "reviewed-migration" ? (
+          <dl className="grid gap-2 font-mono text-[10.5px] text-[var(--subtext-0)]">
+            <div>
+              <dt className="text-[var(--overlay-1)]">Source run</dt>
+              <dd>{driftResolution.sourceRunId}</dd>
+            </div>
+            <div>
+              <dt className="text-[var(--overlay-1)]">Snapshot identity</dt>
+              <dd>{driftResolution.sourceHash}</dd>
+            </div>
+            <div>
+              <dt className="text-[var(--overlay-1)]">Target identity</dt>
+              <dd>{driftResolution.targetHash}</dd>
+            </div>
+          </dl>
+        ) : null}
+      </AppDialog>
     </div>
   );
 }

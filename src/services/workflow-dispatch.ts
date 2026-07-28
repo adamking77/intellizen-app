@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import type { WorkflowRunItem } from "@/lib/types";
 import { requiredNonNegativeInteger } from "@/lib/validated-number";
 import {
+  assertWorkflowDefinitionIdentity,
   validateWorkflowDefinition,
   type WorkflowDefinitionV1,
   type WorkflowRoleAssignStep,
@@ -583,6 +584,7 @@ export async function dispatchWorkflowRun(
   if (!validation.valid) {
     throw new Error("The stored Workflow Run definition snapshot is invalid.");
   }
+  await assertWorkflowDefinitionIdentity(definition, run.definition_hash);
   assertProductionWorkflowArtifacts(definition);
   const context = parsedRunContext(run.context);
   const inputs =

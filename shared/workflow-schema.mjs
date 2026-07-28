@@ -385,3 +385,31 @@ export async function workflowDefinitionHash(definition) {
     byte.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+export async function validatedWorkflowDefinitionHash(definition) {
+  const validation = validateWorkflowDefinition(definition);
+  if (!validation.valid) {
+    throw new Error(
+      `Cannot identify invalid workflow definition: ${validation.errors
+        .map((error) => `${error.path}: ${error.message}`)
+        .join("; ")}`,
+    );
+  }
+  return workflowDefinitionHash(definition);
+}
+
+export async function assertWorkflowDefinitionIdentity(
+  definition,
+  expectedHash,
+) {
+  if (expectedHash == null || expectedHash === "") return;
+  if (typeof expectedHash !== "string") {
+    throw new Error("Stored workflow definition identity is invalid.");
+  }
+  const observedHash = await validatedWorkflowDefinitionHash(definition);
+  if (observedHash !== expectedHash) {
+    throw new Error(
+      "Stored workflow definition snapshot does not match its persisted identity.",
+    );
+  }
+}

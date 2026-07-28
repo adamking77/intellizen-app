@@ -42,5 +42,12 @@ export function dryRunWorkflowDefinition(input: {
 }): WorkflowDryRunResult;
 
 export function workflowDefinitionHash(definition: unknown): Promise<string>;
+export function validatedWorkflowDefinitionHash(
+  definition: unknown,
+): Promise<string>;
+export function assertWorkflowDefinitionIdentity(
+  definition: unknown,
+  expectedHash: unknown,
+): Promise<void>;
 
 export function canonicalWorkflowJson(definition: unknown): string;

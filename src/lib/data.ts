@@ -72,6 +72,7 @@ import { removeInvestigationDirectory } from "@/lib/vault";
 import { DEFAULT_MONITORS } from "@/lib/watch-domains";
 import {
   dryRunWorkflowDefinition,
+  validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
   type WorkflowDefinitionV1,
 } from "@/lib/workflow-schema";
@@ -163,6 +164,7 @@ const WORKFLOW_RUN_FIELDS = {
   completedAt: "run_completed_at",
   schemaVersion: "run_schema_version",
   definitionSnapshot: "run_definition_snapshot",
+  definitionHash: "run_definition_hash",
   currentStepId: "run_current_step_id",
   stepStates: "run_step_states",
   approvals: "run_approvals",
@@ -4256,7 +4258,6 @@ ${returnPath}`;
     parent_work_item: toAgentWorkItem(updatedParent),
   };
 }
-
 function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTemplateItem {
   return {
     id: record.id,
@@ -4286,7 +4287,6 @@ function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTempla
     updated_at: record.updated_at,
   };
 }
-
 function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
   return {
     id: record.id,
@@ -4310,6 +4310,7 @@ function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
     definition_snapshot: fieldJson(
       record.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot],
     ),
+    definition_hash: fieldString(record.fields[WORKFLOW_RUN_FIELDS.definitionHash]),
     current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
     step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
     approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
@@ -4318,7 +4319,6 @@ function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
     updated_at: record.updated_at,
   };
 }
-
 export async function listWorkflowRuns(input: {
   status?: string | null;
   actor?: string | null;
@@ -4663,7 +4663,6 @@ async function getWorkflowTemplateByWorkflowId(workflowId: string) {
   if (error) throw error;
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
-
 function workflowRuntimeDispatchSection(input: {
   status: "submitted" | "queued" | "failed";
   actor: string | null;
@@ -4700,7 +4699,6 @@ Actions taken:
 Verification:
 ${details.join("\n")}`;
 }
-
 export async function startWorkflow(input: StartWorkflowInput) {
   const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
   const workflowItem = toWorkflowTemplateItem(workflow);
@@ -4748,6 +4746,7 @@ export async function startWorkflow(input: StartWorkflowInput) {
   const stepStates = definition
     ? Object.fromEntries(definition.steps.map((step) => [step.id, "queued"]))
     : null;
+  const definitionHash = definition ? await validatedWorkflowDefinitionHash(definition) : null;
   const fields: Record<string, WorkspaceDatabaseFieldValue> = {
     [WORKFLOW_RUN_FIELDS.name]: runName,
     [WORKFLOW_RUN_FIELDS.status]: initialNeedsApproval ? "Needs approval" : "Queued",
@@ -4775,6 +4774,7 @@ export async function startWorkflow(input: StartWorkflowInput) {
           [WORKFLOW_RUN_FIELDS.schemaVersion]: definition.schema,
           [WORKFLOW_RUN_FIELDS.definitionSnapshot]:
             definition as unknown as WorkspaceDatabaseFieldValue,
+          [WORKFLOW_RUN_FIELDS.definitionHash]: definitionHash,
           [WORKFLOW_RUN_FIELDS.currentStepId]: entryStep?.id ?? "",
           [WORKFLOW_RUN_FIELDS.stepStates]:
             stepStates as unknown as WorkspaceDatabaseFieldValue,

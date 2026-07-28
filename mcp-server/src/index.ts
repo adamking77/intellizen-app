@@ -16,6 +16,7 @@ import { fileURLToPath } from "url";
 import { assertPersistenceSafe } from "../../shared/persistence-redaction.mjs";
 import {
   dryRunWorkflowDefinition,
+  validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
   type WorkflowRoleResolution,
 } from "../../shared/workflow-schema.mjs";
@@ -161,6 +162,7 @@ const WORKFLOW_RUN_FIELDS = {
   completedAt: "run_completed_at",
   schemaVersion: "run_schema_version",
   definitionSnapshot: "run_definition_snapshot",
+  definitionHash: "run_definition_hash",
   currentStepId: "run_current_step_id",
   stepStates: "run_step_states",
   approvals: "run_approvals",
@@ -2321,7 +2323,6 @@ async function listIntelClaims(input: { case_id?: string; entity_id?: string; li
   if (error) throw new Error(error.message);
   return data ?? [];
 }
-
 function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
   return {
     id: record.id,
@@ -2351,7 +2352,6 @@ function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
     updated_at: record.updated_at,
   };
 }
-
 function toWorkflowRunItem(record: WorkspaceRecordRow) {
   return {
     id: record.id,
@@ -2375,6 +2375,7 @@ function toWorkflowRunItem(record: WorkspaceRecordRow) {
     definition_snapshot: fieldJson(
       record.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot],
     ),
+    definition_hash: fieldString(record.fields[WORKFLOW_RUN_FIELDS.definitionHash]),
     current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
     step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
     approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
@@ -2383,7 +2384,6 @@ function toWorkflowRunItem(record: WorkspaceRecordRow) {
     updated_at: record.updated_at,
   };
 }
-
 async function listWorkflowRuns(input: {
   status?: string | null;
   actor?: string | null;
@@ -2699,7 +2699,6 @@ async function listWorkflows(input: {
     .slice(0, Math.max(input.limit ?? 50, 1))
     .map(toWorkflowTemplateItem);
 }
-
 async function getWorkflowByWorkflowId(workflowId: string): Promise<WorkspaceRecordRow> {
   const { data, error } = await supabase
     .schema("workspace").from("records")
@@ -2764,7 +2763,6 @@ async function validateWorkflow(input: {
     dry_run: dryRun,
   };
 }
-
 async function startWorkflow(input: {
   workflow_id: string;
   trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
@@ -2826,6 +2824,7 @@ async function startWorkflow(input: {
       : [];
   const entryStep = definitionSteps[0] ?? null;
   const initialNeedsApproval = definition == null && Boolean(input.requires_approval);
+  const definitionHash = definition ? await validatedWorkflowDefinitionHash(definition) : null;
   const currentStep = initialNeedsApproval
     ? "Queued for approval"
     : entryStep
@@ -2857,6 +2856,7 @@ async function startWorkflow(input: {
       ? {
           [WORKFLOW_RUN_FIELDS.schemaVersion]: "intellizen.workflow/1",
           [WORKFLOW_RUN_FIELDS.definitionSnapshot]: definition,
+          [WORKFLOW_RUN_FIELDS.definitionHash]: definitionHash,
           [WORKFLOW_RUN_FIELDS.currentStepId]: entryStep?.id ?? "",
           [WORKFLOW_RUN_FIELDS.stepStates]: Object.fromEntries(
             definitionSteps.map((step) => [step.id, "queued"]),

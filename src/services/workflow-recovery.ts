@@ -1,6 +1,7 @@
 import { GENZEN_WORKSPACE_DATABASE_IDS } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
 import {
+  assertWorkflowDefinitionIdentity,
   validateWorkflowDefinition,
   type WorkflowDefinitionV1,
 } from "@/lib/workflow-schema";
@@ -141,6 +142,10 @@ export function recoverInterruptedLocalWorkflowsOnLaunch() {
         if (!validation.valid) {
           throw new Error("Stored workflow definition snapshot is invalid.");
         }
+        await assertWorkflowDefinitionIdentity(
+          definition,
+          fields.run_definition_hash,
+        );
         const currentStepId = requiredString(
           fields.run_current_step_id,
           "Current step ID",

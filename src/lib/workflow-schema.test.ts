@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertWorkflowDefinitionIdentity,
   canonicalWorkflowJson,
   dryRunWorkflowDefinition,
+  validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
   workflowDefinitionHash,
   type WorkflowDefinitionV1,
@@ -209,5 +211,34 @@ describe("workflow schema v1", () => {
     expect(await workflowDefinitionHash(reordered)).toBe(
       await workflowDefinitionHash(proofWorkflow),
     );
+  });
+
+  it("creates a definition-specific identity only after schema validation", async () => {
+    const identity = await validatedWorkflowDefinitionHash(proofWorkflow);
+    expect(identity).toBe(await workflowDefinitionHash(proofWorkflow));
+    await expect(
+      assertWorkflowDefinitionIdentity(proofWorkflow, identity),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertWorkflowDefinitionIdentity(
+        { ...proofWorkflow, version: proofWorkflow.version + 1 },
+        identity,
+      ),
+    ).rejects.toThrow("does not match its persisted identity");
+    await expect(
+      assertWorkflowDefinitionIdentity(proofWorkflow, null),
+    ).resolves.toBeUndefined();
+    await expect(
+      validatedWorkflowDefinitionHash({
+        ...proofWorkflow,
+        steps: [],
+      }),
+    ).rejects.toThrow("Cannot identify invalid workflow definition");
+    expect(
+      await validatedWorkflowDefinitionHash({
+        ...proofWorkflow,
+        version: proofWorkflow.version + 1,
+      }),
+    ).not.toBe(await validatedWorkflowDefinitionHash(proofWorkflow));
   });
 });

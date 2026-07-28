@@ -253,6 +253,7 @@ export interface WorkflowRunItem {
   completed_at: string | null;
   schema_version: string | null;
   definition_snapshot: unknown | null;
+  definition_hash: string | null;
   current_step_id: string | null;
   step_states: unknown | null;
   approvals: unknown | null;

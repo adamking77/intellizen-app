@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Braces, MessageSquareText, Plus, Save, ShieldCheck, X } from "lucide-react";
+import { MessageSquareText, Plus, Save, ShieldCheck, X } from "lucide-react";
 
 import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { AppDialog } from "@/components/ui/app-dialog";
@@ -13,7 +13,6 @@ import {
   addWorkflowDesignerStep,
   connectWorkflowDesignerEdge,
   createWorkflowDesignerDraft,
-  parseWorkflowDesignerJson,
   updateWorkflowDesignerStep,
   workflowAuthorityDiff,
   type DesignerStepKind,
@@ -46,11 +45,13 @@ interface PendingSave {
 export function WorkflowDesigner({
   workflow,
   roleTargets,
+  initialDefinition = null,
   onClose,
   onSaved,
 }: {
   workflow: WorkflowTemplateItem;
   roleTargets: AgentPanelRoleTarget[];
+  initialDefinition?: WorkflowDefinitionV1 | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -60,41 +61,43 @@ export function WorkflowDesigner({
       ? (structuredClone(workflow.definition) as WorkflowDefinitionV1)
       : null;
   }, [workflow.definition]);
+  const initialDraft = useMemo(() => {
+    const validation = validateWorkflowDefinition(initialDefinition);
+    if (validation.valid) {
+      return structuredClone(initialDefinition) as WorkflowDefinitionV1;
+    }
+    return (
+      existingDefinition ??
+      createWorkflowDesignerDraft({
+        id: workflow.workflow_id,
+        name: workflow.name,
+        ownerRole: workflow.owner_role,
+      })
+    );
+  }, [
+    existingDefinition,
+    initialDefinition,
+    workflow.name,
+    workflow.owner_role,
+    workflow.workflow_id,
+  ]);
   const [definition, setDefinition] = useState<WorkflowDefinitionV1>(() =>
-    existingDefinition ??
-    createWorkflowDesignerDraft({
-      id: workflow.workflow_id,
-      name: workflow.name,
-      ownerRole: workflow.owner_role,
-    }),
+    initialDraft,
   );
   const [selectedStepId, setSelectedStepId] = useState(definition.steps[0]?.id ?? "");
   const [addKind, setAddKind] = useState<DesignerStepKind>("role-assign");
   const [dryRun, setDryRun] = useState<ReturnType<typeof dryRunWorkflowDefinition> | null>(null);
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const [saving, setSaving] = useState(false);
-  const [rawJson, setRawJson] = useState(() => JSON.stringify(definition, null, 2));
-  const [rawError, setRawError] = useState<string | null>(null);
 
   useEffect(() => {
-    const next =
-      existingDefinition ??
-      createWorkflowDesignerDraft({
-        id: workflow.workflow_id,
-        name: workflow.name,
-        ownerRole: workflow.owner_role,
-      });
+    const next = initialDraft;
     setDefinition(next);
     setSelectedStepId(next.steps[0]?.id ?? "");
-    setRawJson(JSON.stringify(next, null, 2));
-    setRawError(null);
     setDryRun(null);
   }, [
-    existingDefinition,
+    initialDraft,
     workflow.id,
-    workflow.name,
-    workflow.owner_role,
-    workflow.workflow_id,
   ]);
 
   useEffect(() => {
@@ -124,7 +127,6 @@ export function WorkflowDesigner({
 
   function commit(next: WorkflowDefinitionV1) {
     setDefinition(next);
-    setRawJson(JSON.stringify(next, null, 2));
     setDryRun(null);
   }
 
@@ -240,17 +242,6 @@ export function WorkflowDesigner({
       onSaved();
     } finally {
       setSaving(false);
-    }
-  }
-
-  function applyRawJson() {
-    try {
-      const parsed = parseWorkflowDesignerJson(rawJson);
-      commit(parsed);
-      setSelectedStepId(parsed.steps[0]?.id ?? "");
-      setRawError(null);
-    } catch (error) {
-      setRawError(error instanceof Error ? error.message : "Invalid workflow JSON.");
     }
   }
 
@@ -579,22 +570,6 @@ export function WorkflowDesigner({
               ) : null}
             </div>
           ) : null}
-
-          <details className="mt-5 border-t border-[var(--border)] pt-4">
-            <summary className="flex cursor-pointer items-center gap-1.5 font-ui text-[11px] font-medium text-[var(--accent)]">
-              <Braces className="h-3.5 w-3.5" />
-              Raw schema v1
-            </summary>
-            <textarea
-              value={rawJson}
-              onChange={(event) => setRawJson(event.target.value)}
-              rows={18}
-              aria-label="Raw workflow schema JSON"
-              className="mt-3 w-full rounded-md border border-[var(--border)] bg-[var(--crust)] p-2.5 font-mono text-[10px] leading-relaxed text-[var(--subtext-0)]"
-            />
-            {rawError ? <p className="mt-2 font-ui text-[10.5px] text-[var(--danger)]">{rawError}</p> : null}
-            <Button className="mt-2" size="sm" variant="outline" onClick={applyRawJson}>Apply JSON</Button>
-          </details>
 
           {!validation.valid ? (
             <ul className="mt-5 space-y-1 border-t border-[var(--border)] pt-4 font-ui text-[10.5px] text-[var(--danger)]">

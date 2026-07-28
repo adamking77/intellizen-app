@@ -39,6 +39,7 @@ const PROTECTED_FIELDS = new Map<string, ReadonlySet<string>>([
     new Set([
       "run_schema_version",
       "run_definition_snapshot",
+      "run_definition_hash",
       "run_current_step_id",
       "run_version",
       "run_step_states",

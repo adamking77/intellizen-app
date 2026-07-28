@@ -49,6 +49,7 @@ const databaseIds = {
 const reservedRunKeys = [
   "run_schema_version",
   "run_definition_snapshot",
+  "run_definition_hash",
   "run_current_step_id",
   "run_version",
   "run_step_states",
@@ -185,4 +186,3 @@ const result = {
 };
 
 console.log(JSON.stringify(result, null, 2));
-
