@@ -157,7 +157,12 @@ above a reviewed grant. A matched positive/negative Rust test proves that the
 same fixture is accepted at the exact grant and rejected one directory above
 it. Opus re-reviewed the correction and returned `VERDICT: APPROVE`.
 
-The final complete-diff review is recorded after this receipt is committed.
+The final complete-diff review covered `4807c0b..4e6b649`, independently
+reproduced all test counts and the byte-exact `.app` hash, reconciled every
+earlier finding, and returned `VERDICT: APPROVE` with no P0/P1/P2 findings.
+Its only actionable P3 was 25 lines of stale slack in two legacy file-size
+ratchets; those ratchets were lowered to their exact current sizes before the
+final consensus confirmation.
 
 ## Known boundaries and external gates
 

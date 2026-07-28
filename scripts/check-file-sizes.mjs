@@ -24,8 +24,8 @@ const legacyBudgets = new Map(
     "src/services/workflow-runner.ts": 1199,
     "src/views/DatabaseEditor.tsx": 1671,
     "src/views/Graph.tsx": 3561,
-    "src/views/Investigation.tsx": 1439,
-    "src/views/Projects.tsx": 1447,
+    "src/views/Investigation.tsx": 1427,
+    "src/views/Projects.tsx": 1434,
   }),
 );
 
