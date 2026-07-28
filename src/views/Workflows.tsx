@@ -16,7 +16,8 @@ import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflows } from "@/lib/data";
+import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows } from "@/lib/data";
+import { isActiveWorkflowRun } from "@/lib/active-work";
 import type { WorkflowTemplateItem, WorkspaceDatabaseFieldValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
@@ -141,6 +142,11 @@ export function WorkflowsView() {
     queryFn: listAgentPanelRoleTargets,
     staleTime: 30_000,
   });
+  const activeRunsQuery = useQuery({
+    queryKey: ["active-work", "workflow-screen"],
+    queryFn: () => listWorkflowRuns({ includeCompleted: false, limit: 100 }),
+    refetchInterval: 15_000,
+  });
 
   const workflows = workflowQuery.data ?? [];
   const ownerOptions = useMemo(
@@ -178,6 +184,15 @@ export function WorkflowsView() {
   }, [filteredWorkflows, selectedId]);
 
   const selected = filteredWorkflows.find((workflow) => workflow.id === selectedId) ?? filteredWorkflows[0] ?? null;
+  const selectedActiveRun = useMemo(
+    () =>
+      (activeRunsQuery.data ?? []).find(
+        (run) =>
+          run.workflow_record_id === selected?.id &&
+          isActiveWorkflowRun(run),
+      ) ?? null,
+    [activeRunsQuery.data, selected?.id],
+  );
   const metrics = useMemo(() => ({
     total: workflows.length,
     active: workflows.filter((workflow) => workflow.status === "Active").length,
@@ -338,6 +353,19 @@ export function WorkflowsView() {
                     </Link>
                   </div>
                 </div>
+                {selectedActiveRun ? (
+                  <Link
+                    to={`/workflows?run=${selectedActiveRun.id}`}
+                    className="mt-4 flex items-center justify-between gap-4 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 font-ui text-[12px] text-[var(--text)]"
+                  >
+                    <span className="min-w-0 truncate">
+                      Current work · {selectedActiveRun.name}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] uppercase text-[var(--overlay-1)]">
+                      {selectedActiveRun.status ?? "In progress"}
+                    </span>
+                  </Link>
+                ) : null}
               </section>
 
               <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

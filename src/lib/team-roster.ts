@@ -1,4 +1,5 @@
 import type { AgentPanelRoleRecord } from "@/lib/agent-panel-roles";
+import { workflowRunsForRole } from "@/lib/active-work";
 import type { RuntimeCatalogItem } from "@/lib/runtime-catalog";
 import type { WorkflowRunItem, WorkflowTemplateItem } from "@/lib/types";
 import type { RuntimeBinding } from "@/services/runtime-bindings";
@@ -181,13 +182,11 @@ export function buildTeamModel(input: {
       const workflowIds = input.workflows
         .filter((workflow) => workflowRoles.get(workflow.id)?.includes(roleKey))
         .map((workflow) => workflow.id);
-      const recentWork = input.runs
-        .filter(
-          (run) =>
-            run.owner_role === roleKey ||
-            (agent && run.actor?.toLowerCase() === String(agent.fields.agent_display_name ?? "").toLowerCase()),
-        )
-        .slice(0, 4);
+      const recentWork = workflowRunsForRole(
+        input.runs,
+        roleKey,
+        fieldString(agent?.fields.agent_display_name),
+      ).slice(0, 4);
       const ready = Boolean(
         agent &&
           (inferredHuman || inferredHermes || (binding && runtime?.usable)),

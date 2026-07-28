@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { emit } from "@tauri-apps/api/event";
-import { ArrowDown, Copy, FileText, Headphones, LoaderCircle, Mic, MicOff, PanelRightClose, PanelRightOpen, Paperclip, Pencil, PictureInPicture2, Play, Plus, RefreshCw, RotateCcw, Search, Send, Square, Volume2, X } from "lucide-react";
+import { ArrowDown, Copy, FileText, Headphones, LoaderCircle, Mic, MicOff, PanelRightOpen, Paperclip, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Send, Square, Volume2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
+import { AgentActiveWork } from "@/components/agent/agent-active-work";
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { AgentActionEvent } from "@/components/agent/agent-action-event";
 import { AgentPanelComposer } from "@/components/agent/agent-panel-composer";
+import { AgentPanelHeader } from "@/components/agent/agent-panel-header";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
 import { AgentPanelThread } from "@/components/agent/agent-panel-thread";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -81,6 +84,7 @@ import {
   type ConversationActionEvent,
 } from "@/lib/agent-conversation";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
+import { inspectActiveWork } from "@/services/active-work";
 import { streamRoleRuntimeChat } from "@/services/runtime-chat";
 import {
   previewAgentMessageDocument,
@@ -324,6 +328,7 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
+  const navigate = useNavigate();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [selectedRoleKey, setSelectedRoleKey] = useState<string | null>(
     readInitialRoleKey,
@@ -530,6 +535,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     staleTime: 60_000,
     enabled: expanded,
   });
+  const activeWorkQuery = useQuery({
+    queryKey: ["active-work"],
+    queryFn: inspectActiveWork,
+    staleTime: 10_000,
+    refetchInterval: expanded ? 15_000 : false,
+    enabled: expanded,
+  });
   const notifyWorkspaceMayHaveChanged = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
     void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });
@@ -589,8 +601,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   }, [notifyWorkspaceMayHaveChanged, queryClient]);
 
   const workflows = workflowsQuery.data ?? [];
-  const isFetching = workflowsQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching || rolesQuery.isFetching;
-  const error = rolesQuery.error ?? workflowsQuery.error ?? agentChatQuery.error;
+  const isFetching = workflowsQuery.isFetching || activeWorkQuery.isFetching || agentChatQuery.isFetching || apiQuery.isFetching || profilesQuery.isFetching || rolesQuery.isFetching;
+  const error = rolesQuery.error ?? activeWorkQuery.error ?? workflowsQuery.error ?? agentChatQuery.error;
   const voiceProviders = getVoiceProviderStatus();
   const voiceInputProvider = getPreferredVoiceInputProvider();
   const voiceOutputProvider = getPreferredVoiceOutputProvider();
@@ -704,6 +716,25 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     [chatTurns, historySearchOpen, inlineActions],
   );
   const awaitingReply = chatTurns.some((turn) => turn.role === "user" && turn.status === "queued");
+  const selectedActiveWork = selectedRoleKey
+    ? activeWorkQuery.data?.[selectedRoleKey] ?? []
+    : [];
+  const primaryActiveWork = selectedActiveWork[0] ?? null;
+  const panelAvailability =
+    rolesQuery.isLoading
+      ? ("loading" as const)
+      : error
+        ? ("error" as const)
+        : !selectedRole
+          ? ("empty" as const)
+          : selectedRole.state === "unavailable"
+            ? ("unavailable" as const)
+            : primaryActiveWork?.state === "blocked" ||
+                primaryActiveWork?.state === "awaiting-approval"
+              ? ("blocked" as const)
+              : primaryActiveWork
+                ? ("working" as const)
+                : ("ready" as const);
 
   // Tighten the poll safety net while a reply is outstanding.
   useEffect(() => {
@@ -1904,88 +1935,22 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       onResizeStart={startPanelResize}
       onInteraction={markRepliesRead}
     >
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <label className="sr-only" htmlFor={`agent-panel-role-${mode}`}>
-                Conversation role
-              </label>
-              <select
-                id={`agent-panel-role-${mode}`}
-                value={selectedRoleKey ?? ""}
-                onChange={(event) =>
-                  applyRoleSelection(event.target.value || null)
-                }
-                className="min-w-0 max-w-[210px] truncate bg-transparent font-ui text-[13px] font-semibold text-[var(--text)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-              >
-                <option value="">Choose role…</option>
-                {roleTargets.map((role) => (
-                  <option key={role.roleKey} value={role.roleKey}>
-                    {role.roleName}
-                    {role.state === "unavailable" ? " · unavailable" : ""}
-                  </option>
-                ))}
-              </select>
-              {unreadCount > 0 ? (
-                <span className="rounded-full bg-[var(--accent)] px-1.5 font-mono text-[10px] leading-4 text-[var(--crust)]">
-                  {Math.min(unreadCount, 99)} new
-                </span>
-              ) : null}
-            </div>
-            <p className="flex items-center gap-1.5 truncate font-ui text-[11px] text-[var(--overlay-1)]">
-              <span
-                className={cn(
-                  "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                  selectedRole?.state === "ready"
-                    ? "bg-[var(--success)]"
-                    : "bg-[var(--overlay-0)]",
-                )}
-              />
-              {selectedRole
-                ? selectedRole.state === "ready"
-                  ? `${selectedRole.agentName ?? selectedRole.agentKey} · ${selectedRole.adapterId}${selectedRole.model ? ` · ${selectedRole.model}` : ""} · ${selectedRole.execution}`
-                  : "No eligible occupant and runtime binding"
-                : "Select a role to begin"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={refresh}
-            aria-label="Refresh agent panel"
-            title="Refresh"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-          >
-            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-          </button>
-          {!standalone ? (
-            <>
-              {onEject ? (
-                <button
-                  type="button"
-                  onClick={onEject}
-                  aria-label="Eject agent panel"
-                  title="Eject agent panel"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-                >
-                  <PictureInPicture2 className="h-4 w-4" />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={toggleCollapsed}
-                aria-label="Collapse agent panel"
-                title="Collapse agent panel"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
+      <AgentPanelHeader
+        mode={standalone ? "standalone" : "docked"}
+        roleTargets={roleTargets}
+        selectedRole={selectedRole}
+        selectedRoleKey={selectedRoleKey}
+        unreadCount={unreadCount}
+        isFetching={isFetching}
+        availability={panelAvailability}
+        onSelectRole={(roleKey) => applyRoleSelection(roleKey)}
+        onRefresh={refresh}
+        onEject={!standalone ? onEject : null}
+        onCollapse={!standalone ? toggleCollapsed : null}
+      />
+      {primaryActiveWork ? (
+        <AgentActiveWork item={primaryActiveWork} onOpen={navigate} />
+      ) : null}
 
       <AgentPanelThread
         containerRef={threadRef}
