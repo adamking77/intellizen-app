@@ -24,7 +24,7 @@ Evidence:
 
 Automated checks:
 
-- `pnpm test` — 201 passed, 1 skipped.
+- Historical snapshot at `310c1b3`: `pnpm test` — 201 passed, 1 skipped.
 - `pnpm run check` — passed.
 - `VITE_INTELLIZEN_LOCAL_ACCESS_KEY= pnpm smoke` — passed.
 - Rust runtime probe tests — 8 passed.

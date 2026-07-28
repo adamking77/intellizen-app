@@ -26,7 +26,7 @@ Evidence:
 
 Automated checks:
 
-- `pnpm test` — 210 passed, 1 skipped.
+- Historical snapshot at `0d1bf81`: `pnpm test` — 210 passed, 1 skipped.
 - `VITE_INTELLIZEN_LOCAL_ACCESS_KEY= pnpm smoke` — passed.
 - Local debug `.app` rebuild — passed.
 

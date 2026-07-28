@@ -25,7 +25,7 @@ Exact artifact:
 
 ## Automated acceptance
 
-- `pnpm test` — 213 passed, 1 skipped.
+- Historical integrated-acceptance snapshot at `4807c0b`: `pnpm test` — 213 passed, 1 skipped.
 - `pnpm --dir mcp-server build` — passed.
 - `pnpm --dir mcp-server test` — 12 passed.
 - `VITE_INTELLIZEN_LOCAL_ACCESS_KEY= pnpm smoke` — passed.
@@ -43,3 +43,7 @@ Final read-only Supabase counts:
 - Records created on 2026-07-28 in those four databases: 0.
 
 No roster, workflow, run, approval, receipt, or runtime-binding record was added or updated. No push, PR, merge, deploy, publish, DMG build, or production app replacement occurred. `/Applications/IntelliZen.app` was not touched.
+
+The three production-backed Gate 7 runs remain valid operational evidence.
+They are not an automated regression gate: the generated `dist/` artifact was
+ephemeral and no current test recreates those exact production-backed runs.

@@ -15,10 +15,13 @@ Primary sidebar routes:
 | Docs | `/docs` |
 | Graph | `/graph` |
 | Canvas | `/canvas` |
+| Workflows | `/workflows` |
+| Team | `/team` |
+| Settings | `/settings` |
 
-`/investigate` remains mounted as a flow-entered deep link from Intel. Retired standalone pages redirect to their surviving operating surface: `/inbox`, `/monitors`, `/agent-work`, and `/roles` → Home; `/workflows` → the Workflow Registry database. Legacy redirects stay in place: `/projects` → Intel and `/reports` → Docs.
+`/investigate` remains mounted as a flow-entered deep link from Intel, and `/agent-panel` is the standalone Tauri panel surface. Retired standalone pages redirect to their surviving operating surface: `/inbox`, `/monitors`, `/agent-work`, and `/roles` → Home. Legacy redirects stay in place: `/projects` → Intel and `/reports` → Docs.
 
-Investigation (3-phase flow: Brief → Collect → Analyse), Docs, the Home morning operating loop, durable Home pins, Databases, and Canvas were promoted beyond the V1 freeze. Inbox and Monitors are retired in favor of Fiona's daily brief; Agent Work, Workflows, and Roles are represented by database-backed Home widgets instead of standalone pages. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
+Investigation (3-phase flow: Brief → Collect → Analyse), Docs, the Home morning operating loop, durable Home pins, Databases, Canvas, Workflows, Team, and Settings were promoted beyond the V1 freeze. Inbox and Monitors are retired in favor of Fiona's daily brief; Agent Work and legacy Roles are represented by database-backed Home widgets instead of standalone pages. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
 
 ## Build commands
 
@@ -99,6 +102,10 @@ Uses **`react-force-graph-2d`** (not React Flow). Two modes inside `src/views/Gr
 - **Construct mode** — custom SVG/DOM canvas with drag, pan, zoom, connector handles, edge drag, multi-select, undo/redo, shortest-path, ego network, minimap.
 
 Graphs can be project-linked or standalone (`project_id = null`).
+
+Workflow topology is a separate surface and intentionally uses `@xyflow/react`
+for definition design, dry-run, and live-run views. The “not React Flow”
+statement above applies only to the Insight/Construct Graph surface.
 
 ## Exa Integration Reference
 

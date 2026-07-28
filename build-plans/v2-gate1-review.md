@@ -3,7 +3,7 @@
 **Date:** 2026-07-27  
 **Status:** Passed — production application and readback verified
 **Build branch:** `v2-integration`  
-**Migration:** `20260727080103_intellizen_v2_gate1_control_contracts.sql`
+**Migration:** `20260727092636_intellizen_v2_gate1_control_contracts.sql`
 
 ## Gate 1 outcome
 
@@ -201,7 +201,7 @@ The smoke build intentionally used the existing local-only access-key override. 
 explicit correction removing the stale overnight-delay instruction:
 
 ```text
-supabase/migrations/20260727080103_intellizen_v2_gate1_control_contracts.sql
+supabase/migrations/20260727092636_intellizen_v2_gate1_control_contracts.sql
 ```
 
 The application and readback passed. Adam's standing whole-build instruction

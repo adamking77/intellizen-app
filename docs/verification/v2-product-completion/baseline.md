@@ -7,7 +7,7 @@ Recorded before the product-correction implementation.
 - Runtime bindings: Codex `0.145.0` and Claude Code `2.1.220`, both bound locally; both model allowlists are empty.
 - Live roster: Fiona occupies Operations Director through Hermes, Keel occupies Chief Engineer through `codex-local-primary`, Adam occupies Founder Approval Authority, and Verifier is unstaffed.
 - Live Workflow Registry: 18 records, 5 schema-v1 definitions, 13 SOP-only records.
-- Automated baseline: `pnpm test` passed 190 assertions; `VITE_INTELLIZEN_LOCAL_ACCESS_KEY= pnpm smoke` passed 17 Rust tests and the production bundle build.
+- Historical baseline snapshot at `f6daee3`: `pnpm test` passed 190 assertions; `VITE_INTELLIZEN_LOCAL_ACCESS_KEY= pnpm smoke` passed 17 Rust tests and the production bundle build. These are commit-anchored historical counts, not the current suite total.
 
 Observed product gaps in the exact `IntelliZen V2 Dev.app`:
 
