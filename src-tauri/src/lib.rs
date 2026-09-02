@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod engine;
+mod proposals;
 mod runtime_auth;
 mod runtime_bindings;
 mod runtimes;
@@ -509,6 +510,10 @@ pub fn run() {
             engine::engine_start,
             engine::engine_reset,
             engine::engine_stop,
+            proposals::proposals_list,
+            proposals::proposal_create,
+            proposals::proposal_accept_hunk,
+            proposals::proposal_reject_hunk,
             supabase_proxy::supabase_proxy_request,
             runtime_bindings::runtime_bindings_list,
             runtime_bindings::runtime_bindings_upsert,

@@ -58,6 +58,7 @@ import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { readVaultFile, removeVaultFile, writeVaultFile } from "@/lib/vault";
 import { useAppStore } from "@/store";
+import { ProposalStrip } from "@/proposals/proposal-strip";
 
 const InlineMarkdownEditor = lazy(async () => {
   const module = await import("@/components/reports/inline-markdown-editor");
@@ -581,6 +582,13 @@ export function ReportsView() {
                   loadingFallback={<EditorFallback />}
                   onRetry={() => void vaultFileQuery.refetch()}
                 >
+                  <ProposalStrip
+                    docPath={selectedVaultPath || null}
+                    onApplied={(text) => {
+                      setContent(text);
+                      setSaveStatus(text === persistedContent ? "idle" : "dirty");
+                    }}
+                  />
                   <Suspense fallback={<EditorFallback />}>
                     <InlineMarkdownEditor
                       key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}
