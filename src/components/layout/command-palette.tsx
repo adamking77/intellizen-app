@@ -15,6 +15,7 @@ import { LABELS } from "@/lib/labels";
 import type { InternalSearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
+import { usePluginPaletteCommands } from "@/plugins/commands";
 
 // ============================================================
 // Context + provider
@@ -192,6 +193,7 @@ function CommandPalette() {
     [location.pathname],
   );
 
+  const pluginCommands = usePluginPaletteCommands(); // wave-1 plugins
   const groups = useMemo(() => {
     const rank = (cmds: Command[]) =>
       cmds
@@ -206,8 +208,9 @@ function CommandPalette() {
       { heading: "Navigation", items: rank(NAV_COMMANDS) },
       { heading: "Actions", items: rank([...scoped, ...ACTION_COMMANDS]) },
       { heading: "Workspace", items: workspaceCommands },
+      { heading: "Plugins", items: rank(pluginCommands) },
     ].filter((g) => g.items.length > 0);
-  }, [query, scoped, workspaceResults]);
+  }, [query, scoped, workspaceResults, pluginCommands]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 

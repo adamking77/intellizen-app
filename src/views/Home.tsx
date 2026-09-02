@@ -41,6 +41,7 @@ import {
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
 import { toast } from "@/lib/toast";
+import { PluginWidgetMenuItems } from "@/plugins/home-widgets";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -374,6 +375,8 @@ export function HomeView() {
                     </button>
                   );
                 })}
+                {/* wave-1 plugins: widgets contributed by ~/.hermes/plugins */}
+                <PluginWidgetMenuItems onAdded={() => setWidgetPickerOpen(false)} />
               </div>
             ) : null}
           </div>

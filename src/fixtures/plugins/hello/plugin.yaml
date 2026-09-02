@@ -1,0 +1,5 @@
+name: hello
+version: "0.1.0"
+description: "Example IntelliZen plugin: one of each contribution."
+author: GenZen
+hooks: []

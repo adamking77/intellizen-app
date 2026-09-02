@@ -44,13 +44,16 @@
     "fs:allow-create",
     "fs:allow-mkdir",
     "fs:allow-remove",
+    "fs:allow-stat",
     {
       "identifier": "fs:scope",
       "allow": [
         { "path": "$HOME/vault" },
         { "path": "$HOME/vault/**/*" },
         { "path": "$HOME/vault/intelligence" },
-        { "path": "$HOME/vault/intelligence/**/*" }
+        { "path": "$HOME/vault/intelligence/**/*" },
+        { "path": "$HOME/.hermes/plugins" },
+        { "path": "$HOME/.hermes/plugins/**/*" }
       ]
     }
   ]
