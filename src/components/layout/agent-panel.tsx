@@ -4,28 +4,33 @@ import { ChevronsUpDown, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
-import { AgentTurn, UserTurn } from "@/components/agent/agent-turn";
+import { AgentTurn, UserTurn, type TurnActions } from "@/components/agent/agent-turn";
 import { DecisionCard } from "@/components/agent/decision-card";
 import { TargetPicker } from "@/components/agent/target-picker";
+import { usePanelSession } from "@/components/agent/use-panel-session";
 import {
   AGENT_PANEL_MAX_WIDTH,
   AGENT_PANEL_MIN_WIDTH,
   useAgentPanelResize,
 } from "@/components/agent/use-agent-panel-resize";
 import { useEngineStore } from "@/engine/engine-store";
+import { ACP_ENGINE_LABEL, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { defaultProfile, listProfiles, type HermesProfile } from "@/engine/profiles";
-import { emptyThread, useSessionStore } from "@/engine/session-store";
-import { transcriptBusy, type Decision } from "@/engine/transcript";
+import { transcriptBusy, type Decision, type Message } from "@/engine/transcript";
 import {
   AGENT_PANEL_COLLAPSED_KEY,
   AGENT_PANEL_WIDTH_KEY,
   readAgentPanelCollapsed,
 } from "@/lib/agent-panel-persistence";
-import { toastError } from "@/lib/toast";
+import { SEND_ON_ENTER_KEY, SHOW_REASONING_KEY, usePreference } from "@/lib/settings-preferences";
+import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { PluginPanelActions } from "@/plugins/panel-actions";
+import { previewAgentMessageDocument, saveAgentMessageDocument } from "@/services/agent-message-document";
+import { useVoice } from "@/voice/use-voice";
+import { VoiceButton } from "@/voice/voice-button";
 
 const ICON_BUTTON =
   "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
@@ -61,6 +66,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() =>
     readAgentPanelCollapsed(panelStorage()),
   );
+  const [showReasoning] = usePreference(SHOW_REASONING_KEY, "1");
+  const [sendOnEnter] = usePreference(SEND_ON_ENTER_KEY, "1");
   const collapsed = userCollapsed ?? isCramped;
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -85,35 +92,41 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     staleTime: 30_000,
     retry: false,
   });
-  const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
-
-  const selectedProfile = useSessionStore((s) => s.selectedProfile);
-  const selectProfile = useSessionStore((s) => s.selectProfile);
-  // Select the stored thread by reference; an empty stand-in is built once
-  // per profile so the selector never hands React a fresh object per render.
-  const storedThread = useSessionStore((s) => (selectedProfile ? s.threads[selectedProfile] : undefined));
-  const thread = useMemo(
-    () => storedThread ?? (selectedProfile ? emptyThread(selectedProfile) : null),
-    [storedThread, selectedProfile],
+  const acpQuery = useQuery({ queryKey: ["acp", "agents"], queryFn: listAcpAgents, staleTime: 15_000 });
+  const hermesProfiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
+  const acpProfiles: HermesProfile[] = useMemo(
+    () =>
+      (acpQuery.data ?? []).map((agent) => ({
+        name: `acp:${agent.id}`,
+        displayName: agent.name,
+        description: agent.role ?? "",
+        model: agent.model ?? null,
+        provider: ACP_ENGINE_LABEL[agent.engine],
+        isDefault: false,
+        gatewayRunning: true,
+      })),
+    [acpQuery.data],
   );
-  const send = useSessionStore((s) => s.send);
-  const stop = useSessionStore((s) => s.stop);
-  const decideApproval = useSessionStore((s) => s.decideApproval);
-  const decideClarify = useSessionStore((s) => s.decideClarify);
+  const profiles = useMemo(() => [...hermesProfiles, ...acpProfiles], [hermesProfiles, acpProfiles]);
+
+  const { selectedProfile, thread, selectProfile, send, stop, decideApproval, decideClarify } =
+    usePanelSession();
 
   // The first selection is the profile Hermes marks default; nothing is
   // hard-coded. An explicit choice is never overridden afterwards.
   useEffect(() => {
     if (selectedProfile || profiles.length === 0) return;
-    const first = defaultProfile(profiles);
+    const first = defaultProfile(hermesProfiles) ?? acpProfiles[0];
     if (first) selectProfile(first.name);
-  }, [profiles, selectedProfile, selectProfile]);
+  }, [hermesProfiles, acpProfiles, selectedProfile, selectProfile]);
 
   const profile: HermesProfile | null =
     profiles.find((p) => p.name === selectedProfile) ??
     (selectedProfile ? { name: selectedProfile, isDefault: false, model: null, provider: null, gatewayRunning: engineOpen, description: "", displayName: "" } : null);
   const agentName = profile?.displayName || profile?.name || null;
-  const usable = useCallback((p: HermesProfile) => engineOpen && p.gatewayRunning, [engineOpen]);
+  const isAcp = selectedProfile?.startsWith("acp:") ?? false;
+  const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || (engineOpen && p.gatewayRunning), [engineOpen]);
+  const targetReady = Boolean(profile && usable(profile));
 
   const [picking, setPicking] = useState(false);
   const closePicker = useCallback(() => setPicking(false), []);
@@ -187,7 +200,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   const submit = (text = draft) => {
     const trimmed = text.trim();
-    if (!trimmed || !selectedProfile || !engineOpen || running) return;
+    if (!trimmed || !selectedProfile || !targetReady || running) return;
     setDraft("");
     atBottom.current = true;
     send(selectedProfile, trimmed).catch((error) => toastError("Could not send", error));
@@ -197,6 +210,39 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     if (!selectedProfile) return;
     stop(selectedProfile).catch((error) => toastError("Could not stop the turn", error));
   };
+
+  const voice = useVoice({
+    profile: selectedProfile,
+    messages,
+    sending: running,
+    onSend: (text) => submit(text),
+    onTranscript: (text) => setDraft((current) => current.trim() ? `${current.replace(/\s+$/, "")} ${text}` : text),
+  });
+
+  const turnActions: TurnActions = useMemo(
+    () => ({
+      canSend: targetReady && !running,
+      onRead: (message: Message) => void voice.readAloud(message),
+      onStopReading: voice.interrupt,
+      onAskAgain: (prompt: string) => submit(prompt),
+      onEdit: (text: string) => submit(text),
+      onDocument: (message: Message) => {
+        const preview = previewAgentMessageDocument({
+          text: message.text,
+          roleKey: "agent-panel",
+          agentKey: agentName ?? message.from,
+          createdAt: new Date(message.at ?? Date.now()).toISOString(),
+        });
+        void saveAgentMessageDocument(preview, true)
+          .then(() => toast.success("Saved as a document", { description: preview.title }))
+          .catch((error) => toastError("Could not open this reply as a document", error));
+      },
+    }),
+    // submit accepts explicit text for every action, so its changing draft
+    // closure is intentionally excluded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [targetReady, running, agentName, voice],
+  );
 
   const run: RunState = useMemo(() => {
     if (!transcript) return { kind: "idle" };
@@ -211,7 +257,9 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     return { kind: "idle" };
   }, [transcript, thread?.opening, pending.length, running, messages]);
 
-  const placeholder = !engineOpen
+  const placeholder = isAcp && agentName
+    ? `Message ${agentName}…  ↵ to send`
+    : !engineOpen
     ? connection === "connecting" || (connection === "idle" && !engineError)
       ? "Starting Hermes…"
       : "Hermes is offline"
@@ -276,7 +324,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           ) : null}
           <div className="flex-1" />
           {/* wave-1 plugins: actions contributed by ~/.hermes/plugins */}
-          <PluginPanelActions profile={selectedProfile} send={(text) => submit(text)} />
+          {!isAcp ? <PluginPanelActions profile={selectedProfile} send={(text) => submit(text)} /> : null}
           {!standalone ? (
             <button
               type="button"
@@ -311,18 +359,27 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
         >
           {messages.length === 0 ? (
             <EmptyState
-              connection={connection}
-              engineError={engineError}
-              profilesPending={profilesQuery.isPending && engineOpen}
-              profilesError={profilesQuery.error ? String((profilesQuery.error as Error).message ?? profilesQuery.error) : null}
+              connection={isAcp ? "open" : connection}
+              engineError={isAcp ? null : engineError}
+              profilesPending={!isAcp && profilesQuery.isPending && engineOpen}
+              profilesError={!isAcp && profilesQuery.error ? String((profilesQuery.error as Error).message ?? profilesQuery.error) : null}
               agentName={agentName}
             />
           ) : null}
           {messages.map((m) =>
             m.from === "you" ? (
-              <UserTurn key={m.id} message={m} now={now} />
+              <UserTurn key={m.id} message={m} now={now} actions={turnActions} />
             ) : (
-              <AgentTurn key={m.id} message={m} profile={profile} now={now} onRetry={(prompt) => submit(prompt)}>
+              <AgentTurn
+                key={m.id}
+                message={m}
+                profile={profile}
+                now={now}
+                onRetry={(prompt) => submit(prompt)}
+                actions={turnActions}
+                reading={voice.talking === m.id}
+                showReasoning={showReasoning !== "0"}
+              >
                 {decisionsFor(m.id).map((decision) => (
                   <DecisionCard
                     key={decision.requestId}
@@ -370,10 +427,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           onStop={onStop}
           onEject={onEject}
           placeholder={placeholder}
-          ready={engineOpen && Boolean(selectedProfile)}
+          ready={targetReady}
           running={running}
           agent={agentName}
           permission={transcript?.approvalMode ? PERMISSION_WORD[transcript.approvalMode] : null}
+          note={voice.note}
+          dictate={<VoiceButton mode="dictate" voice={voice} onTranscript={() => undefined} />}
+          converse={<VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} />}
+          sendOnEnter={sendOnEnter !== "0"}
         />
       </div>
     </AgentPanelShell>

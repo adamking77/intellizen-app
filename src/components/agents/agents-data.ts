@@ -30,13 +30,11 @@ export interface AgentList {
   acpEntries: AcpAgent[];
 }
 
-export async function listAgents(client: GatewayClientLike): Promise<AgentList> {
-  const result = await request<{ profiles?: Record<string, unknown>[] }>(client, "profiles.list", {
-    include_sessions: false,
-  });
-  const hermes = (Array.isArray(result?.profiles) ? result.profiles : [])
-    .map(agentFromProfileRow)
-    .filter((a): a is Agent => a !== null);
+export async function listAgents(client: GatewayClientLike, includeHermes = true): Promise<AgentList> {
+  const result = includeHermes
+    ? await request<{ profiles?: Record<string, unknown>[] }>(client, "profiles.list", { include_sessions: false })
+    : null;
+  const hermes = (Array.isArray(result?.profiles) ? result.profiles : []).map(agentFromProfileRow).filter((a): a is Agent => a !== null);
   let acpEntries: AcpAgent[] = [];
   let acpTrouble: string | null = null;
   try {

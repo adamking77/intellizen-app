@@ -1,7 +1,17 @@
 import { useState } from "react";
-import { ChevronDown, Copy } from "lucide-react";
+import { ChevronDown, Copy, FileText, Pencil, RotateCcw, Volume2, VolumeX } from "lucide-react";
 
 import { took, clock } from "@/components/agent/turn-time";
+import {
+  agentTurnActions,
+  errorReport,
+  failureActions,
+  turnText,
+  userTurnActions,
+  type ActionContext,
+  type MessageAction,
+  type MessageActionId,
+} from "@/components/agent/message-actions";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
 import type { HermesProfile } from "@/engine/profiles";
 import type { Message, ToolRow } from "@/engine/transcript";
@@ -42,6 +52,51 @@ function TurnBar({ align, children }: { align?: "end"; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+const ACTION_ICON: Record<MessageActionId, typeof Copy> = {
+  copy: Copy,
+  read: Volume2,
+  "stop-reading": VolumeX,
+  document: FileText,
+  "ask-again": RotateCcw,
+  edit: Pencil,
+};
+
+/** One act on a turn, as an icon with the word behind it. The donor's shipped
+ *  shape: no `⋯`, no menu — those were specified and rejected on sight. */
+function ActionIcon({ action, onRun }: { action: MessageAction; onRun: (id: MessageActionId) => void }) {
+  const Icon = ACTION_ICON[action.id];
+  return (
+    <button
+      type="button"
+      className={TURN_ICON}
+      title={action.title}
+      aria-label={action.label}
+      onClick={() => onRun(action.id)}
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={1.7} aria-hidden />
+    </button>
+  );
+}
+
+/** What a surface can do to the turns in it. Every entry is optional: the
+ *  HUD has no document route, and a panel with no engine can send nothing. */
+export interface TurnActions extends Partial<ActionContext> {
+  onRead?: (message: Message) => void;
+  onStopReading?: () => void;
+  onDocument?: (message: Message) => void;
+  onAskAgain?: (prompt: string) => void;
+  onEdit?: (text: string) => void;
+}
+
+function contextOf(actions: TurnActions | undefined, reading: boolean): ActionContext {
+  return {
+    canRead: Boolean(actions?.onRead) && actions?.canRead !== false,
+    reading,
+    canDocument: Boolean(actions?.onDocument),
+    canSend: actions?.canSend !== false && Boolean(actions?.onAskAgain ?? actions?.onEdit),
+  };
 }
 
 function ToolRowView({ tool }: { tool: ToolRow }) {
@@ -91,7 +146,71 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
   );
 }
 
-export function UserTurn({ message, now }: { message: Message; now: number }) {
+export function UserTurn({
+  message,
+  now,
+  actions,
+}: {
+  message: Message;
+  now: number;
+  actions?: TurnActions;
+}) {
+  // Editing replaces the bubble with an editor rather than opening a second
+  // composer: the real one carries the target and the permissions, and Send
+  // hands straight to it.
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
+
+  const run = (id: MessageActionId) => {
+    if (id === "copy") void writeTextToClipboard(message.text);
+    else if (id === "edit") setDraft(message.text);
+  };
+
+  if (editing) {
+    return (
+      <div className="max-w-[82%] self-end">
+        <div className="rounded-[10px] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
+          <textarea
+            value={draft}
+            autoFocus
+            rows={Math.min(14, draft.split("\n").length + 1)}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setDraft(null);
+              else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (draft.trim()) actions?.onEdit?.(draft.trim());
+                setDraft(null);
+              }
+            }}
+            aria-label="Edit this message"
+            className="w-full resize-none bg-transparent font-ui text-[13px] leading-normal text-[var(--text)] outline-none"
+          />
+          <div className="mt-1.5 flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDraft(null)}
+              className="rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[12px] text-[var(--text)] hover:opacity-90"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!draft.trim()}
+              onClick={() => {
+                actions?.onEdit?.(draft.trim());
+                setDraft(null);
+              }}
+              className="rounded-full bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[12px] text-[var(--go-fg)] hover:opacity-90 disabled:opacity-40"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="group relative max-w-[82%] self-end">
       <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
@@ -101,15 +220,9 @@ export function UserTurn({ message, now }: { message: Message; now: number }) {
         {message.at !== undefined ? (
           <TurnFact text={clock(message.at, now)} title={new Date(message.at).toLocaleString()} />
         ) : null}
-        <button
-          type="button"
-          className={TURN_ICON}
-          title="Copy"
-          aria-label="Copy your message"
-          onClick={() => void writeTextToClipboard(message.text)}
-        >
-          <Copy className="h-3.5 w-3.5" strokeWidth={1.7} aria-hidden />
-        </button>
+        {userTurnActions(message, contextOf(actions, false)).map((action) => (
+          <ActionIcon key={action.id} action={action} onRun={run} />
+        ))}
       </TurnBar>
     </div>
   );
@@ -120,16 +233,30 @@ export function AgentTurn({
   profile,
   now,
   onRetry,
+  actions,
+  reading,
+  showReasoning = true,
   children,
 }: {
   message: Message;
   profile: HermesProfile | null;
   now: number;
   onRetry?: (prompt: string) => void;
+  actions?: TurnActions;
+  /** This very reply is the one being spoken. */
+  reading?: boolean;
+  showReasoning?: boolean;
   /** Decision cards that arrived inside this turn, rendered where they arrived. */
   children?: React.ReactNode;
 }) {
   const [runOpen, setRunOpen] = useState(false);
+  const runAction = (id: MessageActionId) => {
+    if (id === "copy") void writeTextToClipboard(turnText(message));
+    else if (id === "read") actions?.onRead?.(message);
+    else if (id === "stop-reading") actions?.onStopReading?.();
+    else if (id === "document") actions?.onDocument?.(message);
+    else if (id === "ask-again" && message.prompt) actions?.onAskAgain?.(message.prompt);
+  };
   const tools = message.tools ?? [];
   const name = profile?.displayName || message.from;
   const initial = (name.trim()[0] ?? "?").toUpperCase();
@@ -152,7 +279,7 @@ export function AgentTurn({
           ) : null}
         </div>
 
-        {message.thought ? (
+        {showReasoning && message.thought ? (
           <details className="rounded-md border-l-2 border-[var(--line-strong)] bg-[var(--crust)] px-2.5 py-[7px]">
             <summary className="cursor-default list-none font-ui text-[12px] text-[var(--text-muted)]">
               Thought
@@ -203,15 +330,9 @@ export function AgentTurn({
 
         {!message.streaming && message.text ? (
           <TurnBar>
-            <button
-              type="button"
-              className={TURN_ICON}
-              title="Copy"
-              aria-label="Copy this reply"
-              onClick={() => void writeTextToClipboard(message.text)}
-            >
-              <Copy className="h-3.5 w-3.5" strokeWidth={1.7} aria-hidden />
-            </button>
+            {agentTurnActions(message, contextOf(actions, Boolean(reading))).map((action) => (
+              <ActionIcon key={action.id} action={action} onRun={runAction} />
+            ))}
             {message.tookMs !== undefined ? <TurnFact text={took(message.tookMs)} title="How long this turn took" /> : null}
             <div className="flex-1" />
             {message.at !== undefined ? (
@@ -223,24 +344,36 @@ export function AgentTurn({
         {message.failed ? (
           <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
             <p className="font-ui text-[13px] leading-normal text-[var(--bad)]">{message.failed}</p>
-            {onRetry && message.prompt ? (
-              <div className="mt-2 flex gap-1.5">
+            {/* Word-labelled and always visible: an action you must hover to
+                discover is not offered, and the row survives greyscale. */}
+            <div className="mt-2 flex gap-1.5">
+              {failureActions(Boolean(onRetry && message.prompt)).map((action) => (
                 <button
+                  key={action.id}
                   type="button"
-                  onClick={() => onRetry(message.prompt as string)}
-                  className="rounded-full bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[12px] text-[var(--go-fg)] hover:opacity-90"
+                  onClick={() =>
+                    action.id === "retry"
+                      ? onRetry?.(message.prompt as string)
+                      : void writeTextToClipboard(
+                          errorReport({
+                            reason: message.failed ?? "",
+                            agent: profile?.displayName || profile?.name,
+                            provider: profile?.provider,
+                            model: profile?.model,
+                          }),
+                        )
+                  }
+                  className={cn(
+                    "rounded-full px-3 py-0.5 font-ui text-[12px] hover:opacity-90",
+                    action.id === "retry"
+                      ? "bg-[var(--go-bg)] text-[var(--go-fg)]"
+                      : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)]",
+                  )}
                 >
-                  Ask again
+                  {action.label}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void writeTextToClipboard(message.failed as string)}
-                  className="rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[12px] text-[var(--text)] hover:opacity-90"
-                >
-                  Copy error
-                </button>
-              </div>
-            ) : null}
+              ))}
+            </div>
           </div>
         ) : null}
       </div>

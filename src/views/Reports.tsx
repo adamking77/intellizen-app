@@ -59,6 +59,7 @@ import { cn } from "@/lib/utils";
 import { readVaultFile, removeVaultFile, writeVaultFile } from "@/lib/vault";
 import { useAppStore } from "@/store";
 import { ProposalStrip } from "@/proposals/proposal-strip";
+import { GraphEmbeds } from "@/components/docs/graph-embed";
 
 const InlineMarkdownEditor = lazy(async () => {
   const module = await import("@/components/reports/inline-markdown-editor");
@@ -589,6 +590,7 @@ export function ReportsView() {
                       setSaveStatus(text === persistedContent ? "idle" : "dirty");
                     }}
                   />
+                  <GraphEmbeds markdown={content} />
                   <Suspense fallback={<EditorFallback />}>
                     <InlineMarkdownEditor
                       key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}

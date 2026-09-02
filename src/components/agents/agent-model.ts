@@ -2,7 +2,7 @@
 // A Hermes profile and an ACP entry both become an `Agent`; the id says which
 // door saves it (`hermes:<profile>` or `acp:<id>`).
 
-import type { AcpAgent, AcpEngine } from "@/engine/acp-registry";
+import { defaultAcpLaunch, type AcpAgent, type AcpEngine } from "@/engine/acp-registry";
 
 export type AgentEngine = "hermes" | AcpEngine;
 
@@ -159,13 +159,14 @@ export function agentFromAcp(entry: AcpAgent): Agent {
  *  fields (command, args, cwd) this editor does not show. */
 export function acpFromAgent(agent: Agent, previous?: AcpAgent): AcpAgent {
   if (agent.engine === "hermes") throw new Error("not an ACP agent");
-  const id = agent.id.startsWith("acp:") ? agent.id.slice(4) : agent.id;
+  const id = (agent.id.startsWith("acp:") ? agent.id.slice(4) : agent.id) || `agent-${Date.now().toString(36)}`;
+  const launch = previous ?? defaultAcpLaunch(agent.engine);
   return {
     id,
     name: agent.name.trim(),
     engine: agent.engine,
-    command: previous?.command ?? "",
-    args: previous?.args ?? [],
+    command: launch.command,
+    args: launch.args,
     cwd: previous?.cwd,
     model: agent.model.trim() || undefined,
     role: agent.role.trim() || undefined,

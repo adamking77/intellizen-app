@@ -111,6 +111,8 @@ import {
 } from "@/lib/vault";
 import { useAppStore } from "@/store";
 import { buildGraphExtractionPrompt } from "@/lib/shell";
+import { copyGraphEmbedReference, exportGraphSvgFile } from "@/components/graph/export-actions";
+import { GraphExportMenu } from "@/components/graph/graph-export-menu";
 import type {
   GraphEdgeRecord,
   GraphEntityType,
@@ -2115,13 +2117,11 @@ export function GraphView() {
                       />
                     )}
                     <div className="my-1 h-px bg-[var(--border)]" />
-                    <OverflowItem
-                      label="Export PNG…"
+                    <GraphExportMenu
                       disabled={visualNodes.length === 0}
-                      onClick={() => {
-                        setOverflowOpen(false);
-                        void handleExportPng();
-                      }}
+                      onPng={() => { setOverflowOpen(false); void handleExportPng(); }}
+                      onSvg={() => { setOverflowOpen(false); void exportGraphSvgFile({ nodes, edges, mode: interactionMode }).then((path) => { if (path) setStatusMessage(`Saved: ${path}`); }).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to export SVG.")); }}
+                      onEmbed={() => { setOverflowOpen(false); void copyGraphEmbedReference(effectiveProjectId, interactionMode).then(() => setStatusMessage("Copied a Docs graph embed block.")).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to copy graph embed block.")); }}
                     />
                     <OverflowItem
                       label="Clear graph…"

@@ -15,7 +15,15 @@ vi.mock("@/lib/clipboard", () => ({
   writeTextToClipboard: vi.fn(async () => undefined),
 }));
 
+const acpDisk = vi.hoisted(() => ({ text: "" }));
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  BaseDirectory: { AppData: 1 },
+  exists: async (path: string) => path === "acp-agents.json" && acpDisk.text.length > 0,
+  readTextFile: async () => acpDisk.text,
+}));
+
 import { AgentPanel } from "@/components/layout/agent-panel";
+import { resetAcpSubscription, setAcpBridge, type AcpEnvelope } from "@/engine/acp-session";
 import { useEngineStore } from "@/engine/engine-store";
 import { setGatewayClient } from "@/engine/gateway";
 import type { JsonRpcGatewayClient } from "@/engine/json-rpc-gateway";
@@ -95,11 +103,14 @@ describe("AgentPanel on the gateway", () => {
     setGatewayClient(client as unknown as JsonRpcGatewayClient);
     useSessionStore.setState({ selectedProfile: null, threads: {} });
     useEngineStore.setState({ connection: "open", info: null, error: null });
+    acpDisk.text = "";
   });
 
   afterEach(() => {
     setGatewayClient(null);
     resetSessionStoreSubscription();
+    setAcpBridge(null);
+    resetAcpSubscription();
   });
 
   it("renders the collapsed docked pill", async () => {
@@ -162,7 +173,7 @@ describe("AgentPanel on the gateway", () => {
     expect(text).toContain("197 ms");
     expect(text).toContain("ok");
     expect(panel.container.querySelector('[data-run-state="done"]')?.textContent).toMatch(/Done in \d+ s/);
-    expect(panel.container.querySelector('button[aria-label="Send"]')).not.toBeNull();
+    expect(panel.container.querySelector('button[aria-label="Speaking is switched off in Settings"]')).not.toBeNull();
     expect(text).toContain("Ask first");
     // Inline markdown in the reply renders as elements, not literal marks.
     expect(panel.container.querySelector("strong")?.textContent).toBe("Wed Sep 2 10:05:48 +04 2026");
@@ -220,6 +231,43 @@ describe("AgentPanel on the gateway", () => {
     expect(empty?.textContent).toContain("Hermes is offline.");
     expect(empty?.textContent).toContain("hermes serve exited (code 1)");
     expect(client.callsTo("profiles.list")).toHaveLength(0);
+    await panel.unmount();
+  });
+
+  it("chats with an ACP agent while Hermes is offline", async () => {
+    useEngineStore.setState({ connection: "error", info: null, error: "Hermes stopped" });
+    acpDisk.text = JSON.stringify([{ id: "cc", name: "Claude Code", engine: "claude-code", command: "claude-agent-acp", args: [] }]);
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    let emit: ((event: AcpEnvelope) => void) | null = null;
+    setAcpBridge({
+      invoke: async <T,>(command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return (command === "acp_start" ? { agentId: "cc", sessionId: "acp-1", pid: 42 } : undefined) as T;
+      },
+      listen: async (handler) => {
+        emit = handler;
+        return () => {
+          emit = null;
+        };
+      },
+    });
+
+    const panel = await mountPanel();
+    expect(panel.container.querySelector('button[aria-haspopup="listbox"]')?.textContent).toContain("Claude Code");
+    expect(textarea(panel).disabled).toBe(false);
+    expect(textarea(panel).placeholder).toContain("Message Claude Code");
+    await type(panel, "hello");
+    await pressEnter(panel);
+    expect(calls.slice(0, 2)).toEqual([
+      { command: "acp_start", args: { agentId: "cc" } },
+      { command: "acp_prompt", args: { agentId: "cc", text: "hello" } },
+    ]);
+    await act(async () => {
+      emit?.({ agent_id: "cc", type: "message.start", session_id: "acp-1", payload: {} });
+      emit?.({ agent_id: "cc", type: "message.delta", session_id: "acp-1", payload: { text: "Hi Adam" } });
+      emit?.({ agent_id: "cc", type: "message.complete", session_id: "acp-1", payload: { status: "complete" } });
+    });
+    expect(panel.container.textContent).toContain("Hi Adam");
     await panel.unmount();
   });
 

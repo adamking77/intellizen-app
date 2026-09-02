@@ -13,6 +13,8 @@ export interface HermesProfile {
   gatewayRunning: boolean;
   description: string;
   displayName: string;
+  /** First folder is the session cwd; absent means the Settings default. */
+  context?: string[];
 }
 
 interface ProfileRow {
@@ -22,6 +24,7 @@ interface ProfileRow {
   provider?: unknown;
   description?: unknown;
   display_name?: unknown;
+  ui_meta?: unknown;
 }
 
 export async function listProfiles(client: GatewayClientLike): Promise<HermesProfile[]> {
@@ -31,15 +34,20 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
   const rows = Array.isArray(result?.profiles) ? result.profiles : [];
   return rows
     .filter((row): row is ProfileRow & { name: string } => typeof row.name === "string" && row.name.length > 0)
-    .map((row) => ({
-      name: row.name,
-      isDefault: row.is_default === true,
-      model: typeof row.model === "string" && row.model ? row.model : null,
-      provider: typeof row.provider === "string" && row.provider ? row.provider : null,
-      gatewayRunning: true,
-      description: typeof row.description === "string" ? row.description : "",
-      displayName: typeof row.display_name === "string" ? row.display_name : "",
-    }));
+    .map((row) => {
+      const ui = row.ui_meta && typeof row.ui_meta === "object" ? row.ui_meta as Record<string, unknown> : {};
+      const mine = ui.intellizen && typeof ui.intellizen === "object" ? ui.intellizen as { context?: unknown } : {};
+      return {
+        name: row.name,
+        isDefault: row.is_default === true,
+        model: typeof row.model === "string" && row.model ? row.model : null,
+        provider: typeof row.provider === "string" && row.provider ? row.provider : null,
+        gatewayRunning: true,
+        description: typeof row.description === "string" ? row.description : "",
+        displayName: typeof row.display_name === "string" ? row.display_name : "",
+        context: Array.isArray(mine.context) ? mine.context.filter((path): path is string => typeof path === "string") : [],
+      };
+    });
 }
 
 /** The profile a fresh panel starts on: the one Hermes marks default. */

@@ -4,7 +4,10 @@ use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+mod acp;
+mod acp_wire;
 mod engine;
+mod panel_window;
 mod proposals;
 mod runtime_auth;
 mod runtime_bindings;
@@ -507,9 +510,19 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
+            acp::acp_start,
+            acp::acp_prompt,
+            acp::acp_cancel,
+            acp::acp_stop,
+            acp::acp_probe,
+            acp::acp_respond_permission,
             engine::engine_start,
             engine::engine_reset,
             engine::engine_stop,
+            panel_window::panel_open,
+            panel_window::panel_close,
+            panel_window::panel_is_open,
+            panel_window::panel_resize,
             proposals::proposals_list,
             proposals::proposal_create,
             proposals::proposal_accept_hunk,
@@ -545,6 +558,7 @@ pub fn run() {
         .run(|app_handle, event| {
             // Kill the hermes serve we spawned; never one we attached to.
             if let tauri::RunEvent::Exit = event {
+                acp::shutdown();
                 engine::shutdown(app_handle);
             }
             #[cfg(target_os = "macos")]

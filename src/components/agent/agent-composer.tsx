@@ -76,17 +76,43 @@ export interface ComposerProps {
   agent: string | null;
   /** Permission stated as a word, from the session; absent until known. */
   permission: string | null;
+  /** Beside the controls: the microphone. In the send slot when the draft is
+   *  empty: the conversation toggle. Both from the surface's one `useVoice`. */
+  dictate?: React.ReactNode;
+  converse?: React.ReactNode;
+  /** Whatever the voice stack has to say, above the box it is about. */
+  note?: string | null;
+  /** Enter sends when true; otherwise ⌘/Ctrl+Enter sends. */
+  sendOnEnter?: boolean;
 }
 
 /** The composer separates from the panel by a hairline, not by fill: on the
  *  dark flavors no fill value reads as a plane. Enter sends, Shift+Enter
  *  breaks a line, Send becomes Stop while a turn runs. */
 export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer(
-  { draft, onDraft, onSend, onStop, onEject, placeholder, ready, running, agent, permission },
+  {
+    draft,
+    onDraft,
+    onSend,
+    onStop,
+    onEject,
+    placeholder,
+    ready,
+    running,
+    agent,
+    permission,
+    dictate,
+    converse,
+    note,
+    sendOnEnter = true,
+  },
   ref,
 ) {
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const sendKey = sendOnEnter
+      ? e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey
+      : e.key === "Enter" && !e.shiftKey && (e.metaKey || e.ctrlKey);
+    if (sendKey) {
       e.preventDefault();
       onSend();
     }
@@ -94,6 +120,11 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   const canSend = ready && !running && draft.trim().length > 0;
   return (
     <div className="flex shrink-0 flex-col gap-2 rounded-lg border-t border-[var(--edge)] bg-[var(--base)] px-[11px] py-2.5">
+      {note ? (
+        <p role="status" className="font-ui text-[11px] leading-snug text-[var(--bad)]">
+          {note}
+        </p>
+      ) : null}
       <textarea
         ref={ref}
         value={draft}
@@ -117,9 +148,15 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
         ) : null}
+        {dictate}
         {permission ? <span className="font-ui text-[12px] text-[var(--text-muted)]">{permission}</span> : null}
         <div className="flex-1" />
-        {running ? (
+        {/* The send slot: the conversation toggle while there is nothing to
+            send, Send once there is. A composer with text has an obvious next
+            act; one without has the slot free. */}
+        {!running && !draft.trim() && converse ? (
+          converse
+        ) : running ? (
           <button
             type="button"
             onClick={onStop}

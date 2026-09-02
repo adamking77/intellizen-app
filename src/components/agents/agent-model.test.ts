@@ -76,6 +76,7 @@ describe("acp round trip", () => {
       voice: { service: "elevenlabs", voiceId: "el1" },
     });
     expect(acpFromAgent({ ...agent, voiceId: undefined }, entry).voice).toBeUndefined();
+    expect(acpFromAgent({ ...agent, id: "" })).toMatchObject({ id: expect.stringMatching(/^agent-/), command: "claude-agent-acp" });
     expect(() => acpFromAgent({ ...agent, engine: "hermes" })).toThrow();
   });
 });

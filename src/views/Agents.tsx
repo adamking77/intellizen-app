@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Card, NewCard, Tag } from "@/components/agents/agent-card";
 import { AgentEditor } from "@/components/agents/agent-editor";
@@ -16,7 +17,11 @@ import { useEngineStore } from "@/engine/engine-store";
 import { getGatewayClient } from "@/engine/gateway";
 import { useSessionStore } from "@/engine/session-store";
 import { AGENT_PANEL_COLLAPSED_KEY } from "@/lib/agent-panel-persistence";
+import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
 import { errorMessage, toast } from "@/lib/toast";
+import { groupMemberKey } from "@/rooms/group-membership";
+import { createRoom, ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
+import type { GroupMember } from "@/rooms/types";
 
 const TITLE = "font-ui text-[16px] font-light uppercase tracking-[0.16em] text-[var(--text)]";
 const GRID = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]";
@@ -26,8 +31,8 @@ const ACTION =
 /** Point the panel at a profile. The panel owns its collapsed state; its
  *  ⌘⇧A handler is the one way in from outside.
  *  ponytail: synthetic shortcut, until the panel exposes an open() (wave-1: panel wires this). */
-function talkTo(profile: string) {
-  useSessionStore.getState().selectProfile(profile);
+function talkTo(target: string) {
+  useSessionStore.getState().selectProfile(target);
   try {
     window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "0");
   } catch {
@@ -37,15 +42,16 @@ function talkTo(profile: string) {
 }
 
 export function AgentsView() {
+  const navigate = useNavigate();
+  const [defaultContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
   const client = getGatewayClient();
   const queryClient = useQueryClient();
   const engineOpen = useEngineStore((s) => s.connection === "open");
   const engineError = useEngineStore((s) => s.error);
 
   const list = useQuery({
-    queryKey: ["agents", "list"],
-    queryFn: () => listAgents(client),
-    enabled: engineOpen,
+    queryKey: ["agents", "list", engineOpen],
+    queryFn: () => listAgents(client, engineOpen),
     staleTime: 15_000,
   });
   const teams = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
@@ -62,7 +68,12 @@ export function AgentsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agents]);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["agents", "list"] }),
+      queryClient.invalidateQueries({ queryKey: ["acp", "agents"] }),
+      queryClient.invalidateQueries({ queryKey: ["rooms", "seatable-members"] }),
+    ]);
 
   // ── Editor ──
   const [editing, setEditing] = useState<{ agent: Agent; creating: boolean } | null>(null);
@@ -92,6 +103,9 @@ export function AgentsView() {
     mutationFn: async (agent: Agent) => deleteAgent(agent),
     onSuccess: (_, agent) => {
       toast.success(`${agent.displayName} deleted`);
+      if (useSessionStore.getState().selectedProfile === (isHermes(agent) ? profileOf(agent.id) : agent.id)) {
+        useSessionStore.getState().selectProfile(null);
+      }
       setEditing(null);
       void refresh();
     },
@@ -108,20 +122,37 @@ export function AgentsView() {
     [queryClient],
   );
 
+  const openTeamRoom = async (team: Team) => {
+    await ensureRoomsLoaded();
+    const members: GroupMember[] = teamMembers(team, agents).map((agent) => ({
+      name: isHermes(agent) ? profileOf(agent.id)! : agent.id.slice(4),
+      door: isHermes(agent) ? "gateway" : "acp",
+      display_name: agent.displayName,
+      title: agent.role,
+      model: agent.model || null,
+      provider: agent.provider || engineLabel(agent.engine),
+    }));
+    const keys = members.map(groupMemberKey).sort().join("|");
+    const existing = listRooms().find(
+      (room) => room.name === team.name && (room.members ?? []).map(groupMemberKey).sort().join("|") === keys,
+    );
+    navigate(`/room/${existing?.roomId ?? createRoom(team.name, members)}`);
+  };
+
   const offline = !engineOpen;
   const acpTrouble = list.data?.acpTrouble ?? null;
 
   return (
     <div className="relative h-full overflow-y-auto bg-[var(--base)] px-6 py-5">
       {offline ? (
-        <Notice tone="bad">Hermes is offline{engineError ? ` — ${engineError}` : ""}. Profiles cannot be listed or saved until it is back.</Notice>
+        <Notice tone="bad">Hermes is offline{engineError ? ` — ${engineError}` : ""}. Hermes profiles are unavailable; ACP agents and teams remain editable.</Notice>
       ) : list.error ? (
         <Notice tone="bad">Your agents could not be read — {errorMessage(list.error)}. Nothing below is missing; the app cannot see it.</Notice>
       ) : acpTrouble ? (
         <Notice tone="wait">The ACP registry could not be read — {acpTrouble}. Hermes profiles are listed; Claude Code, Codex, Gemini and Qwen agents are not.</Notice>
       ) : null}
 
-      {!offline && list.isSuccess && agents.length === 0 ? (
+      {list.isSuccess && agents.length === 0 ? (
         <p className="max-w-[520px] pb-4 font-ui text-[12px] leading-[1.5] text-[var(--text-muted)]">
           No agents yet. Make one below — a Hermes profile, or a Claude Code, Codex, Gemini or Qwen agent over ACP.
         </p>
@@ -131,12 +162,12 @@ export function AgentsView() {
         <h1 className={TITLE}>Agents</h1>
         {list.isSuccess ? <Tag>{agents.length} configured</Tag> : null}
         <div className="grow" />
-        <button type="button" className={ACTION} disabled={offline} onClick={() => setEditing({ agent: blankAgent(), creating: true })}>
+        <button type="button" className={ACTION} onClick={() => setEditing({ agent: blankAgent(offline ? "claude-code" : "hermes"), creating: true })}>
           New agent
         </button>
       </div>
 
-      {list.isPending && !offline ? (
+      {list.isPending ? (
         <div className={GRID} aria-busy>
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-[150px] animate-pulse rounded-xl bg-[var(--mantle)]" />
@@ -150,10 +181,7 @@ export function AgentsView() {
               label={a.displayName}
               onOpen={() => setEditing({ agent: a, creating: false })}
               items={[
-                ...(isHermes(a)
-                  ? [{ label: "Open in chat", onSelect: () => talkTo(profileOf(a.id)!) }]
-                  : // wave-1: acp/panel wires this — the panel talks to Hermes profiles only for now.
-                    []),
+                { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
                 { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
                 { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
               ]}
@@ -172,7 +200,7 @@ export function AgentsView() {
               </div>
             </Card>
           ))}
-          {!offline ? <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(), creating: true })} /> : null}
+          <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(offline ? "claude-code" : "hermes"), creating: true })} />
         </div>
       )}
 
@@ -199,7 +227,7 @@ export function AgentsView() {
                 label={t.name}
                 onOpen={() => setTeamSheet(t)}
                 items={[
-                  // wave-1: rooms wires this — "Open in chat" for a team needs the room surface.
+                  { label: "Open in chat", onSelect: () => void openTeamRoom(t).catch((error) => toast.error("Could not open room", { description: errorMessage(error) })) },
                   { label: "Edit team…", onSelect: () => setTeamSheet(t) },
                   { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "team", team: t }) },
                 ]}
@@ -230,7 +258,7 @@ export function AgentsView() {
           loadingDetail={detail.isFetching}
           detailError={detail.error ? errorMessage(detail.error) : null}
           image={images[opened.id] ?? null}
-          defaultContext={[]}
+          defaultContext={defaultContext}
           onSave={(draft, confirmModel) => save.mutateAsync({ draft, confirmModel }).then(() => undefined)}
           onDelete={(a) => setConfirming({ kind: "agent", agent: a })}
           onPickImage={async (url) => {
@@ -275,7 +303,7 @@ export function AgentsView() {
               ? "The profile's sessions, SOUL.md and skills go with it. Teams that name it get smaller."
               : "Its registry entry goes. Teams that name it get smaller."
             : confirming?.kind === "team"
-              ? `Its conversation goes with it. The ${confirming.team.members.length} agents in it stay.`
+              ? `The team configuration goes. Its ${confirming.team.members.length} agents and existing room history stay.`
               : ""
         }
         onCancel={() => setConfirming(null)}

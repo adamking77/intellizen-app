@@ -66,8 +66,8 @@ proposals (E.16). Running on other builders: acp (B.5 Rust), agents-page
   context? }`, `listAcpAgents`, `saveAcpAgent`, `deleteAcpAgent`,
   `discoverAcpAgents`; `src/engine/acp-session.ts` mirrors `session.ts`. If
   absent in your worktree, stub it untracked and do not commit the stub.
-- Rooms (this wave): `src/rooms/needs-you.ts` exports `useRoomsNeedingYou()`.
-  needs-me stubs it untracked if absent.
+- Rooms (this wave) keep mentions and blocking decisions inside the room where
+  they can be answered in context. They do not export a global attention feed.
 - Decisions: `src/engine/decisions.ts`, `session-store.ts`; the card is
   `src/components/agent/decision-card.tsx` and is reused as is.
 
@@ -117,24 +117,13 @@ Mount `<VoiceButton mode="dictate">` beside the composer controls and
 per the voice contract above. Show `voice.note` above the composer when set.
 Tests: action reducers, eject state machine.
 
-## needs-me (B.8)
+## attention data (B.8, superseded 2026-09-03)
 
-Owns `src/needs-me/*`, `src/views/NeedsMe.tsx`, `src-tauri/src/notify.rs`.
-Hunks: `App.tsx` route `/needs-me`, `sidebar.tsx` entry "Needs me" with count,
-`lib.rs`, `Cargo.toml` (`tauri-plugin-notification`), capabilities.
-
-Sources, each a small module returning `NeedsMeItem { id, kind, agent, asked,
-where, at, action }`: pending approvals and clarifications from the decision
-store; rooms flagged `@user` (`useRoomsNeedingYou`); blocked kanban cards
-(REST `/api/plugins/kanban`, routes in
-`~/.hermes/hermes-agent/plugins/kanban/dashboard/plugin_api.py`); failed cron
-runs (`/api/cron`, `hermes_cli/web_server.py`). Rows: what is asked, which
-agent, where from, the real action inline (decision card reused; room row
-opens `/room/:id`; card row opens the board URL; cron row shows the error).
-Donor anatomy: `SPEC-v8.md` needs-you, `src/Row.tsx`. Poll REST every 15 s;
-approvals are live. Dock badge (`set_badge_count`) and a native notification
-when the count rises. Tests: merge/sort with fixtures; env-gated real read of
-`/api/cron` and kanban.
+Adam explicitly removed this app surface. Do not create `src/needs-me`, a
+route, sidebar entry, built-in widget or plugin, counter, dock badge, native
+notification, polling aggregator, or global approval queue. Work needing Adam
+is an ordinary workspace database section or kanban row. A widget over that
+data is user-designed through the generic plugin contract only when requested.
 
 ## rooms (B.7)
 
@@ -151,9 +140,9 @@ door implemented (one session per member via `session.ts`) and
 `Room.tsx`: the log large, members, receipts, the `$groupNeedsYou` flag,
 matching Hermes Desktop's hermes-bots pane and the donor's `msg-turn`
 bubbles. "New room" sheet: members from `profiles.list` plus
-`listAcpAgents()` when present. Export `useRoomsNeedingYou()` from
-`src/rooms/needs-you.ts`. Tests: rounds/membership/adapter with fixtures;
-env-gated one real round with two profiles.
+`listAcpAgents()` when present. Tests: rounds/membership/adapter with fixtures;
+env-gated one real round with two profiles. Mentions stay visible in the room;
+do not derive a separate global feed from them.
 
 ## charts (D.15)
 

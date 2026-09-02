@@ -31,6 +31,7 @@ const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView")
 const AgentsView = lazyNamed(() => import("@/views/Agents"), "AgentsView"); // wave-1 agents-page
 const UnitView = lazyNamed(() => import("@/views/Unit"), "UnitView");
 const ProjectView = lazyNamed(() => import("@/views/Project"), "ProjectView");
+const RoomView = lazyNamed(() => import("@/views/Room"), "RoomView");
 
 function RouteLoadingFallback() {
   return (
@@ -158,6 +159,14 @@ function App() {
             }
           />
           <Route path="/reports" element={<Navigate to="/docs" replace />} />
+          <Route
+            path="/room/:id?"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <RoomView />
+              </Suspense>
+            }
+          />
           {/* wave-1 plugins: every plugin page lives under /plugin/<id> */}
           <Route path="/plugin/:id/*" element={<PluginRouteView />} />
           <Route

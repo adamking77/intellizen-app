@@ -233,7 +233,7 @@ export function Sidebar() {
       >
         {collapsed ? (
           <NavLink
-            to="/settings?section=runtimes"
+            to="/settings?section=providers"
             aria-label="Open settings"
             title={engineTitle}
             className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
@@ -250,7 +250,7 @@ export function Sidebar() {
         ) : (
           <>
             <NavLink
-              to="/settings?section=runtimes"
+              to="/settings?section=providers"
               aria-label="Open settings"
               title={engineTitle}
               className="flex min-w-0 items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"

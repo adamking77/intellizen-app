@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { PanelRight, PictureInPicture2 } from "lucide-react";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { PictureInPicture2 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
+import { EjectedPanel } from "@/components/agent/ejected-panel";
+import { useEject } from "@/components/agent/use-eject";
 import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, TrafficLights, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
@@ -15,8 +16,6 @@ import { HomePinSync } from "@/components/home/home-pin-sync";
 import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
 
-const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
-const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
 const SIDEBAR_COLLAPSED_KEY = "intelizen:sidebar-collapsed";
@@ -38,9 +37,6 @@ function writeFlag(key: string, on: boolean) {
   }
 }
 
-const readAgentPanelDetached = () => readFlag(AGENT_PANEL_DETACHED_KEY);
-const writeAgentPanelDetached = (detached: boolean) => writeFlag(AGENT_PANEL_DETACHED_KEY, detached);
-
 function isEditableTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
 }
@@ -48,7 +44,7 @@ function isEditableTarget(target: EventTarget | null) {
 export function AppShell() {
   useEngineBoot();
   const location = useLocation();
-  const [agentPanelDetached, setAgentPanelDetached] = useState(() => readAgentPanelDetached());
+  const { ejected: agentPanelDetached, eject } = useEject();
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
 
@@ -121,73 +117,6 @@ export function AppShell() {
       .catch((error) => toastError("Workflow recovery failed", error));
   }, []);
 
-  useEffect(() => {
-    const syncDetachedState = () => setAgentPanelDetached(readAgentPanelDetached());
-    window.addEventListener("storage", syncDetachedState);
-    window.addEventListener("focus", syncDetachedState);
-    return () => {
-      window.removeEventListener("storage", syncDetachedState);
-      window.removeEventListener("focus", syncDetachedState);
-    };
-  }, []);
-
-  // Recover from a stale detached flag (app relaunched while the flag was
-  // set, or the panel window died without an event reaching us).
-  useEffect(() => {
-    if (!isTauriRuntime || !agentPanelDetached) return;
-    void WebviewWindow.getByLabel(AGENT_PANEL_WINDOW_LABEL).then((existing) => {
-      if (!existing) {
-        writeAgentPanelDetached(false);
-        setAgentPanelDetached(false);
-      }
-    });
-  }, [agentPanelDetached]);
-
-  async function ejectAgentPanel() {
-    try {
-      const existing = await WebviewWindow.getByLabel(AGENT_PANEL_WINDOW_LABEL);
-      if (existing) {
-        writeAgentPanelDetached(true);
-        setAgentPanelDetached(true);
-        await existing.setFocus();
-        return;
-      }
-
-      const panelWindow = new WebviewWindow(AGENT_PANEL_WINDOW_LABEL, {
-        url: "/agent-panel",
-        title: "Agent Panel",
-        width: 420,
-        height: 820,
-        minWidth: 360,
-        minHeight: 560,
-        resizable: true,
-        focus: true,
-        alwaysOnTop: true,
-        decorations: false,
-        transparent: true,
-        shadow: false,
-        backgroundColor: "#00000000",
-      });
-
-      panelWindow.once("tauri://created", () => {
-        writeAgentPanelDetached(true);
-        setAgentPanelDetached(true);
-        void panelWindow.setAlwaysOnTop(true);
-      });
-      panelWindow.once("tauri://destroyed", () => {
-        writeAgentPanelDetached(false);
-        setAgentPanelDetached(false);
-      });
-      panelWindow.once("tauri://error", (event) => {
-        writeAgentPanelDetached(false);
-        setAgentPanelDetached(false);
-        toastError("Could not eject agent panel", event.payload);
-      });
-    } catch (err) {
-      toastError("Could not eject agent panel", err);
-    }
-  }
-
   const dragWindow = useWindowDrag();
 
   return (
@@ -235,7 +164,7 @@ export function AppShell() {
         {focusMode ? null : agentPanelDetached ? (
           <button
             type="button"
-            onClick={() => void ejectAgentPanel()}
+            onClick={() => eject()}
             aria-label="Focus ejected agent panel"
             title="Focus ejected agent panel"
             className={cn(
@@ -247,7 +176,7 @@ export function AppShell() {
             <PictureInPicture2 className="h-4 w-4" />
           </button>
         ) : (
-          <AgentPanel onEject={() => void ejectAgentPanel()} />
+          <AgentPanel onEject={() => eject()} />
         )}
       </div>
       <WindowResizeHandles />
@@ -272,41 +201,9 @@ export function AppShell() {
 
 export function AgentPanelWindow() {
   useEngineBoot();
-  function redock() {
-    writeAgentPanelDetached(false);
-    void getCurrentWindow()
-      .close()
-      .catch((err) => toastError("Could not re-dock panel", err));
-  }
-
-  const dragWindow = useWindowDrag();
-
   return (
-    <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)]">
-        {/* Frameless floating window: this strip is its title bar. */}
-        <div
-          onMouseDown={dragWindow}
-          className="flex h-9 shrink-0 cursor-default items-center justify-between border-b border-[var(--border)] pl-3 pr-2"
-        >
-          <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--overlay-1)]">
-            Agent Panel
-          </span>
-          <button
-            type="button"
-            onClick={redock}
-            aria-label="Attach agent panel to main window"
-            title="Attach to main window"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
-          >
-            <PanelRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <AgentPanel mode="standalone" />
-        </div>
-      </div>
-      <WindowResizeHandles />
+    <>
+      <EjectedPanel />
       <Toaster
         position="bottom-right"
         theme="dark"
@@ -322,6 +219,6 @@ export function AgentPanelWindow() {
           className: "intelizen-toast",
         }}
       />
-    </div>
+    </>
   );
 }

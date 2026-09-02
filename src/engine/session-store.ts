@@ -3,6 +3,13 @@
 
 import { create } from "zustand";
 
+import {
+  createAcpSession,
+  interruptAcpSession,
+  onAcpEvent,
+  respondAcpApproval,
+  submitAcpPrompt,
+} from "./acp-session";
 import type { ApprovalChoice, GatewayClientLike } from "./contract";
 import {
   answerClarify,
@@ -73,6 +80,11 @@ function errorText(error: unknown): string {
 // instance rather than being taken once at import.
 let subscribedTo: GatewayClientLike | null = null;
 let unsubscribe: (() => void) | null = null;
+let unsubscribeAcp: (() => void) | null = null;
+
+function acpId(target: string): string | null {
+  return target.startsWith("acp:") ? target.slice(4) : null;
+}
 
 function ensureSubscribed(apply: (event: GatewayEvent) => void) {
   const client = getGatewayClient();
@@ -102,12 +114,14 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
   };
 
   const ensureSession = async (profile: string): Promise<string> => {
-    ensureSubscribed(applyEvent);
     const existing = get().threads[profile];
     if (existing?.sessionId) return existing.sessionId;
     update(profile, (t) => ({ ...t, opening: true, error: null }));
     try {
-      const sessionId = await createSession(getGatewayClient(), { profile });
+      const agentId = acpId(profile);
+      if (agentId) unsubscribeAcp ??= onAcpEvent(applyEvent);
+      else ensureSubscribed(applyEvent);
+      const sessionId = agentId ? await createAcpSession(agentId) : await createSession(getGatewayClient(), { profile });
       update(profile, (t) => ({ ...t, sessionId, opening: false }));
       return sessionId;
     } catch (error) {
@@ -140,6 +154,11 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
       const client = getGatewayClient();
       try {
         let sessionId = await ensureSession(profile);
+        const agentId = acpId(profile);
+        if (agentId) {
+          await submitAcpPrompt(agentId, trimmed);
+          return;
+        }
         try {
           await submitPrompt(client, sessionId, trimmed);
         } catch (error) {
@@ -167,7 +186,9 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
     stop: async (profile) => {
       const thread = get().threads[profile];
       if (!thread?.sessionId) return;
-      await interruptSession(getGatewayClient(), thread.sessionId);
+      const agentId = acpId(profile);
+      if (agentId) await interruptAcpSession(agentId);
+      else await interruptSession(getGatewayClient(), thread.sessionId);
     },
 
     decideApproval: async (profile, decision, choice) => {
@@ -175,11 +196,15 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
       if (!thread?.sessionId) throw new Error("No live session for this decision.");
       update(profile, (t) => ({ ...t, deciding: decision.requestId }));
       try {
-        await respondApproval(getGatewayClient(), {
-          sessionId: thread.sessionId,
-          requestId: decision.requestId,
-          choice,
-        });
+        const agentId = acpId(profile);
+        if (agentId) await respondAcpApproval({ agentId, requestId: decision.requestId, choice });
+        else {
+          await respondApproval(getGatewayClient(), {
+            sessionId: thread.sessionId,
+            requestId: decision.requestId,
+            choice,
+          });
+        }
         update(profile, (t) => ({
           ...t,
           deciding: null,
@@ -197,6 +222,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
     },
 
     decideClarify: async (profile, decision, answers) => {
+      if (acpId(profile)) throw new Error("This ACP agent cannot ask structured follow-up questions yet.");
       update(profile, (t) => ({ ...t, deciding: decision.requestId }));
       try {
         await answerClarify(getGatewayClient(), decision, answers);
@@ -233,6 +259,8 @@ export function selectThread(state: SessionStoreState, profile: string | null): 
 /** Test hook: drop the gateway subscription so a fresh client is picked up. */
 export function resetSessionStoreSubscription() {
   unsubscribe?.();
+  unsubscribeAcp?.();
   unsubscribe = null;
+  unsubscribeAcp = null;
   subscribedTo = null;
 }

@@ -63,12 +63,13 @@ stops being a destination; its parts become tabs of a case project.
 
 **Done is the midday scene from `PRODUCT.md`, performed in the running app
 on an ordinary day without anyone explaining it.** Adam opens the app around
-midday. Needs Me tells him what needs him. He answers those decisions where they
-live. He opens a project, reads a report an agent drafted, accepts or rejects
-its edits, checks a database view, looks at progress, and asks an agent (any
-engine) to take the next thing, from the panel or the HUD, by voice if he
-likes. He closes the laptop. Work continues on schedule. Tomorrow it is waiting
-in Needs Me.
+midday. A workspace database section or kanban row holds any work requiring
+him; he may later choose to design a widget over that data. He answers decisions
+where they live. He opens a project, reads a report an agent drafted, accepts or
+rejects its edits, checks a database view, looks at progress, and asks an agent
+(any engine) to take the next thing, from the panel or the HUD, by voice if he
+likes. He closes the laptop. Work continues on schedule and leaves ordinary
+workflow records and kanban data behind.
 
 That scene is done when all of these are true:
 
@@ -89,11 +90,11 @@ done.
 Written from `PRODUCT.md`. Adam edits this until it is what he actually does;
 then it is the test. Each line is one thing to do and one thing to see.
 
-1. Open the app at midday. Needs Me shows a count in the sidebar.
-2. Open Needs Me. Each row says what is asked, which agent asked, where it
-   came from, how long it has waited.
-3. Answer one. It opens where the decision lives (the document, the card,
-   the room) and the count drops by one.
+1. Open the app at midday. Home shows only views Adam chose to pin.
+2. Open the workspace database section or kanban board Adam uses for work
+   requiring him. Each item remains ordinary data, not a special app object.
+3. Answer one at the place the decision lives: the document, card, room, or
+   active conversation.
 4. Open a project in the tree. The center shows its Files, Board, Data and
    Sessions.
 5. Open a report an agent drafted. Its proposed edits show as hunks. Accept
@@ -101,9 +102,10 @@ then it is the test. Each line is one thing to do and one thing to see.
 6. Open a database view from the sidebar. The numbers are today's.
 7. Look at Home. It shows only what Adam or an agent put there.
 8. From the panel, ask any agent, on any engine, to take the next task. Its
-   reply streams. If it needs permission, that appears in Needs Me.
+   reply streams. If it needs permission, answer it inline in that conversation.
 9. Eject the panel, shrink it to the HUD, say the same request by voice.
-10. Close the laptop. Tomorrow, the scheduled work shows in Needs Me.
+10. Close the laptop. Tomorrow, the scheduled run and optional kanban cards
+    show what happened.
 
 ## Still to decide
 
@@ -112,7 +114,7 @@ Decided with the code open, at the stage that needs it. Not before.
 | Decision | Whose | When | Recommendation |
 |---|---|---|---|
 | The acceptance script: the exact steps of Adam's midday pass | Claude drafts, Adam corrects | Before Phase 0.3 | Drafted from `PRODUCT.md`; Adam edits it until it is what he actually does. |
-| How an agent asks permission (its own prompt or the app's) | Claude | Phase B.5 | Every request, whichever engine raised it, appears in Needs Me the same way. Engineering call. |
+| How an agent asks permission (its own prompt or the app's) | Claude | Phase B.5 | Every request stays in the conversation, room, document, or card that raised it. No global queue. |
 | Gateway polling vs events for room members; plugin entry format | Claude | B.7, D.12 | Engineering calls. |
 
 Settled by Adam, 2026-09-01: **no hard-coded Home widgets** (Home ships empty;
@@ -257,9 +259,11 @@ spec per stage, written the morning it starts, not before.
 7. **Rooms.** Vendor the bot-mode engine with the two-function adapter. A room
    holds Hermes profiles and ACP agents together. *Open it: a room of a Hermes profile
    and Claude Code answering one question.*
-8. **Needs me.** One list: pending approvals, clarifications, rooms flagged
-   `@user`, blocked kanban cards, failed cron runs. Sidebar count, dock badge,
-   native notification. Donor: `SPEC-v8.md` sources, Hermes `$groupNeedsYou`.
+8. **Attention stays data.** Do not build a first-party "Needs me" page,
+   widget, plugin, counter, dock badge, notification system, or source
+   aggregator. Work that needs Adam is an ordinary workspace database section
+   or kanban row. Adam may later ask an agent to design a widget or plugin over
+   that data using the generic plugin contract.
 
 ### Phase C — the panel you designed (about 3 days)
 
@@ -277,11 +281,12 @@ spec per stage, written the morning it starts, not before.
     plus our own entry `intellizen/plugin.js`. It may contribute: a route, a
     sidebar entry, a Home widget, a palette command, a panel action. Loaded
     at boot and on file change; a broken plugin fails alone.
-13. **Needs me becomes the first plugin,** proving the contract on something
-    real.
-14. **An agent writes a plugin.** A tool in our MCP server authors a widget;
-    it lands in Needs me for approval; approval loads it. *Open it: ask any agent
-    for a widget showing this week's blocked cards, approve it, see it.*
+13. **Prove the generic contract.** Use the local fixture and a deliberately
+    installed sample plugin. Do not ship a first-party attention plugin.
+14. **An agent writes a plugin when asked.** Track the work and approval as an
+    ordinary database or kanban item; explicit approval installs it. Do not add
+    a plugin-specific inbox or hard-coded approval destination. *Open it: ask
+    an agent for a widget, approve its installation, see it.*
 15. **Charts.** Install the ui.bklit.com registry components on the existing
     visx layer so widgets and reports share one chart kit.
 
@@ -290,7 +295,8 @@ spec per stage, written the morning it starts, not before.
 16. **Proposals.** An agent's edit to a doc arrives as hunks to accept or
     reject. Donor: `proposals.rs`, `Proposal.tsx`.
 17. **Unattended runs.** Workflows page can schedule a run through Hermes
-    cron and dispatch cards through kanban; results appear in Needs me.
+    cron and dispatch cards through kanban; results remain ordinary workflow
+    records and kanban data.
 18. **Relationship graph in reports.** The Graph view exports to an image or
     block that Docs can embed.
 
@@ -298,7 +304,7 @@ spec per stage, written the morning it starts, not before.
 
 1. See what you see: the page and record in front of you.
 2. Write into the workspace with a receipt, through the MCP server.
-3. Ask before anything consequential, and wait for you in Needs me.
+3. Ask before anything consequential, at the work's existing approval point.
 4. Keep working while you are away, on a schedule or a board.
 5. Build a widget or plugin for you, approved before it loads.
 6. Hand work to another agent, in a room or across a board.
@@ -308,6 +314,8 @@ spec per stage, written the morning it starts, not before.
 - A second engine of any kind. If Hermes has it, we show it.
 - Scraping CLI output. Structured doors only: gateway, REST, ACP, MCP.
 - A sandbox, a marketplace, or remote plugin code.
+- A built-in attention inbox, badge, or notification service. Attention is
+  workspace data unless Adam explicitly commissions a plugin later.
 - Porting anything for parity's sake. A surface moves when a stage needs it.
 - Long specs. One page per stage. The audit found 45,000 words of spec
   against 33,000 lines of code; that ratio does not repeat.

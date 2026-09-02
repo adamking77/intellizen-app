@@ -394,7 +394,7 @@ export function AgentEditor({
               </div>
             ) : null}
 
-            <div className="flex items-center gap-2 px-[22px] pb-5 pt-[18px]">
+            <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[var(--raised)] px-[22px] pb-5 pt-[18px]">
               {!creating ? (
                 <button
                   type="button"

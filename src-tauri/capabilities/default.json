@@ -24,6 +24,7 @@
     "core:webview:allow-create-webview-window",
     "opener:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     {
       "identifier": "opener:allow-open-path",
       "allow": [
@@ -41,6 +42,8 @@
     "fs:allow-read-file",
     "fs:allow-read-text-file",
     "fs:allow-write-file",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
     "fs:allow-create",
     "fs:allow-mkdir",
     "fs:allow-remove",

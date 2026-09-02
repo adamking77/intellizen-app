@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowUpRight,
+  CalendarClock,
   CheckCircle2,
   FileText,
   Loader2,
@@ -27,6 +28,7 @@ import { useAppStore } from "@/store";
 import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
 import { WorkflowDefinitionDriftPanel } from "@/components/workflows/workflow-definition-drift-panel";
 import { WorkflowTopology } from "@/components/workflows/workflow-topology";
+import { ScheduleSheet } from "@/components/workflows/schedule-sheet";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
 import {
   buildWorkflowCatalog,
@@ -199,6 +201,7 @@ export function WorkflowsView() {
   const [driftResolution, setDriftResolution] =
     useState<WorkflowDriftResolution | null>(null);
   const [migrationReviewOpen, setMigrationReviewOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const workflowQuery = useQuery({
     queryKey: ["workflow-registry", "screen", entityFilter, ownerFilter],
@@ -605,6 +608,18 @@ export function WorkflowsView() {
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {selectedItem?.executable ? (
+                      <Button
+                        disabled={!selectedItem.runnable}
+                        onClick={() => setScheduleOpen(true)}
+                        size="sm"
+                        title={selectedItem.runnable ? "Schedule this workflow" : "Resolve the listed blockers before scheduling"}
+                        variant="outline"
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        Schedule
+                      </Button>
+                    ) : null}
+                    {selectedItem?.executable ? (
                       <Button size="sm" variant="outline" onClick={() => {
                         setDesignerSeed(null);
                         setDesignerOpen(true);
@@ -875,6 +890,14 @@ export function WorkflowsView() {
           </dl>
         ) : null}
       </AppDialog>
+      {selected && selectedItem?.definition ? (
+        <ScheduleSheet
+          definition={selectedItem.definition}
+          onOpenChange={setScheduleOpen}
+          open={scheduleOpen}
+          workflow={selected}
+        />
+      ) : null}
     </div>
   );
 }

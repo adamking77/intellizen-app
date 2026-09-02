@@ -88,10 +88,10 @@ export function TargetPicker({
       className="absolute left-0 top-8 z-30 flex max-h-[340px] min-w-[208px] max-w-[264px] flex-col gap-px overflow-y-auto rounded-xl bg-[var(--raised)] p-[5px] shadow-[var(--shadow-elevated)]"
     >
       <div className="px-2 pb-1 pt-[7px] font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
-        Profiles
+        Agents
       </div>
       {profiles.length === 0 ? (
-        <div className="px-2 py-1.5 font-ui text-[12px] text-[var(--text-muted)]">No profiles listed.</div>
+        <div className="px-2 py-1.5 font-ui text-[12px] text-[var(--text-muted)]">No agents listed.</div>
       ) : null}
       {profiles.map((p, i) => {
         const selected = p.name === target;

@@ -41,7 +41,7 @@ import {
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
 import { toast } from "@/lib/toast";
-import { PluginWidgetMenuItems } from "@/plugins/home-widgets";
+import { PluginWidgetBoard, PluginWidgetMenuItems } from "@/plugins/home-widgets";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -380,6 +380,7 @@ export function HomeView() {
               </div>
             ) : null}
           </div>
+          <PluginWidgetBoard />
           {isLoading || isLoadingPins ? (
             <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
               <Loader2 className="h-4 w-4 animate-spin" />
