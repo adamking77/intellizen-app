@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppearanceSection } from "@/components/settings/appearance";
+import { VoiceSettings } from "@/components/settings/voice-settings";
 import { Button } from "@/components/ui/button";
 import {
   PANEL_SPEAK_REPLIES_KEY,
@@ -45,6 +46,7 @@ const SECTIONS = [
   { id: "runtimes", label: "Runtimes" },
   { id: "defaults", label: "Defaults" },
   { id: "appearance", label: "Appearance" },
+  { id: "voice", label: "Voice" },
   { id: "worker-access", label: "Worker access" },
   { id: "connections", label: "Connections" },
   { id: "diagnostics", label: "Diagnostics" },
@@ -351,6 +353,8 @@ export function SettingsView() {
           ) : null}
 
           {section === "appearance" ? <AppearanceSection /> : null}
+
+          {section === "voice" ? <VoiceSettings /> : null}
 
           {section === "worker-access" ? (
             <div className="space-y-4">{(runtimeQuery.data ?? []).map((runtime) => <section key={runtime.bindingId} className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5"><h2 className="font-ui text-sm font-semibold text-[var(--text)]">{runtime.label}</h2><dl className="mt-4 grid gap-3 font-mono text-[11px] md:grid-cols-2"><div><dt className="text-[var(--overlay-1)]">Profile</dt><dd className="mt-1 break-all text-[var(--subtext-0)]">{runtime.discovery.workerProfileHome}</dd></div><div><dt className="text-[var(--overlay-1)]">Permission mode</dt><dd className="mt-1 text-[var(--subtext-0)]">{runtime.binding?.providerPermissionMode ?? "No binding"}</dd></div><div><dt className="text-[var(--overlay-1)]">Working-directory grants</dt><dd className="mt-1 text-[var(--subtext-0)]">{runtime.binding?.workingDirGrants.join(", ") ?? "None"}</dd></div><div><dt className="text-[var(--overlay-1)]">Environment</dt><dd className="mt-1 text-[var(--subtext-0)]">sanitized · worker MCP only · secrets by reference</dd></div></dl></section>)}</div>

@@ -9,6 +9,7 @@ mod runtime_auth;
 mod runtime_bindings;
 mod runtimes;
 mod supabase_proxy;
+mod voice;
 
 const EXA_API_BASE: &str = "https://api.exa.ai";
 const EXA_SEARCH_CONTENTS: &str = "/search";
@@ -496,6 +497,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(engine::EngineState::default())
+        .manage(voice::VoiceState::default())
         .register_uri_scheme_protocol("genui", |_ctx, _request| {
             tauri::http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
@@ -515,7 +517,12 @@ pub fn run() {
             runtimes::runtime_run,
             runtimes::runtime_cancel,
             runtimes::runtime_discover_codex,
-            runtimes::runtime_discover_claude
+            runtimes::runtime_discover_claude,
+            voice::voice_speak,
+            voice::voice_stop,
+            voice::voice_transcribe,
+            voice::voice_models,
+            voice::voice_of_profile
         ])
         .on_window_event(|window, event| {
             // macOS convention: closing the main window hides it; the app
