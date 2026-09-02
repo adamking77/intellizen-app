@@ -247,6 +247,39 @@ spec per stage, written the morning it starts, not before.
    command that needs approval, approve it.*
 4. **The parity test and the pin.**
 
+### Wave 1 status — stages 5 to 18 (merged 2026-09-03)
+
+> **Built and merged, awaiting Adam's walk.** Every stage from B.5 to E.18
+> was built in parallel by eleven builders (`docs/stages/wave-1.md`,
+> `docs/stages/wave-1-spec.md`) and merged on `v3/phase-0` at `d912421`.
+> Checks green on the combined tree: file sizes, product contracts, tsc,
+> 423 tests, clippy. Not yet walked by Adam; not pushed. **Do not rebuild
+> these stages.** Pick up only the items below.
+
+**Remaining work, in order. Each item is one builder's job.**
+
+1. **Loose ends from the wave.** Three `// wave-1: ... wires this` markers
+   remain: `src/engine/acp-session.ts` (panel target picker yields an ACP
+   target), `src/views/Agents.tsx` (the Agents page opens the real panel,
+   not a synthetic shortcut), `src/components/agents/teams-store.ts`
+   (teams persist under `$APPDATA`). Wire them.
+2. **Removals.** `src-tauri/src/runtimes.rs`, `runtime_bindings.rs`,
+   `runtime_auth.rs` and their callers in `src/services/` still exist. Delete
+   them; the ACP door replaces them. `hermes.rs` is already gone.
+3. **D.13.** Prove the plugin contract with a deliberately installed local
+   fixture plugin: route, sidebar entry, Home widget, palette command, panel
+   action, and a broken plugin failing alone.
+4. **Fidelity pass.** Side-by-side screenshots against the donor for every
+   surface in the "Design fidelity and feedback" table, fixes applied.
+5. **Adam's walk** of wave 1 in one sitting, feedback applied.
+6. **Done list.** Intel records present as case projects; `hermes-app`
+   archived; `pnpm smoke` green; parity test green at the pin; built `.app`
+   and DMG by the release rule; the acceptance script run on three days.
+
+Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
+first. It is binding. Commit on your own branch, never push, report what
+the overseer must wire.
+
 ### Phase B — many agents (about 4 days)
 
 5. **The roster.** Agents page lists Hermes profiles (from `profiles.list`) and
