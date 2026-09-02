@@ -28,7 +28,7 @@ const InvestigationView = lazyNamed(
 );
 const ReportsView = lazyNamed(() => import("@/views/Reports"), "ReportsView");
 const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView");
-const TeamView = lazyNamed(() => import("@/views/Team"), "TeamView");
+const AgentsView = lazyNamed(() => import("@/views/Agents"), "AgentsView"); // wave-1 agents-page
 const UnitView = lazyNamed(() => import("@/views/Unit"), "UnitView");
 const ProjectView = lazyNamed(() => import("@/views/Project"), "ProjectView");
 
@@ -100,13 +100,14 @@ function App() {
           />
           <Route path="/roles" element={<Navigate to="/home" replace />} />
           <Route
-            path="/team"
+            path="/agents"
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
-                <TeamView />
+                <AgentsView />
               </Suspense>
             }
           />
+          <Route path="/team" element={<Navigate to="/agents" replace />} />
           <Route path="/monitors" element={<Navigate to="/home" replace />} />
           <Route
             path="/graph"

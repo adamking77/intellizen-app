@@ -20,6 +20,12 @@ export const GATEWAY_METHODS = [
   // `gateway.ping` heartbeat is answered inside ws.py, not by a @method, and
   // the client is copied from the same pin, so it is not listed.)
   "session.events.since",
+  // wave-1 agents-page: the profile editor (tui_gateway/methods_profiles.py).
+  "profiles.describe",
+  "profiles.configure",
+  "profiles.create",
+  "profiles.get_asset",
+  "profiles.set_asset",
 ] as const;
 
 export type GatewayMethod = (typeof GATEWAY_METHODS)[number];

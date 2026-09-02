@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Search", to: "/search", key: "search", icon: Search },
   { label: "Workflows", to: "/workflows", key: "workflows", icon: Workflow },
-  { label: "Team", to: "/team", key: "team", icon: UsersRound },
+  { label: "Agents", to: "/agents", key: "agents", icon: UsersRound }, // wave-1 agents-page: Agents replaces Team
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
