@@ -17,14 +17,10 @@ import {
 
 import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
 import { WorkspaceTree } from "@/components/layout/workspace-tree";
+import { describeEngine, deriveEngineTag, useEngineStore, type EngineTag } from "@/engine/engine-store";
 import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
-import { deriveSystemHealth } from "@/lib/runtime-catalog";
-import {
-  inspectRuntimeCatalog,
-  inspectSettingsConnections,
-} from "@/services/runtime-catalog";
 import { useAppStore } from "@/store";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
@@ -45,6 +41,17 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const APP_VERSION = "v0.4.0";
+// Donor: hermes-app tokens.css `.tag` / `.tag.ok` — 11px, 1px 8px, pill.
+const ENGINE_TAG_CLASS: Record<EngineTag, string> = {
+  connected: "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]",
+  "starting…": "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--subtext-0)]",
+  offline: "bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-[var(--danger)]",
+};
+const ENGINE_DOT_CLASS: Record<EngineTag, string> = {
+  connected: "bg-[var(--success)]",
+  "starting…": "bg-[var(--subtext-0)]",
+  offline: "bg-[var(--danger)]",
+};
 const STORAGE_KEY = "intelizen:sidebar-collapsed";
 const WIDTH_EXPANDED = 216;
 const WIDTH_COLLAPSED = 56;
@@ -71,21 +78,11 @@ export function Sidebar() {
   const { isCramped } = useWindowSize();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
-  const runtimeQuery = useQuery({
-    queryKey: ["settings-runtime-catalog"],
-    queryFn: inspectRuntimeCatalog,
-    staleTime: 15_000,
-  });
-  const connectionQuery = useQuery({
-    queryKey: ["settings-connections"],
-    queryFn: inspectSettingsConnections,
-    staleTime: 15_000,
-  });
-  const health = deriveSystemHealth({
-    runtimes: runtimeQuery.data,
-    connections: connectionQuery.data,
-    loading: runtimeQuery.isLoading || connectionQuery.isLoading,
-  });
+  const engineConnection = useEngineStore((state) => state.connection);
+  const engineInfo = useEngineStore((state) => state.info);
+  const engineError = useEngineStore((state) => state.error);
+  const engineTag = deriveEngineTag({ connection: engineConnection, error: engineError });
+  const engineTitle = `${describeEngine({ connection: engineConnection, info: engineInfo, error: engineError })} · IntelliZen ${APP_VERSION}`;
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
 
@@ -235,35 +232,40 @@ export function Sidebar() {
           <NavLink
             to="/settings?section=runtimes"
             aria-label="Open settings"
-            title={health.label}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          ><Settings className="h-4 w-4" /></NavLink>
+            title={engineTitle}
+            className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+          >
+            <Settings className="h-4 w-4" />
+            <span
+              aria-hidden
+              className={cn(
+                "absolute right-1 top-1 h-1.5 w-1.5 rounded-full ring-2 ring-[var(--mantle)]",
+                ENGINE_DOT_CLASS[engineTag],
+              )}
+            />
+          </NavLink>
         ) : (
           <>
             <NavLink
               to="/settings?section=runtimes"
               aria-label="Open settings"
-              title="Open settings"
-              className="flex items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"
+              title={engineTitle}
+              className="flex min-w-0 items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"
             >
               <span
-                aria-hidden
                 className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  health.state === "ready"
-                    ? "bg-[var(--success)]"
-                    : health.state === "checking"
-                      ? "bg-[var(--overlay-1)]"
-                      : "bg-[var(--warning)]",
+                  "shrink-0 whitespace-nowrap rounded-full px-2 py-px font-ui text-[11px] leading-4",
+                  ENGINE_TAG_CLASS[engineTag],
                 )}
-              />
-              <span className="font-ui text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--overlay-1)]">
-                {health.label}
+              >
+                {engineTag}
               </span>
+              {engineTag === "connected" && engineInfo ? (
+                <span className="truncate font-mono text-[10px] text-[var(--overlay-1)]">
+                  {engineInfo.version} · :{engineInfo.port}
+                </span>
+              ) : null}
             </NavLink>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
-              {APP_VERSION}
-            </span>
           </>
         )}
       </div>

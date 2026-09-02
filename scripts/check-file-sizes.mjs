@@ -18,7 +18,6 @@ const legacyBudgets = new Map(
     "src/components/database/DatabasePeekPanel.tsx": 1317,
     "src/components/database/DatabaseTableView.tsx": 1124,
     "src/components/database/ViewTabBar.tsx": 1549,
-    "src/components/layout/agent-panel.tsx": 1618,
     "src/lib/data.ts": 5427,
     "src/lib/database-core.ts": 1077,
     "src/services/workflow-runner.ts": 1199,

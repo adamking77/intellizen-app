@@ -223,6 +223,15 @@ spec per stage, written the morning it starts, not before.
 
 ### Phase A — the engine door (about 3 days)
 
+> **Built 2026-09-02, awaiting Adam's walk.** Branch `v3/phase-0`, nothing
+> committed. Spec: `docs/stages/phase-a.md`. Checks green: file sizes, tsc,
+> 352 tests, clippy, parity test against pin `21b2095d`. Seen by the
+> overseer in builder screenshots: footer `connected · 0.21.0 · :60780`,
+> `default` running `date` with a settled tool row and reply, the approval
+> card for `rm -rf` with the four real choices, and the card settling after
+> Allow once. **Adam walked all three Open-it lines 2026-09-02 evening and
+> they passed.**
+
 1. **Spawn and attach.** The app starts `hermes serve` with a token it chose,
    or attaches to one already running, and shows engine status in the status
    bar. Copy the gateway client in. *Open it: the status bar says which Hermes

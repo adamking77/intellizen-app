@@ -4,7 +4,7 @@ use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-mod hermes;
+mod engine;
 mod runtime_auth;
 mod runtime_bindings;
 mod runtimes;
@@ -495,6 +495,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(engine::EngineState::default())
         .register_uri_scheme_protocol("genui", |_ctx, _request| {
             tauri::http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
@@ -503,13 +504,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
-            hermes::hermes_check_api,
-            hermes::hermes_stream_chat,
-            hermes::hermes_cancel_stream,
-            hermes::hermes_run_start,
-            hermes::hermes_run_status,
-            hermes::hermes_check_gateway,
-            hermes::hermes_gateway_submit,
+            engine::engine_start,
+            engine::engine_reset,
+            engine::engine_stop,
             supabase_proxy::supabase_proxy_request,
             runtime_bindings::runtime_bindings_list,
             runtime_bindings::runtime_bindings_upsert,
@@ -534,6 +531,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            // Kill the hermes serve we spawned; never one we attached to.
+            if let tauri::RunEvent::Exit = event {
+                engine::shutdown(app_handle);
+            }
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 use tauri::Manager;

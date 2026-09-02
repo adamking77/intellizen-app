@@ -28,7 +28,9 @@ import {
   prepareRuntimeAssignment,
   runRuntime,
 } from "@/services/runtimes";
-import { executeHermesRun as runHermesWorkflowAssignment } from "@/services/agent";
+import { getGatewayClient } from "@/engine/gateway";
+import { runPrompt } from "@/engine/session";
+import { workflowDispatchPrompt } from "@/services/agent";
 import {
   WorkflowDispatchCoordinator,
   WorkflowDispatchError,
@@ -45,6 +47,19 @@ type WorkspaceRoleRecord = {
 };
 
 const productionCoordinator = new WorkflowDispatchCoordinator();
+
+const HERMES_PROFILE_HOME_PREFIX = "provider-managed:";
+
+/** The Hermes profile a binding runs on (`workerProfileHome:
+ *  "provider-managed:<profile>"`), or "default" when it names none. */
+export function hermesBindingProfile(binding: Pick<RuntimeBinding, "workerProfileHome">): string {
+  const home = binding.workerProfileHome ?? "";
+  if (home.startsWith(HERMES_PROFILE_HOME_PREFIX)) {
+    const profile = home.slice(HERMES_PROFILE_HOME_PREFIX.length).trim();
+    if (profile) return profile;
+  }
+  return "default";
+}
 
 function fieldString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -422,17 +437,22 @@ async function productionPort(
       const binding = bindingsById.get(assignment.selectedBinding);
       if (binding?.adapterId === "hermes") {
         try {
-          const runtime = await runHermesWorkflowAssignment({
-            prompt: workflowPrompt({ renderedContext, step }),
-            instructions:
-              "Execute one bounded internal IntelliZen workflow assignment. Stay inside the supplied envelope.",
+          // One turn through the gateway on the binding's profile. The
+          // session id is the run's durable handle; Hermes keeps the history.
+          const turn = await runPrompt(getGatewayClient(), {
+            profile: hermesBindingProfile(binding),
+            text: workflowDispatchPrompt({
+              instructions:
+                "Execute one bounded internal IntelliZen workflow assignment. Stay inside the supplied envelope.",
+              prompt: workflowPrompt({ renderedContext, step }),
+            }),
             timeoutMs: step.timeoutMinutes * 60_000,
             signal,
           });
           return {
-            sessionId: runtime.runId,
-            result: parseStructuredResult(runtime.output),
-            usage: runtime.usage,
+            sessionId: turn.sessionId,
+            result: parseStructuredResult(turn.text),
+            usage: null,
           };
         } catch (error) {
           throw new WorkflowDispatchError({

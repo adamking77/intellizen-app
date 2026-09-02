@@ -1,7 +1,7 @@
 import { buildRuntimeCatalog, type ConnectionFact } from "@/lib/runtime-catalog";
 import { supabase } from "@/lib/supabase";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
-import { checkHermesHostApi, checkHermesHostGateway } from "@/services/hermes-host";
+import { useEngineStore } from "@/engine/engine-store";
 import {
   effectiveRuntimeBindings,
   listRuntimeBindings,
@@ -51,8 +51,13 @@ export async function inspectSettingsConnections(): Promise<ConnectionFact[]> {
       "Workspace read plane responded.",
       "Workspace read plane did not respond.",
     ),
-    connectionFact("hermes-api", "Hermes API", checkHermesHostApi, "Local host API responded.", "Local host API is unavailable."),
-    connectionFact("hermes-gateway", "Hermes gateway", checkHermesHostGateway, "Local gateway responded.", "Local gateway is unavailable."),
+    connectionFact(
+      "hermes-gateway",
+      "Hermes engine",
+      async () => useEngineStore.getState().connection === "open",
+      "Connected to the Hermes gateway.",
+      useEngineStore.getState().error ?? "The Hermes gateway is not connected.",
+    ),
     connectionFact(
       "local-mcp",
       "IntelliZen local MCP",

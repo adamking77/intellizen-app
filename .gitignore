@@ -42,3 +42,4 @@ shell-*.png
 docs-*.png
 .playwright-mcp/
 audit-evidence/
+!docs/stages/phase-*.md

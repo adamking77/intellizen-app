@@ -223,7 +223,7 @@ ANALYSE
 - Active: `--text`, 2px Accent left-bar flush against item (inside the item's left padding), no background fill
 - Focus-visible: 1px `--accent-border` ring, 4px radius
 
-**Footer** — 1px `--border` top divider, 12px padding. Single status line: 2px Success dot + "Systems nominal" in Satoshi 10px 500 uppercase `--overlay-1` tracking-[0.15em]. Version `v0.4.x` right-aligned, Geist Mono 10px `--overlay-1`.
+**Footer** (2026-09-02, engine door) — 1px `--border` top divider, 40px tall, 16px side padding. Left: the donor tag (hermes-app `tokens.css` `.tag`): lowercase, 11px, pill, `1px 8px` padding, reading `connected` (Success at 14% mix, Success text), `starting…` (`--text` at 10% mix, `--subtext-0` text) or `offline` (Danger at 14% mix, Danger text); beside it, when connected, `<hermes version> · :<port>` in Geist Mono 10px `--overlay-1`, truncating before the tag ever does. The whole row links to Settings; its tooltip carries the engine URL, pid, spawned or attached, and the app version. Collapsed rail: the Settings glyph with a 6px dot in the same three colours and the same tooltip.
 
 ### Sidebar workspace tree (2026-09-02)
 

@@ -1,14 +1,10 @@
+import { getGatewayClient } from "@/engine/gateway";
+import { defaultProfile, listProfiles, type HermesProfile } from "@/engine/profiles";
+import { createSession, submitPrompt } from "@/engine/session";
 import { supabase } from "@/lib/supabase";
-import { hermesDashboardConfigured, hermesDashboardFetch } from "@/services/voice";
 import type { GraphEntityType } from "@/lib/types";
-import {
-  checkHermesHostApi,
-  checkHermesHostGateway,
-  getHermesHostRunStatus,
-  startHermesHostRun,
-  streamHermesHostChat,
-  submitHermesHostGateway,
-} from "@/services/hermes-host";
+
+export type { HermesProfile } from "@/engine/profiles";
 
 export interface AgentContext {
   type: string;
@@ -24,20 +20,13 @@ export interface AgentWorkflowInput {
   priority?: "low" | "normal" | "high" | "urgent";
   config?: Record<string, unknown>;
   prompt?: string;
-}
-
-export interface AgentChatInput {
-  message: string;
-  targetAgent: string;
-  /** Hermes profile to route through (profile-scoped webhook). */
+  /** Hermes profile to run on. Defaults to the profile Hermes marks default. */
   profile?: string | null;
-  context: AgentContext;
-  submit?: boolean;
-  priority?: "low" | "normal" | "high" | "urgent";
 }
 
 export interface AgentSubmission {
   status: "submitted" | "queued";
+  /** The gateway session the prompt was submitted to. */
   messageId?: string;
   inboxItemId?: string;
   /** Why gateway dispatch failed when the message fell back to the inbox queue. */
@@ -49,165 +38,9 @@ export interface GraphExtractionOutput {
   relationships: Array<{ source: string; target: string; relation: string }>;
 }
 
-export interface HermesProfile {
-  name: string;
-  isDefault: boolean;
-  model: string | null;
-  provider: string | null;
-  gatewayRunning: boolean;
-  description: string;
-}
-
-// The webhook gateway currently running is Fiona's profile-scoped instance;
-// used as the known profile when the dashboard (profile catalog) is offline.
-export const DEFAULT_HERMES_PROFILE = "fiona";
-
-// ── Hermes API server (OpenAI-compatible, streaming) ───────────────────────
-
-/** True when the streaming chat API is configured and reachable. */
-export async function checkHermesApi(): Promise<boolean> {
-  try {
-    return await checkHermesHostApi();
-  } catch {
-    return false;
-  }
-}
-
-export interface HermesStreamResult {
-  text: string;
-  sessionId: string | null;
-}
-
-export interface HermesChatTurn {
-  role: "user" | "assistant";
-  content: string;
-}
-
-export interface HermesRunExecution {
-  runId: string;
-  output: string;
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-  } | null;
-}
-
-/**
- * Stream a chat turn from Hermes over /v1/chat/completions (SSE).
- * Continuity is stateless via the messages array (the X-Hermes-Session-Id
- * header is not in the server's CORS allow-list, so browsers cannot send it
- * — upstream Hermes gap; revisit when Access-Control-Allow-Headers grows).
- */
-export async function streamHermesChat(input: {
-  message: string;
-  history?: HermesChatTurn[];
-  systemPrompt?: string;
-  onDelta: (text: string) => void;
-  signal?: AbortSignal;
-}): Promise<HermesStreamResult> {
-  return streamHermesHostChat(input);
-}
-
-function waitForHermesPoll(signal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timeout);
-      signal?.removeEventListener("abort", onAbort);
-      reject(new DOMException("Hermes run was cancelled.", "AbortError"));
-    };
-    const timeout = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, 1_000);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-export async function executeHermesRun(input: {
-  prompt: string;
-  instructions: string;
-  timeoutMs: number;
-  signal?: AbortSignal;
-}): Promise<HermesRunExecution> {
-  const started = await startHermesHostRun({
-    prompt: input.prompt,
-    instructions: input.instructions,
-  });
-
-  const deadline = Date.now() + input.timeoutMs;
-  while (Date.now() < deadline) {
-    if (input.signal?.aborted) {
-      throw new DOMException("Hermes run was cancelled.", "AbortError");
-    }
-    await waitForHermesPoll(input.signal);
-    const status = await getHermesHostRunStatus(started.runId);
-    if (status.status === "completed") {
-      return {
-        runId: started.runId,
-        output: status.output ?? "",
-        usage: status.usage
-          ? {
-              inputTokens: status.usage.inputTokens,
-              outputTokens: status.usage.outputTokens,
-            }
-          : null,
-      };
-    }
-    if (
-      status.status &&
-      ["failed", "cancelled", "waiting_for_approval"].includes(status.status)
-    ) {
-      throw new Error(
-        `Hermes run ended as ${status.status}: ${status.error ?? "no detail"}`,
-      );
-    }
-    if (!status.status || status.status === "unknown") {
-      throw new Error(
-        `Hermes run ${started.runId} returned an unknown status${
-          status.error ? `: ${status.error}` : "."
-        }`,
-      );
-    }
-  }
-  throw new Error("Hermes run did not reach a terminal state before timeout.");
-}
-
-/**
- * Health-check the Hermes webhook gateway — the transport chat actually
- * uses. A 2xx on the CORS preflight means direct dispatch will succeed.
- */
-export async function checkHermesGateway(): Promise<boolean> {
-  try {
-    return await checkHermesHostGateway();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * List Hermes profiles from the local dashboard. Throwing (unreachable or
- * unconfigured) means the panel falls back to the running gateway profile.
- */
+/** Hermes profiles, from the connected engine. Throws while it is offline. */
 export async function fetchHermesProfiles(): Promise<HermesProfile[]> {
-  if (!hermesDashboardConfigured()) throw new Error("Hermes dashboard URL is not configured.");
-  const res = await hermesDashboardFetch("/api/profiles");
-  if (!res.ok) throw new Error(`Hermes profiles failed (${res.status})`);
-  const payload = (await res.json()) as { profiles?: Array<Record<string, unknown>> };
-  return (payload.profiles ?? [])
-    .filter((profile) => typeof profile.name === "string" && profile.name)
-    .map((profile) => ({
-      name: profile.name as string,
-      isDefault: profile.is_default === true,
-      model: typeof profile.model === "string" ? profile.model : null,
-      provider: typeof profile.provider === "string" ? profile.provider : null,
-      gatewayRunning: profile.gateway_running === true,
-      description: typeof profile.description === "string" ? profile.description : "",
-    }));
-}
-
-function randomDeliveryId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `intellizen-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return listProfiles(getGatewayClient());
 }
 
 function workflowPayload(input: AgentWorkflowInput) {
@@ -223,18 +56,15 @@ function workflowPayload(input: AgentWorkflowInput) {
   };
 }
 
-function agentChatPayload(input: AgentChatInput & { message: string }) {
-  return {
-    source: "intelizen",
-    kind: "chat_message",
-    action: "send_message",
-    target_agent: input.targetAgent,
-    profile: input.profile ?? null,
-    message: input.message,
-    submit: input.submit ?? true,
-    context: input.context,
-    priority: input.priority ?? "normal",
-  };
+/** The prompt a workflow dispatch hands the profile. The payload travels
+ *  whole so the agent's receipts can name the run and its records. */
+export function workflowDispatchPrompt(payload: Record<string, unknown>): string {
+  return [
+    "IntelliZen workflow dispatch. Follow the payload's prompt and context; keep writes bounded to the referenced workflow_run_id and linked records; append receipts for every state change; request approval before anything external-facing or irreversible.",
+    "",
+    "Payload:",
+    JSON.stringify(payload, null, 2),
+  ].join("\n");
 }
 
 async function enqueueFionaInbox(input: {
@@ -260,83 +90,37 @@ async function enqueueFionaInbox(input: {
   return data.id as string;
 }
 
-async function submitHermesPayload(input: {
-  event: "intellizen.workflow" | "intellizen.chat";
-  payload: Record<string, unknown>;
-  profile?: string | null;
-}) {
-  return (await submitHermesHostGateway({
-    event: input.event,
-    payload: input.payload,
-    profile: input.profile,
-    deliveryId: randomDeliveryId(),
-  })) as {
-    message_id?: string;
-    messageId?: string;
-    delivery_id?: string;
-    deliveryId?: string;
-  };
-}
-
 function dispatchErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Dispatch a workflow through the API server run queue (/v1/runs). */
-async function submitHermesRun(payload: Record<string, unknown>): Promise<string> {
-  const run = await startHermesHostRun({
-    prompt: `IntelliZen workflow dispatch. Follow the payload's prompt and context; keep writes bounded to the referenced workflow_run_id and linked records; append receipts for every state change; request approval before anything external-facing or irreversible.\n\nPayload:\n${JSON.stringify(payload, null, 2)}`,
-  });
-  return run.runId;
+/** Open a session on the profile and submit the prompt without waiting for
+ *  the turn. Resolves with the session id. */
+async function dispatchThroughGateway(profile: string | null | undefined, prompt: string) {
+  const client = getGatewayClient();
+  let target = profile?.trim() || null;
+  if (!target) {
+    const profiles = await listProfiles(client);
+    target = defaultProfile(profiles)?.name ?? null;
+  }
+  if (!target) throw new Error("Hermes listed no profiles to dispatch to.");
+  const sessionId = await createSession(client, { profile: target });
+  await submitPrompt(client, sessionId, prompt);
+  return sessionId;
 }
 
+/** Dispatch a workflow to a Hermes profile through the gateway. When the
+ *  engine cannot take it, the work is queued durably in Fiona's inbox. */
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {
   const payload = workflowPayload(input);
-  // Preferred transport: API server run queue (has CORS + receipts via
-  // Fiona's runtime). Webhook second, durable inbox last.
   try {
-    const runId = await submitHermesRun(payload);
-    return { status: "submitted", messageId: runId };
-  } catch (apiError) {
-    console.warn(`Hermes /v1/runs dispatch unavailable, trying webhook: ${dispatchErrorMessage(apiError)}`);
-  }
-  try {
-    const result = await submitHermesPayload({ event: "intellizen.workflow", payload });
-    return {
-      status: "submitted",
-      messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
-    };
+    const sessionId = await dispatchThroughGateway(input.profile, workflowDispatchPrompt(payload));
+    return { status: "submitted", messageId: sessionId };
   } catch (error) {
     const dispatchError = dispatchErrorMessage(error);
     console.warn(`Hermes workflow dispatch failed, queuing to Fiona inbox: ${dispatchError}`);
     const inboxItemId = await enqueueFionaInbox({
       task: input.task,
-      payload: { ...payload, dispatch_error: dispatchError },
-      priority: input.priority,
-    });
-    return { status: "queued", inboxItemId, dispatchError };
-  }
-}
-
-export async function sendToAgentChat(input: AgentChatInput): Promise<AgentSubmission> {
-  const message = input.message.trim();
-  if (!message) throw new Error("Message is required.");
-  if (input.submit === false) {
-    throw new Error("Draft-only agent chat messages are not supported yet.");
-  }
-
-  const payload = agentChatPayload({ ...input, message });
-  try {
-    const result = await submitHermesPayload({ event: "intellizen.chat", payload, profile: input.profile });
-    return {
-      status: "submitted",
-      messageId: result.message_id ?? result.messageId ?? result.delivery_id ?? result.deliveryId,
-    };
-  } catch (error) {
-    const dispatchError = dispatchErrorMessage(error);
-    console.warn(`Hermes chat dispatch failed, queuing to Fiona inbox: ${dispatchError}`);
-    const inboxItemId = await enqueueFionaInbox({
-      task: `Direct chat message for ${input.targetAgent}: ${message}`,
       payload: { ...payload, dispatch_error: dispatchError },
       priority: input.priority,
     });

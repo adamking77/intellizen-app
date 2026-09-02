@@ -12,6 +12,7 @@ import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
+import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
 
 const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
@@ -45,6 +46,7 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 export function AppShell() {
+  useEngineBoot();
   const location = useLocation();
   const [agentPanelDetached, setAgentPanelDetached] = useState(() => readAgentPanelDetached());
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
@@ -269,6 +271,7 @@ export function AppShell() {
 }
 
 export function AgentPanelWindow() {
+  useEngineBoot();
   function redock() {
     writeAgentPanelDetached(false);
     void getCurrentWindow()

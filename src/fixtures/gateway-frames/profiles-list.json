@@ -1,0 +1,176 @@
+{
+  "recordedAt": "2026-09-02T06:05:41.123Z",
+  "hermesPin": "21b2095d00a98b8ad7b5c60b10587619c852cdb8",
+  "result": {
+    "profiles": [
+      {
+        "name": "default",
+        "path": "/Users/adamking/.hermes",
+        "is_default": true,
+        "model": "deepseek-v4-flash",
+        "provider": "deepseek",
+        "description": "",
+        "display_name": "",
+        "skill_count": 76,
+        "ui_meta_revisions": {
+          "hermes-bots-groups": 101
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "chat": "20260817_184702_2465c0",
+            "shape": "drop",
+            "color": "#8b5cf6",
+            "imageKind": "shape",
+            "title": "",
+            "custom": true
+          },
+          "hermes-bots-groups": {
+            "version": 3,
+            "updatedAt": 1787595447070,
+            "rooms": {},
+            "deleted": {
+              "id:rmt4o1agb-vm6sn": 101,
+              "name:Front End UI/UX Design Team": 101
+            }
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "fiona",
+        "path": "/Users/adamking/.hermes/profiles/fiona",
+        "is_default": false,
+        "model": "gpt-5.6-sol",
+        "provider": "openai-codex",
+        "description": "",
+        "display_name": "",
+        "skill_count": 104,
+        "ui_meta_revisions": {
+          "hermes-bots": 1
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "groups": [
+              "Team 1"
+            ],
+            "group": "Team 1"
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "hr-agent",
+        "path": "/Users/adamking/.hermes/profiles/hr-agent",
+        "is_default": false,
+        "model": "deepseek-v4-flash-vision-exp",
+        "provider": "deepseek",
+        "description": "You are an agent who makes and removes other agents (profiles) based on project requirements and requests from project leaders. You design their role, select the ideal agentic model, and set them up as needed.",
+        "display_name": "",
+        "skill_count": 76,
+        "ui_meta_revisions": {
+          "hermes-bots": 7
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "shape": "triangle",
+            "color": "#f5f5f4",
+            "imageKind": "shape",
+            "title": "HR Agent",
+            "created": 1787400591499,
+            "custom": true,
+            "groups": [],
+            "group": null
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "isla",
+        "path": "/Users/adamking/.hermes/profiles/isla",
+        "is_default": false,
+        "model": "MiniMax-M3",
+        "provider": "minimax",
+        "description": "",
+        "display_name": "",
+        "skill_count": 75,
+        "ui_meta_revisions": {
+          "hermes-bots": 4
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "groups": [
+              "Team 1"
+            ],
+            "group": "Team 1"
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "keel",
+        "path": "/Users/adamking/.hermes/profiles/keel",
+        "is_default": false,
+        "model": "gpt-5.6-sol",
+        "provider": "openai-codex",
+        "description": "",
+        "display_name": "",
+        "skill_count": 94,
+        "ui_meta_revisions": {
+          "hermes-bots": 4
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "groups": [
+              "Team 1"
+            ],
+            "group": "Team 1"
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "nash",
+        "path": "/Users/adamking/.hermes/profiles/nash",
+        "is_default": false,
+        "model": "gpt-5.6-sol",
+        "provider": "openai-codex",
+        "description": "",
+        "display_name": "",
+        "skill_count": 76,
+        "ui_meta_revisions": {
+          "hermes-bots": 3
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "groups": [],
+            "group": null
+          }
+        },
+        "has_avatar": true
+      },
+      {
+        "name": "rook",
+        "path": "/Users/adamking/.hermes/profiles/rook",
+        "is_default": false,
+        "model": "gpt-5.6-sol",
+        "provider": "openai-codex",
+        "description": "",
+        "display_name": "",
+        "skill_count": 76,
+        "ui_meta_revisions": {
+          "hermes-bots": 4
+        },
+        "ui_meta": {
+          "hermes-bots": {
+            "groups": [
+              "Team 1"
+            ],
+            "group": "Team 1"
+          }
+        },
+        "has_avatar": true
+      }
+    ],
+    "bot_mode_protocol": true
+  }
+}
