@@ -167,6 +167,7 @@ contracts=(
   "v2_gate1_schema_contract.sql"
   "v2_gate1_workflow_contract.sql"
   "v2_audit_receipt_contract.sql"
+  "v3_hierarchy_nodes_contract.sql"
 )
 for contract in "${contracts[@]}"; do
   echo "Running $contract"
@@ -176,4 +177,4 @@ for contract in "${contracts[@]}"; do
     >/dev/null
 done
 
-echo "V2 isolated SQL contracts passed (3/3)."
+echo "V2 isolated SQL contracts passed (4/4)."

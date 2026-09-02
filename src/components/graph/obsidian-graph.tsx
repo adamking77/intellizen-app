@@ -67,6 +67,29 @@ type GraphData = {
   links: GraphLink[];
 };
 
+/** Canvas cannot read CSS variables, so the flavor's tokens are read once
+ *  and again whenever the flavor or accent changes on <html>. */
+function readPalette() {
+  const style = getComputedStyle(document.documentElement);
+  const v = (name: string) => style.getPropertyValue(name).trim();
+  return {
+    crust: v("--crust"),
+    mantle: v("--mantle"),
+    text: v("--text"),
+    muted: v("--text-muted"),
+    line: v("--line-strong"),
+    accent: v("--accent"),
+    path: v("--lavender"),
+    font: v("--font-ui") || "system-ui, sans-serif",
+  };
+}
+
+function withAlpha(color: string, alpha: number) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  if (!m) return color;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -77,6 +100,13 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>();
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [palette, setPalette] = useState(readPalette);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => setPalette(readPalette()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-flavor", "style"] });
+    return () => observer.disconnect();
+  }, []);
   const lastLayoutTickRef = useRef(props.layoutTick);
   const nodeCacheRef = useRef<Map<string, GraphNode>>(new Map());
 
@@ -301,13 +331,13 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
         out.height = canvas.height;
         const ctx = out.getContext("2d");
         if (!ctx) return canvas.toDataURL("image/png");
-        ctx.fillStyle = "#1e1e2e";
+        ctx.fillStyle = palette.crust;
         ctx.fillRect(0, 0, out.width, out.height);
         ctx.drawImage(canvas, 0, 0);
         return out.toDataURL("image/png");
       },
     }),
-    [nodeLookup],
+    [nodeLookup, palette.crust],
   );
 
   function shouldShowLabel(node: GraphNode) {
@@ -334,13 +364,13 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
           width={size.width}
           height={size.height}
           graphData={graphData}
-          backgroundColor="#11111b"
+          backgroundColor={palette.crust}
           nodeId="id"
           nodeRelSize={5.2}
           nodeVal={(node) => node.val}
           nodeColor={(node) => {
             const isContextVisible = !contextualNodeSet || contextualNodeSet.has(node.id);
-            if (!isContextVisible) return "rgba(127, 132, 156, 0.22)";
+            if (!isContextVisible) return withAlpha(palette.muted, 0.22);
             return node.color;
           }}
           nodeCanvasObjectMode={() => "after"}
@@ -356,7 +386,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
             if (selected || isEgoCenter || onPath) {
               ctx.beginPath();
               ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
-              ctx.strokeStyle = selected ? "#89b4fa" : "#b4befe";
+              ctx.strokeStyle = selected ? palette.accent : palette.path;
               ctx.lineWidth = 1;
               ctx.stroke();
             }
@@ -366,7 +396,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
 
             const fontSize = clamp(11 / globalScale, 10, 13);
             const label = node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label;
-            ctx.font = `500 ${fontSize}px Switzer, system-ui, sans-serif`;
+            ctx.font = `500 ${fontSize}px ${palette.font}`;
             ctx.textAlign = "center";
             ctx.textBaseline = "top";
 
@@ -379,8 +409,8 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
               const h = fontSize + padY * 2;
               const px = x - w / 2;
               const py = y + radius + 6;
-              ctx.fillStyle = "#181825";
-              ctx.strokeStyle = "rgba(69, 71, 90, 0.6)";
+              ctx.fillStyle = palette.mantle;
+              ctx.strokeStyle = withAlpha(palette.line, 0.6);
               ctx.lineWidth = 1;
               ctx.beginPath();
               // rounded rect
@@ -397,18 +427,18 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
               ctx.closePath();
               ctx.fill();
               ctx.stroke();
-              ctx.fillStyle = "#cdd6f4";
+              ctx.fillStyle = palette.text;
               ctx.fillText(label, x, py + padY);
             } else {
-              ctx.fillStyle = "rgba(166, 173, 200, 0.55)";
+              ctx.fillStyle = withAlpha(palette.muted, 0.55);
               ctx.fillText(label, x, y + radius + 6);
             }
           }}
           linkColor={(link) => {
             const selected = link.id === props.selectedEdgeId || selectedEdgeSet.has(link.id);
             const onPath = pathEdgeSet.has(link.id);
-            if (selected) return "#89b4fa";
-            if (onPath) return "#b4befe";
+            if (selected) return palette.accent;
+            if (onPath) return palette.path;
             // Entity-hue tint when incident to an active selection
             const activeSelection = props.selectedNodeId || selectedNodeSet.size > 0;
             if (activeSelection) {
@@ -420,10 +450,10 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
                 selectedNodeSet.has(sourceId) ||
                 selectedNodeSet.has(targetId)
               ) {
-                return "rgba(137, 180, 250, 0.8)";
+                return withAlpha(palette.accent, 0.8);
               }
             }
-            return "rgba(108, 112, 134, 0.4)";
+            return withAlpha(palette.muted, 0.4);
           }}
           linkWidth={(link) => {
             const selected = link.id === props.selectedEdgeId || selectedEdgeSet.has(link.id);

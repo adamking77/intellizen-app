@@ -4,10 +4,10 @@ import { NavLink } from "react-router-dom";
 import {
   Database,
   FileText,
+  FolderTree,
   House,
   LayoutGrid,
   Network,
-  Radar,
   Search,
   Settings,
   UsersRound,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
+import { WorkspaceTree } from "@/components/layout/workspace-tree";
 import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -34,13 +35,13 @@ type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", to: "/home", key: "home", icon: House },
   { label: "Search", to: "/search", key: "search", icon: Search },
-  { label: "Intel", to: "/intel", key: "intel", icon: Radar },
   { label: "Workflows", to: "/workflows", key: "workflows", icon: Workflow },
   { label: "Team", to: "/team", key: "team", icon: UsersRound },
   { label: "Databases", to: "/databases", key: "databases", icon: Database },
   { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
+  { label: "Settings", to: "/settings", key: "settings", icon: Settings },
 ];
 
 const APP_VERSION = "v0.4.0";
@@ -128,7 +129,11 @@ export function Sidebar() {
             title={entityFilter ? "Expand — entity scope active" : "Expand"}
             className="relative inline-flex items-center justify-center rounded-full transition-opacity duration-150 hover:opacity-70"
           >
-            <img src="/app-icon.svg" alt="InteliZen" className="h-7 w-7 rounded-md" />
+            <svg aria-label="InteliZen" role="img" viewBox="0 0 28 28" className="h-7 w-7 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+              <circle cx="14" cy="14" r="11.5" />
+              <path d="M14 12.5v7" />
+              <circle cx="14" cy="8.75" r="1" fill="currentColor" stroke="none" />
+            </svg>
             {entityFilter ? (
               <span
                 aria-hidden
@@ -169,6 +174,20 @@ export function Sidebar() {
           collapsed ? "px-2" : "px-3",
         )}
       >
+        {collapsed ? (
+          <NavLink
+            to="/home"
+            aria-label="Workspace"
+            title="Workspace"
+            className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-full text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
+          >
+            <FolderTree aria-hidden strokeWidth={1.5} className="h-[18px] w-[18px]" />
+          </NavLink>
+        ) : (
+          <div className="mb-3">
+            <WorkspaceTree />
+          </div>
+        )}
         {NAV_ITEMS.map((item) => {
           const showCount = item.key === "databases" ? databases.length : 0;
           const Icon = item.icon;
@@ -177,56 +196,29 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               title={collapsed ? item.label : undefined}
-              className={({ isActive }) =>
-                cn(
-                  "relative flex items-center rounded",
-                  "font-ui font-medium",
-                  "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
-                  collapsed
-                    ? "mx-auto h-9 w-9 justify-center rounded-full px-0"
-                    : "justify-between px-4 py-2 text-[13px]",
-                  isActive
-                    ? cn("text-[var(--text)]", collapsed && "bg-[var(--surface-wash)]")
-                    : "text-[var(--subtext-0)] hover:text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
-                )
-              }
+              className={cn(
+                collapsed ? "rail-node mx-auto" : "nav-node",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+              )}
             >
-              {({ isActive }) => (
+              {collapsed ? (
+                <Icon aria-hidden strokeWidth={1.5} className="h-[18px] w-[18px]" />
+              ) : (
                 <>
-                  {isActive && !collapsed && (
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)]"
-                    />
-                  )}
-                  {collapsed ? (
-                    <Icon
-                      aria-hidden
-                      strokeWidth={1.5}
-                      className={cn(
-                        "h-[18px] w-[18px]",
-                        isActive && "text-[var(--accent)]",
-                      )}
-                    />
-                  ) : (
-                    <>
-                      <span>{item.label}</span>
-                      {showCount ? (
-                        <span className="font-mono text-[10px] text-[var(--accent)]">
-                          {showCount}
-                        </span>
-                      ) : null}
-                    </>
-                  )}
-                  {collapsed && showCount ? (
-                    <span
-                      aria-hidden
-                      className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
-                    />
+                  <span>{item.label}</span>
+                  {showCount ? (
+                    <span className="ml-auto font-mono text-[10px] text-[var(--accent)]">
+                      {showCount}
+                    </span>
                   ) : null}
                 </>
               )}
+              {collapsed && showCount ? (
+                <span
+                  aria-hidden
+                  className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+                />
+              ) : null}
             </NavLink>
           );
         })}

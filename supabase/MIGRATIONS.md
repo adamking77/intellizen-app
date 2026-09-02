@@ -9,6 +9,10 @@ applying new migrations.
 
 Snapshot: 2026-07-27 — 89 remote-applied migrations, 9 schemas.
 
+Applied 2026-09-02: `20260901000045_add_hierarchy_nodes` adds the workspace
+hierarchy nodes (`department → workspace → project → session`) that back the
+sidebar tree.
+
 Local pending hardening as of 2026-07-28 (not applied remotely):
 
 - `20260728114149_harden_append_only_receipt_permissions` revokes default
@@ -123,3 +127,4 @@ migration set.
 | 20260705093638 | structural_entities_internal_search_relation_rpc |
 | 20260709133307 | add_to_agent_to_fiona_inbox |
 | 20260727092636 | intellizen_v2_gate1_control_contracts |
+| 20260901000045 | add_hierarchy_nodes |

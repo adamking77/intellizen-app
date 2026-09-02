@@ -28,6 +28,8 @@ const InvestigationView = lazyNamed(
 const ReportsView = lazyNamed(() => import("@/views/Reports"), "ReportsView");
 const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView");
 const TeamView = lazyNamed(() => import("@/views/Team"), "TeamView");
+const UnitView = lazyNamed(() => import("@/views/Unit"), "UnitView");
+const ProjectView = lazyNamed(() => import("@/views/Project"), "ProjectView");
 
 function RouteLoadingFallback() {
   return (
@@ -53,6 +55,22 @@ function App() {
             }
           />
           <Route path="/inbox" element={<Navigate to="/home" replace />} />
+          <Route
+            path="/unit/:id"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <UnitView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/project/:id"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <ProjectView />
+              </Suspense>
+            }
+          />
           <Route
             path="/search"
             element={

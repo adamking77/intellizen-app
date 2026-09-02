@@ -7,7 +7,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
 import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, TrafficLights, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
-import { CommandPaletteProvider } from "./command-palette";
+import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
@@ -16,27 +16,86 @@ import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-re
 
 const AGENT_PANEL_WINDOW_LABEL = "agent-panel";
 const AGENT_PANEL_DETACHED_KEY = "intelizen:agent-panel-detached";
+const FOCUS_MODE_KEY = "intelizen:focus-mode";
+// Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
+const SIDEBAR_COLLAPSED_KEY = "intelizen:sidebar-collapsed";
 
-function readAgentPanelDetached() {
+function readFlag(key: string) {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(AGENT_PANEL_DETACHED_KEY) === "1";
+    return window.localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeAgentPanelDetached(detached: boolean) {
+function writeFlag(key: string, on: boolean) {
   try {
-    window.localStorage.setItem(AGENT_PANEL_DETACHED_KEY, detached ? "1" : "0");
+    window.localStorage.setItem(key, on ? "1" : "0");
   } catch {
     /* ignore */
   }
 }
 
+const readAgentPanelDetached = () => readFlag(AGENT_PANEL_DETACHED_KEY);
+const writeAgentPanelDetached = (detached: boolean) => writeFlag(AGENT_PANEL_DETACHED_KEY, detached);
+
+function isEditableTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
+}
+
 export function AppShell() {
   const location = useLocation();
   const [agentPanelDetached, setAgentPanelDetached] = useState(() => readAgentPanelDetached());
+  const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
+  const [sidebarKey, setSidebarKey] = useState(0);
+
+  useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
+
+  // Shell shortcuts: ⌘⇧F focus mode, ⌘\ sidebar, Escape or ⌘⇧A leaves focus. The
+  // palette dispatches the same commands as a custom event.
+  useEffect(() => {
+    const run = (command: ShellCommand) => {
+      if (command === "focus-mode") {
+        setFocusMode((on) => !on);
+        return;
+      }
+      let collapsed = false;
+      try {
+        const raw = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+        // No explicit choice: sidebar.tsx auto-collapses when cramped (<1100).
+        collapsed = raw === null ? window.innerWidth < 1100 : raw === "1";
+      } catch {
+        /* ignore */
+      }
+      writeFlag(SIDEBAR_COLLAPSED_KEY, !collapsed);
+      setSidebarKey((k) => k + 1);
+    };
+    const onCommand = (event: Event) => run((event as CustomEvent<ShellCommand>).detail);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        run("focus-mode");
+      } else if (mod && event.key === "\\") {
+        event.preventDefault();
+        run("toggle-sidebar");
+      } else if (mod && event.shiftKey && event.key.toLowerCase() === "a") {
+        // The agent panel is unmounted in focus mode, so its own ⌘⇧A
+        // handler is not listening; leave focus mode so the next press lands.
+        setFocusMode(false);
+      } else if (event.key === "Escape") {
+        setFocusMode(false);
+      }
+    };
+    window.addEventListener(SHELL_COMMAND_EVENT, onCommand);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener(SHELL_COMMAND_EVENT, onCommand);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     publishConversationContext(createRouteConversationContext(location));
@@ -138,12 +197,12 @@ export function AppShell() {
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) dragWindow(event);
         }}
-        className={cn("flex h-dvh min-h-0 gap-2 p-2", !isTauriRuntime && "bg-[var(--crust)]")}
+        className={cn("app-shell flex h-dvh min-h-0 gap-2 p-2", !isTauriRuntime && "bg-[var(--crust)]")}
         // Non-zero alpha keeps the transparent gutters hit-testable on macOS
         // without painting a visible outline around the window.
         style={isTauriRuntime ? { background: "rgba(0,0,0,0.001)" } : undefined}
       >
-        <Sidebar />
+        {!focusMode && <Sidebar key={sidebarKey} />}
         <main
           className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)]"
           style={{ background: PANE_BG }}
@@ -160,13 +219,18 @@ export function AppShell() {
             className="flex h-9 shrink-0 cursor-default items-center border-b border-[var(--border)]"
           >
             <TrafficLights className="pl-4 pr-3" />
+            {focusMode && (
+              <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                ⌘⇧F to leave focus
+              </span>
+            )}
           </div>
           <div className="min-h-0 flex-1">
             <Outlet />
           </div>
           <PaneResizeEdges west east />
         </main>
-        {agentPanelDetached ? (
+        {focusMode ? null : agentPanelDetached ? (
           <button
             type="button"
             onClick={() => void ejectAgentPanel()}

@@ -133,6 +133,7 @@ export function ReportsView() {
       ? requested
       : "all";
   });
+  const projectParam = searchParams.get("project");
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => searchParams.get("record"));
   const [pendingDelete, setPendingDelete] = useState<WorkspaceDatabaseRecordModel | null>(null);
@@ -166,12 +167,13 @@ export function ReportsView() {
           record.entity === entityFilter ||
           record.fields[DOCUMENTS_DB_FIELDS.entity] === entityFilter
         )
+        .filter((record) => !projectParam || record.fields[DOCUMENTS_DB_FIELDS.project] === projectParam)
         .map(normalizeModelRecord)
         .sort((a, b) =>
           String(b[DOCUMENTS_DB_FIELDS.updatedAt] ?? b._updatedAt ?? "")
             .localeCompare(String(a[DOCUMENTS_DB_FIELDS.updatedAt] ?? a._updatedAt ?? ""))
         ),
-    [bundle?.records, entityFilter],
+    [bundle?.records, entityFilter, projectParam],
   );
   const records = useMemo(
     () => allRecords.filter((record) =>
@@ -239,6 +241,7 @@ export function ReportsView() {
         ) : {}),
         [DOCUMENTS_DB_FIELDS.stage]: "Draft",
         [DOCUMENTS_DB_FIELDS.templateSource]: template?.id ?? null,
+        ...(projectParam ? { [DOCUMENTS_DB_FIELDS.project]: projectParam } : {}),
       };
       return createPortableDocument({
         databaseId: bundle.database.id,
@@ -403,7 +406,7 @@ export function ReportsView() {
           <div className="min-w-0">
             <span className="text-label">Docs</span>
             <p className="truncate text-meta">
-              {realDocumentCount} document{realDocumentCount === 1 ? "" : "s"} · Supabase rows linked to portable markdown
+              {realDocumentCount} document{realDocumentCount === 1 ? "" : "s"} · {projectParam ? "one project" : "Supabase rows linked to portable markdown"}
             </p>
           </div>
         </div>

@@ -75,6 +75,11 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 // Commands
 // ============================================================
 
+export type ShellCommand = "focus-mode" | "toggle-sidebar";
+export const SHELL_COMMAND_EVENT = "intelizen:shell-command";
+const shell = (detail: ShellCommand) => () =>
+  window.dispatchEvent(new CustomEvent<ShellCommand>(SHELL_COMMAND_EVENT, { detail }));
+
 type CommandKind = "navigation" | "action" | "workspace";
 
 interface Command {
@@ -95,6 +100,7 @@ const NAV_COMMANDS: Command[] = [
   { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
   { id: "nav:canvas", label: "Canvas", kind: "navigation", run: ({ navigate }) => navigate("/canvas") },
   { id: "nav:investigate", label: LABELS.caseWorkspace, kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
+  { id: "nav:settings-appearance", label: "Go to Settings ▸ Appearance", kind: "navigation", run: ({ navigate }) => navigate("/settings?section=appearance") },
 ];
 
 const ACTION_COMMANDS: Command[] = [
@@ -105,6 +111,8 @@ const ACTION_COMMANDS: Command[] = [
   { id: "act:search-news", label: "Search — News", kind: "action", run: ({ navigate }) => navigate("/search?mode=news") },
   { id: "act:search-people", label: "Search — People", kind: "action", run: ({ navigate }) => navigate("/search?mode=people") },
   { id: "act:search-research", label: "Search — Research", kind: "action", run: ({ navigate }) => navigate("/search?mode=research") },
+  { id: "act:focus-mode", label: "Focus mode", hint: "⌘⇧F", kind: "action", run: shell("focus-mode") },
+  { id: "act:toggle-sidebar", label: "Toggle sidebar", hint: "⌘\\", kind: "action", run: shell("toggle-sidebar") },
 ];
 
 const SCOPED_COMMANDS: Command[] = [

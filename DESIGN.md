@@ -2,7 +2,7 @@
 
 Design system refresh for the 7-screen Tauri build. This is the authoritative design reference; `src/index.css`, component primitives, and per-screen work derive from it.
 
-> **Binding status (2026-07-15):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: accent is now Blue `#89b4fa` (not Teal), UI font is **Switzer** (not Satoshi), and Inbox/Monitors are retired in favor of Fiona's daily brief. Agent Work, Workflows, and Roles are database-backed Home widgets rather than standalone destinations.
+> **Binding status (2026-07-15):** This document is a hard gate for every UI change, human- or agent-authored. See "Agent Surfaces & Review Gate" at the end. Where this doc and `src/index.css` disagree on a token value, **the live CSS wins** — update this doc, don't fork the tokens. Known reconciliations: the app now has seven flavors and fourteen accents (see "Flavors and accents" below; the palette tables here describe Mocha, the default), UI font is **Geist** (not Satoshi), and Inbox/Monitors are retired in favor of Fiona's daily brief. Agent Work, Workflows, and Roles are database-backed Home widgets rather than standalone destinations.
 >
 > **Shell reconciliation (2026-07-07):** the app is now a frameless transparent window with floating rounded panes (sogo-app reference): custom traffic lights in the main pane's chrome strip, JS window drag, manual pane-edge resize (see `docs/chrome-layer-handoff-2026-07-07.md`), collapsible sidebar/agent-panel as detached pills, and **pill-shaped buttons app-wide** (Adam-pinned). The "Navigation shell" section below predates this and is historical where it conflicts; sidebar has icons and the section names are Home / Search / Intel / Databases / Docs / Graph / Canvas.
 
@@ -55,7 +55,11 @@ https://github.com/catppuccin/catppuccin
 | `--overlay-1` | `#7f849c` | Dim / section headers |
 | `--overlay-0` | `#6c7086` | Placeholder / disabled |
 
-**Accent — single primary**
+### Flavors and accents (2026-09-02)
+
+Seven flavors live in `src/lib/theme.ts` and as `[data-flavor]` blocks in `index.css`: five dark (Mocha default, Macchiato, Frappé, Nitro, OLED) and two light (Latte, Flat). Each flavor carries the same fourteen named accents (`--rosewater` … `--lavender`); the user picks one in Settings → Appearance and JS writes it to `--accent`, so nothing in the app hard-codes an accent hue. The semantic tokens `--wait`, `--ok`, `--bad`, `--runtime` never follow the accent, and colour is never the only signal — pair it with a label, icon, or weight. New styles use tokens or `color-mix(in srgb, var(--text) N%, transparent)`, never `rgba(255,255,255,…)`, so they invert on the light flavors.
+
+**Accent — single primary (Mocha default shown; user-chosen at runtime)**
 | Token | Hex | Use |
 |---|---|---|
 | `--accent` | `#94e2d5` (Teal) | Interactive primary, active states, focus ring |
@@ -95,8 +99,8 @@ https://github.com/catppuccin/catppuccin
 
 ### Typography
 
-- **UI + display:** Satoshi — Regular 400, Medium 500, Bold 700
-- **Data + numbers:** Geist Mono — Regular 400, Medium 500
+- **UI + display:** Geist (`--font-ui`) — Regular 400, Medium 500, Bold 700. Satoshi and Switzer are gone; the Satoshi rows below read as Geist.
+- **Data + numbers:** Geist Mono (`--font-mono`) — Regular 400, Medium 500
 - **Inter banned everywhere.** Remove from `:root` font stack.
 
 **Self-hosted.** Add `src/assets/fonts/` with woff2 files. Declare via `@font-face` in `index.css`.
@@ -221,6 +225,10 @@ ANALYSE
 
 **Footer** — 1px `--border` top divider, 12px padding. Single status line: 2px Success dot + "Systems nominal" in Satoshi 10px 500 uppercase `--overlay-1` tracking-[0.15em]. Version `v0.4.x` right-aligned, Geist Mono 10px `--overlay-1`.
 
+### Sidebar workspace tree (2026-09-02)
+
+Below the fixed routes the sidebar carries the workspace tree: `department → workspace → project (recursive) → session`, backed by the hierarchy database so agents and MCP see the same nodes. Selecting a node drives the center panel; nothing selected is Home. The full rule, including what each node type shows in the center, is ROADMAP.md "The center panel" — do not restate it here, point at it.
+
 ### Command palette (⌘K)
 
 - Global keyboard trigger (⌘K / Ctrl+K)
@@ -300,7 +308,7 @@ No screen moves forward without sign-off.
 ## Non-goals
 
 - Responsive design for web/mobile. macOS desktop app only.
-- Theming / light mode. Dark-only, Catppuccin Mocha only.
+- Theming beyond the seven flavors and fourteen accents in `src/lib/theme.ts`. No per-surface colour overrides, no arbitrary user colours.
 - Accessibility beyond keyboard navigation and sensible focus outlines. Single-user app, no a11y audit for V1.
 - shadcn/ui migration. Hand-rolled primitives continue.
 

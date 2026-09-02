@@ -11,6 +11,7 @@ export const DOCUMENTS_DB_FIELDS = {
   attachmentType: "doc_attachment_type",
   attachedTo: "doc_attached_to",
   linkedCase: "doc_linked_case",
+  project: "doc_project",
   linkedEngagement: "doc_linked_engagement",
   linkedClient: "doc_linked_client",
   linkedCompany: "doc_linked_company",

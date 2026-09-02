@@ -1,28 +1,9 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
-
 /* ============================================================
-   Fonts — self-hosted variable fonts
+   Fonts — Geist (sans) comes from @fontsource-variable/geist, imported in
+   main.tsx. Geist Mono stays self-hosted.
    ============================================================ */
-
-@font-face {
-  font-family: "Switzer";
-  src: url("./assets/fonts/Switzer-Variable.woff2") format("woff2-variations"),
-       url("./assets/fonts/Switzer-Variable.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Switzer";
-  src: url("./assets/fonts/Switzer-VariableItalic.woff2") format("woff2-variations"),
-       url("./assets/fonts/Switzer-VariableItalic.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: italic;
-  font-display: swap;
-}
 
 @font-face {
   font-family: "Geist Mono";
@@ -43,77 +24,268 @@
 }
 
 /* ============================================================
-   Design tokens — Catppuccin Mocha
+   Design tokens — Calmppuccin flavors. Three planes always:
+   rail (--crust) -> panel (--mantle) -> work surface (--base).
+   The flavor is chosen by `data-flavor` on <html> (src/lib/theme.ts);
+   Mocha is the default on bare :root. `--accent` is set by JS from the
+   flavor's fourteen named accents.
    ============================================================ */
+
+:root,
+:root[data-flavor="mocha"] {
+  --crust: #11111a;
+  --mantle: #171724;
+  --base: #1d1d2c;
+  --raised: #252539;
+  --input: #11111a;
+  --text: #aeb6cf;
+  --text-muted: #9ca4bd;
+  --line: #2a2a3d;
+  --line-strong: #3a3a52;
+  --hair: rgba(255, 255, 255, 0.045);
+  --rosewater: #e2cfcb;
+  --flamingo: #e9c5c5;
+  --pink: #e4b5d7;
+  --mauve: #ba9ae2;
+  --red: #e4829e;
+  --maroon: #d8939f;
+  --peach: #e2a37b;
+  --yellow: #e7d1a2;
+  --green: #99cf94;
+  --teal: #8cd3c7;
+  --sky: #80ccda;
+  --sapphire: #70b7d8;
+  --blue: #7fa6e6;
+  --lavender: #a6afe9;
+}
+
+:root[data-flavor="nitro"] {
+  --crust: #0d0d14;
+  --mantle: #13131f;
+  --base: #181825;
+  --raised: #20202f;
+  --input: #0d0d14;
+  --text: #a7aec5;
+  --text-muted: #989fb6;
+  --line: #232334;
+  --line-strong: #32324a;
+  --hair: rgba(255, 255, 255, 0.045);
+  --rosewater: #dcc9c5;
+  --flamingo: #e3bfbf;
+  --pink: #deafd1;
+  --mauve: #b494dc;
+  --red: #de7c98;
+  --maroon: #d28d99;
+  --peach: #dc9d75;
+  --yellow: #e1cb9c;
+  --green: #93c98e;
+  --teal: #86cdc1;
+  --sky: #7ac6d4;
+  --sapphire: #6ab1d2;
+  --blue: #79a0e0;
+  --lavender: #a0a9e3;
+}
+
+:root[data-flavor="macchiato"] {
+  --crust: #171825;
+  --mantle: #1e2030;
+  --base: #24273a;
+  --raised: #2c2f44;
+  --input: #171825;
+  --text: #c2cae9;
+  --text-muted: #aeb6d4;
+  --line: #2f3247;
+  --line-strong: #3f4360;
+  --hair: rgba(255, 255, 255, 0.045);
+  --rosewater: #e4d0cc;
+  --flamingo: #eac6c6;
+  --pink: #e5b7d8;
+  --mauve: #bc9de3;
+  --red: #e5849f;
+  --maroon: #d994a0;
+  --peach: #e3a47c;
+  --yellow: #e8d2a3;
+  --green: #9ad095;
+  --teal: #8dd4c8;
+  --sky: #81cddb;
+  --sapphire: #71b8d9;
+  --blue: #80a7e7;
+  --lavender: #a7b0ea;
+}
+
+:root[data-flavor="frappe"] {
+  --crust: #222532;
+  --mantle: #282b3a;
+  --base: #2f3344;
+  --raised: #3a3e52;
+  --input: #222532;
+  --text: #c6d0f5;
+  --text-muted: #b2bcdf;
+  --line: #3a3e52;
+  --line-strong: #4a4f68;
+  --hair: rgba(255, 255, 255, 0.045);
+  --rosewater: #e6d2ce;
+  --flamingo: #ecc8c8;
+  --pink: #e7b9da;
+  --mauve: #be9fe5;
+  --red: #e786a1;
+  --maroon: #db96a2;
+  --peach: #e5a67e;
+  --yellow: #ead4a5;
+  --green: #9cd297;
+  --teal: #8fd6ca;
+  --sky: #83cfdd;
+  --sapphire: #73badb;
+  --blue: #82a9e9;
+  --lavender: #a9b2ec;
+}
+
+:root[data-flavor="oled"] {
+  --crust: #000000;
+  --mantle: #07070c;
+  --base: #0b0b11;
+  --raised: #15151d;
+  --input: #000000;
+  --text: #a7adc1;
+  --text-muted: #979db1;
+  --line: #17171f;
+  --line-strong: #383844;
+  --hair: rgba(255, 255, 255, 0.045);
+  --rosewater: #c9b7b3;
+  --flamingo: #d0adad;
+  --pink: #cb9ebe;
+  --mauve: #a385c9;
+  --red: #cb7189;
+  --maroon: #c07f8a;
+  --peach: #c98e6a;
+  --yellow: #cdb98d;
+  --green: #85b681;
+  --teal: #79bab0;
+  --sky: #6eb4c1;
+  --sapphire: #5fa0bf;
+  --blue: #6d90cc;
+  --lavender: #9098cf;
+}
+
+/* Light flavors take darker semantic variants at the same hues — the dark
+   pastels wash out on near-white. */
+:root[data-flavor="latte"] {
+  --crust: #cfd1d4;
+  --mantle: #dcdee1;
+  --base: #e9eaee;
+  --raised: #c6c8cd;
+  --input: #cfd1d4;
+  --text: #474a63;
+  --text-muted: #555970;
+  --line: #b8bac0;
+  --line-strong: #8d9099;
+  --hair: rgba(0, 0, 0, 0.09);
+  --rosewater: #a8817a;
+  --flamingo: #b07070;
+  --pink: #b05a95;
+  --mauve: #7a4fa8;
+  --red: #b03a56;
+  --maroon: #9c4b57;
+  --peach: #b06a33;
+  --yellow: #9c7f2c;
+  --green: #4a7c4e;
+  --teal: #3d8478;
+  --sky: #3178a0;
+  --sapphire: #2a6a9c;
+  --blue: #3a5fa8;
+  --lavender: #5a63b0;
+}
+
+:root[data-flavor="flat"] {
+  --crust: #eceae7;
+  --mantle: #f4f2ef;
+  --base: #fbfaf8;
+  --raised: #e6e3de;
+  --input: #eceae7;
+  --text: #4a4a52;
+  --text-muted: #62626b;
+  --line: #d8d5d0;
+  --line-strong: #aaa69f;
+  --hair: rgba(0, 0, 0, 0.08);
+  --rosewater: #a07b74;
+  --flamingo: #a86a6a;
+  --pink: #a85590;
+  --mauve: #734aa0;
+  --red: #a8354f;
+  --maroon: #944650;
+  --peach: #a8652e;
+  --yellow: #947a28;
+  --green: #457747;
+  --teal: #387f73;
+  --sky: #2c739b;
+  --sapphire: #256597;
+  --blue: #355aa0;
+  --lavender: #555ea8;
+}
 
 :root {
   color-scheme: dark;
-  font-family: "Switzer", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-feature-settings: "ss01", "ss02", "cv11";
+  font-family: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* Surfaces */
-  --crust: #11111b;
-  --mantle: #181825;
-  --base: #1e1e2e;
-  --surface-0: #313244;
-  --surface-1: #45475a;
-  --surface-2: #585b70;
+  /* Semantic. Never overridden by the user's accent — otherwise a green accent
+     could make failure look like success. */
+  --wait: #e2a47d;
+  --ok: #a6cfa1;
+  --bad: #d47b95;
+  --runtime: #789cd6;
 
-  /* Text */
-  --text: #cdd6f4;
-  --subtext-1: #bac2de;
-  --subtext-0: #a6adc8;
-  --overlay-2: #9399b2;
-  --overlay-1: #7f849c;
-  --overlay-0: #6c7086;
+  /* User preference. Selection, focus, active nav, links. Set by
+     applyTheme(); this is only the pre-JS fallback (Mocha blue). */
+  --accent: #7fa6e6;
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, var(--text));
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
 
-  /* Accent (single primary) — Catppuccin Blue */
-  --accent: #89b4fa;
-  --accent-hover: #a4c4fc;
-  --accent-soft: rgba(137, 180, 250, 0.10);
-  --accent-border: rgba(137, 180, 250, 0.30);
+  /* Hover: one wash everywhere something is clickable. Mixed against --text
+     so it lightens on dark and darkens on light. */
+  --hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --hover-strong: color-mix(in srgb, var(--text) 8%, transparent);
+  /* The hairline between two planes that cannot separate by value. */
+  --edge: color-mix(in srgb, var(--text) 10%, transparent);
+  /* The primary action: a tint on dark, a filled accent on light. */
+  --go-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --go-fg: var(--text);
 
-  /* Surface wash — used instead of grey surface-0 for subtle hover lifts */
-  --surface-wash: rgba(205, 214, 244, 0.04);
-  --surface-wash-strong: rgba(205, 214, 244, 0.07);
+  /* Catppuccin-shaped surface and text ramps, derived from the flavor planes
+     so every legacy consumer follows the flavor. */
+  --surface-0: var(--raised);
+  --surface-1: var(--line-strong);
+  --surface-2: color-mix(in srgb, var(--text) 25%, var(--line-strong));
+  --subtext-1: color-mix(in srgb, var(--text) 92%, var(--base));
+  --subtext-0: var(--text-muted);
+  --overlay-2: color-mix(in srgb, var(--text) 72%, var(--base));
+  --overlay-1: color-mix(in srgb, var(--text) 60%, var(--base));
+  --overlay-0: color-mix(in srgb, var(--text) 48%, var(--base));
+
+  --surface-wash: var(--hover);
+  --surface-wash-strong: var(--hover-strong);
 
   /* Status */
-  --success: #a6e3a1;
-  --warning: #f9e2af;
-  --caution: #fab387;
-  --danger: #f03f3f;
-  --info: #74c7ec;
+  --success: var(--ok);
+  --warning: var(--yellow);
+  --caution: var(--wait);
+  --danger: var(--bad);
+  --info: var(--runtime);
 
-  /* Catppuccin accents */
-  --rosewater: #f5e0dc;
-  --flamingo: #f2cdcd;
-  --pink: #f5c2e7;
-  --mauve: #cba6f7;
-  --red: #f38ba8;
-  --maroon: #eba0ac;
-  --peach: #fab387;
-  --yellow: #f9e2af;
-  --green: #a6e3a1;
-  --teal: #94e2d5;
-  --sky: #89dceb;
-  --sapphire: #74c7ec;
-  --blue: #89b4fa;
-  --lavender: #b4befe;
-
-  /* Graph entity palette — Catppuccin Mocha */
-  --entity-person: #94e2d5;
-  --entity-org: #89dceb;
-  --entity-location: #fab387;
-  --entity-event: #f38ba8;
-  --entity-topic: #cba6f7;
-  --entity-signal: #f9e2af;
-  --entity-investigation: #b4befe;
-  --entity-report: #a6e3a1;
+  /* Graph entity palette — follows the flavor's named accents */
+  --entity-person: var(--teal);
+  --entity-org: var(--sky);
+  --entity-location: var(--peach);
+  --entity-event: var(--red);
+  --entity-topic: var(--mauve);
+  --entity-signal: var(--yellow);
+  --entity-investigation: var(--lavender);
+  --entity-report: var(--green);
 
   /* Borders */
-  --border: rgba(69, 71, 90, 0.6);
-  --border-strong: #45475a;
-  --border-subtle: rgba(69, 71, 90, 0.3);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --border-subtle: var(--hair);
 
   /* Elevation — single flat shadow only, reserved for popovers/modals */
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -125,7 +297,7 @@
   --t-slow: 180ms;
 
   /* Type families */
-  --font-ui: "Switzer", system-ui, -apple-system, sans-serif;
+  --font-ui: "Geist Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* ---------- Compat aliases (map legacy names to new tokens) ----------
@@ -164,19 +336,56 @@
   --chart-line-secondary: var(--chart-2);
   --chart-crosshair: var(--accent);
   --chart-grid: var(--border-subtle);
-  --chart-tooltip-background: rgba(24, 24, 37, 0.92);
+  --chart-tooltip-background: color-mix(in srgb, var(--mantle) 92%, transparent);
   --chart-tooltip-foreground: var(--text);
   --chart-tooltip-muted: var(--subtext-0);
   --chart-marker-background: var(--surface-0);
   --chart-marker-border: var(--border-strong);
   --chart-marker-foreground: var(--text);
-  --chart-ring-background: rgba(205, 214, 244, 0.08);
+  --chart-ring-background: color-mix(in srgb, var(--text) 8%, transparent);
   --chart-label: var(--overlay-1);
   --legend: oklch(1 0 0);
   --legend-foreground: oklch(0.141 0.005 285.823);
   --legend-muted: oklch(0.967 0.001 286.375);
   --legend-muted-foreground: oklch(0.552 0.016 285.938);
   --legend-track: oklch(0.92 0.004 286.32);
+}
+
+/* Light flavors: darker semantics at the same hues, and every mix above
+   inverts direction. */
+:root[data-flavor="latte"],
+:root[data-flavor="flat"] {
+  color-scheme: light;
+  --wait: #b06d33;
+  --ok: #4a7c4e;
+  --bad: #b04a5f;
+  --runtime: #3f6ba8;
+  --hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --hover-strong: color-mix(in srgb, var(--text) 11%, transparent);
+  --go-bg: var(--accent);
+  --go-fg: #fff;
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+/* Panes: `data-panes` on <html> (src/lib/theme.ts). Segmented is the
+   default: separate rounded panels over the window. Connected is one
+   surface: no gutters, no radii, panes divided by a hairline. */
+:root[data-panes="connected"] .app-shell {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+:root[data-panes="connected"] .app-shell > * {
+  align-self: stretch;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+:root[data-panes="connected"] .app-shell > * + * {
+  border-left: 1px solid var(--edge);
 }
 
 * {
@@ -799,7 +1008,7 @@ pre {
 }
 
 /* ---------- Type scale (Untitled UI principles) ----------
-   One family (Switzer), variable weights, leading and tracking
+   One family (Geist), variable weights, leading and tracking
    tuned to role. Mono (Geist Mono) reserved for data/code. */
 
 .text-display-lg {
@@ -4311,7 +4520,7 @@ pre {
   font-size: 0.9em;
   padding: 0.15em 0.35em;
   border-radius: 3px;
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .peek-markdown pre {
@@ -4319,7 +4528,7 @@ pre {
   padding: 0.6em 0.8em;
   border-radius: 4px;
   overflow-x: auto;
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .peek-markdown pre code {
@@ -4330,7 +4539,7 @@ pre {
 .peek-markdown blockquote {
   margin: 0.5em 0;
   padding: 0.25em 0.8em;
-  border-left: 3px solid rgba(255,255,255,0.15);
+  border-left: 3px solid color-mix(in srgb, var(--text) 15%, transparent);
   opacity: 0.8;
 }
 
@@ -4404,36 +4613,13 @@ pre {
   --color-chart-marker-foreground: var(--chart-marker-foreground);
   --color-chart-ring-background: var(--chart-ring-background);
   --color-chart-label: var(--chart-label);
-  --chart-line-secondary: var(----chart-line-secondary);
-  --chart-line-primary: var(----chart-line-primary);
-  --color-legend-track: var(----legend-track);
-  --color-legend-muted-foreground: var(----legend-muted-foreground);
-  --color-legend-muted: var(----legend-muted);
-  --color-legend-foreground: var(----legend-foreground);
-  --color-legend: var(----legend);
-}
-
-.dark {
-  --chart-1: oklch(1 0 none);
-  --chart-2: oklch(0.73 0 none);
-  --chart-3: oklch(0.51 0 none);
-  --chart-4: oklch(0.39 0 none);
-  --chart-5: oklch(0.32 0 none);
-  --chart-background: oklch(0.145 0 0);
-  --chart-foreground: oklch(0.45 0 0);
-  --chart-foreground-muted: oklch(0.65 0.01 260);
-  --chart-crosshair: oklch(0.45 0 0);
-  --chart-grid: oklch(0.25 0 0);
-  --chart-marker-background: oklch(0.25 0.01 260);
-  --chart-marker-border: oklch(0.4 0.01 260);
-  --chart-marker-foreground: oklch(0.9 0 0);
-  --chart-ring-background: oklch(0.35 0.01 260 / 0.25);
-  --chart-label: oklch(0.75 0.01 260);
-  --legend: oklch(0.21 0.006 285.885);
-  --legend-foreground: oklch(0.985 0 0);
-  --legend-muted: oklch(0.274 0.006 286.033);
-  --legend-muted-foreground: oklch(0.705 0.015 286.067);
-  --legend-track: oklch(0.274 0.006 286.033);
+  --chart-line-secondary: var(--chart-line-secondary);
+  --chart-line-primary: var(--chart-line-primary);
+  --color-legend-track: var(--legend-track);
+  --color-legend-muted-foreground: var(--legend-muted-foreground);
+  --color-legend-muted: var(--legend-muted);
+  --color-legend-foreground: var(--legend-foreground);
+  --color-legend: var(--legend);
 }
 
 /* Compact markdown for Agent Panel chat replies. MarkdownBody applies the
@@ -4501,4 +4687,116 @@ pre {
   padding: 8px;
   font-size: 11px !important;
   border-radius: 6px;
+}
+
+/* ============================================================
+   Selection and hover, ported from hermes-app tokens.css (.nav-node,
+   .rail-node, .pill). Selection is a fill and full-strength text — never a
+   bar, a ring, or a chevron. The fill is accent-tinted per Adam.
+   ============================================================ */
+:root {
+  --r-row: 4px;
+  --r-pill: 999px;
+  --t-ui: 13px;
+  --t-meta: 12px;
+  --selected: color-mix(in srgb, var(--accent) 16%, var(--raised));
+  --selected-hover: color-mix(in srgb, var(--accent) 22%, var(--raised));
+}
+
+:root[data-flavor="latte"],
+:root[data-flavor="flat"] {
+  --selected: color-mix(in srgb, var(--accent) 14%, var(--base));
+  --selected-hover: color-mix(in srgb, var(--accent) 22%, var(--base));
+}
+
+.nav-node {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--t-ui);
+  cursor: default;
+  transition: color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out);
+}
+
+.nav-node:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.nav-node[aria-selected="true"],
+.nav-node[aria-current="page"] {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 450;
+}
+
+.nav-node[aria-selected="true"]:hover,
+.nav-node[aria-current="page"]:hover {
+  background: var(--selected-hover);
+}
+
+.rail-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+  transition: color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out);
+}
+
+.rail-node:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rail-node[aria-selected="true"],
+.rail-node[aria-current="page"] {
+  background: var(--selected);
+  color: var(--text);
+}
+
+.rail-node[aria-selected="true"]:hover,
+.rail-node[aria-current="page"]:hover {
+  background: var(--selected-hover);
+}
+
+.pill {
+  font-size: var(--t-meta);
+  padding: 5px 13px;
+  border-radius: var(--r-pill);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  cursor: default;
+  transition: color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out);
+}
+
+.pill:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pill[aria-selected="true"] {
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 450;
+}
+
+.pill[aria-selected="true"]:hover {
+  background: var(--selected-hover);
 }

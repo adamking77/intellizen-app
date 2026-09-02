@@ -2076,6 +2076,7 @@ function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
       name: "Linked case",
       type: "text",
     },
+    { id: DOCUMENTS_DB_FIELDS.project, name: "Project", type: "text" },
     {
       id: DOCUMENTS_DB_FIELDS.linkedEngagement,
       name: "Linked engagement",
@@ -4989,7 +4990,6 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     run: toWorkflowRunItem(created),
   };
 }
-
 
 export interface RecordRevisionItem {
   id: string;

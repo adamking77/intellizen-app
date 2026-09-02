@@ -23,6 +23,7 @@
     "core:window:allow-current-monitor",
     "core:webview:allow-create-webview-window",
     "opener:default",
+    "dialog:allow-open",
     {
       "identifier": "opener:allow-open-path",
       "allow": [

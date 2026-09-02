@@ -4,17 +4,12 @@ import {
   Check,
   CircleAlert,
   Clipboard,
-  HardDrive,
-  KeyRound,
-  Link2,
   RefreshCw,
-  Settings2,
-  SlidersHorizontal,
-  TerminalSquare,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AppearanceSection } from "@/components/settings/appearance";
 import { Button } from "@/components/ui/button";
 import {
   PANEL_SPEAK_REPLIES_KEY,
@@ -47,11 +42,12 @@ import {
 } from "@/services/runtime-catalog";
 
 const SECTIONS = [
-  { id: "runtimes", label: "Runtimes", icon: TerminalSquare },
-  { id: "defaults", label: "Defaults", icon: SlidersHorizontal },
-  { id: "worker-access", label: "Worker access", icon: KeyRound },
-  { id: "connections", label: "Connections", icon: Link2 },
-  { id: "diagnostics", label: "Diagnostics", icon: HardDrive },
+  { id: "runtimes", label: "Runtimes" },
+  { id: "defaults", label: "Defaults" },
+  { id: "appearance", label: "Appearance" },
+  { id: "worker-access", label: "Worker access" },
+  { id: "connections", label: "Connections" },
+  { id: "diagnostics", label: "Diagnostics" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -201,34 +197,26 @@ export function SettingsView() {
   return (
     <div className="flex h-full min-h-0 bg-[var(--base)]">
       <aside className="w-52 shrink-0 border-r border-[var(--border)] bg-[var(--mantle)] px-3 py-5">
-        <div className="mb-5 flex items-center gap-2 px-3">
-          <Settings2 className="h-4 w-4 text-[var(--accent)]" />
-          <span className="font-ui text-xs font-bold uppercase tracking-[0.16em] text-[var(--text)]">Settings</span>
-        </div>
-        <nav className="space-y-1" aria-label="Settings sections">
-          {SECTIONS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => navigate(item.id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded px-3 py-2 text-left font-ui text-xs transition-colors",
-                  section === item.id
-                    ? "bg-[var(--surface-wash)] text-[var(--text)]"
-                    : "text-[var(--subtext-0)] hover:text-[var(--text)]",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {item.label}
-              </button>
-            );
-          })}
+        <span className="mb-2 block px-2 font-ui text-[11px] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">Settings</span>
+        <nav className="flex flex-col gap-0.5" aria-label="Settings sections">
+          {SECTIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => navigate(item.id)}
+              aria-selected={section === item.id}
+              className="nav-node focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
       </aside>
 
       <main className="min-w-0 flex-1 overflow-y-auto px-7 py-6">
+        {section === "appearance" ? (
+          <h1 className="mx-auto max-w-5xl font-ui text-[16px] font-light uppercase tracking-[0.16em] text-[var(--text)]">Appearance</h1>
+        ) : (
         <header className="mx-auto flex max-w-5xl items-start justify-between gap-4 border-b border-[var(--border)] pb-5">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">Local control plane</p>
@@ -240,6 +228,7 @@ export function SettingsView() {
             Re-check
           </Button>
         </header>
+        )}
 
         <div className="mx-auto max-w-5xl py-5">
           {section === "runtimes" ? (
@@ -360,6 +349,8 @@ export function SettingsView() {
               <PreferenceRow label="Speak replies" description="Read completed Agent Panel replies aloud using the current native voice provider."><button type="button" role="switch" aria-checked={speakReplies} onClick={() => { const next = !speakReplies; setSpeakReplies(next); writePreference(PANEL_SPEAK_REPLIES_KEY, next ? "1" : "0"); }} className={cn("justify-self-start rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase", speakReplies ? "border-[var(--success)] text-[var(--success)]" : "border-[var(--border)] text-[var(--subtext-0)]")}>{speakReplies ? "On" : "Off"}</button></PreferenceRow>
             </section>
           ) : null}
+
+          {section === "appearance" ? <AppearanceSection /> : null}
 
           {section === "worker-access" ? (
             <div className="space-y-4">{(runtimeQuery.data ?? []).map((runtime) => <section key={runtime.bindingId} className="rounded-lg border border-[var(--border)] bg-[var(--mantle)] p-5"><h2 className="font-ui text-sm font-semibold text-[var(--text)]">{runtime.label}</h2><dl className="mt-4 grid gap-3 font-mono text-[11px] md:grid-cols-2"><div><dt className="text-[var(--overlay-1)]">Profile</dt><dd className="mt-1 break-all text-[var(--subtext-0)]">{runtime.discovery.workerProfileHome}</dd></div><div><dt className="text-[var(--overlay-1)]">Permission mode</dt><dd className="mt-1 text-[var(--subtext-0)]">{runtime.binding?.providerPermissionMode ?? "No binding"}</dd></div><div><dt className="text-[var(--overlay-1)]">Working-directory grants</dt><dd className="mt-1 text-[var(--subtext-0)]">{runtime.binding?.workingDirGrants.join(", ") ?? "None"}</dd></div><div><dt className="text-[var(--overlay-1)]">Environment</dt><dd className="mt-1 text-[var(--subtext-0)]">sanitized · worker MCP only · secrets by reference</dd></div></dl></section>)}</div>
