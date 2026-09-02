@@ -32,6 +32,7 @@ import {
   readWorkerBrokerConfig,
 } from "./control-plane.js";
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
+import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
 
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
@@ -4279,6 +4280,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         required: ["case_id", "file_name", "file_type", "content"],
       },
     },
+    proposeDocumentEditTool,
     {
       name: "read_vault_file",
       description: "Read an existing vault file for an investigation.",
@@ -5244,6 +5246,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: `Written: ${filePath}` }] };
   }
 
+  if (name === "propose_document_edit") return proposeDocumentEditCall(args, VAULT_BASE);
   // ── read_vault_file ────────────────────────────────────────────────────────
   if (name === "read_vault_file") {
     const { case_id, file_name } = args as { case_id: string; file_name: string };
