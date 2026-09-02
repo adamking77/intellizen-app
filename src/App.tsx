@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType } from "react";
 import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
 
 import { AgentPanelWindow, AppShell } from "@/components/layout/app-shell";
+import { PluginRouteView } from "@/plugins/route-view";
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -156,6 +157,8 @@ function App() {
             }
           />
           <Route path="/reports" element={<Navigate to="/docs" replace />} />
+          {/* wave-1 plugins: every plugin page lives under /plugin/<id> */}
+          <Route path="/plugin/:id/*" element={<PluginRouteView />} />
           <Route
             path="/settings"
             element={

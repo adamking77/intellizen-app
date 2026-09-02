@@ -25,6 +25,7 @@ import {
 import { toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { PluginPanelActions } from "@/plugins/panel-actions";
 
 const ICON_BUTTON =
   "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
@@ -274,6 +275,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             <span className="truncate font-mono text-[10px] text-[var(--text-muted)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
+          {/* wave-1 plugins: actions contributed by ~/.hermes/plugins */}
+          <PluginPanelActions profile={selectedProfile} send={(text) => submit(text)} />
           {!standalone ? (
             <button
               type="button"

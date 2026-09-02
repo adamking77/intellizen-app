@@ -22,6 +22,7 @@ import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
+import { PluginSidebarEntries } from "@/plugins/sidebar-entries";
 
 type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
 
@@ -219,6 +220,8 @@ export function Sidebar() {
             </NavLink>
           );
         })}
+        {/* wave-1 plugins: rows contributed by ~/.hermes/plugins */}
+        <PluginSidebarEntries collapsed={collapsed} />
       </nav>
 
       {/* Footer */}
