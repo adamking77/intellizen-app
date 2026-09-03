@@ -7,8 +7,8 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 - Branch: `v3/phase-0`
 - Roadmap base: `063de674171dddfb561a052308d9f4c9d981f8a3`
 - Wave 1 completion commit: `23182215da9047ef133a54029dcb7a175fe30807`
-- Phase 0.3 project-room repair: current local candidate; final native walk
-  pending because the Mac was locked when the artifact was built
+- Phase 0.3 project-room repair: `1354a85`; exact-app native walk pending
+  because the Mac was locked after the artifact was built
 - State: local on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
@@ -133,7 +133,7 @@ This closes the stale sidebar label that previously claimed v0.4.0.
 | 1. Every stage used by Adam in a built app | Phase 0, Phase A, and Wave 1 walks are dated in `ROADMAP.md`; repaired interactions are in `wave-1-walk.md`. E.17 passed through the live scheduled run and approval receipt above. | Complete. |
 | 2. Six agent capabilities have examples | `wave-1-capability-examples.md` plus the matching Tasks receipt. | Complete. |
 | 3. Donor retired, old workers removed, Intel cases present | Seven obsolete Rust/TypeScript worker files and their imports are absent. The live hierarchy preserves 16 legacy projects and 9 investigations as project nodes. Adam confirmed the donor remains in place for reference and is not an active IntelliZen runtime path. | Complete. |
-| 4. Smoke, parity, `.app`, DMG | Gates and exact artifact identities above. | Complete. |
+| 4. Smoke, parity, `.app`, DMG | Gates and exact artifact identities above. These artifacts were refreshed after the Phase 0.3 repair and do not wait on the three-day acceptance run. | Complete. |
 | 5. Same scene on three days | Adam confirmed the script he wrote with Fable; readiness is in `wave-1-acceptance-readiness.md`. | Three days pending. |
 
 ## Remaining release boundaries
