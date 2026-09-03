@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronsUpDown, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { ChevronsUpDown, PanelRightClose } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
 import { Avatar } from "@/components/agents/avatar";
@@ -15,7 +15,7 @@ import {
   useAgentPanelResize,
 } from "@/components/agent/use-agent-panel-resize";
 import { useEngineStore } from "@/engine/engine-store";
-import { ACP_ENGINE_LABEL, listAcpAgents } from "@/engine/acp-registry";
+import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { defaultProfile, listProfiles, loadProfileAvatar, type HermesProfile } from "@/engine/profiles";
 import { transcriptBusy, type Decision, type Message } from "@/engine/transcript";
@@ -27,7 +27,6 @@ import {
 import { SEND_ON_ENTER_KEY, SHOW_REASONING_KEY, usePreference } from "@/lib/settings-preferences";
 import { toast, toastError } from "@/lib/toast";
 import { useWindowSize } from "@/lib/use-window-size";
-import { cn } from "@/lib/utils";
 import { PluginPanelActions } from "@/plugins/panel-actions";
 import { previewAgentMessageDocument, saveAgentMessageDocument } from "@/services/agent-message-document";
 import { joinVoiceText, useVoice } from "@/voice/use-voice";
@@ -36,7 +35,7 @@ import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
 
 const ICON_BUTTON =
-  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
 
 function panelStorage() {
   if (typeof window === "undefined") return null;
@@ -50,6 +49,7 @@ function panelStorage() {
 interface AgentPanelProps {
   mode?: "docked" | "standalone";
   onEject?: () => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
   openRequest?: number;
   toggleRequest?: number;
 }
@@ -65,7 +65,13 @@ const PERMISSION_WORD = {
  *  donor's `AgentPanel` restricted to one turn through the gateway and its
  *  decisions: a target picker on the name, the thread, run status directly
  *  above the composer, the composer. */
-export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRequest = 0 }: AgentPanelProps) {
+export function AgentPanel({
+  mode = "docked",
+  onEject,
+  onCollapsedChange,
+  openRequest = 0,
+  toggleRequest = 0,
+}: AgentPanelProps) {
   const standalone = mode === "standalone";
   const { isCramped } = useWindowSize();
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() =>
@@ -74,6 +80,11 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
   const [showReasoning] = usePreference(SHOW_REASONING_KEY, "1");
   const [sendOnEnter] = usePreference(SEND_ON_ENTER_KEY, "1");
   const collapsed = userCollapsed ?? isCramped;
+
+  useEffect(() => {
+    if (!standalone) onCollapsedChange?.(collapsed);
+  }, [collapsed, onCollapsedChange, standalone]);
+
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const stored = Number(window.localStorage.getItem(AGENT_PANEL_WIDTH_KEY));
@@ -116,7 +127,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
         displayName: agent.name,
         description: agent.role ?? "",
         model: agent.model ?? null,
-        provider: ACP_ENGINE_LABEL[agent.engine],
+        provider: acpEngineLabel(agent.engine),
         isDefault: false,
         gatewayRunning: true,
         avatarStyle: agent.avatarStyle === "blob" ? "blob" : "sphere",
@@ -327,22 +338,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
     pending.filter((d) => d.messageId === messageId);
 
   if (!standalone && collapsed) {
-    return (
-      <aside
-        className="pane flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[var(--r-pill)] py-3"
-        style={{ background: "var(--mantle)" }}
-      >
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label="Expand agent panel"
-          title="Expand agent panel"
-          className={cn(ICON_BUTTON, "h-8 w-8")}
-        >
-          <PanelRightOpen className="h-4 w-4" />
-        </button>
-      </aside>
-    );
+    return null;
   }
 
   if (!standalone && selectedRoomId) {
@@ -379,7 +375,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
             aria-haspopup="listbox"
             aria-expanded={picking}
             title="Who to talk to"
-            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-row)] px-1.5 py-0.5 hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-row)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           >
             {profile ? (
               <Avatar
@@ -391,7 +387,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
                 }}
                 size={20}
                 image={profile.avatarImage}
-                animate={false}
+                animate="always"
               />
             ) : null}
             <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">

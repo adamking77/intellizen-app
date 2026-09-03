@@ -29,23 +29,22 @@ export function ConfirmDialog({
       }}
     >
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-[120] bg-black/40" />
-        <AlertDialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center px-4">
+        <AlertDialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
+        <AlertDialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <AlertDialog.Popup
-            className="min-w-[320px] max-w-[420px] overflow-hidden rounded-[var(--r-plane)] bg-[var(--mantle)] outline-none"
-            style={{ boxShadow: "var(--shadow-elevated)" }}
+            className="modal-surface w-[min(372px,calc(100vw-24px))] overflow-hidden"
           >
-            <div className="px-5 py-4">
-              <AlertDialog.Title className="text-[var(--t-title)] font-semibold text-[var(--text)]">
+            <div className="px-[19px] pt-[17px]">
+              <AlertDialog.Title className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                 {title}
               </AlertDialog.Title>
             </div>
-            <div className="border-t border-[var(--border-subtle)] px-5 py-4">
-              <AlertDialog.Description className="text-[var(--t-ui)] leading-5 text-[var(--subtext-0)]">
+            <div className="px-[19px] pt-[5px]">
+              <AlertDialog.Description className="font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">
                 {message}
               </AlertDialog.Description>
             </div>
-            <div className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">
+            <div className="flex justify-end gap-2 px-[19px] pb-[17px] pt-3.5">
               <Button variant="secondary" size="sm" onClick={onCancel}>
                 Cancel
               </Button>

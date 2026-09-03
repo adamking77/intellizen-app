@@ -20,7 +20,7 @@ import { writeTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 const TURN_ICON =
-  "inline-flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "inline-flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
 
 /** A fact about a turn, in the row with its controls. Not a control, so it
  *  never rides the hover fade. */
@@ -191,7 +191,7 @@ export function UserTurn({
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)] hover:opacity-90"
+              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]"
             >
               Cancel
             </button>
@@ -202,7 +202,7 @@ export function UserTurn({
                 actions?.onEdit?.(draft.trim());
                 setDraft(null);
               }}
-              className="rounded-[var(--r-pill)] bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--go-fg)] hover:opacity-90 disabled:opacity-40"
+              className="rounded-[var(--r-pill)] bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--go-fg)] transition-[filter] hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
             >
               Send
             </button>
@@ -375,10 +375,10 @@ export function AgentTurn({
                         )
                   }
                   className={cn(
-                    "rounded-[var(--r-pill)] px-3 py-0.5 font-ui text-[var(--t-meta)] hover:opacity-90",
+                    "rounded-[var(--r-pill)] px-3 py-0.5 font-ui text-[var(--t-meta)] transition-colors",
                     action.id === "retry"
-                      ? "bg-[var(--go-bg)] text-[var(--go-fg)]"
-                      : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)]",
+                      ? "bg-[var(--go-bg)] text-[var(--go-fg)] hover:brightness-110"
+                      : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",
                   )}
                 >
                   {action.label}

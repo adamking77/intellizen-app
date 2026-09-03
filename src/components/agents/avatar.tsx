@@ -106,15 +106,15 @@ export function Avatar({
   size = 24,
   image,
   className,
-  animate = true,
+  animate = "hover",
   speaking,
 }: {
   agent: AvatarAgent;
   size?: number;
   image?: string | null;
   className?: string;
-  /** Blob motion is direct-hover only. Disable it for dense rows and stacks. */
-  animate?: boolean;
+  /** Blob motion. Use always only for a single, prominent identity. */
+  animate?: boolean | "hover" | "always";
   /** Measured voice level, 0..1. Undefined means silent. */
   speaking?: number;
 }) {
@@ -148,7 +148,7 @@ export function Avatar({
         className={className}
         palette={agent.avatarColor ? { head: agent.avatarColor } : undefined}
         traits={kind ? { shape: KIND_TRAIT[kind] } : undefined}
-        {...(animate ? { animate: "hover" as const } : {})}
+        {...(animate ? { animate: animate === true ? "hover" as const : animate } : {})}
       />,
       speaking,
       size,

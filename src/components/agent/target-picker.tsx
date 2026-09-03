@@ -111,8 +111,8 @@ export function TargetPicker({
             onClick={() => pick(p.name)}
             className={cn(
               "flex w-full items-center gap-2 rounded-[var(--r-row)] px-2 py-1.5 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none",
-              "hover:bg-[var(--hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
-              selected && "bg-[var(--accent-soft)]",
+              "hover:bg-[var(--base)] focus-visible:bg-[var(--base)]",
+              selected && "bg-[var(--base)]",
               !on && "text-[var(--text-muted)]",
             )}
           >

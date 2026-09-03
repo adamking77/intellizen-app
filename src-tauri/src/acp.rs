@@ -1,4 +1,5 @@
-//! ACP over stdio: Claude Code, Codex, Gemini and Qwen as agents.
+//! ACP over stdio for any agent discovered through the ACP registry or a
+//! local ACP executable.
 //!
 //! JSON-RPC 2.0, one message per line, from `hermes-app/crates/agent/src/acp.rs`.
 //! The handshake is three steps and the second is easy to miss: `initialize`
@@ -24,7 +25,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::acp_paths::{child_path, resolve_binary, resolve_cwd};
 use crate::acp_wire::{permission_payload, text, translate_update};
+#[cfg(test)]
+use crate::acp_paths::{expand_tilde, home_dir};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
@@ -57,6 +61,14 @@ pub struct AcpAgentSpawn {
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpStarted {
+    pub agent_id: String,
+    pub session_id: String,
+    pub pid: Option<u32>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpStatus {
     pub agent_id: String,
     pub session_id: String,
     pub pid: Option<u32>,
@@ -106,86 +118,6 @@ fn live(agent_id: &str) -> Result<Arc<Live>, String> {
         .get(agent_id)
         .cloned()
         .ok_or_else(|| format!("{agent_id} is not running"))
-}
-
-// ── Binaries and paths ──────────────────────────────────────────────────
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
-}
-
-/// `~` is a shell convention, not a filesystem one.
-fn expand_tilde(value: &str) -> PathBuf {
-    if let Some(rest) = value.strip_prefix("~/") {
-        if let Some(home) = home_dir() {
-            return home.join(rest);
-        }
-    }
-    if value == "~" {
-        if let Some(home) = home_dir() {
-            return home;
-        }
-    }
-    PathBuf::from(value)
-}
-
-/// Directories a CLI tends to live in when the app was launched from Finder
-/// and inherited the login PATH rather than the shell's.
-fn known_bin_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if let Some(home) = home_dir() {
-        for rel in [
-            ".local/bin",
-            ".npm-global/bin",
-            ".bun/bin",
-            ".volta/bin",
-            ".cargo/bin",
-        ] {
-            dirs.push(home.join(rel));
-        }
-        if let Ok(versions) = fs::read_dir(home.join(".nvm/versions/node")) {
-            for entry in versions.flatten() {
-                dirs.push(entry.path().join("bin"));
-            }
-        }
-    }
-    for abs in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"] {
-        dirs.push(PathBuf::from(abs));
-    }
-    dirs
-}
-
-/// The PATH a child gets: the known directories ahead of whatever we inherited.
-fn child_path() -> String {
-    let mut parts: Vec<PathBuf> = known_bin_dirs();
-    if let Some(inherited) = std::env::var_os("PATH") {
-        parts.extend(std::env::split_paths(&inherited));
-    }
-    std::env::join_paths(parts.iter().filter(|p| p.is_dir()))
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-fn resolve_binary(command: &str) -> Option<PathBuf> {
-    let direct = expand_tilde(command);
-    if direct.components().count() > 1 {
-        return direct.is_file().then_some(direct);
-    }
-    let mut dirs = Vec::new();
-    if let Some(inherited) = std::env::var_os("PATH") {
-        dirs.extend(std::env::split_paths(&inherited));
-    }
-    dirs.extend(known_bin_dirs());
-    dirs.into_iter()
-        .map(|dir| dir.join(command))
-        .find(|candidate| candidate.is_file())
-}
-
-fn resolve_cwd(cwd: Option<&str>) -> PathBuf {
-    cwd.map(expand_tilde)
-        .filter(|p| p.is_dir())
-        .or_else(home_dir)
-        .unwrap_or_else(|| PathBuf::from("/"))
 }
 
 // ── Registry file ───────────────────────────────────────────────────────
@@ -402,6 +334,14 @@ impl Live {
             .unwrap_or_else(|e| e.into_inner())
             .clear();
     }
+
+    fn is_running(&self) -> bool {
+        let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        match child.as_mut() {
+            Some(child) => !matches!(child.try_wait(), Ok(Some(_))),
+            None => false,
+        }
+    }
 }
 
 fn stderr_excerpt(tail: &StderrTail) -> String {
@@ -517,13 +457,23 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink) -> Result<Arc<Live>, String>
         )
         .await?;
         live.notify("initialized", json!({})).await?;
-        let session = live
-            .request(
-                "session/new",
-                json!({ "cwd": cwd.to_string_lossy(), "mcpServers": [] }),
-                HANDSHAKE_TIMEOUT,
-            )
-            .await?;
+        let params = json!({ "cwd": cwd.to_string_lossy(), "mcpServers": [] });
+        let session = match live
+            .request("session/new", params.clone(), HANDSHAKE_TIMEOUT)
+            .await
+        {
+            Ok(session) => session,
+            // Claude's npm ACP bridge can return one generic initialization
+            // failure while its native session layer warms. A second request
+            // on the already-initialized adapter is safe and avoids making a
+            // transient bridge failure look like a broken CLI connection.
+            Err(reason) if reason.trim_start().starts_with("Internal error") => {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                live.request("session/new", params, HANDSHAKE_TIMEOUT)
+                    .await?
+            }
+            Err(reason) => return Err(reason),
+        };
         session
             .get("sessionId")
             .and_then(Value::as_str)
@@ -697,6 +647,22 @@ pub async fn acp_stop(agent_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Live ACP sessions for Settings and reconnect state. Processes that already
+/// exited are removed here so the UI cannot keep calling them connected.
+#[tauri::command]
+pub fn acp_statuses() -> Vec<AcpStatus> {
+    let mut table = agents().lock().unwrap_or_else(|e| e.into_inner());
+    table.retain(|_, agent| agent.is_running());
+    table
+        .values()
+        .map(|agent| AcpStatus {
+            agent_id: agent.agent_id.clone(),
+            session_id: agent.session_id.get().cloned().unwrap_or_default(),
+            pid: agent.pid,
+        })
+        .collect()
+}
+
 /// Read-only discovery for Settings. It uses the same Finder-safe PATH as
 /// the spawner, so "available" means a chat can resolve the adapter too.
 #[tauri::command]
@@ -792,6 +758,37 @@ while IFS= read -r line; do
   esac
 done
 "#;
+
+    const FLAKY_SESSION_AGENT: &str = r#"#!/bin/bash
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*) echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
+    *'"id":2'*'"method":"session/new"'*) echo '{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal error"}}' ;;
+    *'"id":3'*'"method":"session/new"'*) echo '{"jsonrpc":"2.0","id":3,"result":{"sessionId":"sess-retried"}}' ;;
+  esac
+done
+"#;
+
+    #[tokio::test]
+    async fn a_transient_internal_session_error_is_retried_once() {
+        let dir = std::env::temp_dir().join(format!("acp-retry-{}", std::process::id()));
+        let bin = fake_agent(&dir, FLAKY_SESSION_AGENT);
+        let spec = AcpAgentSpawn {
+            id: "flaky".into(),
+            command: bin.to_string_lossy().into_owned(),
+            args: vec![],
+            cwd: Some(dir.to_string_lossy().into_owned()),
+        };
+        let live = connect(&spec, Arc::new(|_, _| {}))
+            .await
+            .expect("the second session/new should connect");
+        assert_eq!(
+            live.session_id.get().map(String::as_str),
+            Some("sess-retried")
+        );
+        live.kill();
+        let _ = fs::remove_dir_all(dir);
+    }
 
     #[tokio::test]
     async fn a_turn_streams_asks_permission_and_completes() {

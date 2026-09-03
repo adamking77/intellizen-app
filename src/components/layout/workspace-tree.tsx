@@ -211,7 +211,6 @@ function Row({
       style={{ paddingLeft: 4 + depth * INDENT }}
       className={cn(
         "nav-node group h-8 select-none",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
         dropTarget && "ring-1 ring-[var(--accent)]",
       )}
       onClick={() => onSelect(node)}
@@ -255,7 +254,7 @@ function Row({
         <ChevronRight
           strokeWidth={2}
           className={cn(
-            "h-3 w-3 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "h-3 w-3 transition-transform duration-[var(--t-base)] ease-[var(--ease)]",
             open && "rotate-90",
           )}
         />
@@ -274,7 +273,7 @@ function Row({
         }}
         className={cn(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)]",
-          "opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100",
+          "opacity-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover:opacity-100 group-focus-within:opacity-100",
           "hover:bg-[var(--base)] hover:text-[var(--text)]",
         )}
       >
@@ -564,8 +563,7 @@ export function WorkspaceTree() {
           onClick={() => startAdding(null)}
           className={cn(
             "flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)]",
-            "transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+            "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
           )}
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />

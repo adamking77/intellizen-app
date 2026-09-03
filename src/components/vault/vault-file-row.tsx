@@ -91,7 +91,7 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
         <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {file.file_type}
         </span>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/vf:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover/vf:opacity-100">
           <Button
             size="sm"
             variant="ghost"

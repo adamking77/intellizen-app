@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { Maximize2, Minimize2, PanelLeftClose, PanelRightClose, PictureInPicture2 } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftClose, PanelRight, PictureInPicture2 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
 import { EjectedPanel } from "@/components/agent/ejected-panel";
@@ -15,9 +16,11 @@ import { createRouteConversationContext, publishConversationContext } from "@/li
 import { HomePinSync } from "@/components/home/home-pin-sync";
 import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
-import { AGENT_PANEL_OPEN_EVENT } from "@/lib/agent-panel-persistence";
+import { AGENT_PANEL_OPEN_EVENT, readAgentPanelCollapsed } from "@/lib/agent-panel-persistence";
 import { useSessionStore } from "@/engine/session-store";
 import { useWindowSize } from "@/lib/use-window-size";
+import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-registry";
+import { readPreference, RECONNECT_ON_LAUNCH_KEY, SCAN_ON_LAUNCH_KEY } from "@/lib/settings-preferences";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
@@ -40,25 +43,54 @@ function writeFlag(key: string, on: boolean) {
   }
 }
 
+function readAgentPanelHidden() {
+  if (typeof window === "undefined") return false;
+  try {
+    return readAgentPanelCollapsed(window.localStorage) ?? window.innerWidth < 1100;
+  } catch {
+    return false;
+  }
+}
+
 function isEditableTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
 }
 
 export function AppShell() {
   useEngineBoot();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject();
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
   const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
   const [agentPanelToggleRequest, setAgentPanelToggleRequest] = useState(0);
+  const [agentPanelHidden, setAgentPanelHidden] = useState(readAgentPanelHidden);
   const roomOpen = useSessionStore((state) => Boolean(state.selectedRoomId));
   const { isNarrow } = useWindowSize();
 
   useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
 
   useEffect(() => {
+    if (!isTauriRuntime || readPreference(SCAN_ON_LAUNCH_KEY, "1") === "0") return;
+    void queryClient.prefetchQuery({
+      queryKey: ["settings", "acp-providers"],
+      queryFn: discoverAcpProviders,
+      staleTime: 15_000,
+    });
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!isTauriRuntime || readPreference(RECONNECT_ON_LAUNCH_KEY, "1") === "0") return;
+    void reconnectAcpProviders().then(
+      () => queryClient.invalidateQueries({ queryKey: ["settings", "acp-statuses"] }),
+      (error) => console.warn("ACP reconnect failed", error),
+    );
+  }, [queryClient]);
+
+  useEffect(() => {
     const open = () => {
+      setAgentPanelHidden(false);
       if (agentPanelDetached) {
         redock();
         setFocusMode(false);
@@ -188,26 +220,31 @@ export function AppShell() {
                 <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
               </ChromeButton>
               <ChromeButton
-                label="Collapse or expand agent panel"
+                label={agentPanelHidden ? "Show agent panel" : "Hide agent panel"}
+                pressed={!agentPanelHidden}
                 onClick={() => setAgentPanelToggleRequest((request) => request + 1)}
                 disabled={agentPanelDetached}
               >
-                <PanelRightClose className="h-3.5 w-3.5" strokeWidth={1.5} />
+                <PanelRight className="h-3.5 w-3.5" strokeWidth={1.5} />
               </ChromeButton>
-              <ChromeButton
-                label="Eject agent panel"
-                onClick={() => eject(false)}
-                disabled={agentPanelDetached || agentPanelEjecting || roomOpen}
-              >
-                <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-              </ChromeButton>
-              <ChromeButton
-                label="Reduce agent panel to HUD"
-                onClick={() => eject(true)}
-                disabled={agentPanelDetached || agentPanelEjecting || roomOpen}
-              >
-                <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-              </ChromeButton>
+              {!agentPanelHidden && !agentPanelDetached ? (
+                <>
+                  <ChromeButton
+                    label="Eject agent panel"
+                    onClick={() => eject(false)}
+                    disabled={agentPanelEjecting || roomOpen}
+                  >
+                    <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </ChromeButton>
+                  <ChromeButton
+                    label="Reduce agent panel to HUD"
+                    onClick={() => eject(true)}
+                    disabled={agentPanelEjecting || roomOpen}
+                  >
+                    <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </ChromeButton>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="min-h-0 flex-1">
@@ -232,6 +269,7 @@ export function AppShell() {
         ) : (
           <AgentPanel
             onEject={() => eject()}
+            onCollapsedChange={setAgentPanelHidden}
             openRequest={agentPanelOpenRequest}
             toggleRequest={agentPanelToggleRequest}
           />
@@ -278,7 +316,7 @@ function ChromeButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-35 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-35 disabled:hover:bg-transparent"
     >
       {children}
     </button>

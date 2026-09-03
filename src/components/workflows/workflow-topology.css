@@ -55,8 +55,9 @@
 }
 
 .workflow-topology-node.is-selected {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  border-color: transparent;
+  background: var(--selected);
+  box-shadow: none;
 }
 
 .workflow-node-trigger {

@@ -141,8 +141,8 @@ export function AddGraphToDocument({
     >
       <div className="grid gap-4">
         <div className="flex gap-2" role="radiogroup" aria-label="Document destination">
-          <Button variant={choice === "existing" ? "accent-soft" : "secondary"} onClick={() => setChoice("existing")}>Existing document</Button>
-          <Button variant={choice === "new" ? "accent-soft" : "secondary"} onClick={() => setChoice("new")}>New document</Button>
+          <Button variant="secondary" className={choice === "existing" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("existing")}>Existing document</Button>
+          <Button variant="secondary" className={choice === "new" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("new")}>New document</Button>
         </div>
         {choice === "existing" ? (
           docs.isPending ? (

@@ -50,30 +50,14 @@ export function SignalCard({
       className={cn(
         "group/row relative flex cursor-pointer items-start gap-3 pr-3 py-6",
         "border-b border-[var(--border-subtle)]",
-        "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         isSelected
-          ? "bg-[var(--accent-soft)] pl-[13px]"
+          ? "bg-[var(--selected)] pl-4 hover:bg-[var(--selected-hover)]"
           : isActive
             ? "bg-[var(--surface-wash)] pl-4"
             : "pl-4 hover:bg-[var(--surface-wash)]",
       )}
     >
-      {/* Selection rail */}
-      {isSelected ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]"
-        />
-      ) : null}
-
-      {/* Active rail */}
-      {!isSelected && isActive ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-2.5 left-0 w-[2px] bg-[var(--accent)]/60"
-        />
-      ) : null}
-
       {/* Selection checkbox — aligned to first text line */}
       {showCheckbox ? (
         <button
@@ -84,7 +68,7 @@ export function SignalCard({
           }}
           aria-label={isSelected ? "Deselect signal" : "Select signal"}
           className={cn(
-            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-150",
+            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-[var(--t-base)] ease-[var(--ease)]",
             isSelected
               ? "border-[var(--accent)] bg-[var(--accent)] opacity-100"
               : selectionActive
@@ -170,7 +154,7 @@ export function SignalCard({
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+          <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover/row:opacity-100 group-focus-within/row:opacity-100">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void openUrl(url); }}
@@ -184,7 +168,7 @@ export function SignalCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSave(); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
                 title="Save to evidence pile"
                 aria-label="Save to evidence pile"
               >

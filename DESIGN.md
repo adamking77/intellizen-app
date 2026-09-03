@@ -102,8 +102,9 @@ active.
 
 ### Primary
 
-- **User accent:** selection, primary action, user voice waveform, links, and
-  focus. The user selects one of fourteen named accents.
+- **User accent:** primary action, user voice waveform, links, keyboard focus,
+  and color swatches. Ordinary selection uses the neutral raised plane. The
+  user selects one of fourteen named accents.
 
 ### Secondary
 
@@ -219,9 +220,10 @@ use spacing and dividers. Empty states do not nest a second card inside a card.
 
 ### Inputs / Fields
 
-Fields use the row radius, the input plane, and a functional edge. Focus uses a
-two-ring treatment that survives accent/surface hue collisions. Errors name the
-problem and recovery beside the field.
+Fields use the row radius, the input plane, and a functional edge. Keyboard
+focus uses one quiet accent outline; text editors and the composer use the
+caret alone. Focus never becomes a persistent glow. Errors name the problem and
+recovery beside the field.
 
 ### Navigation
 

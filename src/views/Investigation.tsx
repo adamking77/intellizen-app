@@ -714,7 +714,7 @@ export function InvestigationView() {
         <aside
           style={{ width: isNarrow ? (mobileRailOpen ? "min(320px, calc(100vw - 2rem))" : 0) : railWidth }}
           className={cn(
-            "flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)] transition-[width] duration-150",
+            "flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--base)] transition-[width] duration-[var(--t-base)] ease-[var(--ease)]",
             isNarrow ? "absolute inset-y-0 left-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
           )}
         >
@@ -753,18 +753,15 @@ export function InvestigationView() {
                     type="button"
                     onClick={() => selectCase(inv.case_id)}
                     className={cn(
-                      "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left transition-colors duration-150",
-                      isSelected ? "bg-[var(--accent-soft)] pl-[13px]" : "pl-4 hover:bg-[var(--surface-wash)]",
+                      "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                      isSelected ? "bg-[var(--selected)] pl-4 hover:bg-[var(--selected-hover)]" : "pl-4 hover:bg-[var(--surface-wash)]",
                       inv.status === "archived" && "opacity-50",
                     )}
                   >
-                    {isSelected && (
-                      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]" />
-                    )}
                     <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dotColor }} />
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className={cn("min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium", isSelected ? "text-[var(--accent)]" : "text-[var(--text)]")}>
+                        <p className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                           {inv.name}
                         </p>
                         <span className="shrink-0 font-mono text-[var(--t-count)] tabular-nums text-[var(--overlay-1)]">
@@ -845,7 +842,7 @@ export function InvestigationView() {
                     <button
                       type="button"
                       onClick={() => { setPendingProjectSelectionId(parentProject.id); navigate("/intel"); }}
-                      className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
+                      className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-[var(--r-pill)] bg-[var(--selected)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium text-[var(--text)] transition-colors hover:bg-[var(--selected-hover)]"
                     >
                       <FolderOpen className="h-2.5 w-2.5" />
                       <span className="max-w-[160px] truncate">Evidence: {parentProject.name}</span>
@@ -904,7 +901,7 @@ export function InvestigationView() {
                         className={cn(
                           "rounded-[var(--r-pill)] border px-3 py-2 text-left font-ui text-[var(--t-meta)] font-medium transition-colors disabled:opacity-60",
                           stage.value === clientCaseStage
-                            ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                            ? "border-transparent bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                             : "border-[var(--border-subtle)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
                         )}
                       >
@@ -936,15 +933,15 @@ export function InvestigationView() {
                         title={phase.hint}
                         className={cn(
                           "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-[var(--r-row)] border px-3 py-2 text-left transition-all",
-                          isActive ? "border-[var(--accent-border)] bg-[var(--accent-soft)]" : isLocked ? "cursor-not-allowed border-[var(--border-subtle)] opacity-60" : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
+                          isActive ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : isLocked ? "cursor-not-allowed border-[var(--border-subtle)] opacity-60" : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
                         )}
                       >
                         <div className="flex w-full items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <span className={cn("font-mono text-[var(--t-count)]", isActive ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
+                            <span className={cn("font-mono text-[var(--t-count)]", isActive ? "text-[var(--text)]" : "text-[var(--overlay-1)]")}>
                               0{phase.id}
                             </span>
-                            <span className={cn("font-ui text-[var(--t-meta)] font-medium", isActive ? "text-[var(--accent)]" : isDone ? "text-[var(--text)]" : "text-[var(--subtext-0)]")}>
+                            <span className={cn("font-ui text-[var(--t-meta)] font-medium", isActive || isDone ? "text-[var(--text)]" : "text-[var(--subtext-0)]")}>
                               {phase.name}
                             </span>
                           </div>
@@ -1141,8 +1138,8 @@ export function InvestigationView() {
 
                       {/* Parent project — auto-import status */}
                       {parentProject && (
-                        <div className="flex items-center gap-2 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-3 py-2.5">
-                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
+                        <div className="flex items-center gap-2 rounded-[var(--r-row)] bg-[var(--selected)] px-3 py-2.5">
+                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--text)]" />
                           <p className="text-meta text-[var(--subtext-0)]">
                             Signals from{" "}
                             <span className="font-medium text-[var(--text)]">{parentProject.name}</span>{" "}

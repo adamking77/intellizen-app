@@ -295,7 +295,7 @@ export function RecordBacklinksSection({
           <li key={`${backlink.databaseId}-${backlink.record.id}`}>
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              className="flex w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
               onClick={() => onOpenRecord?.(backlink.databaseId, backlink.record.id)}
             >
               <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{backlink.recordTitle}</span>

@@ -1,6 +1,5 @@
 import type { HermesProjectSession } from "@/services/hermes-project-sessions";
 import { projectSessionKey } from "@/lib/project-room";
-import { cn } from "@/lib/utils";
 
 export const PROJECT_TREE_SESSION_LIMIT = 8;
 
@@ -33,10 +32,7 @@ export function ProjectSessionTree({
             aria-label={session.title}
             title={`${session.profile} · ${session.cwd ?? "No working directory"}`}
             style={{ paddingLeft: 4 + depth * 12 }}
-            className={cn(
-              "nav-node h-8 select-none",
-              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
-            )}
+            className="nav-node h-8 select-none"
             onClick={() => onSelect(session)}
           >
             <span className="h-5 w-5 shrink-0" aria-hidden />

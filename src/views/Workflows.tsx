@@ -159,7 +159,7 @@ function WorkflowCard({
       className={cn(
         "w-full rounded-[var(--r-row)] border px-3 py-3 text-left transition-colors",
         selected
-          ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+          ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
           : "border-[var(--border)] bg-[var(--mantle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
       )}
     >
@@ -640,7 +640,7 @@ export function WorkflowsView() {
                 {selectedActiveRun ? (
                   <Link
                     to={`/workflows?run=${selectedActiveRun.id}`}
-                    className="mt-4 flex items-center justify-between gap-4 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--text)]"
+                    className="mt-4 flex items-center justify-between gap-4 rounded-[var(--r-row)] bg-[var(--selected)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors hover:bg-[var(--selected-hover)]"
                   >
                     <span className="min-w-0 truncate">
                       Current work · {selectedActiveRun.name}

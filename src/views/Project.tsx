@@ -147,7 +147,8 @@ export function ProjectView() {
                 size="sm"
                 role="tab"
                 aria-selected={tab === t}
-                variant={tab === t ? "accent-soft" : "ghost"}
+                variant="ghost"
+                className={tab === t ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]" : undefined}
                 onClick={() => {
                   setTab(t);
                   if (selectedSessionKey) setSearchParams({}, { replace: true });
@@ -190,7 +191,7 @@ export function ProjectView() {
                     className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
                   >
                     <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-                    <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
+                    <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                       {title}
                     </span>
                     {type ? <span className="shrink-0 text-meta">{type}</span> : null}

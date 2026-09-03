@@ -21,7 +21,7 @@ import { Avatar } from "./avatar";
 
 const INPUT =
   "min-w-0 rounded-[var(--r-row)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-border)]";
+  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
 
 export function TeamSheet({
   agents,
@@ -98,11 +98,11 @@ export function TeamSheet({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-[120] bg-[color-mix(in_srgb,var(--crust)_42%,transparent)] backdrop-blur-[7px]" />
+        <Dialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
         <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <Dialog.Popup
             aria-label={team ? "Edit team" : "New team"}
-            className="flex max-h-[calc(100dvh-24px)] w-[min(420px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--raised)] outline-none shadow-[var(--shadow-elevated)]"
+            className="modal-surface flex max-h-[72dvh] w-[min(420px,calc(100vw-24px))] flex-col overflow-hidden"
           >
             <div className="px-[17px] pb-[11px] pt-[15px]">
               <Dialog.Title className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{team ? "Edit team" : "New team"}</Dialog.Title>
@@ -145,7 +145,7 @@ export function TeamSheet({
               })}
             </div>
 
-            <div className="flex items-center gap-[9px] bg-[var(--mantle)] px-[13px] py-[11px]">
+            <div className="flex items-center gap-[9px] px-[13px] py-[11px]">
               <input
                 ref={input}
                 className={cn(INPUT, "flex-1 bg-[var(--input)]")}
@@ -182,7 +182,7 @@ export function TeamSheet({
                 {busy ? "Saving…" : team ? "Save" : "Create"}
               </button>
             </div>
-            {error ? <div className="bg-[var(--mantle)] px-[13px] pb-2.5 font-ui text-[var(--t-meta)] text-[var(--bad)]">{error}</div> : null}
+            {error ? <div className="px-[13px] pb-2.5 font-ui text-[var(--t-meta)] text-[var(--bad)]">{error}</div> : null}
           </Dialog.Popup>
         </Dialog.Viewport>
       </Dialog.Portal>

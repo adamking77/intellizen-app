@@ -27,7 +27,7 @@ import type { HermesProfile } from "@/engine/profiles";
 import { Avatar, identityColor } from "@/components/agents/avatar";
 
 /** What the HUD has open above its bar. */
-export type HudOpen = "none" | "chat";
+export type HudOpen = "none" | "roster" | "chat";
 
 /** `@tauri-apps/api/window` does not export this union; the donor redeclares
  *  it for the same reason. */
@@ -45,8 +45,7 @@ const CLEAR = { top: 27, side: 33, bottom: 43 };
 
 const ICON =
   "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] " +
-  "transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent";
 
 /** The bar's ground and the one sanctioned shadow: separation from a desktop
  *  the app does not control, not depth between two of its own planes. */
@@ -105,12 +104,14 @@ function ResizeFrame() {
 
 export interface HudProps {
   agent: HermesProfile | null;
+  profiles: HermesProfile[];
   target: string | null;
   messages: Message[];
   run: RunState;
   voice: VoiceHandle;
   open: HudOpen;
   onOpen: (open: HudOpen) => void;
+  onTarget: (name: string) => void;
   onSend: (text: string) => void;
   onStop: () => void;
   /** Back to the full ejected panel. */
@@ -123,12 +124,14 @@ export interface HudProps {
 
 export function Hud({
   agent,
+  profiles,
   target,
   messages,
   run,
   voice,
   open,
   onOpen,
+  onTarget,
   onSend,
   onStop,
   onGrow,
@@ -199,10 +202,63 @@ export function Hud({
     >
       <ResizeFrame />
 
+      {open === "roster" ? (
+        <div
+          onMouseDown={drag}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[22px] px-3 py-[9px]"
+          style={SURFACE}
+          role="listbox"
+          aria-label="Agents"
+        >
+          {profiles.length === 0 ? (
+            <span className="m-auto font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No agents listed.</span>
+          ) : null}
+          {profiles.map((profile) => {
+            const selected = profile.name === target;
+            const online = profile.gatewayRunning !== false;
+            return (
+              <button
+                key={profile.name}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onTarget(profile.name);
+                  onOpen("none");
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-[var(--r-row)] px-1.5 py-1 text-left outline-none",
+                  "hover:bg-[var(--base)] focus-visible:bg-[var(--base)]",
+                  selected && "bg-[var(--base)]",
+                )}
+              >
+                <Avatar
+                  agent={{
+                    displayName: profile.displayName || profile.name,
+                    avatarStyle: profile.avatarStyle,
+                    avatarKind: profile.avatarKind,
+                    avatarColor: profile.avatarColor,
+                  }}
+                  size={20}
+                  image={profile.avatarImage}
+                  animate={false}
+                />
+                <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">
+                  {profile.displayName || profile.name}
+                </span>
+                <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+                  {online ? profile.model ?? "ready" : "offline"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {open === "chat" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-pill)]"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px]"
           style={SURFACE}
         >
           <div
@@ -311,18 +367,46 @@ export function Hud({
         style={SURFACE}
         data-run-state={run.kind}
       >
-        {speaking && open === "none" ? (
-          <>
-            {speaking === "you" ? (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--go-fg)]">
-                <Mic className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
-              </span>
-            ) : (
-              <Avatar agent={face} size={20} image={face.avatarImage} animate={false} speaking={voice.said} />
-            )}
-            <div className="min-w-0 flex-1">
-              <Waveform color={speaking === "agent" ? hue : "var(--accent)"} height={14} bars={12} levels={speaking === "agent" ? voice.saidLevels : voice.levels} />
-            </div>
+        <div className="flex min-w-0 flex-1 items-center gap-[9px]">
+          {speaking && open === "none" ? (
+            <>
+              {speaking === "you" ? (
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--go-fg)]">
+                  <Mic className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                </span>
+              ) : (
+                <Avatar agent={face} size={20} image={face.avatarImage} animate={false} speaking={voice.said} />
+              )}
+              <div className="min-w-0 flex-1">
+                <Waveform
+                  color={speaking === "agent" ? hue : "var(--accent)"}
+                  height={14}
+                  bars={12}
+                  levels={speaking === "agent" ? voice.saidLevels : voice.levels}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => onOpen(open === "roster" ? "none" : "roster")}
+                aria-label={open === "roster" ? "Close the agent list" : "Open the agent list"}
+                aria-expanded={open === "roster"}
+                title="Agents"
+                className="flex min-w-0 items-center gap-[9px] rounded-[var(--r-row)] px-1 py-0.5 outline-none transition-colors hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
+              >
+                <Avatar agent={face} size={20} image={face.avatarImage} animate="always" />
+                <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">
+                  {name}
+                </span>
+              </button>
+              <HudRun run={run} agent={name} />
+            </>
+          )}
+        </div>
+        <div className="-mr-1.5 flex shrink-0 items-center gap-0.5">
+          {speaking ? (
             <button
               type="button"
               onClick={() => {
@@ -330,78 +414,64 @@ export function Hud({
                 else if (speaking === "agent") voice.interrupt();
                 else void voice.dictate();
               }}
-              aria-label={
-                voice.convo ? "Stop voice chat" : speaking === "agent" ? "Stop speaking" : "Stop listening"
-              }
+              aria-label={voice.convo ? "Stop voice chat" : speaking === "agent" ? "Stop speaking" : "Stop listening"}
               title={voice.convo ? "Stop voice chat" : "Stop"}
               className={ICON}
               style={voice.convo ? { color: "var(--bad)" } : undefined}
             >
               <Square className="h-[7px] w-[7px]" strokeWidth={0} fill="currentColor" aria-hidden />
             </button>
-          </>
-        ) : (
-          <>
-            <Avatar agent={face} size={20} image={face.avatarImage} animate={false} />
-            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">
-              {name}
-            </span>
-            <HudRun run={run} agent={name} />
-            <div className="flex-1" />
-            <div className="-mr-1.5 flex items-center gap-0.5">
-              {!speaking && voice.dictationOn ? (
-                <button
-                  type="button"
-                  onClick={() => void voice.dictate()}
-                  disabled={voice.hearing}
-                  aria-label={voice.hearing ? "Typing what was said" : "Speak instead of typing"}
-                  title={voice.hearing ? "Typing what was said…" : "Speak"}
-                  className={ICON}
-                >
-                  <Mic className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
-                </button>
-              ) : null}
-              {(voice.canConverse || voice.convo) && !speaking ? (
-                <VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} className={ICON} />
-              ) : null}
-              <button
-                type="button"
-                onClick={() => onOpen(open === "chat" ? "none" : "chat")}
-                aria-label={open === "chat" ? "Close the conversation" : "Open the conversation"}
-                title={open === "chat" ? "Close" : "Open the conversation"}
-                className={ICON}
-              >
-                <ChevronUp
-                  className="h-[13px] w-[13px]"
-                  strokeWidth={1.5}
-                  style={{
-                    transform: open === "chat" ? "rotate(180deg)" : undefined,
-                    transition: "transform 160ms ease",
-                  }}
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                onClick={onGrow}
-                aria-label="Back to the full panel"
-                title="Back to the full panel"
-                className={ICON}
-              >
-                <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
-              </button>
-              <button
-                type="button"
-                onClick={onRedock}
-                aria-label="Put the panel back in the main window"
-                title="Redock"
-                className={ICON}
-              >
-                <PanelRight className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
-              </button>
-            </div>
-          </>
-        )}
+          ) : voice.dictationOn ? (
+            <button
+              type="button"
+              onClick={() => void voice.dictate()}
+              disabled={voice.hearing}
+              aria-label={voice.hearing ? "Typing what was said" : "Speak instead of typing"}
+              title={voice.hearing ? "Typing what was said…" : "Speak"}
+              className={ICON}
+            >
+              <Mic className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
+            </button>
+          ) : null}
+          {(voice.canConverse || voice.convo) && !speaking ? (
+            <VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} className={ICON} />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onOpen(open === "chat" ? "none" : "chat")}
+            aria-label={open === "chat" ? "Close the conversation" : "Open the conversation"}
+            title={open === "chat" ? "Close" : "Open the conversation"}
+            className={ICON}
+          >
+            <ChevronUp
+              className="h-[13px] w-[13px]"
+              strokeWidth={1.5}
+              style={{
+                transform: open === "chat" ? "rotate(180deg)" : undefined,
+                transition: "transform 160ms ease",
+              }}
+              aria-hidden
+            />
+          </button>
+          <button
+            type="button"
+            onClick={onGrow}
+            aria-label="Back to the full panel"
+            title="Back to the full panel"
+            className={ICON}
+          >
+            <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onRedock}
+            aria-label="Put the panel back in the main window"
+            title="Redock"
+            className={ICON}
+          >
+            <PanelRight className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
+          </button>
+        </div>
       </div>
       {/* `onStop` is the bar's only route to interrupting a turn it cannot
           see; the chat's own stop lives in the composer. */}
@@ -547,7 +617,7 @@ function HudComposer({
           disabled={sending || !ready || !draft.trim()}
           aria-label={sending ? "Working — this turn cannot be stopped from here" : "Send"}
           title="Send"
-          className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40"
         >
           <ChevronRight className="h-3 w-3" strokeWidth={2.4} aria-hidden />
         </button>

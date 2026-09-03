@@ -39,7 +39,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Docs", to: "/docs", key: "docs", icon: FileText },
   { label: "Graph", to: "/graph", key: "graph", icon: Network },
   { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
-  { label: "Settings", to: "/settings", key: "settings", icon: Settings },
 ];
 
 const APP_VERSION = `v${appPackage.version}`;
@@ -57,6 +56,12 @@ const ENGINE_DOT_CLASS: Record<EngineTag, string> = {
 const STORAGE_KEY = "intelizen:sidebar-collapsed";
 const WIDTH_EXPANDED = 216;
 const WIDTH_COLLAPSED = 56;
+
+function AppMark({ size }: { size: number }) {
+  return (
+    <span aria-hidden className="app-mark shrink-0" style={{ width: size, height: size }} />
+  );
+}
 
 function readCollapsed(): boolean | null {
   try {
@@ -125,13 +130,9 @@ export function Sidebar() {
             onClick={toggle}
             aria-label="Expand sidebar"
             title={entityFilter ? "Expand — entity scope active" : "Expand"}
-            className="relative inline-flex items-center justify-center rounded-[var(--r-pill)] transition-opacity duration-150 hover:opacity-70"
+            className="relative inline-flex items-center justify-center rounded-[var(--r-pill)] transition-opacity duration-[var(--t-base)] ease-[var(--ease)] hover:opacity-70"
           >
-            <svg aria-label="InteliZen" role="img" viewBox="0 0 28 28" className="h-7 w-7 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-              <circle cx="14" cy="14" r="11.5" />
-              <path d="M14 12.5v7" />
-              <circle cx="14" cy="8.75" r="1" fill="currentColor" stroke="none" />
-            </svg>
+            <AppMark size={28} />
             {entityFilter ? (
               <span
                 aria-hidden
@@ -141,7 +142,7 @@ export function Sidebar() {
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <img src="/app-icon.svg" alt="" aria-hidden className="h-6 w-6 rounded-[var(--r-row)]" />
+            <AppMark size={24} />
             <span className="font-ui text-[var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent)]">
               InteliZen
             </span>
@@ -154,7 +155,7 @@ export function Sidebar() {
             className={cn(
             "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)]",
               "font-ui text-[var(--t-ui)] text-[var(--overlay-1)]",
-              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
               "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
             )}
             aria-label="Collapse sidebar"
@@ -196,7 +197,6 @@ export function Sidebar() {
               title={collapsed ? item.label : undefined}
               className={cn(
                 collapsed ? "rail-node mx-auto" : "nav-node",
-                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
               )}
             >
               {collapsed ? (
@@ -255,7 +255,7 @@ export function Sidebar() {
               to="/settings?section=providers"
               aria-label="Open settings"
               title={engineTitle}
-              className="flex min-w-0 items-center gap-2 text-[var(--overlay-1)] hover:text-[var(--text)]"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--r-row)] px-0.5 py-1 text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             >
               <span
                 className={cn(
@@ -270,6 +270,8 @@ export function Sidebar() {
                   {engineInfo.version} · :{engineInfo.port}
                 </span>
               ) : null}
+              <span className="flex-1" />
+              <Settings className="h-4 w-4 shrink-0" aria-hidden />
             </NavLink>
           </>
         )}

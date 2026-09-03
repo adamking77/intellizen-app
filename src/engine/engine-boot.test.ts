@@ -18,6 +18,8 @@ type ClientOptions = {
   failConnectTimes?: number;
   /** On the first connect: open, then drop the socket before connect() returns. */
   dropAfterFirstOpen?: boolean;
+  /** Match the real client: reuse an open socket without emitting another event. */
+  reuseOpenWithoutEvent?: boolean;
 };
 
 function fakeClient(options: ClientOptions = {}) {
@@ -31,6 +33,7 @@ function fakeClient(options: ClientOptions = {}) {
     for (const handler of handlers) handler(next);
   };
   const connect = vi.fn(async (_url: string) => {
+    if (state === "open" && options.reuseOpenWithoutEvent) return;
     setState("connecting");
     if (failuresLeft > 0) {
       failuresLeft -= 1;
@@ -48,7 +51,13 @@ function fakeClient(options: ClientOptions = {}) {
     handler(state);
     return () => handlers.delete(handler);
   };
-  return { connect, onState, setState, get state() { return state; } };
+  return {
+    connect,
+    onState,
+    setState,
+    get connectionState() { return state; },
+    get state() { return state; },
+  };
 }
 
 function harness(options: ClientOptions & { start?: () => Promise<EngineInfo> } = {}) {
@@ -89,6 +98,22 @@ describe("createEngineSupervisor", () => {
     expect(h.setConnection.mock.calls.map(([state]) => state)).toEqual(["idle", "connecting", "open"]);
     expect(h.setError).toHaveBeenLastCalledWith(null);
     expect(h.reset).not.toHaveBeenCalled();
+    h.supervisor.dispose();
+  });
+
+  it("restores open state when connect reuses an existing socket", async () => {
+    const h = harness({ reuseOpenWithoutEvent: true });
+    await h.supervisor.boot();
+    h.setConnection.mockClear();
+
+    // This is what the manual Connect action does before asking the existing
+    // supervisor to boot again. The gateway is still open, so connect() emits
+    // nothing and the supervisor must reconcile its current state.
+    h.setConnection("connecting");
+    await h.supervisor.boot();
+
+    expect(h.client.connect).toHaveBeenCalledTimes(2);
+    expect(h.setConnection).toHaveBeenLastCalledWith("open");
     h.supervisor.dispose();
   });
 

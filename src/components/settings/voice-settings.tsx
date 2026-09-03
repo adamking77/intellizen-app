@@ -13,6 +13,8 @@ import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useVoicePrefs, type SpeechService } from "@/voice/voice-prefs";
 
+import { SettingSwitch } from "./setting-switch";
+
 interface Catalog {
   id: string;
   label: string;
@@ -33,24 +35,6 @@ const SPEAKING_SERVICES: Catalog[] = [
 
 const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
 const meta = "font-ui text-[var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
-
-function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onToggle}
-      className={cn(
-        "flex h-[22px] w-[38px] shrink-0 items-center rounded-[var(--r-pill)] p-[2px] transition-colors",
-        on ? "justify-end bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]" : "justify-start bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",
-      )}
-    >
-      <span className={cn("h-[18px] w-[18px] rounded-[var(--r-pill)]", on ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]")} />
-    </button>
-  );
-}
 
 function Row({ label, detail, children }: { label: string; detail: string; children: React.ReactNode }) {
   return (
@@ -89,7 +73,7 @@ function Half({
   return (
     <section className="flex flex-col">
       <Row label={title} detail={explain}>
-        <Switch on={value.enabled} label={`${title}, ${value.enabled ? "on" : "off"}`} onToggle={() => onChange({ ...value, enabled: !value.enabled })} />
+        <SettingSwitch on={value.enabled} label={`${title}, ${value.enabled ? "on" : "off"}`} onToggle={() => onChange({ ...value, enabled: !value.enabled })} />
       </Row>
 
       {value.enabled ? (
@@ -190,7 +174,7 @@ export function VoiceSettings() {
 
       <Half
         title="Speaking"
-        explain="An agent reading its reply aloud, in its own voice."
+        explain="An agent reading its reply aloud, in its own identity colour."
         value={voice.speaking}
         catalog={SPEAKING_SERVICES}
         onChange={(speaking) => setVoice({ ...voice, speaking })}

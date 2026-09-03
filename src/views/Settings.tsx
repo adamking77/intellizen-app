@@ -26,17 +26,20 @@ export function SettingsView() {
   const engineOpen = useEngineStore((state) => state.connection === "open");
 
   return (
-    <div className="flex h-full min-h-0 bg-[var(--base)]">
-      <aside className="w-52 shrink-0 border-r border-[var(--border)] bg-[var(--mantle)] px-3 py-5">
-        <span className="mb-2 block px-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
-        <nav className="flex flex-col gap-0.5" aria-label="Settings sections">
+    <div className="subshell h-full bg-[var(--base)]">
+      <aside className="subpane flex w-[clamp(168px,15vw,210px)] shrink-0 flex-col gap-0.5 bg-[var(--mantle)] p-[14px]">
+        <span className="block px-0.5 pb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
+        <nav className="flex flex-col gap-0.5" aria-label="Settings sections" role="tablist" aria-orientation="vertical">
           {SECTIONS.map((item) => (
             <button
               key={item.id}
               type="button"
+              id={`settings-tab-${item.id}`}
+              role="tab"
+              aria-controls="settings-panel"
               onClick={() => setParams({ section: item.id }, { replace: true })}
               aria-selected={section === item.id}
-              className="nav-node focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              className="nav-node px-[11px] py-[9px] text-left"
             >
               {item.label}
             </button>
@@ -44,14 +47,16 @@ export function SettingsView() {
         </nav>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto px-7 py-6">
-        <div className="mx-auto max-w-5xl">
+      <main className="subpane relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5">
+          <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${section}`} className="flex max-w-[880px] flex-col gap-2">
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
           {section === "context" ? <ContextSettings /> : null}
           {section === "voice" ? <VoiceSettings /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
           {section === "general" ? <GeneralSettings /> : null}
+          </div>
         </div>
       </main>
     </div>

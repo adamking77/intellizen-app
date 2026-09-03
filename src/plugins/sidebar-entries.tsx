@@ -2,13 +2,9 @@
 // plugin still gets a row, marked, so its error is one click away.
 import { NavLink } from "react-router-dom";
 
-import { cn } from "@/lib/utils";
-
 import { pluginRouteHref } from "./contract";
 import { usePluginSidebarEntries, usePlugins } from "./registry";
 import "./boot";
-
-const LINK_CLASS = "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
 export function PluginSidebarEntries({ collapsed }: { collapsed: boolean }) {
   const entries = usePluginSidebarEntries();
@@ -22,7 +18,7 @@ export function PluginSidebarEntries({ collapsed }: { collapsed: boolean }) {
           key={`${entry.pluginId}:${entry.label}`}
           to={entry.to ?? pluginRouteHref(entry.pluginId)}
           title={collapsed ? entry.label : undefined}
-          className={cn(collapsed ? "rail-node mx-auto" : "nav-node", LINK_CLASS)}
+          className={collapsed ? "rail-node mx-auto" : "nav-node"}
         >
           {collapsed ? (
             <span aria-hidden className="font-ui text-[var(--t-meta)] font-semibold">
@@ -39,7 +35,7 @@ export function PluginSidebarEntries({ collapsed }: { collapsed: boolean }) {
           to={pluginRouteHref(plugin.id)}
           title={`${plugin.name}: ${plugin.error}`}
           aria-label={`${plugin.name} (failed to load)`}
-          className={cn(collapsed ? "rail-node mx-auto" : "nav-node", LINK_CLASS)}
+          className={collapsed ? "rail-node mx-auto" : "nav-node"}
         >
           {collapsed ? (
             <span aria-hidden className="font-ui text-[var(--t-meta)] font-semibold text-[var(--danger)]">

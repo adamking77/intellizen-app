@@ -47,7 +47,7 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
       <button
         type="button"
         onClick={() => setExpanded((open) => !open)}
-        className="flex w-full items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+        className="flex w-full items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--surface-wash)]"
       >
         <span className="flex items-center gap-1.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           <Fingerprint className="h-3.5 w-3.5" />
@@ -133,7 +133,7 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                 dispatchPrompt: `Begin Phase 1 (Operational Planning) of the 6-phase OSINT investigation for case ${caseId} ("${subject}") per SOP document 1676. Produce the operational plan with PLAN justification (Proportionality, Legality, Accountability, Necessity), subject definition, scope, seed entities, and initial hypotheses. Do NOT begin collection until the plan gate passes. Requested by ${OPERATOR_ACTOR}.`,
               })
             }
-            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[var(--t-meta)] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[var(--t-meta)] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50"
           >
             {isStartingWorkflow ? <RefreshCw className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             Start 6-phase OSINT investigation

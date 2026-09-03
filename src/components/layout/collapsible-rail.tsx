@@ -35,7 +35,7 @@ export function CollapsibleRail({
       aria-hidden={collapsed ? true : undefined}
       className={cn(
         "relative flex shrink-0 flex-col overflow-hidden bg-[var(--mantle)]",
-        "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "transition-[width] duration-[var(--t-slow)] ease-[var(--ease)]",
         !collapsed && "border-r border-[var(--border)]",
         collapsed && "invisible",
         className,
@@ -53,7 +53,7 @@ export function CollapsibleRail({
                   onClick={onCollapse}
                   aria-label={collapseLabel}
                   title={collapseLabel}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>

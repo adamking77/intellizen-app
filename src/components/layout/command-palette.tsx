@@ -241,13 +241,11 @@ function CommandPalette() {
       }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-[var(--crust)]/70" aria-hidden />
+      <div className="modal-backdrop absolute inset-0" aria-hidden />
 
       <div
         className={cn(
-          "relative z-10 w-[560px] max-w-[90vw] overflow-hidden rounded-[var(--r-plane)]",
-          "bg-[var(--mantle)] border border-[var(--surface-1)]",
-          "shadow-[0_8px_24px_rgba(0,0,0,0.4)]",
+          "modal-surface relative z-10 flex max-h-[60dvh] w-[588px] max-w-[calc(100vw-24px)] flex-col overflow-hidden",
           "animate-fade-in",
         )}
         onKeyDown={(e) => {
@@ -282,7 +280,7 @@ function CommandPalette() {
           }}
           placeholder="Type a command or search…"
           className={cn(
-            "w-full bg-[var(--crust)] px-4 py-3",
+            "w-full bg-transparent px-4 py-3",
             "font-ui text-[var(--t-body)] text-[var(--text)]",
             "placeholder:text-[var(--overlay-0)]",
             "border-b border-[var(--border)]",
@@ -290,7 +288,7 @@ function CommandPalette() {
           )}
         />
 
-        <div id="cp-listbox" role="listbox" aria-label="Commands" className="max-h-[50vh] overflow-y-auto py-2">
+        <div id="cp-listbox" role="listbox" aria-label="Commands" className="min-h-0 flex-1 overflow-y-auto py-2">
           {groups.length === 0 && (
             <div className="px-4 py-6 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
               No results
@@ -319,9 +317,9 @@ function CommandPalette() {
                       className={cn(
                         "flex w-full items-center justify-between px-4 py-2 text-left",
                         "font-ui text-[var(--t-ui)]",
-                        "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                        "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                         isActive
-                          ? "bg-[var(--accent-soft)] text-[var(--text)]"
+                          ? "bg-[var(--selected)] text-[var(--text)]"
                           : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
                       )}
                     >
@@ -339,7 +337,7 @@ function CommandPalette() {
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--base)] px-4 py-2">
+        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-2">
           <div className="flex items-center gap-3 font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             <span>
               <span className="font-mono">↑↓</span> Navigate

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const CARD =
   "flex w-full flex-col gap-[13px] rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 text-left text-[var(--text)] " +
-  "transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--mantle))] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--mantle))]";
 
 export function Tag({ children, tone, className }: { children: ReactNode; tone?: "bad" | "wait" | "ok"; className?: string }) {
   const color = tone ? `var(--${tone})` : "var(--subtext-0)";

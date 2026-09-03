@@ -61,8 +61,8 @@ function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
         });
       }}
       className={cn(
-        "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
-        pinned ? "text-[var(--success)]" : "text-[var(--overlay-1)] hover:text-[var(--accent)]",
+        "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] transition-colors",
+        pinned ? "text-[var(--success)]" : "text-[var(--overlay-1)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
       )}
     >
       {pinned ? "Pinned to Home" : pinning ? "Pinning…" : "Pin to Home"}
@@ -109,7 +109,7 @@ function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: 
             <li key={index}>
               <Link
                 to={link.to}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+                className="flex items-center justify-between gap-2 px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-wash)]"
               >
                 <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{link.label}</span>
                 {link.status ? <Badge variant="outline">{link.status}</Badge> : null}

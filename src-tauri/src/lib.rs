@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod acp;
+mod acp_discovery;
+mod acp_paths;
 mod acp_wire;
+mod agent_models;
 mod engine;
 mod panel_window;
 mod proposals;
@@ -507,12 +510,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
+            agent_models::agent_models,
             acp::acp_start,
             acp::acp_prompt,
             acp::acp_cancel,
             acp::acp_stop,
+            acp::acp_statuses,
             acp::acp_probe,
             acp::acp_respond_permission,
+            acp_discovery::acp_discover,
             engine::engine_start,
             engine::engine_reset,
             engine::engine_stop,

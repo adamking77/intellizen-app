@@ -72,7 +72,7 @@ export function NodePicker({
         onClick={() => setOpen((o) => !o)}
         className={cn(
           "flex h-8 w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
-          "transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none",
+          "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none",
         )}
       >
         {selected ? (
@@ -111,7 +111,7 @@ export function NodePicker({
           )}
           <ChevronDown
             className={cn(
-              "h-3 w-3 text-[var(--overlay-1)] transition-transform duration-150",
+              "h-3 w-3 text-[var(--overlay-1)] transition-transform duration-[var(--t-base)] ease-[var(--ease)]",
               open && "rotate-180",
             )}
           />
@@ -145,9 +145,9 @@ export function NodePicker({
                       setOpen(false);
                     }}
                     className={cn(
-                      "flex w-full items-center gap-1.5 px-2 py-1.5 text-left transition-colors duration-150",
+                      "flex w-full items-center gap-1.5 px-2 py-1.5 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                       isSelected
-                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                        ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                         : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                     )}
                   >

@@ -453,7 +453,7 @@ function KanbanCard({
           transform: CSS.Translate.toString(transform),
           opacity: isDragging ? 0.4 : 1,
           boxShadow: dragging ? "0 8px 24px rgba(0, 0, 0, 0.4)" : undefined,
-          backgroundColor: active ? "var(--accent-soft)" : undefined,
+          backgroundColor: active ? "var(--selected)" : undefined,
         }}
         {...attributes}
         {...listeners}

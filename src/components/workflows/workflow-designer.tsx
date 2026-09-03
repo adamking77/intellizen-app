@@ -298,7 +298,7 @@ export function WorkflowDesigner({
                 className={cn(
                   "w-full rounded-[var(--r-row)] border px-2.5 py-2 text-left transition-colors",
                   selectedStep?.id === step.id
-                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                    ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                     : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
                 )}
               >

@@ -36,7 +36,7 @@ export function ProjectData({ projectId, legacyProjectId }: { projectId: string;
               className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
             >
               <Database className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-              <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
+              <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                 {record.title}
               </span>
               {record.status ? <span className="text-meta">{record.status}</span> : null}

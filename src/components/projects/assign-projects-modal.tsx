@@ -144,7 +144,7 @@ export function AssignProjectsModal({
                     onClick={() => toggle(project.id)}
                     className={cn(
                       "flex items-center gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-left transition-colors",
-                      isChecked ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--surface-wash)]",
+                      isChecked ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : "hover:bg-[var(--surface-wash)]",
                     )}
                   >
                     <span className={cn(
@@ -162,7 +162,7 @@ export function AssignProjectsModal({
                     <span className="min-w-0 flex-1">
                       <span className={cn(
                         "block truncate font-ui text-[var(--t-ui)]",
-                        isChecked ? "font-medium text-[var(--accent)]" : "text-[var(--text)]",
+                        isChecked ? "font-medium text-[var(--text)]" : "text-[var(--text)]",
                       )}>
                         {project.name}
                       </span>

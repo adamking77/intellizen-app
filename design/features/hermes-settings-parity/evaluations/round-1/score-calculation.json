@@ -1,0 +1,4 @@
+{
+  "calculated": false,
+  "reason": "The repository has no approved EVAL.md weights or numerical threshold. The evaluator therefore issued a qualitative prototype-parity verdict without inventing a score."
+}

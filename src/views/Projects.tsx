@@ -534,24 +534,21 @@ export function ProjectsView() {
         }}
         className={cn(
           "group/row relative flex w-full cursor-pointer items-start gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left",
-          "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
           isSelected
-            ? "bg-[var(--accent-soft)] pl-[13px]"
+            ? "bg-[var(--selected)] pl-4 hover:bg-[var(--selected-hover)]"
             : indent
               ? "pl-10 hover:bg-[var(--surface-wash)]"
               : "pl-4 hover:bg-[var(--surface-wash)]",
           project.status === "archived" && "opacity-50",
         )}
       >
-        {isSelected && (
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]" />
-        )}
         <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dot }} />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <p className={cn(
               "min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium",
-              isSelected ? "text-[var(--accent)]" : indent ? "text-[var(--subtext-0)]" : "text-[var(--text)]",
+              isSelected ? "text-[var(--text)]" : indent ? "text-[var(--subtext-0)]" : "text-[var(--text)]",
             )}>
               {project.name}
             </p>
@@ -689,27 +686,24 @@ export function ProjectsView() {
                         }}
                         className={cn(
                           "relative flex w-full items-center gap-3 border-b border-[var(--border-subtle)] py-3 pr-3 text-left",
-                          "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                           isOpSelected
-                            ? "bg-[var(--accent-soft)] pl-[13px]"
+                            ? "bg-[var(--selected)] pl-4 hover:bg-[var(--selected-hover)]"
                             : "pl-4 hover:bg-[var(--surface-wash)]",
                         )}
                       >
-                        {isOpSelected && (
-                          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]" />
-                        )}
                         <Layers
                           aria-hidden
                           strokeWidth={1.5}
                           className={cn(
                             "h-3.5 w-3.5 shrink-0",
-                            isOpSelected ? "text-[var(--accent)]" : "text-[var(--subtext-0)]",
+                            isOpSelected ? "text-[var(--text)]" : "text-[var(--subtext-0)]",
                           )}
                         />
                         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className={cn(
                             "min-w-0 truncate font-ui text-[var(--t-ui)] font-semibold",
-                            isOpSelected ? "text-[var(--accent)]" : "text-[var(--text)]",
+                            "text-[var(--text)]",
                           )}>
                             {operation.name}
                           </span>
@@ -765,14 +759,14 @@ export function ProjectsView() {
           >
             <span
               aria-hidden
-              className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors duration-150 group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
+              className="absolute inset-y-0 right-0 w-[2px] bg-transparent transition-colors duration-[var(--t-base)] ease-[var(--ease)] group-hover/resize:bg-[var(--accent)]/60 group-active/resize:bg-[var(--accent)]"
             />
           </div> : null}
         </CollapsibleRail>
 
         {/* Detail pane */}
         <section className={cn(
-          "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)] transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)] transition-[padding] duration-[var(--t-slow)] ease-[var(--ease)]",
           !isNarrow && railCollapsed && "pl-14",
         )}>
           <CollapsedRailTrigger
@@ -1322,7 +1316,7 @@ function OperationDetailPane({
                       className={cn(
                         "rounded-[var(--r-pill)] border px-2 py-1.5 font-ui text-[var(--t-section)] transition-colors disabled:opacity-60",
                         stage.value === caseStage
-                          ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                          ? "border-transparent bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                           : "border-[var(--border-subtle)] bg-[var(--base)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
                       )}
                     >

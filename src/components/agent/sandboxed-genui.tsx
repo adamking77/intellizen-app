@@ -134,7 +134,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
           <button
             type="button"
             onClick={() => setAttempt((current) => current + 1)}
-            className="mt-2 rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[var(--t-count)] font-medium text-[var(--accent)] transition-colors hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="mt-2 rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[var(--t-count)] font-medium text-[var(--accent)] transition-colors hover:border-[var(--accent-border)]"
           >
             Retry
           </button>

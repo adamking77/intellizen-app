@@ -44,7 +44,7 @@ describe("agentFromProfileRow", () => {
     expect(a.role).toBe("Editor");
     expect(a.avatarColor).toBe("#123456");
     expect(a.context).toEqual(["~/a"]);
-    expect(toUiMeta(a)).toEqual({ role: "Editor", avatar_color: "#123456", context: ["~/a"] });
+    expect(toUiMeta(a)).toEqual({ role: "Editor", avatar_style: "sphere", avatar_color: "#123456", context: ["~/a"] });
   });
 });
 

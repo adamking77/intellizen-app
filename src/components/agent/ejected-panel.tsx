@@ -40,7 +40,7 @@ import type { HermesProfile } from "@/engine/profiles";
 
 const ICON =
   "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors " +
-  "hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]";
 
 const NO_THREADS: Record<string, ProfileThread> = {};
 
@@ -109,6 +109,7 @@ export function EjectedPanel() {
       <HudWindow
         profile={selected}
         identity={identity}
+        profiles={Object.values(frame?.profileDirectory ?? {})}
         thread={thread}
         open={mode.open}
         onOpen={(open) => setMode({ type: "open", open })}
@@ -164,6 +165,7 @@ export function EjectedPanel() {
 function HudWindow({
   profile,
   identity,
+  profiles,
   thread,
   open,
   onOpen,
@@ -172,6 +174,7 @@ function HudWindow({
 }: {
   profile: string | null;
   identity: HermesProfile | null;
+  profiles: HermesProfile[];
   thread: ProfileThread | null;
   open: HudOpen;
   onOpen: (open: HudOpen) => void;
@@ -214,12 +217,14 @@ function HudWindow({
   return (
     <Hud
       agent={identity}
+      profiles={profiles}
       target={profile}
       messages={messages}
       run={run}
       voice={voice}
       open={open}
       onOpen={onOpen}
+      onTarget={(name) => requestAction({ type: "select", profile: name })}
       onSend={send}
       onStop={() => profile && requestAction({ type: "stop", profile })}
       onGrow={onGrow}

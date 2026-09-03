@@ -6,9 +6,10 @@ import type { ApprovalDecision, ClarifyDecision, Decision } from "@/engine/trans
 import { cn } from "@/lib/utils";
 
 const PILL =
-  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
-const PILL_GO = "bg-[color-mix(in_srgb,var(--wait)_18%,transparent)] text-[var(--wait)] hover:opacity-90";
-const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:opacity-90";
+  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-colors disabled:opacity-50";
+const PILL_GO = "bg-[color-mix(in_srgb,var(--wait)_18%,transparent)] text-[var(--wait)] hover:bg-[color-mix(in_srgb,var(--wait)_24%,transparent)]";
+const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]";
+const PILL_SELECTED = "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]";
 
 /** The donor's approval gate (design.html "06 · Approval gate"): who asks,
  *  one line of what, the exact payload in mono, the real choices as buttons
@@ -185,7 +186,7 @@ function ClarifyBody({
                       type="button"
                       aria-pressed={selected}
                       onClick={() => setAnswers((a) => ({ ...a, [key]: [choice] }))}
-                      className={cn(PILL, selected ? PILL_GO : PILL_PLAIN)}
+                      className={cn(PILL, selected ? PILL_SELECTED : PILL_PLAIN)}
                     >
                       {choice}
                     </button>

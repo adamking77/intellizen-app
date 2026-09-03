@@ -54,7 +54,7 @@ export function UnitView() {
                   onClick={() => navigate(row.kind === "project" ? `/project/${row.id}` : `/unit/${row.id}`)}
                   className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
                 >
-                  <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
+                  <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                     {row.name}
                   </span>
                   {row.caseLinked ? <StatusPill variant="new">CASE</StatusPill> : null}

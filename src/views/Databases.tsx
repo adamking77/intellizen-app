@@ -235,18 +235,11 @@ export function DatabasesView() {
                       type="button"
                       onClick={() => selectDatabase(database.id)}
                       className={cn(
-                        "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
-                        currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                        "group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--hover)]",
+                        currentDatabase?.id === database.id && "bg-[var(--selected)] hover:bg-[var(--selected-hover)]",
                       )}
                     >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                          currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                        )}
-                      />
-                      <p className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
+                      <p className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                         {database.name}
                       </p>
                     </button>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,7 @@ import { SETTINGS_TITLE } from "./settings-style";
 
 const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
 const card =
-  "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-colors";
+  "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-[background-color,box-shadow] hover:bg-[var(--raised)]";
 const activeTag =
   "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[var(--t-section)] text-[var(--accent)]";
 
@@ -56,24 +56,52 @@ function AccentPicker({
 }) {
   const [hovered, setHovered] = useState<{ name: string; hex: string } | null>(null);
   const shown = hovered ?? flavor.accents.find((a) => a.hex === accent) ?? { name: "custom", hex: accent };
+  const dialog = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const selected = dialog.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    (selected ?? dialog.current)?.focus();
+  }, []);
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--crust)_42%,transparent)] backdrop-blur-[7px]"
+      className="modal-backdrop absolute inset-0 z-20 flex items-center justify-center"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-label="Accent"
-        className="flex w-[400px] flex-col gap-3.5 rounded-[var(--r-plane)] bg-[var(--raised)] p-5 shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+        aria-modal="true"
+        tabIndex={-1}
+        ref={dialog}
+        className="modal-surface flex w-[min(400px,calc(100%_-_24px))] flex-col gap-3.5 p-5"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          if (event.key !== "Tab") return;
+          const controls = [...(dialog.current?.querySelectorAll<HTMLElement>("button") ?? [])];
+          if (!controls.length) return;
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <span className={caps}>Accent</span>
           <span className="text-xs text-[var(--text-muted)]">{flavor.name}</span>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-2 max-[900px]:grid-cols-4">
           {flavor.accents.map((a) => (
             <button
               key={a.name}
@@ -84,7 +112,7 @@ function AccentPicker({
               onClick={() => onPick(a.hex)}
               onMouseEnter={() => setHovered(a)}
               onMouseLeave={() => setHovered(null)}
-              className="h-9 w-9 rounded-[var(--r-pill)] motion-safe:transition-transform motion-safe:hover:scale-[1.14]"
+              className="swatch h-9 w-9 rounded-[var(--r-pill)]"
               style={{
                 background: a.hex,
                 boxShadow: a.hex === accent ? "inset 0 0 0 3px var(--raised), inset 0 0 0 5px var(--text)" : undefined,
@@ -100,7 +128,7 @@ function AccentPicker({
         </div>
 
         <p className="text-xs leading-[1.45] text-[var(--text-muted)]">
-          Moves selection, focus, active navigation and primary actions. It never touches the colours that carry
+          Moves primary actions, keyboard focus and links. It never touches neutral selection or the colours that carry
           meaning — waiting, verified, failed.
         </p>
 

@@ -18,7 +18,8 @@ plug-in.**
 - Hermes supplies agents, sessions, memory, approvals, cron, kanban, skills and
   plugins. We do not rebuild any of those. We show them and drive them.
 - Claude Code, Codex, Gemini and Qwen join as extra agent engines on their own
-  subscriptions, through ACP, the protocol all four already speak. This is the
+  subscriptions, through ACP, using the official registry to discover every
+  installed agent that exposes the protocol. This is the
   one thing Hermes cannot do cleanly for us, and the reason the cockpit exists.
 - Supabase stays. It is where the business data lives. Read and write.
 
@@ -138,7 +139,7 @@ what is in the wrong place. Adam does not need to name components.
 | Agent sessions, streaming replies, tool calls, approvals, profiles, memory, skills, config | **Hermes gateway**: JSON-RPC over WebSocket at `/api/ws` from `hermes serve` | Same door Hermes Desktop uses. Typed TypeScript client is MIT; we copy `json-rpc-gateway.ts` and `websocket-url.ts` into `src/engine/`. |
 | Cron, kanban board and dispatch, plugin routes | **Hermes REST** under `/api/cron`, `/api/plugins/kanban`, `/api/plugins/<id>` | Kanban also pushes events on a WebSocket. |
 | Rooms (many agents, one log, @mentions, passes, caps, needs-you) | **Bot mode's engine**, vendored | `group-rounds.ts`, `group-membership.ts`, `group-activity.ts` and the pure half of `group-chat.ts` are plain TypeScript, MIT. Adapter is two functions: `request` and `requestProfile`. Our adapter routes a member either to the gateway or to ACP. |
-| Claude Code, Codex, Gemini, Qwen as agents | **ACP over stdio**, from `hermes-app/crates/agent/src/acp.rs` | Official adapters: `@zed-industries/claude-code-acp`, `@agentclientprotocol/codex-acp`; `gemini --experimental-acp`; `qwen --acp`. Permission requests become real. (`@zed-industries/codex-acp` is the obsolete package and failed a real first prompt on 2026-09-03.) |
+| Installed command-line agents | **ACP over stdio**, from `hermes-app/crates/agent/src/acp.rs` | Match the official ACP registry against the user's real executable paths, cache it for offline scans, and accept local `*-acp` adapters. Verified bridges remain compatibility fallbacks, never the discovery ceiling. Permission requests become real. |
 | Agents writing into the workspace | **Our MCP server** (`mcp-server/`) | Already ~40 tools. Gains: move card, propose document edit, pin widget, author plugin. Fix the Hermes wrapper at `~/.hermes/mcp-servers/intellizen/run.sh`, which points at a folder that no longer exists. |
 | Floating panel, HUD, eject window, voice, message actions | **hermes-app donor** | `AgentPanel`, `Hud`, `EjectedPanel`, `useEject`, `useVoice`, `dictation.ts`, the Rust `speak`/`transcribe` commands. Rewritten onto IntelliZen's primitives as they move; the behaviour is what transfers. |
 | Document proposals (agent edit arrives as hunks you accept or reject) | **hermes-app donor** | `crates/store/src/proposals.rs`, `Proposal.tsx`. Swap the hand-written diff for the `similar` crate. |

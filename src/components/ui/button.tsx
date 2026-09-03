@@ -4,10 +4,9 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--r-pill)] font-medium font-ui select-none " +
-    "transition-[background-color,border-color,color,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
-    "active:scale-[0.98] " +
+    "transition-[background-color,border-color,color,opacity] duration-[var(--t-base)] ease-[var(--ease)] " +
     "disabled:pointer-events-none disabled:opacity-50 " +
-    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+    "focus-visible:shadow-none",
   {
     variants: {
       variant: {
@@ -22,6 +21,8 @@ const buttonVariants = cva(
         ghost:
           "bg-transparent text-[var(--subtext-0)] border border-transparent " +
           "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
+        selected:
+          "bg-[var(--selected)] text-[var(--text)] border border-transparent hover:bg-[var(--selected-hover)]",
         destructive:
           "bg-[var(--danger)] text-[var(--crust)] hover:opacity-90",
         "accent-soft":

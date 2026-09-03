@@ -122,7 +122,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && draft.trim().length > 0;
   return (
-    <div className="flex shrink-0 flex-col gap-2 rounded-[var(--r-plane)] border-t border-[var(--edge)] bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
         <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
@@ -147,7 +147,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             onClick={onEject}
             aria-label="Eject agent panel"
             title="Eject to its own window"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]"
           >
             <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
@@ -166,7 +166,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             onClick={onStop}
             aria-label="Stop this turn"
             title="Stop"
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] border border-[var(--line-strong)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] border border-[var(--line-strong)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
             <Square className="h-[11px] w-[11px]" strokeWidth={2.2} aria-hidden />
           </button>
@@ -179,7 +179,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             title="Send"
             className={cn(
               "inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity",
-              "disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+              "disabled:opacity-40",
             )}
           >
             <ArrowUp className="h-[15px] w-[15px]" strokeWidth={2.2} aria-hidden />

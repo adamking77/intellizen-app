@@ -2,17 +2,13 @@
 // A Hermes profile and an ACP entry both become an `Agent`; the id says which
 // door saves it (`hermes:<profile>` or `acp:<id>`).
 
-import { defaultAcpLaunch, type AcpAgent, type AcpEngine } from "@/engine/acp-registry";
+import { acpEngineLabel, defaultAcpLaunch, type AcpAgent, type AcpEngine } from "@/engine/acp-registry";
 
 export type AgentEngine = "hermes" | AcpEngine;
 export type AvatarStyle = "sphere" | "blob";
 
 export const ENGINES: { id: AgentEngine; label: string; acp: boolean }[] = [
   { id: "hermes", label: "Hermes", acp: false },
-  { id: "claude-code", label: "Claude Code", acp: true },
-  { id: "codex", label: "Codex", acp: true },
-  { id: "gemini", label: "Gemini", acp: true },
-  { id: "qwen", label: "Qwen", acp: true },
 ];
 
 export type VoiceService = "minimax" | "elevenlabs" | "openai" | "macos-say";
@@ -29,7 +25,7 @@ export function asVoiceService(v: unknown): VoiceService | undefined {
 }
 
 export function engineLabel(engine: AgentEngine): string {
-  return ENGINES.find((e) => e.id === engine)?.label ?? engine;
+  return engine === "hermes" ? "Hermes" : acpEngineLabel(engine);
 }
 
 export interface Agent {
@@ -96,7 +92,7 @@ export interface AgentUiMeta {
 export function toUiMeta(agent: Agent): AgentUiMeta {
   const meta: AgentUiMeta = {};
   if (agent.role.trim()) meta.role = agent.role.trim();
-  if (agent.avatarStyle === "blob") meta.avatar_style = "blob";
+  meta.avatar_style = agent.avatarStyle;
   if (agent.avatarKind) meta.avatar_kind = agent.avatarKind;
   if (agent.avatarColor) meta.avatar_color = agent.avatarColor;
   if (agent.context.length > 0) meta.context = agent.context;
@@ -171,7 +167,10 @@ export function agentFromAcp(entry: AcpAgent): Agent {
 
 /** The ACP registry entry an Agent saves as. `previous` keeps the launch
  *  fields (command, args, cwd) this editor does not show. */
-export function acpFromAgent(agent: Agent, previous?: AcpAgent): AcpAgent {
+export function acpFromAgent(
+  agent: Agent,
+  previous?: Pick<AcpAgent, "command" | "args" | "cwd">,
+): AcpAgent {
   if (agent.engine === "hermes") throw new Error("not an ACP agent");
   const id = (agent.id.startsWith("acp:") ? agent.id.slice(4) : agent.id) || `agent-${Date.now().toString(36)}`;
   const launch = previous ?? defaultAcpLaunch(agent.engine);

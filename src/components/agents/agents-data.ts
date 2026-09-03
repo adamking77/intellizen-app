@@ -3,7 +3,7 @@
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
-import { deleteAcpAgent, listAcpAgents, saveAcpAgent, type AcpAgent } from "@/engine/acp-registry";
+import { deleteAcpAgent, discoverAcpProviders, listAcpAgents, saveAcpAgent, type AcpAgent } from "@/engine/acp-registry";
 import { request, type GatewayClientLike } from "@/engine/contract";
 import { hermesRest } from "@/engine/rest";
 import { levelOf } from "@/voice/dictation";
@@ -176,7 +176,11 @@ export interface SaveOptions {
  *  new Hermes profile is its name). */
 export async function saveAgent(client: GatewayClientLike, agent: Agent, options: SaveOptions): Promise<Agent> {
   if (agent.engine !== "hermes") {
-    const saved = await saveAcpAgent(acpFromAgent(agent, options.previousAcp));
+    const discovered = options.previousAcp
+      ? undefined
+      : (await discoverAcpProviders()).find((provider) => provider.engine === agent.engine);
+    const launch = options.previousAcp ?? (discovered ? { command: discovered.command, args: discovered.args } : undefined);
+    const saved = await saveAcpAgent(acpFromAgent(agent, launch));
     return agentFromAcp(saved);
   }
 

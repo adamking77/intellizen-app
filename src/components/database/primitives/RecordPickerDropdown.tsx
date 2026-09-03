@@ -184,7 +184,7 @@ export function RecordPickerDropdown({
                 className={cn(
                   "flex w-full items-center justify-between gap-3 rounded-[var(--r-plane)] px-2.5 py-2 text-left transition-colors",
                   selected
-                    ? "bg-[color-mix(in_srgb,var(--accent)_14%,var(--mantle)_86%)] text-[var(--text)]"
+                    ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                     : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >

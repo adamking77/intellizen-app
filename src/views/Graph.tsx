@@ -1969,7 +1969,7 @@ export function GraphView() {
                 setConnectSourceId(null);
                 hasAutoFitRef.current = null;
               }}
-              className="h-7 min-w-0 max-w-[180px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-7 min-w-0 max-w-[180px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
             >
               <option value="standalone">Standalone</option>
               {graphMode === "project" && graphProjectId === null ? (
@@ -1992,7 +1992,7 @@ export function GraphView() {
               type="button"
               onClick={() => setInteractionMode("insight")}
               className={cn(
-                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-150",
+                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                 isInsightMode
                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -2004,7 +2004,7 @@ export function GraphView() {
               type="button"
               onClick={() => setInteractionMode("construct")}
               className={cn(
-                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-150",
+                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                 isConstructMode
                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -2024,7 +2024,7 @@ export function GraphView() {
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
                   placeholder="Search ( / )"
-                  className="h-7 w-[160px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-150 hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+                  className="h-7 w-[160px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
                 />
               </div>
             )}
@@ -2148,7 +2148,7 @@ export function GraphView() {
           {/* Insight mode */}
           <div
             className={cn(
-              "absolute inset-0 transition-opacity duration-150",
+              "absolute inset-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)]",
               isInsightMode ? "z-20 opacity-100" : "z-0 pointer-events-none opacity-0",
             )}
           >
@@ -2232,7 +2232,7 @@ export function GraphView() {
           <div
             ref={viewportRef}
             className={cn(
-              "absolute inset-0 transition-opacity duration-150",
+              "absolute inset-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)]",
               placeMode
                 ? "cursor-crosshair"
                 : panStateRef.current
@@ -2794,7 +2794,7 @@ export function GraphView() {
       <aside
         className={cn(
           "z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]",
-          "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "transition-[width] duration-[var(--t-slow)] ease-[var(--ease)]",
           isNarrow ? "absolute inset-y-0 right-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
         )}
         style={{ width: railOpen ? (isNarrow ? "min(340px, calc(100vw - 2rem))" : 340) : 0 }}
@@ -2822,7 +2822,7 @@ export function GraphView() {
               <button
                 type="button"
                 onClick={() => setRailOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                 title="Hide"
               >
                 <X className="h-3.5 w-3.5" />
@@ -2993,7 +2993,7 @@ export function GraphView() {
                               <button
                                 key={relation.edgeId}
                                 type="button"
-                                className="flex items-center justify-between rounded px-1.5 py-1 text-left transition-colors duration-150 hover:bg-[var(--surface-wash)]"
+                                className="flex items-center justify-between rounded px-1.5 py-1 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)]"
                                 onClick={() => {
                                   selectSingleNode(relation.otherNodeId);
                                   setSelectedEdgeId(relation.edgeId);
@@ -3183,7 +3183,7 @@ export function GraphView() {
                           type="button"
                           onClick={() => toggleEntityTypeFilter(type)}
                           className={cn(
-                            "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-150",
+                            "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                             entityTypeFilters[type]
                               ? "hover:bg-[var(--surface-wash)]"
                               : "opacity-50 hover:opacity-80 hover:bg-[var(--surface-wash)]",
@@ -3279,7 +3279,7 @@ export function GraphView() {
                               type="button"
                               onClick={() => setInsightLabelMode(mode)}
                               className={cn(
-                                "flex-1 rounded-[var(--r-pill)] px-2 py-1 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-150",
+                                "flex-1 rounded-[var(--r-pill)] px-2 py-1 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                                 insightLabelMode === mode
                                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -3510,7 +3510,7 @@ export function GraphView() {
                         );
                       }}
                       className={cn(
-                        "flex-1 rounded-[var(--r-pill)] px-3 py-1.5 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-150",
+                        "flex-1 rounded-[var(--r-pill)] px-3 py-1.5 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                         exportTarget === t
                           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                           : "text-[var(--subtext-0)] hover:text-[var(--text)]",

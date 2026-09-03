@@ -7,7 +7,7 @@
 // `clarify.respond`, and the events those raise.
 
 import { request as gatewayRequest, type GatewayClientLike, type GatewayMethod } from "@/engine/contract";
-import { ACP_ENGINE_LABEL, listAcpAgents } from "@/engine/acp-registry";
+import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { acpGatewayClient } from "@/engine/acp-session";
 import { getGatewayClient } from "@/engine/gateway";
 
@@ -44,7 +44,7 @@ export async function listAcpMembers(): Promise<GroupMember[]> {
       display_name: agent.name,
       title: agent.role,
       model: agent.model,
-      provider: ACP_ENGINE_LABEL[agent.engine],
+      provider: acpEngineLabel(agent.engine),
       avatar_style: agent.avatarStyle,
       avatar_kind: agent.avatarKind,
       avatar_color: agent.avatarColor || agent.avatar,

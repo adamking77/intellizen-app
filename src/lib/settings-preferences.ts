@@ -7,6 +7,9 @@ export const DEFAULT_AGENT_CONTEXT_KEY = "intelizen:settings:agent-context";
 export const DEFAULT_WORKSPACE_KEY = "intelizen:settings:workspace";
 export const SHOW_REASONING_KEY = "intelizen:settings:show-reasoning";
 export const SEND_ON_ENTER_KEY = "intelizen:settings:send-on-enter";
+export const SCAN_ON_LAUNCH_KEY = "intelizen:settings:scan-on-launch";
+export const RECONNECT_ON_LAUNCH_KEY = "intelizen:settings:reconnect-on-launch";
+export const ENGINE_MANUAL_DISCONNECT_KEY = "intelizen:engine:manual-disconnect";
 
 const CHANGE_EVENT = "intelizen:settings-changed";
 

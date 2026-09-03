@@ -29,8 +29,7 @@ export interface VoiceButtonProps {
 
 const icon =
   "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors " +
-  "hover:bg-[var(--hover-strong)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "hover:bg-[var(--hover-strong)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent";
 
 export function VoiceButton(props: VoiceButtonProps) {
   return props.mode === "converse" ? <ConverseButton {...props} /> : <DictateButton {...props} />;
@@ -100,7 +99,7 @@ function ConverseButton({ voice, size = 13, className }: VoiceButtonProps) {
       title={label}
       className={cn(
         className ??
-          "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+          "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40",
       )}
       // A running conversation gets its own unmistakable control rather than
       // the same one tinted.

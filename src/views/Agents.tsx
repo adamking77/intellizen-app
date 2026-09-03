@@ -13,6 +13,7 @@ import { TeamSheet } from "@/components/agents/team-sheet";
 import { deleteTeam, loadTeams, newTeamId, saveTeam } from "@/components/agents/teams-store";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useEngineStore } from "@/engine/engine-store";
+import { discoverAcpProviders } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
@@ -47,7 +48,20 @@ export function AgentsView() {
     staleTime: 15_000,
   });
   const teams = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
+  const discoveredProviders = useQuery({
+    queryKey: ["settings", "acp-providers"],
+    queryFn: discoverAcpProviders,
+    staleTime: 15_000,
+  });
   const agents = list.data?.agents ?? [];
+  const providerOptions = [
+    { id: "hermes" as const, label: "Hermes", available: engineOpen },
+    ...(discoveredProviders.data ?? []).map((provider) => ({
+      id: provider.engine,
+      label: provider.label,
+      available: provider.available,
+    })),
+  ];
 
   // Pictures, fetched once per profile that has one.
   const [images, setImages] = useState<Record<string, string | null>>({});
@@ -137,6 +151,9 @@ export function AgentsView() {
 
   const offline = !engineOpen;
   const acpTrouble = list.data?.acpTrouble ?? null;
+  const newAgentEngine = engineOpen
+    ? "hermes"
+    : (discoveredProviders.data ?? []).find((provider) => provider.available)?.engine ?? "hermes";
 
   return (
     <div className="relative h-full overflow-y-auto bg-[var(--base)] px-3 py-4 sm:px-6 sm:py-5">
@@ -145,12 +162,12 @@ export function AgentsView() {
       ) : list.error ? (
         <Notice tone="bad">Your agents could not be read — {errorMessage(list.error)}. Nothing below is missing; the app cannot see it.</Notice>
       ) : acpTrouble ? (
-        <Notice tone="wait">The ACP registry could not be read — {acpTrouble}. Hermes profiles are listed; Claude Code, Codex, Gemini and Qwen agents are not.</Notice>
+        <Notice tone="wait">The ACP registry could not be read — {acpTrouble}. Hermes profiles are listed; command-line agents are not.</Notice>
       ) : null}
 
       {list.isSuccess && agents.length === 0 ? (
         <p className="max-w-[520px] pb-4 font-ui text-[var(--t-meta)] leading-[1.5] text-[var(--text-muted)]">
-          No agents yet. Make one below — a Hermes profile, or a Claude Code, Codex, Gemini or Qwen agent over ACP.
+          No agents yet. Make one below — a Hermes profile or any installed ACP command-line agent.
         </p>
       ) : null}
 
@@ -158,7 +175,7 @@ export function AgentsView() {
         <h1 className={TITLE}>Agents</h1>
         {list.isSuccess ? <Tag>{agents.length} configured</Tag> : null}
         <div className="grow" />
-        <button type="button" className={ACTION} onClick={() => setEditing({ agent: blankAgent(offline ? "claude-code" : "hermes"), creating: true })}>
+        <button type="button" className={ACTION} onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })}>
           New agent
         </button>
       </div>
@@ -196,7 +213,7 @@ export function AgentsView() {
               </div>
             </Card>
           ))}
-          <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(offline ? "claude-code" : "hermes"), creating: true })} />
+          <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
         </div>
       )}
 
@@ -255,6 +272,7 @@ export function AgentsView() {
           detailError={detail.error ? errorMessage(detail.error) : null}
           image={images[opened.id] ?? null}
           defaultContext={defaultContext}
+          providers={providerOptions}
           onSave={(draft, confirmModel) => save.mutateAsync({ draft, confirmModel }).then(() => undefined)}
           onDelete={(a) => setConfirming({ kind: "agent", agent: a })}
           onPickImage={async (url) => {

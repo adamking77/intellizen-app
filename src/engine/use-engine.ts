@@ -6,11 +6,17 @@ import {
   NOT_DESKTOP_HOST,
   resetEngine,
   startEngine,
+  stopEngine,
   type EngineInfo,
 } from "./engine";
 import { useEngineStore } from "./engine-store";
 import { getGatewayClient } from "./gateway";
 import type { ConnectionState, JsonRpcGatewayClient } from "./json-rpc-gateway";
+import {
+  ENGINE_MANUAL_DISCONNECT_KEY,
+  readPreference,
+  RECONNECT_ON_LAUNCH_KEY,
+} from "@/lib/settings-preferences";
 
 export const RETRY_DELAY_MS = 3_000;
 /** Consecutive connect failures against an attached engine before we stop
@@ -20,7 +26,7 @@ export const ATTACHED_RESET_AFTER = 3;
 export type EngineSupervisorDeps = {
   start: () => Promise<EngineInfo>;
   reset: () => Promise<void>;
-  client: Pick<JsonRpcGatewayClient, "connect" | "onState">;
+  client: Pick<JsonRpcGatewayClient, "connect" | "connectionState" | "onState">;
   setConnection: (connection: ConnectionState) => void;
   setInfo: (info: EngineInfo) => void;
   setError: (error: string | null) => void;
@@ -33,6 +39,8 @@ export type EngineSupervisor = {
   dispose: () => void;
 };
 
+let activeSupervisor: EngineSupervisor | null = null;
+
 /** Start (or attach to) the engine, connect the gateway client, and keep it
  *  connected: whenever the socket closes or errors, wait, start again (which
  *  respawns a dead process) and reconnect. One retry timer at a time. */
@@ -44,6 +52,7 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let unsubscribe: (() => void) | null = null;
   let lastState: ConnectionState = "idle";
+  let stateEventVersion = 0;
   let attachedFailures = 0;
   // A close or error that lands while a boot is in flight is not lost: once
   // the boot settles, it is honoured unless the boot left us open.
@@ -84,7 +93,20 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
       if (disposed) return;
       deps.setInfo(info);
       try {
+        const stateVersionBeforeConnect = stateEventVersion;
         await deps.client.connect(engineWebSocketUrl(info));
+        // connect() intentionally returns without emitting when the existing
+        // socket is already open. Reconcile that state explicitly so a manual
+        // Connect click cannot leave Settings displaying "connecting" forever.
+        if (
+          stateEventVersion === stateVersionBeforeConnect
+          && deps.client.connectionState === "open"
+        ) {
+          lastState = "open";
+          deps.setConnection("open");
+          deps.setError(null);
+          attachedFailures = 0;
+        }
       } catch (error) {
         await noteConnectFailure(info);
         throw error;
@@ -106,6 +128,7 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
   const attach = () => {
     unsubscribe = deps.client.onState((state) => {
       if (disposed) return;
+      stateEventVersion += 1;
       lastState = state;
       deps.setConnection(state);
       if (state === "open") {
@@ -139,25 +162,90 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
 const BOOT_FLAG = "__intellizenEngineBoot";
 type BootGlobal = typeof globalThis & { [BOOT_FLAG]?: boolean };
 
+function makeSupervisor() {
+  const store = useEngineStore.getState();
+  return createEngineSupervisor({
+    start: startEngine,
+    reset: resetEngine,
+    client: getGatewayClient(),
+    setConnection: store.setConnection,
+    setInfo: store.setInfo,
+    setError: store.setError,
+  });
+}
+
+function markManualDisconnect(disconnected: boolean) {
+  try {
+    window.localStorage.setItem(ENGINE_MANUAL_DISCONNECT_KEY, disconnected ? "1" : "0");
+  } catch {
+    /* The current window still disconnects when storage is unavailable. */
+  }
+}
+
+function pauseLocalEngine() {
+  activeSupervisor?.dispose();
+  activeSupervisor = null;
+  getGatewayClient().close();
+  const store = useEngineStore.getState();
+  store.setConnection("closed");
+  store.setInfo(null);
+  store.setError(null);
+  (globalThis as BootGlobal)[BOOT_FLAG] = false;
+}
+
+/** Start or reconnect Hermes on demand. Safe to call repeatedly. */
+export async function connectEngine() {
+  const store = useEngineStore.getState();
+  if (!isDesktopHost()) {
+    store.setError(NOT_DESKTOP_HOST);
+    return;
+  }
+  // A manual click is a fresh attempt. Clear a stale failure immediately so
+  // Settings cannot continue to say "offline" while an existing healthy
+  // engine/socket is being reused.
+  store.setError(null);
+  store.setConnection("connecting");
+  markManualDisconnect(false);
+  const scope = globalThis as BootGlobal;
+  scope[BOOT_FLAG] = true;
+  activeSupervisor ??= makeSupervisor();
+  await activeSupervisor.boot();
+}
+
+/** Stop retrying, close the gateway, and stop an engine spawned by IntelliZen. */
+export async function disconnectEngine() {
+  markManualDisconnect(true);
+  pauseLocalEngine();
+  try {
+    await stopEngine();
+  } finally {
+    // The marker only coordinates windows that are alive during this action.
+    // Launch behavior continues to be governed by Reconnect on launch.
+    markManualDisconnect(false);
+  }
+}
+
 /** Call once from the app shell. */
 export function useEngineBoot() {
   useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === ENGINE_MANUAL_DISCONNECT_KEY && event.newValue === "1") {
+        pauseLocalEngine();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
     const scope = globalThis as BootGlobal;
-    if (scope[BOOT_FLAG]) return;
-    scope[BOOT_FLAG] = true;
-    const store = useEngineStore.getState();
-    if (!isDesktopHost()) {
-      store.setError(NOT_DESKTOP_HOST);
-      return;
+    if (!scope[BOOT_FLAG]) {
+      const manuallyDisconnected = readPreference(ENGINE_MANUAL_DISCONNECT_KEY, "0") === "1";
+      const reconnectOnLaunch = readPreference(RECONNECT_ON_LAUNCH_KEY, "1") !== "0";
+      if (manuallyDisconnected || !reconnectOnLaunch) {
+        pauseLocalEngine();
+      } else {
+        void connectEngine();
+      }
     }
-    const supervisor = createEngineSupervisor({
-      start: startEngine,
-      reset: resetEngine,
-      client: getGatewayClient(),
-      setConnection: store.setConnection,
-      setInfo: store.setInfo,
-      setError: store.setError,
-    });
-    void supervisor.boot();
+
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 }

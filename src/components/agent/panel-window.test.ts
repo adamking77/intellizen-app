@@ -14,6 +14,8 @@ describe("ejected panel state", () => {
     const hud = panelModeReducer({ hud: false, open: "none" }, { type: "reduce" });
     expect(hud).toEqual({ hud: true, open: "none" });
     expect(sizeFor(hud)).toEqual({ w: 468, h: 126 });
+    const roster = panelModeReducer(hud, { type: "open", open: "roster" });
+    expect(sizeFor(roster)).toEqual({ w: 468, h: 286 });
     const chat = panelModeReducer(hud, { type: "open", open: "chat" });
     expect(sizeFor(chat)).toEqual({ w: 496, h: 406 });
     expect(panelModeReducer(chat, { type: "grow" })).toEqual({ hud: false, open: "none" });

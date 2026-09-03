@@ -157,7 +157,7 @@ export function ProjectPickerModal({
                       "group flex items-center justify-between gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
                       isSaving
                         ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
-                        : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)]",
+                        : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
                       savingProjectId !== null && !isSaving && "opacity-40",
                     )}
                   >
@@ -246,7 +246,7 @@ export function ProjectPickerModal({
                 className={cn(
                   "w-full rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2.5",
                   "font-ui text-[var(--t-meta)] font-medium text-[var(--subtext-0)]",
-                  "transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
+                  "transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >
                 + New standalone evidence pile

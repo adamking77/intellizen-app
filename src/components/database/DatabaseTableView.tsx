@@ -535,7 +535,7 @@ export function DatabaseTableView({
                       }}
                     >
                       <ChevronRight
-                        className={`h-3 w-3 transition-transform duration-150${isExpanded ? " rotate-90" : ""}`}
+                        className={`h-3 w-3 transition-transform duration-[var(--t-base)] ease-[var(--ease)]${isExpanded ? " rotate-90" : ""}`}
                       />
                     </button>
                   )}

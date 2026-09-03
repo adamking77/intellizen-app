@@ -21,6 +21,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
   const client = useQueryClient();
   const [profile, setProfile] = useState("");
   const [query, setQuery] = useState("");
+  const [availableOnly, setAvailableOnly] = useState(false);
   const profiles = useQuery({
     queryKey: ["settings", "profiles"],
     queryFn: () => listProfiles(getGatewayClient()),
@@ -42,9 +43,10 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (capabilities.data ?? []).filter((row) =>
-      !needle || `${row.name} ${row.description} ${row.detail}`.toLowerCase().includes(needle),
+      (!availableOnly || row.available) &&
+      (!needle || `${row.name} ${row.description} ${row.detail}`.toLowerCase().includes(needle)),
     );
-  }, [capabilities.data, query]);
+  }, [availableOnly, capabilities.data, query]);
 
   return (
     <div className="space-y-4">
@@ -55,27 +57,36 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
             What this Hermes profile can use. Changes are written through Hermes and apply to its next session.
           </p>
         </div>
-        <select
-          aria-label="Hermes profile"
-          value={effectiveProfile}
-          onChange={(event) => setProfile(event.target.value)}
-          disabled={!engineOpen || profiles.isPending}
-          className="rounded-[var(--r-row)] border-0 bg-[var(--input)] px-3 py-2 font-ui text-xs text-[var(--text)] outline-none focus:ring-1 focus:ring-[var(--accent-border)]"
-        >
-          {(profiles.data ?? []).map((row) => <option key={row.name} value={row.name}>{row.displayName || row.name}</option>)}
-        </select>
       </header>
 
       {!engineOpen ? <Notice>Hermes is offline. Start it to read or change its capabilities.</Notice> : null}
       {capabilities.error ? <Notice bad>{errorMessage(capabilities.error)}</Notice> : null}
 
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Filter capabilities…"
-        aria-label="Filter capabilities"
-        className="w-full max-w-xs rounded-[var(--r-row)] border-0 bg-[var(--input)] px-3 py-2 font-ui text-xs text-[var(--text)] outline-none placeholder:text-[var(--overlay-0)] focus:ring-1 focus:ring-[var(--accent-border)]"
-      />
+      <div className="flex flex-wrap items-center gap-2 py-1">
+        {(profiles.data ?? []).map((row) => (
+          <button
+            key={row.name}
+            type="button"
+            className="pill"
+            aria-selected={effectiveProfile === row.name}
+            disabled={!engineOpen}
+            onClick={() => setProfile(row.name)}
+          >
+            {row.displayName || row.name}
+          </button>
+        ))}
+        {(profiles.data?.length ?? 0) > 0 ? <div className="h-[18px] w-px bg-[var(--line)]" /> : null}
+        <button type="button" className="pill" aria-selected={availableOnly} disabled={!engineOpen} onClick={() => setAvailableOnly((value) => !value)}>Available only</button>
+        <div className="min-w-2 flex-1" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Filter…"
+          aria-label="Filter capabilities"
+          disabled={!engineOpen}
+          className="w-[180px] rounded-[var(--r-row)] border-0 bg-[var(--crust)] px-2.5 py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-0)] max-[900px]:w-full"
+        />
+      </div>
 
       {capabilities.isPending && engineOpen ? (
         <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 rounded bg-[var(--line)] opacity-40" />)}</div>
@@ -86,7 +97,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
         if (!rows.length) return null;
         return (
           <section key={group.id} className="pt-2">
-            <div className="flex items-baseline gap-2 border-b border-[var(--hair)] pb-2">
+            <div className="flex items-baseline gap-2 pb-0.5">
               <h2 className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</h2>
               <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
               <span className="text-[var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
@@ -94,8 +105,9 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
             {rows.map((row) => {
               const pending = toggle.isPending && toggle.variables?.id === row.id && toggle.variables.kind === row.kind;
               return (
-                <div key={`${row.kind}:${row.id}`} className={cn("flex items-center gap-3 border-b border-[var(--hair)] py-2.5", !row.available && "opacity-45")}>
+                <div key={`${row.kind}:${row.id}`} className={cn("flex items-center gap-3 border-b border-[var(--hair)] px-0.5 py-[9px]", !row.available && "opacity-45")}>
                   <SettingSwitch
+                    size="compact"
                     on={row.enabled}
                     label={`${row.enabled ? "Disable" : "Enable"} ${row.name}`}
                     disabled={pending || !row.available}
@@ -112,12 +124,19 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
       })}
 
       {!capabilities.isPending && engineOpen && shown.length === 0 ? (
-        <p className="py-5 text-xs text-[var(--subtext-0)]">Nothing matches.</p>
+        <div className="py-5">
+          <p className="text-sm text-[var(--text)]">Nothing matches.</p>
+          <p className="mt-1 text-xs text-[var(--subtext-0)]">Try a different profile, turn off the availability filter, or use a shorter search.</p>
+        </div>
+      ) : null}
+
+      {!capabilities.isPending && (capabilities.data?.length ?? 0) > 0 ? (
+        <p className="pt-2 text-[var(--t-meta)] text-[var(--overlay-1)]">{shown.length} of {capabilities.data?.length ?? 0} shown. Capabilities belong to the active Hermes profile.</p>
       ) : null}
     </div>
   );
 }
 
 function Notice({ children, bad }: { children: React.ReactNode; bad?: boolean }) {
-  return <p className={cn("rounded-[var(--r-row)] bg-[var(--mantle)] px-3 py-2 text-xs", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{children}</p>;
+  return <p className={cn("rounded-[var(--r-row)] px-3 py-2 text-xs", bad ? "border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] text-[var(--danger)]" : "bg-[var(--mantle)] text-[var(--subtext-0)]")}>{children}</p>;
 }

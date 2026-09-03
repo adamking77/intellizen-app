@@ -397,19 +397,16 @@ export function CanvasView() {
                       className={cn(
                         "group relative flex items-center gap-1 rounded py-1.5 pl-2 pr-1 transition-colors",
                         isActive
-                          ? "bg-[var(--accent-soft)]"
+                          ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                           : "hover:bg-[var(--surface-wash)]",
                       )}
                     >
-                      {isActive && (
-                        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l bg-[var(--accent)]" />
-                      )}
                       <button
                         type="button"
                         onClick={() => selectCanvas(canvas.id)}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <div className={cn("truncate text-[var(--t-meta)]", isActive ? "text-[var(--accent)]" : "text-[var(--subtext-1)]")}>
+                        <div className={cn("truncate text-[var(--t-meta)]", isActive ? "font-medium text-[var(--text)]" : "text-[var(--subtext-1)]")}>
                           {canvas.name}
                         </div>
                         <div className="mt-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">

@@ -1,0 +1,16 @@
+{
+  "artifact": "IntelliZen v3 working tree",
+  "baseCommit": "28876881df96b55cec7ee3b5c9ececd35c8cf5f4",
+  "diffHash": "c41dd7663bf36636a76cd79aeeb7cb06f5a911bd9060b06e71ed8e74f1f5ca95",
+  "reviewMode": "prototype",
+  "policy": "diagnostic fallback; no project EVAL.md",
+  "verdict": "PASS",
+  "releaseAuthorization": false,
+  "blockers": [],
+  "evidenceSufficiency": "sufficient for requested desktop Hermes parity; partial for native-only integrations, 390px reflow, and 200% zoom",
+  "findings": [],
+  "residualGaps": [
+    "Native automation resolves the concurrently running production app because production and v3 share the visible accessibility identity.",
+    "Narrow-width and 200% zoom states were not captured in this round."
+  ]
+}

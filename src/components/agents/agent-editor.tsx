@@ -1,8 +1,10 @@
 // The editor modal, after hermes-app's `pages/Agents.tsx` Editor: identity
 // column on the left (avatar, colour, voice), the operative fields on the
-// right (name, role, engine, model), then Identity (SOUL.md) and Context.
+// right (name, role, model), then Identity (SOUL.md) and Context. Runtime
+// routing stays with the agent configuration rather than leaking into this UI.
 
 import { Dialog } from "@base-ui/react/dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +14,19 @@ import { errorMessage } from "@/lib/toast";
 import { flavorById, loadTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-import { changed, ENGINES, isHermes, validProfileName, VOICE_SERVICES, type Agent, type AgentEngine, type AvatarStyle, type VoiceService } from "./agent-model";
+import {
+  blankAgent,
+  changed,
+  ENGINES,
+  engineLabel,
+  isHermes,
+  validProfileName,
+  VOICE_SERVICES,
+  type Agent,
+  type AgentEngine,
+  type AvatarStyle,
+  type VoiceService,
+} from "./agent-model";
 import { previewVoice } from "./agents-data";
 import { Avatar, BLOB_KINDS } from "./avatar";
 
@@ -23,8 +37,28 @@ function voiceLabel(service: VoiceService | undefined): string {
 const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
 const FIELD =
   "w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-border)]";
+  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
 const PILL = "pill";
+const COMPACT_PILL = "pill pill-compact";
+const COMPACT_GROUP =
+  "inline-flex items-center gap-0.5 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-0.5";
+
+export interface AgentProviderOption {
+  id: AgentEngine;
+  label: string;
+  available: boolean;
+}
+
+interface AgentModelOption {
+  id: string;
+  /** Hermes inference provider; empty for a CLI that runs as itself. */
+  provider: string;
+  group: string;
+}
+
+function modelValue(model: Pick<AgentModelOption, "id" | "provider">): string {
+  return JSON.stringify([model.provider, model.id]);
+}
 
 export interface EditorProps {
   agent: Agent;
@@ -34,6 +68,9 @@ export interface EditorProps {
   detailError: string | null;
   image: string | null;
   defaultContext: string[];
+  /** Installed/discovered runtimes. Existing agents retain their provider;
+   *  new agents can choose any available one. */
+  providers?: AgentProviderOption[];
   /** Resolves when written; rejects with the reason. `confirmModel` resends a
    *  pin Hermes asked to confirm. */
   onSave: (draft: Agent, confirmModel: boolean) => Promise<void>;
@@ -49,6 +86,7 @@ export function AgentEditor({
   detailError,
   image,
   defaultContext,
+  providers = ENGINES.map((engine) => ({ id: engine.id, label: engine.label, available: true })),
   onSave,
   onDelete,
   onPickImage,
@@ -61,6 +99,8 @@ export function AgentEditor({
   const [picking, setPicking] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewLevel, setPreviewLevel] = useState(0);
+  const [proceduralPreview, setProceduralPreview] = useState(false);
+  const [models, setModels] = useState<AgentModelOption[] | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   // The detail read lands after mount; take it once, without clobbering
@@ -76,17 +116,46 @@ export function AgentEditor({
     }));
   }, [agent.identity, agent.provider, agent.model, agent.voiceId, agent.voiceService]);
 
-  const dirty = creating || changed(draft, agent);
+  useEffect(() => {
+    let live = true;
+    setModels(null);
+    void invoke<AgentModelOption[]>("agent_models", { provider: draft.engine })
+      .then((found) => live && setModels(found))
+      .catch(() => live && setModels([]));
+    return () => {
+      live = false;
+    };
+  }, [draft.engine]);
+
+  const dirty = creating || proceduralPreview || changed(draft, agent);
   const hermes = isHermes(draft);
   const accents = flavorById(loadTheme().flavor).accents;
   const context = draft.context.length > 0 ? draft.context : defaultContext;
   const inherited = draft.context.length === 0;
   const name = draft.name.trim();
   const nameOk = name.length > 0 && (!hermes || !creating || validProfileName(name));
+  const providerOptions = providers.some((provider) => provider.id === draft.engine)
+    ? providers
+    : [{ id: draft.engine, label: engineLabel(draft.engine), available: false }, ...providers];
+  const selectedModel = (models ?? []).find(
+    (model) => model.id === draft.model && (!hermes || model.provider === draft.provider),
+  );
+  const visibleModels = draft.model && !selectedModel
+    ? [{ id: draft.model, provider: hermes ? draft.provider : "", group: "Current" }, ...(models ?? [])]
+    : (models ?? []);
+  const groupedModels = visibleModels.reduce<Record<string, AgentModelOption[]>>((groups, model) => {
+    (groups[model.group] ??= []).push(model);
+    return groups;
+  }, {});
   const set = (patch: Partial<Agent>) => {
     setError(null);
     setConfirm(null);
     setDraft((d) => ({ ...d, ...patch }));
+  };
+
+  const chooseProvider = (engine: AgentEngine) => {
+    const fresh = blankAgent(engine);
+    set({ id: fresh.id, engine, provider: "", model: "" });
   };
 
   const save = async (confirmModel = false) => {
@@ -95,6 +164,7 @@ export function AgentEditor({
     setError(null);
     try {
       await onSave({ ...draft, name, displayName: draft.displayName.trim() || name }, confirmModel);
+      if (proceduralPreview && image) await onPickImage(null);
       onClose();
     } catch (e) {
       if (e instanceof Error && e.name === "ModelConfirmRequired") setConfirm(e.message);
@@ -122,7 +192,9 @@ export function AgentEditor({
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
-      void onPickImage(typeof reader.result === "string" ? reader.result : null).catch((e) => setError(errorMessage(e)));
+      void onPickImage(typeof reader.result === "string" ? reader.result : null)
+        .then(() => setProceduralPreview(false))
+        .catch((e) => setError(errorMessage(e)));
     };
     reader.readAsDataURL(f);
   };
@@ -130,25 +202,35 @@ export function AgentEditor({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-[120] bg-[color-mix(in_srgb,var(--crust)_42%,transparent)] backdrop-blur-[7px]" />
+        <Dialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
         <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <Dialog.Popup
             aria-label={creating ? "New agent" : "Edit agent"}
-            className="flex max-h-[calc(100dvh-24px)] w-[min(588px,calc(100vw-24px))] flex-col overflow-y-auto rounded-[var(--r-plane)] bg-[var(--raised)] outline-none shadow-[var(--shadow-elevated)]"
+            className="modal-surface flex max-h-[86dvh] w-[min(588px,calc(100vw-24px))] flex-col overflow-y-auto"
           >
             <div className="flex flex-col items-start gap-[18px] px-4 pt-5 sm:flex-row sm:px-[22px]">
               {/* Identity column: things the agent is. */}
               <div className="flex w-full shrink-0 flex-col items-center gap-2.5 sm:w-[168px]">
-                <Avatar agent={draft} size={76} image={image} speaking={previewing ? previewLevel : undefined} />
+                <span className={CAPS}>Avatar</span>
+                <Avatar
+                  agent={draft}
+                  size={76}
+                  image={proceduralPreview ? null : image}
+                  animate="always"
+                  speaking={previewing ? previewLevel : undefined}
+                />
 
-                <div className="flex gap-[3px] rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-[3px]">
+                <div className={COMPACT_GROUP} role="group" aria-label="Avatar style">
                   {(["sphere", "blob"] as AvatarStyle[]).map((style) => (
                     <button
                       key={style}
                       type="button"
-                      className={PILL}
                       aria-selected={draft.avatarStyle === style}
-                      onClick={() => set({ avatarStyle: style, avatarKind: style === "blob" ? draft.avatarKind : undefined })}
+                      className={COMPACT_PILL}
+                      onClick={() => {
+                        setProceduralPreview(true);
+                        set({ avatarStyle: style, avatarKind: style === "blob" ? draft.avatarKind : undefined });
+                      }}
                     >
                       {style === "sphere" ? "Sphere" : "Blob"}
                     </button>
@@ -161,8 +243,11 @@ export function AgentEditor({
                       type="button"
                       title="Auto — the name decides"
                       aria-pressed={!draft.avatarKind}
-                      onClick={() => set({ avatarKind: undefined })}
-                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] aria-pressed:bg-[var(--selected)]"
+                      onClick={() => {
+                        setProceduralPreview(true);
+                        set({ avatarKind: undefined });
+                      }}
+                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                     >
                       Auto
                     </button>
@@ -173,8 +258,11 @@ export function AgentEditor({
                         title={kind}
                         aria-label={`${kind} blob`}
                         aria-pressed={draft.avatarKind === kind}
-                        onClick={() => set({ avatarKind: kind })}
-                        className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent aria-pressed:bg-[var(--selected)]"
+                        onClick={() => {
+                          setProceduralPreview(true);
+                          set({ avatarKind: kind });
+                        }}
+                        className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                       >
                         <Avatar agent={{ ...draft, avatarStyle: "blob", avatarKind: kind }} size={26} animate={false} />
                       </button>
@@ -183,12 +271,20 @@ export function AgentEditor({
                 ) : null}
 
                 {hermes && !creating ? (
-                  <div className="flex gap-[3px] rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-[3px]">
-                    <button type="button" className={PILL} style={{ padding: "4px 12px", fontSize: 11 }} onClick={() => file.current?.click()}>
+                  <div className={COMPACT_GROUP} role="group" aria-label="Avatar picture">
+                    <button type="button" className={COMPACT_PILL} onClick={() => file.current?.click()}>
                       {image ? "Replace picture" : "Picture"}
                     </button>
                     {image ? (
-                      <button type="button" className={PILL} style={{ padding: "4px 12px", fontSize: 11 }} onClick={() => void onPickImage(null).catch((e) => setError(errorMessage(e)))}>
+                      <button
+                        type="button"
+                        className={COMPACT_PILL}
+                        onClick={() =>
+                          void onPickImage(null)
+                            .then(() => setProceduralPreview(false))
+                            .catch((e) => setError(errorMessage(e)))
+                        }
+                      >
                         Remove
                       </button>
                     ) : null}
@@ -200,8 +296,11 @@ export function AgentEditor({
                   <button
                     type="button"
                     title="Auto — the name decides"
-                    onClick={() => set({ avatarColor: undefined })}
-                    className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[var(--t-count)] text-[var(--text-muted)]"
+                    onClick={() => {
+                      setProceduralPreview(true);
+                      set({ avatarColor: undefined });
+                    }}
+                    className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[var(--t-count)] text-[var(--text-muted)] transition-colors hover:bg-[var(--raised)]"
                     style={{ boxShadow: !draft.avatarColor ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined }}
                   >
                     A
@@ -213,8 +312,11 @@ export function AgentEditor({
                       title={a.name}
                       aria-label={a.name}
                       aria-pressed={draft.avatarColor === a.hex}
-                      onClick={() => set({ avatarColor: a.hex })}
-                      className="h-5 w-5 rounded-[var(--r-pill)]"
+                      onClick={() => {
+                        setProceduralPreview(true);
+                        set({ avatarColor: a.hex });
+                      }}
+                      className="swatch h-5 w-5 rounded-[var(--r-pill)]"
                       style={{
                         background: a.hex,
                         boxShadow: draft.avatarColor === a.hex ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined,
@@ -223,7 +325,11 @@ export function AgentEditor({
                   ))}
                 </div>
                 <span className="text-center font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
-                  {image ? "Picture override." : draft.avatarKind || draft.avatarColor ? "Pinned." : "Drawn from the name."}
+                  {image && !proceduralPreview
+                    ? "Picture override. Choose Sphere or Blob to replace it when you save."
+                    : draft.avatarKind || draft.avatarColor
+                      ? "Procedural avatar pinned."
+                      : "Drawn from the name."}
                 </span>
 
                 {/* Voice, at the foot of the identity column: something the
@@ -309,49 +415,52 @@ export function AgentEditor({
 
                 <div className="grid grid-cols-2 gap-[11px]">
                   <div className="flex flex-col gap-1">
-                    <span className={CAPS}>Engine</span>
+                    <span className={CAPS}>Provider</span>
                     <select
                       className={cn(FIELD, "px-[10px] py-2")}
                       value={draft.engine}
                       disabled={!creating}
-                      title={creating ? undefined : "An agent keeps its engine; make a new one to move it."}
-                      onChange={(e) => set({ engine: e.target.value as AgentEngine, model: "", provider: "" })}
+                      title={creating ? undefined : "An agent keeps its provider; make a new one to move it."}
+                      onChange={(event) => chooseProvider(event.target.value as AgentEngine)}
                     >
-                      {ENGINES.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.label}
+                      {providerOptions.map((provider) => (
+                        <option key={provider.id} value={provider.id} disabled={!provider.available && provider.id !== draft.engine}>
+                          {provider.label}{provider.available || provider.id === draft.engine ? "" : " (not connected)"}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className={CAPS}>Model</span>
-                    {loadingDetail ? (
+                    {loadingDetail || models === null ? (
                       <div className={cn(FIELD, "px-[10px] py-2 text-[var(--text-muted)]")}>Reading…</div>
                     ) : (
-                      <input
+                      <select
                         className={cn(FIELD, "px-[10px] py-2 font-mono text-[var(--t-meta)]")}
-                        value={draft.model}
-                        placeholder={hermes ? "model id" : "model id (optional)"}
-                        onChange={(e) => set({ model: e.target.value })}
-                      />
+                        aria-label="Model"
+                        value={selectedModel ? modelValue(selectedModel) : draft.model ? modelValue(visibleModels[0]!) : ""}
+                        onChange={(event) => {
+                          if (!event.target.value) return set({ model: "", provider: "" });
+                          const [provider, model] = JSON.parse(event.target.value) as [string, string];
+                          set({ model, provider: hermes ? provider : "" });
+                        }}
+                      >
+                        <option value="">{visibleModels.length ? "Choose a model…" : "No models found"}</option>
+                        {Object.entries(groupedModels).map(([group, options]) =>
+                          group ? (
+                            <optgroup key={group} label={group}>
+                              {options.map((model) => (
+                                <option key={modelValue(model)} value={modelValue(model)}>{model.id}</option>
+                              ))}
+                            </optgroup>
+                          ) : options.map((model) => (
+                            <option key={modelValue(model)} value={modelValue(model)}>{model.id}</option>
+                          )),
+                        )}
+                      </select>
                     )}
                   </div>
                 </div>
-                {hermes ? (
-                  <div className="flex flex-col gap-1">
-                    <span className={CAPS}>Provider</span>
-                    <input
-                      className={cn(FIELD, "px-[10px] py-2 font-mono text-[var(--t-meta)]")}
-                      value={draft.provider}
-                      placeholder={creating ? "inherits the launch profile's" : "provider id"}
-                      onChange={(e) => set({ provider: e.target.value })}
-                    />
-                    <span className="font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
-                      Provider and model are pinned together, or not at all.
-                    </span>
-                  </div>
-                ) : null}
 
                 {detailError ? (
                   <div className="rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">

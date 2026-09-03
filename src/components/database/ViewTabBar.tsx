@@ -319,7 +319,7 @@ export function ViewTabBar({
         <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
           <div ref={filterRef} className="relative">
             <Button
-              variant={filterCount > 0 ? "accent-soft" : "ghost"}
+              variant={filterCount > 0 ? "selected" : "ghost"}
               size="sm"
               onClick={() => togglePanel("filter")}
               aria-expanded={filterOpen}
@@ -339,7 +339,7 @@ export function ViewTabBar({
 
           <div ref={sortRef} className="relative">
             <Button
-              variant={sortCount > 0 ? "accent-soft" : "ghost"}
+              variant={sortCount > 0 ? "selected" : "ghost"}
               size="sm"
               onClick={() => togglePanel("sort")}
               aria-expanded={sortOpen}
@@ -359,7 +359,7 @@ export function ViewTabBar({
           </div>
 
           <Button
-            variant={hasDisplaySettings ? "accent-soft" : "ghost"}
+            variant={hasDisplaySettings ? "selected" : "ghost"}
             size="sm"
             onClick={() => {
               closePanels();
@@ -726,14 +726,14 @@ function SortPanel({
             <div key={field.id} className="flex items-center gap-2 rounded-[var(--r-plane)] bg-[var(--base)] px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-[var(--t-ui)] text-[var(--text)]">{field.name}</span>
               <Button
-                variant={activeSort?.direction === "asc" ? "accent-soft" : "ghost"}
+                variant={activeSort?.direction === "asc" ? "selected" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "asc")}
               >
                 Asc
               </Button>
               <Button
-                variant={activeSort?.direction === "desc" ? "accent-soft" : "ghost"}
+                variant={activeSort?.direction === "desc" ? "selected" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "desc")}
               >
@@ -927,7 +927,7 @@ function ViewSettingsModal({
                           return (
                             <button
                               className={cn(
-                                "grid min-h-[76px] gap-1 rounded-[var(--r-row)] border p-3 text-left transition-colors duration-150",
+                                "grid min-h-[76px] gap-1 rounded-[var(--r-row)] border p-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                                 selected
                                   ? "border-[var(--border)] bg-[var(--base)] text-[var(--text)]"
                                   : "border-transparent bg-transparent text-[var(--subtext-0)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",

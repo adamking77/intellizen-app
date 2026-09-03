@@ -525,7 +525,7 @@ export function ReportsView() {
         </CollapsibleRail>
 
         <section className={cn(
-          "relative min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "relative min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-[var(--t-slow)] ease-[var(--ease)]",
           isCramped && !selectedRecordId ? "hidden" : "flex",
           !isCramped && railCollapsed && "pl-14",
         )}>
@@ -757,7 +757,7 @@ function DocumentRow({
       onClick={() => onSelect(record.id)}
       className={cn(
         "grid w-full grid-cols-[1fr_auto] gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-left transition-colors",
-        selected ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--surface-wash)]",
+        selected ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : "hover:bg-[var(--surface-wash)]",
       )}
     >
       <span className="min-w-0">

@@ -35,7 +35,7 @@ export function Checkbox({
       <div
         className={cn(
           "h-4 w-4 rounded-[var(--r-row)] border inline-flex items-center justify-center",
-          "transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "transition-[background-color,border-color] duration-[var(--t-base)] ease-[var(--ease)]",
           checked
             ? "bg-[var(--accent)] border-[var(--accent)]"
             : indeterminate

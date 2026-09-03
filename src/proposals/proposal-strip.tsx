@@ -6,9 +6,9 @@ import { hunkStat, proposalStat, type Hunk, type Proposal } from "./types";
 import { useProposals } from "./use-proposals";
 
 const PILL =
-  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
-const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:opacity-90";
-const PILL_PRIMARY = "bg-[var(--accent)] text-[var(--crust)] hover:opacity-90";
+  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-colors disabled:opacity-50";
+const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]";
+const PILL_PRIMARY = "bg-[var(--accent)] text-[var(--crust)] hover:brightness-110";
 
 /** Every proposal waiting on the open document, above the editor.
  *

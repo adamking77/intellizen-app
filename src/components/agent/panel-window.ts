@@ -29,6 +29,7 @@ export const PANEL_HUD_HANDOFF_KEY = "intelizen:agent-panel-hud";
 export const PANEL_SIZES = {
   panel: { w: 380, h: 620 },
   hud: { w: 468, h: 126 },
+  roster: { w: 468, h: 286 },
   chat: { w: 496, h: 406 },
 } as const;
 
@@ -86,7 +87,7 @@ export function ejectReducer(state: EjectState, event: EjectEvent): EjectState {
  *  grows; the chat opens upward from it. */
 export interface PanelMode {
   hud: boolean;
-  open: "none" | "chat";
+  open: "none" | "roster" | "chat";
 }
 
 export type PanelModeEvent =
@@ -107,7 +108,9 @@ export function panelModeReducer(mode: PanelMode, event: PanelModeEvent): PanelM
 
 export function sizeFor(mode: PanelMode): { w: number; h: number } {
   if (!mode.hud) return PANEL_SIZES.panel;
-  return mode.open === "chat" ? PANEL_SIZES.chat : PANEL_SIZES.hud;
+  if (mode.open === "chat") return PANEL_SIZES.chat;
+  if (mode.open === "roster") return PANEL_SIZES.roster;
+  return PANEL_SIZES.hud;
 }
 
 // ── The channel between the two windows ───────────────────────────────

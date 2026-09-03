@@ -222,7 +222,7 @@ function PinnedWidgetCard({
             </div>
           ) : null}
         </div>
-        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-[var(--r-row)] bg-[var(--base)] opacity-70 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-[var(--r-row)] bg-[var(--base)] opacity-70 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover:opacity-100 group-focus-within:opacity-100">
           {widget.kind === "genui" && widget.pin.widget.kind === "html" ? (
             <button
               type="button"

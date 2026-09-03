@@ -123,11 +123,10 @@ describe("AgentPanel on the gateway", () => {
     resetAcpSubscription();
   });
 
-  it("renders the collapsed docked pill", async () => {
+  it("hides the collapsed docked panel completely", async () => {
     window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "1");
     const panel = await mountPanel();
-    expect(panel.container.querySelector('button[aria-label="Expand agent panel"]')).not.toBeNull();
-    expect(panel.container.querySelector("textarea")).toBeNull();
+    expect(panel.container.childElementCount).toBe(0);
     await panel.unmount();
   });
 
@@ -146,7 +145,7 @@ describe("AgentPanel on the gateway", () => {
   it("toggles the docked panel through the shell toolbar request", async () => {
     const panel = await mountPanel("docked", 0, 1);
     await settle();
-    expect(panel.container.querySelector('button[aria-label="Expand agent panel"]')).not.toBeNull();
+    expect(panel.container.childElementCount).toBe(0);
     expect(window.localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY)).toBe("1");
     await panel.unmount();
   });

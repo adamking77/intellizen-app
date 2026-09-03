@@ -246,9 +246,9 @@ export function SearchView() {
         <div className="ml-auto flex min-w-0 items-center gap-2">
           <VentureScope className={isCramped ? "hidden sm:inline-flex" : undefined} />
           {targetProject && !isCramped ? (
-            <div className="flex min-w-0 items-center gap-2 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-1">
-              <Target className="h-3 w-3 shrink-0 text-[var(--accent)]" />
-              <span className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--accent)]">Save to</span>
+            <div className="flex min-w-0 items-center gap-2 rounded-[var(--r-pill)] bg-[var(--selected)] px-2 py-1">
+              <Target className="h-3 w-3 shrink-0 text-[var(--text)]" />
+              <span className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text)]">Save to</span>
               <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text)]">
                 {targetWorkItem ? `${targetWorkItem.name} › ` : ""}{targetProject.name}
               </span>
@@ -420,7 +420,7 @@ export function SearchView() {
                   else inputRef.current?.focus();
                 }, 0);
               }}
-              className="mt-6 inline-flex max-w-full items-center gap-2 rounded-[var(--r-pill)] border border-[var(--border-subtle)] bg-[var(--mantle)] px-4 py-2 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-wash-strong)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              className="mt-6 inline-flex max-w-full items-center gap-2 rounded-[var(--r-pill)] border border-[var(--border-subtle)] bg-[var(--mantle)] px-4 py-2 text-left transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-wash-strong)]"
             >
               <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
               <span className="shrink-0 text-label">Try</span>
@@ -550,9 +550,9 @@ function ModeTabs({
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] px-2.5 py-1",
               "font-ui text-[var(--t-meta)] font-medium",
-              "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
               isActive
-                ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                 : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
             )}
             title={item.description}
@@ -661,7 +661,7 @@ function SearchComposer({
             onKeyDown={onKeyDown}
             className={cn(
               "w-full rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] pl-10 pr-[116px] text-[var(--text)] placeholder:text-[var(--overlay-1)]",
-              "transition-[border-color,box-shadow] duration-150 focus:border-[var(--accent)] focus:outline-none focus:shadow-[0_0_0_1px_var(--accent-border)]",
+              "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)] focus:outline-none focus:shadow-none",
               compact ? "h-9 font-ui text-[var(--t-ui)]" : "h-12 font-ui text-[var(--t-body)]",
             )}
             autoFocus={!compact}
@@ -717,7 +717,7 @@ function InternalResultCard({ result }: { result: InternalSearchResult }) {
               href={result.url}
               target="_blank"
               rel="noreferrer"
-              className="font-ui text-[var(--t-body)] font-semibold text-[var(--text)] hover:text-[var(--accent)]"
+              className="font-ui text-[var(--t-body)] font-semibold text-[var(--text)] hover:underline"
             >
               {result.title}
             </a>

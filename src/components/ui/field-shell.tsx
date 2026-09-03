@@ -30,7 +30,7 @@ export function FieldShell({
     <section
       className={cn(
         "rounded-[var(--r-plane)] border border-[var(--border-subtle)] bg-[var(--mantle)]/55",
-        "transition-[border-color,background-color] duration-150 focus-within:border-[var(--accent-border)] focus-within:bg-[var(--mantle)]",
+        "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
         className,
       )}
       aria-labelledby={labelId}

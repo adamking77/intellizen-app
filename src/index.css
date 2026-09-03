@@ -291,7 +291,8 @@
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.4);
 
   /* Motion */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: var(--ease);
   --t-fast: 90ms;
   --t-base: 120ms;
   --t-slow: 200ms;
@@ -307,7 +308,6 @@
   --t-ui: 13px;
   --t-meta: 12px;
   --t-count: 10px;
-  --focus-inner: var(--base);
 
   /* Type families */
   --font-ui: "Geist Variable", system-ui, -apple-system, sans-serif;
@@ -412,6 +412,44 @@
   border: 0;
   border-radius: var(--r-plane);
   overflow: hidden;
+}
+
+/* Internal pane divisions use the same seam language as the outer shell. */
+:root[data-panes="connected"] .subshell {
+  gap: 1px;
+  background: var(--line);
+}
+
+:root[data-panes="segmented"] .subshell {
+  gap: 10px;
+  padding: 10px;
+  background: transparent;
+}
+
+:root[data-panes="segmented"] .subshell > .subpane {
+  border-radius: var(--r-plane);
+  overflow: hidden;
+}
+
+.subshell {
+  display: flex;
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.subpane {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The original app mark is a transparent source asset. A mask lets its visible
+   strokes follow the selected appearance accent without redrawing the logo. */
+.app-mark {
+  display: inline-block;
+  background: var(--accent);
+  -webkit-mask: url("/app-icon.svg") center / contain no-repeat;
+  mask: url("/app-icon.svg") center / contain no-repeat;
 }
 
 .sidebar-lights {
@@ -862,16 +900,28 @@ pre {
 }
 
 .bn-suggestion-menu-item[aria-selected="true"],
-.bn-suggestion-menu-item:hover,
 .bn-grid-suggestion-menu-item[aria-selected="true"],
+.bn-toolbar .mantine-Button-root[data-selected],
+.bn-toolbar .mantine-ActionIcon-root[data-selected] {
+  background: var(--selected) !important;
+  color: var(--text) !important;
+}
+
+.bn-suggestion-menu-item[aria-selected="true"]:hover,
+.bn-grid-suggestion-menu-item[aria-selected="true"]:hover,
+.bn-toolbar .mantine-Button-root[data-selected]:hover,
+.bn-toolbar .mantine-ActionIcon-root[data-selected]:hover {
+  background: var(--selected-hover) !important;
+  color: var(--text) !important;
+}
+
+.bn-suggestion-menu-item:hover,
 .bn-grid-suggestion-menu-item:hover,
 .mantine-Menu-item[data-hovered],
 .mantine-Menu-item:hover,
 .bn-toolbar .mantine-Button-root:hover,
-.bn-toolbar .mantine-ActionIcon-root:hover,
-.bn-toolbar .mantine-Button-root[data-selected],
-.bn-toolbar .mantine-ActionIcon-root[data-selected] {
-  background: var(--accent-soft) !important;
+.bn-toolbar .mantine-ActionIcon-root:hover {
+  background: var(--hover) !important;
   color: var(--text) !important;
 }
 
@@ -991,16 +1041,28 @@ pre {
 }
 
 .bn-root .bn-suggestion-menu-item[aria-selected="true"],
-.bn-root .bn-suggestion-menu-item:hover,
 .bn-root .bn-grid-suggestion-menu-item[aria-selected="true"],
+.bn-root .bn-toolbar .mantine-Button-root[data-selected],
+.bn-root .bn-toolbar .mantine-ActionIcon-root[data-selected] {
+  background: var(--selected) !important;
+  color: var(--text) !important;
+}
+
+.bn-root .bn-suggestion-menu-item[aria-selected="true"]:hover,
+.bn-root .bn-grid-suggestion-menu-item[aria-selected="true"]:hover,
+.bn-root .bn-toolbar .mantine-Button-root[data-selected]:hover,
+.bn-root .bn-toolbar .mantine-ActionIcon-root[data-selected]:hover {
+  background: var(--selected-hover) !important;
+  color: var(--text) !important;
+}
+
+.bn-root .bn-suggestion-menu-item:hover,
 .bn-root .bn-grid-suggestion-menu-item:hover,
 .bn-root .mantine-Menu-item[data-hovered],
 .bn-root .mantine-Menu-item:hover,
 .bn-root .bn-toolbar .mantine-Button-root:hover,
-.bn-root .bn-toolbar .mantine-ActionIcon-root:hover,
-.bn-root .bn-toolbar .mantine-Button-root[data-selected],
-.bn-root .bn-toolbar .mantine-ActionIcon-root[data-selected] {
-  background: var(--accent-soft) !important;
+.bn-root .bn-toolbar .mantine-ActionIcon-root:hover {
+  background: var(--hover) !important;
   color: var(--text) !important;
 }
 
@@ -1236,14 +1298,26 @@ pre {
   padding-right: 36px !important;
 }
 
-/* Focus-visible ring (keyboard only) */
-:focus-visible {
-  outline: none;
+/* One quiet keyboard-only focus edge. Text-entry controls rely on their caret;
+   focus never becomes a persistent glow or a second selected state. */
+*:focus-visible {
+  outline: 1px solid var(--accent) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
 }
 
 .focus-ring:focus-visible {
-  box-shadow: 0 0 0 1px var(--accent-border);
-  border-radius: 4px;
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+input[type="text"]:focus-visible,
+input:not([type]):focus-visible,
+textarea:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* ============================================================
@@ -1285,8 +1359,9 @@ pre {
 
 /* ─── Buttons ───────────────────────────────────────────── */
 .db-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--accent-border);
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .db-btn {
@@ -1326,9 +1401,13 @@ pre {
 }
 
 .db-btn-active {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface-1) 86%);
-  border-color: var(--accent-border);
-  color: var(--accent);
+  background: var(--selected);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.db-btn-active:hover {
+  background: var(--selected-hover);
 }
 
 .db-btn-danger {
@@ -1363,8 +1442,8 @@ pre {
 
 .db-input:focus,
 .db-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-border);
+  border-color: var(--border);
+  box-shadow: none;
   outline: none;
 }
 
@@ -1489,8 +1568,8 @@ pre {
 }
 
 .db-row-active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--selected);
+  box-shadow: none;
 }
 
 .db-td {
@@ -4739,21 +4818,22 @@ pre {
 /* ============================================================
    Selection and hover, ported from hermes-app tokens.css (.nav-node,
    .rail-node, .pill). Selection is a fill and full-strength text — never a
-   bar, a ring, or a chevron. The fill is accent-tinted per Adam.
+   bar, a ring, or a chevron. Ordinary selection is the neutral raised plane;
+   accent remains reserved for actions, focus and semantic colour choices.
    ============================================================ */
 :root {
   --r-row: 4px;
   --r-pill: 999px;
   --t-ui: 13px;
   --t-meta: 12px;
-  --selected: color-mix(in srgb, var(--accent) 16%, var(--raised));
-  --selected-hover: color-mix(in srgb, var(--accent) 22%, var(--raised));
+  --selected: var(--raised);
+  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
 }
 
 :root[data-flavor="latte"],
 :root[data-flavor="flat"] {
-  --selected: color-mix(in srgb, var(--accent) 14%, var(--base));
-  --selected-hover: color-mix(in srgb, var(--accent) 22%, var(--base));
+  --selected: var(--raised);
+  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
 }
 
 .nav-node {
@@ -4833,6 +4913,28 @@ pre {
   transition: color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out);
 }
 
+.pill.pill-compact {
+  padding: 2px 9px;
+  font-size: var(--t-section);
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* Hermes modal contract: one raised plane over a soft blurred veil. Feature
+   dialogs own their width and height cap, but not their surface treatment. */
+.modal-backdrop {
+  background: color-mix(in srgb, var(--crust) 42%, transparent);
+  backdrop-filter: blur(7px);
+}
+
+.modal-surface {
+  border: 0;
+  border-radius: var(--r-plane);
+  background: var(--raised);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
+  outline: none;
+}
+
 .pill:hover {
   background: var(--hover);
   color: var(--text);
@@ -4846,6 +4948,124 @@ pre {
 
 .pill[aria-selected="true"]:hover {
   background: var(--selected-hover);
+}
+
+/* Hermes control primitives. Page-specific controls can still own their
+   geometry, but pointer, disabled and selection feedback stay consistent. */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+  transition: color var(--t-base) var(--ease), background var(--t-base) var(--ease);
+}
+
+.icon-button:hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.icon-button[aria-pressed="false"] {
+  opacity: 0.4;
+}
+
+.action {
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--t-meta);
+  cursor: default;
+  transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), opacity var(--t-base) var(--ease);
+}
+
+.action:hover {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.action-tinted {
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+  color: var(--tint);
+}
+
+.action-tinted:hover {
+  background: color-mix(in srgb, var(--tint) 22%, transparent);
+}
+
+.action-primary {
+  background: var(--accent);
+  color: var(--base);
+  font-weight: 550;
+}
+
+.action-primary:hover {
+  filter: brightness(1.08);
+}
+
+.action-primary:disabled:hover {
+  filter: none;
+}
+
+.action:disabled:hover,
+.pill:disabled:hover,
+.icon-button:disabled:hover,
+.nav-node:disabled:hover {
+  background: inherit;
+}
+
+.action:disabled,
+.pill:disabled,
+.icon-button:disabled,
+.nav-node:disabled {
+  opacity: 0.45;
+}
+
+button:not(.pill):not(.action):not(.nav-node):not(.rail-node):not(.icon-button):not(.swatch):not(.swatch-button):not(:disabled):hover {
+  box-shadow: inset 0 0 0 999px var(--hover);
+}
+
+.swatch {
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.swatch:hover {
+  transform: scale(1.14);
+}
+
+.hoverable {
+  cursor: default;
+  transition: box-shadow var(--t-base) var(--ease);
+}
+
+.hoverable:hover {
+  box-shadow: inset 0 0 0 999px var(--hover);
+}
+
+/* Raw selects use the donor's neutral chevron instead of the system accent.
+   The shared Select component renders its own SVG and opts out here. */
+select:not([data-select-chevron="custom"]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px !important;
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  background-size: 10px 10px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca4bd' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  cursor: default;
+}
+
+:root[data-flavor="latte"] select:not([data-select-chevron="custom"]),
+:root[data-flavor="flat"] select:not([data-select-chevron="custom"]) {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236c6c78' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
 }
 
 /* Closed type roles. Product chrome uses these instead of inventing local
@@ -4895,13 +5115,6 @@ pre {
 
 .team-avatar-stack__member[data-running="true"] {
   opacity: 1;
-}
-
-/* One visible two-ring treatment across native controls and custom rows. */
-:where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--focus-inner) !important;
-  outline-offset: 1px !important;
-  box-shadow: 0 0 0 4px var(--accent) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

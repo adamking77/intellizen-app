@@ -137,7 +137,7 @@ export function InvestigationCreateModal({
                   className={cn(
                     "flex items-start gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
                     useCase === uc.id
-                      ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                      ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                       : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
                   )}
                 >

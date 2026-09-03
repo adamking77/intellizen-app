@@ -30,28 +30,27 @@ export function AppDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-[120] bg-[color-mix(in_srgb,var(--crust)_72%,transparent)]" />
-        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center px-4 py-6">
+        <Dialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
+        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <Dialog.Popup
             className={cn(
-              "max-h-full min-w-[320px] max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] outline-none",
+              "modal-surface flex max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] flex-col overflow-hidden",
               className,
             )}
-            style={{ boxShadow: "var(--shadow-elevated)" }}
           >
-            <header className="border-b border-[var(--border-subtle)] px-5 py-4">
-              <Dialog.Title className="font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">
+            <header className="shrink-0 px-[19px] pb-2 pt-[17px]">
+              <Dialog.Title className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
                 {title}
               </Dialog.Title>
               {description ? (
-                <Dialog.Description className="mt-1 font-ui text-[var(--t-ui)] leading-5 text-[var(--subtext-0)]">
+                <Dialog.Description className="mt-1 font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">
                   {description}
                 </Dialog.Description>
               ) : null}
             </header>
-            <div className="max-h-[min(70vh,720px)] overflow-y-auto px-5 py-4">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-[19px] py-3">{children}</div>
             {footer ? (
-              <footer className="flex justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">
+              <footer className="flex shrink-0 justify-end gap-2 px-[19px] pb-[17px] pt-2">
                 {footer}
               </footer>
             ) : null}

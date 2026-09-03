@@ -199,7 +199,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
               <button
                 className={`rounded-[var(--r-pill)] border px-2.5 py-1 font-ui text-[var(--t-count)] transition-colors ${
                   schedule === preset.expression
-                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text)]"
+                    ? "border-transparent bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
                     : "border-[var(--border)] text-[var(--overlay-1)] hover:text-[var(--text)]"
                 }`}
                 key={preset.expression}
