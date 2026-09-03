@@ -45,17 +45,42 @@ function messageText(value: unknown): string {
 }
 
 export async function listHermesSessions(): Promise<HermesProjectSession[]> {
-  const result = await hermesRest<{ sessions?: RawSession[] }>(
-    "/api/profiles/sessions?limit=2000&offset=0&min_messages=1&archived=exclude&order=recent&profile=all&exclude_sources=cron%2Ckanban%2Ctool",
-  );
-  const sessions = (result.sessions ?? []).flatMap((row) => {
+  const rows: RawSession[] = [];
+  const pageSize = 500; // Hermes caps this endpoint at 500 rows per request.
+  let offset = 0;
+  let total = 0;
+  do {
+    const query = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String(offset),
+      min_messages: "1",
+      archived: "exclude",
+      order: "recent",
+      profile: "all",
+      exclude_sources: "cron,kanban,tool",
+    });
+    const result = await hermesRest<{ sessions?: RawSession[]; total?: number }>(
+      `/api/profiles/sessions?${query.toString()}`,
+    );
+    const page = result.sessions ?? [];
+    rows.push(...page);
+    total = Number(result.total ?? page.length) || page.length;
+    offset += pageSize;
+    if (page.length === 0) break;
+  } while (offset < total);
+
+  const seen = new Set<string>();
+  const sessions = rows.flatMap((row) => {
     const id = string(row.id);
-    if (!id) return [];
+    const profile = string(row.profile) || "default";
+    const key = `${profile}:${id}`;
+    if (!id || seen.has(key)) return [];
+    seen.add(key);
     return [{
       id,
       title: string(row.title) || "Untitled session",
       preview: string(row.preview),
-      profile: string(row.profile) || "default",
+      profile,
       cwd: string(row.cwd) || null,
       source: string(row.source) || null,
       lastActive: Number(row.last_active ?? row.started_at ?? 0) || 0,
