@@ -56,6 +56,7 @@ export const WORKER_TOOL_NAMES = new Set([
   "list_agent_projects",
   "list_agent_work",
   "list_databases",
+  "list_hierarchy",
   "query_records",
   "list_roles",
   "list_role_assignments",

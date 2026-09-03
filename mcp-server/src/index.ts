@@ -33,7 +33,7 @@ import {
 } from "./control-plane.js";
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
-
+import { listHierarchy } from "./hierarchy.js";
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
 
@@ -3111,10 +3111,7 @@ async function generateCaseId(): Promise<string> {
   return `case-${new Date().getFullYear()}-${seq}`;
 }
 
-const server = new Server(
-  { name: "intelizen", version: "2.0.0" },
-  { capabilities: { tools: {} } }
-);
+const server = new Server({ name: "intelizen", version: "2.0.0" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = [
@@ -3167,6 +3164,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
     },
+    { name: "list_hierarchy", description: "List the shared IntelliZen sidebar hierarchy, including project folders used to file Hermes sessions. Read-only.", inputSchema: { type: "object", properties: {} } },
     {
       name: "query_records",
       description:
@@ -4349,7 +4347,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     });
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
-
+  if (name === "list_hierarchy") {
+    return { content: [{ type: "text", text: JSON.stringify(await listHierarchy(supabase), null, 2) }] };
+  }
   // ── query_records ─────────────────────────────────────────────────────────
   if (name === "query_records") {
     const result = await queryRecords((args ?? {}) as {

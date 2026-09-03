@@ -9,7 +9,11 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 - Wave 1 completion commit: `23182215da9047ef133a54029dcb7a175fe30807`
 - Phase 0.3 project-room repair: `1354a85`
 - Pinned Hermes session-page repair found by the exact-app walk: `69625a9`
-- App-finished gate: passed in the rebuilt `.app` on 2026-09-03
+- Native Supabase bodyless-response repair found by the live Sogo project link:
+  `a3c2dd9`
+- Canonical MCP hierarchy read added after the live completion audit; the
+  rebuilt server exposes 65 tools and `list_hierarchy` read back 29 live nodes
+- App-finished gate: open after Adam rejected the earlier completion claim
 - State: local on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
@@ -18,10 +22,10 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 
 | Artifact | Bytes | Built | SHA-256 |
 | --- | ---: | --- | --- |
-| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 16:22:00 +04 | `954a92b602e65c6994c52e9a033543be9798110caaf9e88dc015dc9987263b53` |
-| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,809,228 | 2026-09-03 16:22:21 +04 | `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6` |
+| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 17:04:08 +04 | `ec4699b7318d7d6f25feb39fe9831e708f641478c5f4d4d092de392b8a1fcf97` |
+| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,809,291 | 2026-09-03 17:04:29 +04 | `6241add3a91ef12c98091e4031f9f491337e78b45effb8a9223f5c57e73aa7e3` |
 
-Exactly one IntelliZen process (`13144`) was running when this receipt was collected,
+Exactly one IntelliZen process (`19132`) was running when this receipt was collected,
 from the `.app` above.
 
 The final completion audit also found and quit one stray process from the
@@ -40,6 +44,15 @@ in Operations and opened that exact record; Sessions initially exposed a real
 422 caused by the old 2,000-row request, then passed after `69625a9` rebuilt the
 client around Hermes's 500-row page contract. The final Sessions state was the
 correct folder-aware empty state because this project currently has no folder.
+
+A later live project-room pass added the real `Gokart Studio / Sogo / Sogo V3`
+hierarchy, linked its repository folder, and read back 53 Hermes board cards and
+233 matching session histories. The folder link committed but initially showed
+a false failure because the native Supabase adapter put a body on a successful
+`204` response. `a3c2dd9` repaired all bodyless statuses and added a regression;
+a rename/restore mutation then completed in the rebuilt app with no false error.
+Adam chose to leave the current Sessions-history interaction unchanged until
+post-completion workflow-led redesign.
 
 ## Gates
 
@@ -60,6 +73,9 @@ correct folder-aware empty state because this project currently has no folder.
   browser request blocked by Hermes's absent CORS preflight support
 - Live hierarchy: 23 projects; all 16 legacy projects and all 9 investigations
   present; no duplicate legacy-project mapping
+- Canonical MCP hierarchy contract: `list_hierarchy` is exposed in both the
+  admin registry and reviewed read-only worker allowlist; a direct admin probe
+  returned 29 total nodes and Sogo V3's exact linked folder
 
 ## Completed local workflow evidence
 

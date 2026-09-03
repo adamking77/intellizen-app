@@ -21,6 +21,7 @@ test("MCP plane parsing defaults to admin and rejects unknown planes", () => {
 
 test("worker plane exposes only the reviewed tool allowlist", () => {
   const tools = [
+    { name: "list_hierarchy" },
     { name: "query_records" },
     { name: "create_record" },
     { name: "update_record" },
@@ -34,6 +35,7 @@ test("worker plane exposes only the reviewed tool allowlist", () => {
   const filtered = filterToolsForPlane(tools, "worker").map((tool) => tool.name);
 
   assert.deepEqual(filtered, [
+    "list_hierarchy",
     "query_records",
     "append_agent_work_note",
     "advance_workflow_step",

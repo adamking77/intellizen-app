@@ -356,6 +356,24 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > user-visible completion audit; do not begin acceptance until Adam confirms
 > the app-finished gate.
 
+> **Live project-room follow-up 2026-09-03.** A real `Sogo V3` project was
+> added beneath `Gokart Studio / Sogo` and linked to
+> `/Users/adamking/projects/gokart-studio/sogo-work/sogo-app-v2`. The rebuilt
+> project room read back 53 real Hermes board cards and all 233 matching
+> Hermes session histories. The first live folder mutation also exposed a
+> transport defect: successful Supabase `204 No Content` writes were committed
+> and then reported as failures because the native fetch adapter constructed an
+> illegal response body. Repair `a3c2dd9` preserves bodyless statuses; its
+> regression tests, the full frontend suite, TypeScript check, and strict
+> Clippy pass are green, and a rename/restore mutation succeeded in the rebuilt
+> `.app` without the false error. Adam chose to leave the current project
+> Sessions-history interaction unchanged until post-completion workflow-led
+> redesign. The canonical MCP also lacked the tree read required by Phase 0.2;
+> the minimal read-only `list_hierarchy` tool now returns the same live nodes,
+> including Sogo V3's folder, through the one existing MCP build. The `.app`
+> and DMG were refreshed and strictly verified after the native transport fix.
+> The app-finished gate remains open and acceptance remains 0 of 3 days.
+
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what
 the overseer must wire.

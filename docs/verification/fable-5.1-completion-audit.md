@@ -7,8 +7,9 @@ evidence index, not a substitute for Adam's three acceptance days.
 ## Verdict
 
 **Not complete.** The rebuilt `.app` passed the repaired project-room walk
-after `1354a85` and the pinned Hermes session-page fix in `69625a9`. Final
-artifacts and automated gates are green, but Adam rejected the resulting claim
+after `1354a85`, the pinned Hermes session-page fix in `69625a9`, and the
+bodyless Supabase response fix in `a3c2dd9`. The `.app` and DMG have now been
+refreshed and verified from that source. Adam also rejected the earlier claim
 that the full app was finished. The app-finished gate is therefore open while
 the user-visible completion audit continues. The unchanged ten-line scene on
 three separate calendar days remains later; readiness and completion walks do
@@ -19,8 +20,8 @@ not count as Day 1.
 | Stage | User-visible outcome | Authoritative evidence | Status |
 | --- | --- | --- | --- |
 | 0.1 | Flavors, accents, and appearance | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
-| 0.2 | Hierarchy tree and row operations | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
-| 0.3 | Selection controls the center surface | Native walk in the rebuilt `.app`: Files, Board, Data and Sessions rendered; Data opened its linked Operations record. Sessions' discovered 422 was repaired at `69625a9` and the rebuilt surface passed. | Used in built app |
+| 0.2 | Hierarchy tree and row operations | `ROADMAP.md` Phase 0 walk plus canonical MCP readback: `list_hierarchy` returned 29 live nodes and Sogo V3's exact linked folder. | Used in built app and visible to MCP agents |
+| 0.3 | Selection controls the center surface | Native walk in the rebuilt `.app`: a live `Sogo V3` project read 53 Hermes cards and 233 matching sessions. Sessions' discovered 422 was repaired at `69625a9`; the false failure after a successful folder-link `204` was repaired at `a3c2dd9`. Adam left the current Sessions-history interaction unchanged until post-completion workflow-led redesign. | Used in built app |
 | 0.4 | Three-panel shell, collapse, focus, shortcuts | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
 | A.1 | App attaches to Hermes and names the engine | `ROADMAP.md` Phase A walk, 2026-09-02 | Used in built app |
 | A.2 | Streaming Hermes turn in the panel | `ROADMAP.md` Phase A walk, 2026-09-02 | Used in built app |
@@ -48,19 +49,23 @@ not count as Day 1.
 | 1. Every stage used in a built `.app` and dated | Phase 0.3 exact-app repair walk completed 2026-09-03; the other dated stage evidence is listed above. | Complete |
 | 2. Six agent capability examples | `docs/verification/wave-1-capability-examples.md` names the corresponding native action, record, delegation, approval, room, or plugin proof. | Complete |
 | 3. Donor retired; old workers removed; Intel cases retained | `docs/verification/hermes-app-reference-retention.md`; current tree has no `runtimes.rs`, `runtime_bindings.rs`, or `runtime_auth.rs`; release evidence records 16 legacy projects and 9 investigations in 23 project nodes. | Complete |
-| 4. Smoke, parity, `.app`, and DMG | The local smoke and parity gates are green after the Phase 0.3 repair. The `.app` and DMG were rebuilt, signed ad hoc, verified, scanned, and recorded below. | Complete |
+| 4. Smoke, parity, `.app`, and DMG | The local checks are green after `a3c2dd9`. The `.app` and DMG were refreshed; strict verification passed for the app on disk and the app mounted from the DMG, and the DMG checksum is valid. | Complete |
 | 5. Unchanged scene on three separate days | The approved script and line-by-line readiness are in `ROADMAP.md` and `docs/verification/wave-1-acceptance-readiness.md`. | **0 of 3 days recorded** |
 
 ## Current assembled state
 
-- Source completion commit: `69625a9`
+- Latest verified native-app source commit: `a3c2dd9`
 - Evidence reconciliation commit: `4d7d9b3`
-- Final executable SHA-256:
-  `954a92b602e65c6994c52e9a033543be9798110caaf9e88dc015dc9987263b53`
-- Final DMG SHA-256:
-  `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6`
-- Current runtime readback: one exact release IntelliZen process (`13144`);
-  zero retired donor UI processes; Fiona's independent launch agent is running.
+- Current rebuilt executable SHA-256:
+  `ec4699b7318d7d6f25feb39fe9831e708f641478c5f4d4d092de392b8a1fcf97`
+- Current rebuilt DMG SHA-256:
+  `6241add3a91ef12c98091e4031f9f491337e78b45effb8a9223f5c57e73aa7e3`
+- Current runtime readback: one exact release IntelliZen app (`19132`); zero retired donor
+  UI processes; Hermes is attached and Fiona's independent launch agent is
+  running.
+- Canonical MCP: rebuilt from the same repository; 65 tools exposed, including
+  read-only `list_hierarchy`; live readback returned 29 nodes and the exact
+  Sogo V3 folder.
 - Scheduled proof readback: job `9c1e6c93e398` is paused with no running claim
   or last error after Adam rejected the app-finished classification.
 - Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
