@@ -86,7 +86,7 @@ export function useEject(): EjectHandle {
     if (!isTauri) return;
     const frame = () => {
       const s = useSessionStore.getState();
-      publishFrame({ selectedProfile: s.selectedProfile, threads: s.threads });
+      publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads });
     };
     const stops: Array<() => void> = [];
     const unsubscribe = useSessionStore.subscribe(() => {
@@ -105,7 +105,7 @@ export function useEject(): EjectHandle {
   useEffect(() => {
     if (!ejected || !isTauri) return;
     const s = useSessionStore.getState();
-    publishFrame({ selectedProfile: s.selectedProfile, threads: s.threads });
+    publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads });
   }, [ejected]);
 
   const eject = useCallback((asHud = false) => {

@@ -53,7 +53,7 @@ export function ChartStatFlow({
   return (
     <>
       {icon ? (
-        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-[var(--r-pill)] bg-muted/50">
           {icon}
         </div>
       ) : null}

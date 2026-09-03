@@ -5,12 +5,15 @@ import { Loader2, Trash2, Users, X } from "lucide-react";
 import { DecisionCard } from "@/components/agent/decision-card";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
 import { clock } from "@/components/agent/turn-time";
+import { Avatar, identityColor } from "@/components/agents/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { ApprovalChoice } from "@/engine/contract";
 import { answerClarify } from "@/engine/decisions";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
+import type { HermesProfile } from "@/engine/profiles";
+import { useSessionStore } from "@/engine/session-store";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { clientFor } from "@/rooms/door";
@@ -32,44 +35,66 @@ const GAP_MS = 15 * 60_000;
 function Turn({
   entry,
   members,
+  directory,
   showTime,
 }: {
   entry: GroupMessage;
   members: GroupMember[];
+  directory: Record<string, HermesProfile>;
   showTime: boolean;
 }) {
   const isUser = entry.from.kind === "user";
   const member = members.find((m) => m.name === entry.from.name);
   const who = isUser ? "You" : member ? displayName(member) : entry.from.name;
+  const profile = member ? profileForMember(directory, member) : null;
+  const face = {
+    displayName: who,
+    avatarStyle: profile?.avatarStyle ?? member?.avatar_style ?? "sphere",
+    avatarKind: profile?.avatarKind ?? member?.avatar_kind,
+    avatarColor: profile?.avatarColor ?? member?.avatar_color,
+  };
+  const hue = identityColor(who, face.avatarColor);
 
   return (
     <>
       {showTime ? (
         <div className="my-1 flex items-center gap-2 px-1">
           <span className="h-px flex-1 bg-[var(--hair)]" />
-          <span className="font-ui text-[11px] tabular-nums text-[var(--text-muted)]">
+          <span className="font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
             {clock(entry.at)}
           </span>
           <span className="h-px flex-1 bg-[var(--hair)]" />
         </div>
       ) : null}
-      <div
-        className={cn(
-          "group flex flex-col gap-1 rounded-lg px-3 py-2",
-          isUser && "bg-[var(--surface-wash)]",
-        )}
-      >
-        <span className="font-ui text-[12px] font-medium text-[var(--text-muted)]">{who}</span>
-        {isUser ? (
-          <p className="font-ui text-[14px] leading-6 whitespace-pre-wrap text-[var(--text)]">
+      {isUser ? (
+        <div className="group flex max-w-[82%] flex-col gap-1 self-end">
+          <span className="text-right font-ui text-[var(--t-meta)] text-[var(--text-muted)]">You</span>
+          <p className="whitespace-pre-wrap rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2 font-ui text-[var(--t-body)] leading-6 text-[var(--text)]">
             {entry.text}
           </p>
-        ) : (
-          <ReplyMarkdown content={entry.text} />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="group flex gap-[9px]">
+          <div className="mt-0.5 shrink-0">
+            <Avatar agent={face} size={24} image={profile?.avatarImage} />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{who}</span>
+            <div
+              className="rounded-[var(--r-msg)] px-[11px] py-2"
+              style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
+            >
+              <ReplyMarkdown content={entry.text} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
+}
+
+function profileForMember(directory: Record<string, HermesProfile>, member: GroupMember) {
+  return directory[member.door === "acp" ? `acp:${member.name}` : member.name] ?? null;
 }
 
 /** The room: one log, the members beside it, the receipts of the run in
@@ -94,6 +119,9 @@ export function RoomView({
   const [confirmDisband, setConfirmDisband] = useState(false);
   const [busy, setBusy] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  const [behind, setBehind] = useState(false);
+  const directory = useSessionStore((state) => state.profileDirectory);
 
   useEffect(() => {
     void ensureRoomsLoaded().finally(() => setReady(true));
@@ -118,7 +146,13 @@ export function RoomView({
 
   useEffect(() => {
     const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (atBottom.current) {
+      el.scrollTop = el.scrollHeight;
+      setBehind(false);
+    } else {
+      setBehind(true);
+    }
   }, [log.length, activity.length]);
 
   const onApprove = async (decision: ApprovalDecision, choice: ApprovalChoice) => {
@@ -149,7 +183,7 @@ export function RoomView({
   if (!ready) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--base)]">
-        <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+        <Loader2 className="h-4 w-4 text-[var(--accent)]" />
       </div>
     );
   }
@@ -168,7 +202,7 @@ export function RoomView({
           action={{ label: "New room", onClick: () => setSheet(true) }}
         />
         {others.length ? (
-          <ul className="w-full max-w-sm rounded-lg border border-[var(--border)]">
+          <ul className="w-full max-w-sm rounded-[var(--r-plane)] border border-[var(--border)]">
             {others.map((other) => (
               <li key={other.roomId}>
                 <button
@@ -176,10 +210,10 @@ export function RoomView({
                   onClick={() => navigate(`/room/${other.roomId}`)}
                   className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-[var(--hover)]"
                 >
-                  <span className="truncate font-ui text-[13px] text-[var(--text)]">
+                  <span className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
                     {other.name}
                   </span>
-                  <span className="shrink-0 font-ui text-[11px] text-[var(--text-muted)]">
+                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
                     {(other.members || []).length} members
                   </span>
                 </button>
@@ -199,12 +233,32 @@ export function RoomView({
   return (
     <div className="flex h-full overflow-hidden bg-[var(--base)]" data-room-panel={panel || undefined}>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-3">
+        <header className="flex shrink-0 items-center gap-3 px-5 py-3">
+          <div className="flex shrink-0 items-center" aria-label={`${members.length} room members`}>
+            {members.slice(0, 6).map((member, index) => {
+              const profile = profileForMember(directory, member);
+              return (
+                <span key={groupMemberKey(member)} style={{ marginInlineStart: index ? -7 : 0 }}>
+                  <Avatar
+                    agent={{
+                      displayName: displayName(member),
+                      avatarStyle: profile?.avatarStyle ?? member.avatar_style,
+                      avatarKind: profile?.avatarKind ?? member.avatar_kind,
+                      avatarColor: profile?.avatarColor ?? member.avatar_color,
+                    }}
+                    image={profile?.avatarImage}
+                    size={24}
+                    animate={false}
+                  />
+                </span>
+              );
+            })}
+          </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-ui text-[17px] font-semibold text-[var(--text)]">
+            <h1 className="truncate font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
               {room.name}
             </h1>
-            <p className="truncate font-ui text-[12px] text-[var(--text-muted)]">
+            <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               {room.turn
                 ? `${displayName(members.find((m) => m.name === room.turn) ?? { name: room.turn })} is thinking…`
                 : `${members.length} members${room.running ? " · running" : ""}`}
@@ -225,18 +279,28 @@ export function RoomView({
           ) : null}
         </header>
 
-        <div ref={logRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div
+          ref={logRef}
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 32;
+            atBottom.current = near;
+            if (near) setBehind(false);
+          }}
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+        >
           {log.length === 0 ? (
-            <p className="py-10 text-center font-ui text-[13px] text-[var(--text-muted)]">
+            <p className="py-10 text-center font-ui text-[var(--t-ui)] text-[var(--text-muted)]">
               Say something to start. Everyone answers unless you @name someone.
             </p>
           ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-1">
+            <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {log.map((entry, index) => (
                 <Turn
                   key={entry.id ?? `${entry.at}-${index}`}
                   entry={entry}
                   members={members}
+                  directory={directory}
                   showTime={index === 0 || entry.at - (log[index - 1]?.at ?? 0) > GAP_MS}
                 />
               ))}
@@ -255,6 +319,24 @@ export function RoomView({
           )}
         </div>
 
+        {behind ? (
+          <div className="flex shrink-0 justify-center pb-1.5">
+            <button
+              type="button"
+              className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[var(--t-meta)] text-[var(--text)]"
+              onClick={() => {
+                const el = logRef.current;
+                if (!el) return;
+                el.scrollTop = el.scrollHeight;
+                atBottom.current = true;
+                setBehind(false);
+              }}
+            >
+              New reply ↓
+            </button>
+          </div>
+        ) : null}
+
         <RoomComposer
           members={members}
           running={room.running === true}
@@ -264,9 +346,9 @@ export function RoomView({
       </div>
 
       <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)] lg:flex", panel && "lg:hidden")}>
-        <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center gap-2 px-4 py-3">
           <Users className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-          <span className="font-ui text-[12px] font-medium text-[var(--text-muted)]">Members</span>
+          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Members</span>
         </div>
         <ul className="shrink-0 py-1">
           {members.map((member) => {
@@ -274,15 +356,26 @@ export function RoomView({
             return (
               <li
                 key={`${member.door}:${member.name}`}
-                className="flex items-baseline gap-2 px-4 py-1.5"
+                className="flex items-center gap-2 px-4 py-1.5"
               >
-                <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-[var(--text)]">
+                <Avatar
+                  agent={{
+                    displayName: displayName(member),
+                    avatarStyle: profileForMember(directory, member)?.avatarStyle ?? member.avatar_style,
+                    avatarKind: profileForMember(directory, member)?.avatarKind ?? member.avatar_kind,
+                    avatarColor: profileForMember(directory, member)?.avatarColor ?? member.avatar_color,
+                  }}
+                  image={profileForMember(directory, member)?.avatarImage}
+                  size={20}
+                  animate={false}
+                />
+                <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
                   {displayName(member)}
                 </span>
                 {room.turn === member.name ? (
-                  <span className="shrink-0 font-ui text-[11px] text-[var(--accent)]">on turn</span>
+                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--accent)]">on turn</span>
                 ) : held ? (
-                  <span className="shrink-0 font-ui text-[11px] text-[var(--text-muted)]">held</span>
+                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">held</span>
                 ) : null}
               </li>
             );
@@ -290,21 +383,21 @@ export function RoomView({
         </ul>
 
         <div className="border-t border-[var(--border-subtle)] px-4 py-3">
-          <span className="font-ui text-[12px] font-medium text-[var(--text-muted)]">Receipts</span>
+          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Receipts</span>
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto pb-3">
           {activity.length === 0 ? (
-            <li className="px-4 font-ui text-[12px] text-[var(--text-muted)]">
+            <li className="px-4 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               Nothing running.
             </li>
           ) : (
             activity.map((event, index) => (
               <li key={`${event.at}-${index}`} className="flex gap-2 px-4 py-0.5">
-                <span className="shrink-0 font-ui text-[11px] tabular-nums text-[var(--text-muted)]">
+                <span className="shrink-0 font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
                   {clock(event.at)}
                 </span>
                 <span
-                  className="min-w-0 flex-1 font-ui text-[11px] leading-4"
+                  className="min-w-0 flex-1 font-ui text-[var(--t-section)] leading-4"
                   style={{ color: groupActivityTone(event.kind) }}
                   title={event.reason}
                 >

@@ -249,10 +249,10 @@ export function WorkflowDesigner({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
       <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-ui text-[13px] font-semibold text-[var(--text)]">
+          <p className="truncate font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">
             {definition.name}
           </p>
-          <p className="font-mono text-[10px] text-[var(--overlay-1)]">
+          <p className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
             {definition.schema} · editing v{definition.version}
           </p>
         </div>
@@ -286,7 +286,7 @@ export function WorkflowDesigner({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[220px_minmax(520px,1fr)_340px]">
         <aside className="min-h-0 overflow-y-auto border-b border-[var(--border)] bg-[var(--mantle)] p-3 xl:border-b-0 xl:border-r">
-          <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+          <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
             Workflow outline
           </p>
           <div className="mt-3 space-y-1.5">
@@ -296,16 +296,16 @@ export function WorkflowDesigner({
                 type="button"
                 onClick={() => setSelectedStepId(step.id)}
                 className={cn(
-                  "w-full rounded-md border px-2.5 py-2 text-left transition-colors",
+                  "w-full rounded-[var(--r-row)] border px-2.5 py-2 text-left transition-colors",
                   selectedStep?.id === step.id
                     ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
                     : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
                 )}
               >
-                <span className="block font-mono text-[9px] text-[var(--overlay-1)]">
+                <span className="block font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                   {index + 1} · {step.kind}
                 </span>
-                <span className="mt-1 block font-ui text-[11px] font-semibold leading-snug text-[var(--text)]">
+                <span className="mt-1 block font-ui text-[var(--t-section)] font-semibold leading-snug text-[var(--text)]">
                   {step.title}
                 </span>
               </button>
@@ -316,7 +316,7 @@ export function WorkflowDesigner({
               value={addKind}
               onChange={(event) => setAddKind(event.target.value as DesignerStepKind)}
               aria-label="Step kind"
-              className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[11px] text-[var(--text)]"
+              className="h-8 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-section)] text-[var(--text)]"
             >
               {STEP_KINDS.map((kind) => (
                 <option key={kind.id} value={kind.id}>{kind.label}</option>
@@ -328,10 +328,10 @@ export function WorkflowDesigner({
             </Button>
           </div>
           <div className="mt-4 border-t border-[var(--border)] pt-3">
-            <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+            <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
               Validation
             </p>
-            <p className={cn("mt-1 font-ui text-[10.5px]", validation.valid ? "text-[var(--success)]" : "text-[var(--danger)]")}>
+            <p className={cn("mt-1 font-ui text-[var(--t-count)]", validation.valid ? "text-[var(--success)]" : "text-[var(--danger)]")}>
               {validation.valid ? "Schema and graph valid" : `${validation.errors.length} issues`}
             </p>
           </div>
@@ -347,14 +347,14 @@ export function WorkflowDesigner({
           />
 
           {dryRun ? (
-            <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
-              <p className="font-ui text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+            <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-[var(--r-row)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
+              <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
                 Dry-run · dispatches nothing
               </p>
-              <p className={cn("mt-1 font-ui text-[11px]", dryRun.valid ? "text-[var(--success)]" : "text-[var(--danger)]")}>
+              <p className={cn("mt-1 font-ui text-[var(--t-section)]", dryRun.valid ? "text-[var(--success)]" : "text-[var(--danger)]")}>
                 {dryRun.valid ? "Role, approval, and graph checks passed." : `${dryRun.errors.length} checks need attention.`}
               </p>
-              <ol className="mt-2 space-y-1 font-ui text-[10.5px] text-[var(--subtext-0)]">
+              <ol className="mt-2 space-y-1 font-ui text-[var(--t-count)] text-[var(--subtext-0)]">
                 {dryRun.sequence.map((entry, index) => {
                   const step = entry as Record<string, unknown>;
                   const stepId = String(step.stepId ?? `step-${index}`);
@@ -370,7 +370,7 @@ export function WorkflowDesigner({
                 })}
               </ol>
               {dryRun.errors.length > 0 ? (
-                <ul className="mt-2 space-y-1 font-ui text-[10px] text-[var(--danger)]">
+                <ul className="mt-2 space-y-1 font-ui text-[var(--t-count)] text-[var(--danger)]">
                   {dryRun.errors.map((error) => (
                     <li key={`${error.path}-${error.code}`}>{error.path} · {error.message}</li>
                   ))}
@@ -389,7 +389,7 @@ export function WorkflowDesigner({
               <div>
                 <label
                   htmlFor="workflow-step-title"
-                  className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]"
+                  className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]"
                 >
                   Title
                 </label>
@@ -397,7 +397,7 @@ export function WorkflowDesigner({
                   id="workflow-step-title"
                   value={selectedStep.title}
                   onChange={(event) => updateSelected({ ...selectedStep, title: event.target.value })}
-                  className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)]"
+                  className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
                 />
               </div>
 
@@ -406,7 +406,7 @@ export function WorkflowDesigner({
                   <div>
                     <label
                       htmlFor="workflow-step-role"
-                      className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]"
+                      className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]"
                     >
                       Role
                     </label>
@@ -421,7 +421,7 @@ export function WorkflowDesigner({
                           execution: target?.execution ?? selectedStep.execution,
                         } as WorkflowRoleAssignStep);
                       }}
-                      className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)]"
+                      className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
                     >
                       {roleTargets.map((role) => (
                         <option key={role.roleKey} value={role.roleKey}>{role.roleName} · {role.state}</option>
@@ -441,7 +441,7 @@ export function WorkflowDesigner({
                   <div>
                     <label
                       htmlFor="workflow-step-instructions"
-                      className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]"
+                      className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]"
                     >
                       Instructions
                     </label>
@@ -450,22 +450,22 @@ export function WorkflowDesigner({
                       value={selectedStep.instructions}
                       onChange={(event) => updateSelected({ ...selectedStep, instructions: event.target.value })}
                       rows={5}
-                      className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[12px] leading-relaxed text-[var(--text)]"
+                      className="mt-1 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--text)]"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <label className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                       Execution
                       <select
                         value={selectedStep.execution}
                         onChange={(event) => updateSelected({ ...selectedStep, execution: event.target.value as "ephemeral" | "durable" })}
-                        className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[11px] normal-case text-[var(--text)]"
+                        className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] normal-case text-[var(--text)]"
                       >
                         <option value="ephemeral">ephemeral</option>
                         <option value="durable">durable</option>
                       </select>
                     </label>
-                    <label className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <label className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                       Timeout
                       <input
                         type="number"
@@ -473,11 +473,11 @@ export function WorkflowDesigner({
                         max={240}
                         value={selectedStep.timeoutMinutes}
                         onChange={(event) => updateSelected({ ...selectedStep, timeoutMinutes: Number(event.target.value) })}
-                        className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[11px] normal-case text-[var(--text)]"
+                        className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] normal-case text-[var(--text)]"
                       />
                     </label>
                   </div>
-                  <label className="flex items-center gap-2 font-ui text-[11px] text-[var(--subtext-0)]">
+                  <label className="flex items-center gap-2 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">
                     <input
                       type="checkbox"
                       checked={selectedStep.verification.required}
@@ -500,7 +500,7 @@ export function WorkflowDesigner({
                         verification: { required: true, method: event.target.value },
                       })}
                       placeholder="verifier-step:step_3"
-                      className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[11px] text-[var(--text)]"
+                      className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
                     />
                   ) : null}
                 </>
@@ -513,16 +513,16 @@ export function WorkflowDesigner({
                     onChange={(event) => updateSelected({ ...selectedStep, expr: event.target.value })}
                     rows={3}
                     aria-label="Condition expression"
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-mono text-[11px] text-[var(--text)]"
+                    className="w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     {(["then", "else"] as const).map((field) => (
-                      <label key={field} className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">
+                      <label key={field} className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                         {field}
                         <select
                           value={selectedStep[field]}
                           onChange={(event) => updateSelected({ ...selectedStep, [field]: event.target.value })}
-                          className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[10px] normal-case text-[var(--text)]"
+                          className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
                         >
                           {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
                         </select>
@@ -534,34 +534,34 @@ export function WorkflowDesigner({
 
               {selectedStep.kind === "approval" ? (
                 <>
-                  <input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[11px] text-[var(--text)]" />
-                  <input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[11px] text-[var(--text)]" />
+                  <input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  <input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
                 </>
               ) : null}
 
               {selectedStep.kind === "artifact" ? (
                 <>
-                  <select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[11px] text-[var(--text)]">
+                  <select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-section)] text-[var(--text)]">
                     <option value="create-doc">Create document</option>
                     <option value="revise-doc">Revise document</option>
                     <option value="create-record">Create record</option>
                     <option value="simulate-consequential-action">Simulate consequential action</option>
                   </select>
-                  <input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[11px] text-[var(--text)]" />
+                  <input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
                 </>
               ) : null}
 
               {selectedStep.kind === "decision" ? (
-                <textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} className="w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[12px] text-[var(--text)]" />
+                <textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} className="w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]" />
               ) : null}
 
               {selectedStep.kind !== "condition" ? (
-                <label className="block font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">
+                <label className="block font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                   Next
                   <select
                     value={selectedStep.next ?? ""}
                     onChange={(event) => updateSelected({ ...selectedStep, next: event.target.value || null })}
-                    className="mt-1 h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[10px] normal-case text-[var(--text)]"
+                    className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
                   >
                     <option value="">terminal</option>
                     {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
@@ -572,7 +572,7 @@ export function WorkflowDesigner({
           ) : null}
 
           {!validation.valid ? (
-            <ul className="mt-5 space-y-1 border-t border-[var(--border)] pt-4 font-ui text-[10.5px] text-[var(--danger)]">
+            <ul className="mt-5 space-y-1 border-t border-[var(--border)] pt-4 font-ui text-[var(--t-count)] text-[var(--danger)]">
               {validation.errors.map((error) => <li key={`${error.path}-${error.code}`}>{error.path} · {error.message}</li>)}
             </ul>
           ) : null}
@@ -604,7 +604,7 @@ export function WorkflowDesigner({
               </Badge>
               {pendingSave.diff.addedApprovalGates.map((gate) => <Badge key={gate} variant="info">+ {gate}</Badge>)}
             </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--crust)] p-3 font-mono text-[10px] leading-relaxed text-[var(--subtext-0)]">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] bg-[var(--crust)] p-3 font-mono text-[var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
               {JSON.stringify(pendingSave.definition, null, 2)}
             </pre>
           </div>

@@ -117,8 +117,8 @@ function ChartState({ tone, message }: { tone: "empty" | "error"; message: strin
     <div
       className={
         tone === "error"
-          ? "m-2 rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-4 text-center font-ui text-[11px] text-[var(--danger)]"
-          : "m-2 rounded-md border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[11px] text-[var(--overlay-1)]"
+          ? "m-2 rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--danger)]"
+          : "m-2 rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]"
       }
       role={tone === "error" ? "alert" : "status"}
     >
@@ -131,8 +131,8 @@ function SeriesLegend({ series }: { series: PreparedSeries[] }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 pb-1 pt-2" aria-hidden="true">
       {series.map((item) => (
-        <span key={item.key} className="inline-flex items-center gap-1 font-ui text-[10px] text-[var(--overlay-1)]">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+        <span key={item.key} className="inline-flex items-center gap-1 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
+          <span className="h-1.5 w-1.5 rounded-[var(--r-pill)]" style={{ backgroundColor: item.color }} />
           {item.label}
         </span>
       ))}

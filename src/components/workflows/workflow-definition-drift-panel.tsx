@@ -21,15 +21,15 @@ export function WorkflowDefinitionDriftPanel({
   return (
     <section
       aria-label="Workflow definition drift"
-      className="rounded-md border border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_7%,var(--base))] px-4 py-3"
+      className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_7%,var(--base))] px-4 py-3"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--warning)]">
+          <div className="flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--warning)]">
             <AlertTriangle className="h-3.5 w-3.5" />
             Definition drift
           </div>
-          <p className="mt-1 font-ui text-[11px] leading-relaxed text-[var(--subtext-0)]">
+          <p className="mt-1 font-ui text-[var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
             This run remains pinned to v{drift.runVersion}; the Registry is now
             v{drift.currentVersion}. Historical execution will not be upgraded
             implicitly.
@@ -76,7 +76,7 @@ export function WorkflowDefinitionDriftPanel({
       {resolution ? (
         <p
           data-resolution={resolution.response}
-          className="mt-3 font-ui text-[11px] text-[var(--subtext-0)]"
+          className="mt-3 font-ui text-[var(--t-section)] text-[var(--subtext-0)]"
         >
           {resolution.message}
         </p>

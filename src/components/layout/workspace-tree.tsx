@@ -142,7 +142,7 @@ function NameField({
         aria-label={initial ? "Rename" : "Name"}
         className={cn(
           "h-7 w-full rounded border border-[var(--accent-border)] bg-[var(--base)] px-2",
-          "font-ui text-[13px] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
+          "font-ui text-[var(--t-ui)] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
           "focus:outline-none focus:border-[var(--accent)]",
         )}
         placeholder="Name"
@@ -554,7 +554,7 @@ export function WorkspaceTree() {
   return (
     <div className="flex flex-col">
       <div className="flex h-7 items-center justify-between pl-4 pr-1">
-        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">
           Workspace
         </span>
         <button
@@ -563,7 +563,7 @@ export function WorkspaceTree() {
           title="New department"
           onClick={() => startAdding(null)}
           className={cn(
-            "flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)]",
+            "flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)]",
             "transition-colors duration-150 hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
           )}
@@ -573,12 +573,12 @@ export function WorkspaceTree() {
       </div>
 
       {error ? (
-        <p role="alert" className="px-4 py-1.5 font-ui text-[12px] leading-4 text-[var(--danger)]">
+        <p role="alert" className="px-4 py-1.5 font-ui text-[var(--t-meta)] leading-4 text-[var(--danger)]">
           Couldn't load the tree: {error.message}
         </p>
       ) : null}
       {isLoading ? (
-        <p className="px-4 py-1.5 font-ui text-[12px] text-[var(--overlay-1)]">Loading…</p>
+        <p className="px-4 py-1.5 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading…</p>
       ) : null}
 
       <div
@@ -595,7 +595,7 @@ export function WorkspaceTree() {
           <button
             type="button"
             onClick={() => startAdding(null)}
-            className="rounded px-4 py-1.5 text-left font-ui text-[12px] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="rounded px-4 py-1.5 text-left font-ui text-[var(--t-meta)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             Add a department to begin
           </button>

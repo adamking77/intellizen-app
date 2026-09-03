@@ -27,6 +27,9 @@ export interface AcpAgent {
   model?: string;
   role?: string;
   avatar?: string;
+  avatarStyle?: "sphere" | "blob";
+  avatarKind?: string;
+  avatarColor?: string;
   voice?: AcpVoice;
   identity?: string;
   context?: string[];
@@ -81,19 +84,33 @@ export function normalizeAcpAgent(value: unknown): AcpAgent | null {
   const command = optionalString(row.command);
   if (!id || !command || !isEngine(row.engine)) return null;
 
+  const avatarStyle = row.avatarStyle === "blob" || row.avatar_style === "blob" ? "blob" : undefined;
+  const avatarKind = optionalString(row.avatarKind ?? row.avatar_kind);
+  const avatarColor = optionalString(row.avatarColor ?? row.avatar_color);
+  const cwd = optionalString(row.cwd);
+  const model = optionalString(row.model);
+  const role = optionalString(row.role);
+  const avatar = optionalString(row.avatar);
+  const normalizedVoice = voice(row.voice);
+  const identity = optionalString(row.identity);
+  const context = stringList(row.context);
+
   return {
     id,
     name: optionalString(row.name) ?? ACP_ENGINE_LABEL[row.engine],
     engine: row.engine,
     command,
     args: Array.isArray(row.args) ? row.args.filter((item): item is string => typeof item === "string") : [],
-    cwd: optionalString(row.cwd),
-    model: optionalString(row.model),
-    role: optionalString(row.role),
-    avatar: optionalString(row.avatar),
-    voice: voice(row.voice),
-    identity: optionalString(row.identity),
-    context: stringList(row.context),
+    ...(cwd ? { cwd } : {}),
+    ...(model ? { model } : {}),
+    ...(role ? { role } : {}),
+    ...(avatar ? { avatar } : {}),
+    ...(avatarStyle ? { avatarStyle } : {}),
+    ...(avatarKind ? { avatarKind } : {}),
+    ...(avatarColor ? { avatarColor } : {}),
+    ...(normalizedVoice ? { voice: normalizedVoice } : {}),
+    ...(identity ? { identity } : {}),
+    ...(context ? { context } : {}),
   };
 }
 

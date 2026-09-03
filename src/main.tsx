@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "@/App";
 import { AppErrorBoundary } from "@/components/layout/app-error-boundary";
 import "@fontsource-variable/geist";
+import "blobatar/motion.css";
 import "@/index.css";
 import { applyTheme, loadTheme } from "@/lib/theme";
 

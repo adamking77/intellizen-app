@@ -33,7 +33,7 @@ function formatDate(value: string) {
 function LazyFallback() {
   return (
     <div className="flex h-full items-center justify-center">
-      <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+      <Loader2 className="h-4 w-4 text-[var(--accent)]" />
     </div>
   );
 }
@@ -129,12 +129,12 @@ export function ProjectView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-5 py-3">
         <div className="min-w-0 flex-1">
           {scoped && scoped.path.length > 0 ? <p className="truncate text-meta">{breadcrumb(scoped)}</p> : null}
-          <h1 className="truncate font-ui text-[17px] font-semibold text-[var(--text)]">{node?.name ?? "Project"}</h1>
+          <h1 className="truncate font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{node?.name ?? "Project"}</h1>
           {node && node.folders.length > 0 ? (
-            <p className="truncate font-mono text-[11px] text-[var(--overlay-1)]" title={node.folders.join("\n")}>
+            <p className="truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]" title={node.folders.join("\n")}>
               {node.folders.map(shortenHome).join("  ·  ")}
             </p>
           ) : null}
@@ -177,7 +177,7 @@ export function ProjectView() {
               <span className="text-label">{files.length} document{files.length === 1 ? "" : "s"}</span>
               <NewDocumentButton pending={create.isPending} onClick={() => create.mutate()} />
             </div>
-            <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border)]">
+            <div className="divide-y divide-[var(--border-subtle)] rounded-[var(--r-plane)] border border-[var(--border)]">
               {files.map((file) => {
                 const title = String(file.fields[DOCUMENTS_DB_FIELDS.title] ?? "").trim() || "Untitled document";
                 const type = String(file.fields[DOCUMENTS_DB_FIELDS.docType] ?? "");
@@ -190,11 +190,11 @@ export function ProjectView() {
                     className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
                   >
                     <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-                    <span className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
+                    <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
                       {title}
                     </span>
                     {type ? <span className="shrink-0 text-meta">{type}</span> : null}
-                    {updated ? <span className="shrink-0 font-mono text-[11px] text-[var(--overlay-1)]">{updated}</span> : null}
+                    {updated ? <span className="shrink-0 font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{updated}</span> : null}
                   </button>
                 );
               })}
@@ -244,7 +244,7 @@ export function ProjectView() {
 function NewDocumentButton({ pending, onClick }: { pending: boolean; onClick: () => void }) {
   return (
     <Button size="sm" className="gap-1.5" onClick={onClick} disabled={pending}>
-      {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+      {pending ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
       New document
     </Button>
   );

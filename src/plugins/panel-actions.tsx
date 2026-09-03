@@ -38,7 +38,7 @@ function Actions({ profile, send, navigate }: Props & { navigate: (to: string) =
               .then(() => action.run({ profile, send, navigate }))
               .catch((error) => toastError(`Plugin “${action.pluginName}” action failed`, error));
           }}
-          className="rounded-full border border-[var(--border)] bg-[var(--surface-wash)] px-2.5 py-1 font-ui text-[11px] text-[var(--text)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          className="rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--surface-wash)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--text)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
         >
           {action.label}
         </button>

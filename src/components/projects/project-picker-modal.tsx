@@ -111,28 +111,28 @@ export function ProjectPickerModal({
       className="w-full max-w-[560px]"
     >
         {savingProjectId !== null ? (
-          <p className="mb-3 flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
-            <Loader2 className="h-3 w-3 animate-spin" />
+          <p className="mb-3 flex items-center gap-1.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--accent)]">
+            <Loader2 className="h-3 w-3" />
             Saving evidence…
           </p>
         ) : null}
           {detailsSlot ? (
-            <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--base)] p-3">
+            <div className="mb-4 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] p-3">
               {detailsSlot}
             </div>
           ) : null}
 
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Choose an evidence pile inside a work item
             </span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+            <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
               {existing.length}
             </span>
           </div>
 
           {existing.length === 0 ? (
-            <p className="rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+            <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
               No evidence piles yet — create a standalone one below, then assign it to a work item in Intel.
             </p>
           ) : (
@@ -154,7 +154,7 @@ export function ProjectPickerModal({
                       }
                     }}
                     className={cn(
-                      "group flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                      "group flex items-center justify-between gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
                       isSaving
                         ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
                         : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)]",
@@ -162,19 +162,19 @@ export function ProjectPickerModal({
                     )}
                   >
                     <span className={cn(
-                      "truncate font-ui text-[13px] font-medium",
+                      "truncate font-ui text-[var(--t-ui)] font-medium",
                       isSaving ? "text-[var(--accent)]" : "text-[var(--text)]",
                     )}>
                       <span className="block truncate">{project.name}</span>
-                      <span className="mt-0.5 block truncate font-ui text-[10px] font-normal text-[var(--overlay-1)]">
+                      <span className="mt-0.5 block truncate font-ui text-[var(--t-count)] font-normal text-[var(--overlay-1)]">
                         {(operations ?? []).find((operation) => operation.id === project.operation_id)?.name ?? "Standalone evidence pile"}
                       </span>
                     </span>
                     <span className="shrink-0 flex items-center gap-1.5">
                       {isSaving ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent)]" />
+                        <Loader2 className="h-3.5 w-3.5 text-[var(--accent)]" />
                       ) : (
-                        <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
+                        <span className="font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
                           {project.type.replace("_", " ")}
                         </span>
                       )}
@@ -189,13 +189,13 @@ export function ProjectPickerModal({
             {creating ? (
               <div className="grid gap-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                     New standalone evidence pile
                   </span>
                   <button
                     type="button"
                     onClick={() => setCreating(false)}
-                    className="font-ui text-[11px] text-[var(--overlay-1)] hover:text-[var(--text)]"
+                    className="font-ui text-[var(--t-section)] text-[var(--overlay-1)] hover:text-[var(--text)]"
                   >
                     Cancel
                   </button>
@@ -208,7 +208,7 @@ export function ProjectPickerModal({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <select
-                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                     value={type}
                     onChange={(event) => setType(event.target.value as ProjectType)}
                   >
@@ -218,7 +218,7 @@ export function ProjectPickerModal({
                     <option value="client_case">Client Case</option>
                   </select>
                   <select
-                    className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                     value={watchDomain}
                     onChange={(event) => setWatchDomain(event.target.value)}
                   >
@@ -244,8 +244,8 @@ export function ProjectPickerModal({
                 type="button"
                 onClick={() => setCreating(true)}
                 className={cn(
-                  "w-full rounded-md border border-dashed border-[var(--border)] px-3 py-2.5",
-                  "font-ui text-[12px] font-medium text-[var(--subtext-0)]",
+                  "w-full rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2.5",
+                  "font-ui text-[var(--t-meta)] font-medium text-[var(--subtext-0)]",
                   "transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >

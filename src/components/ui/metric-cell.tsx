@@ -28,7 +28,7 @@ export function MetricCell({
       <span className="text-metric leading-none">{value}</span>
       {delta && (
         <span
-          className="font-mono text-[11px] leading-none"
+          className="font-mono text-[var(--t-section)] leading-none"
           style={{ color: deltaColor }}
         >
           {arrow} {delta.value}

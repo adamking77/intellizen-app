@@ -61,7 +61,7 @@ function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
         });
       }}
       className={cn(
-        "font-ui text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+        "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
         pinned ? "text-[var(--success)]" : "text-[var(--overlay-1)] hover:text-[var(--accent)]",
       )}
     >
@@ -72,9 +72,9 @@ function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
 
 function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: "html" }> }) {
   return (
-    <div className="mt-1.5 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--mantle)]">
+    <div className="mt-1.5 overflow-hidden rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)]">
       {widget.title ? (
-        <div className="border-b border-[var(--border-subtle)] px-2 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <div className="border-b border-[var(--border-subtle)] px-2 py-1 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {widget.title}
         </div>
       ) : null}
@@ -83,8 +83,8 @@ function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: 
       {widget.kind === "data-insights" ? (
         <ul className="space-y-1 px-2 py-1.5">
           {widget.insights.slice(0, 6).map((insight, index) => (
-            <li key={index} className="flex gap-1.5 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">
-              <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-[var(--accent)]" />
+            <li key={index} className="flex gap-1.5 font-ui text-[var(--t-section)] leading-snug text-[var(--subtext-0)]">
+              <span className="mt-[5px] h-1 w-1 shrink-0 rounded-[var(--r-pill)] bg-[var(--accent)]" />
               <span>{insight}</span>
             </li>
           ))}
@@ -111,7 +111,7 @@ function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: 
                 to={link.to}
                 className="flex items-center justify-between gap-2 px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
               >
-                <span className="min-w-0 truncate font-ui text-[11.5px] text-[var(--text)]">{link.label}</span>
+                <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{link.label}</span>
                 {link.status ? <Badge variant="outline">{link.status}</Badge> : null}
               </Link>
             </li>
@@ -134,7 +134,7 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
               <th
                 key={column.key}
                 className={cn(
-                  "px-2 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]",
+                  "px-2 py-1 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]",
                   column.align === "right" ? "text-right" : "text-left",
                 )}
               >
@@ -154,7 +154,7 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
                   <td
                     key={column.key}
                     className={cn(
-                      "max-w-[140px] truncate px-2 py-1 text-[11px] leading-snug",
+                      "max-w-[140px] truncate px-2 py-1 text-[var(--t-section)] leading-snug",
                       numeric || column.align === "right"
                         ? "text-right font-mono text-[var(--text)]"
                         : "text-left font-ui text-[var(--subtext-0)]",
@@ -170,7 +170,7 @@ function WidgetTable({ widget }: { widget: Extract<AgentChatWidgetModel, { kind:
         </tbody>
       </table>
       {widget.table.truncated || (widget.table.totalRows ?? rows.length) > rows.length ? (
-        <div className="border-t border-[var(--border-subtle)] px-2 py-1 font-mono text-[10px] text-[var(--overlay-1)]">
+        <div className="border-t border-[var(--border-subtle)] px-2 py-1 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
           {widget.table.totalRows ?? "more"} total rows
         </div>
       ) : null}

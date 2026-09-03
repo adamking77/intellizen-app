@@ -5,6 +5,7 @@
 import { defaultAcpLaunch, type AcpAgent, type AcpEngine } from "@/engine/acp-registry";
 
 export type AgentEngine = "hermes" | AcpEngine;
+export type AvatarStyle = "sphere" | "blob";
 
 export const ENGINES: { id: AgentEngine; label: string; acp: boolean }[] = [
   { id: "hermes", label: "Hermes", acp: false },
@@ -46,6 +47,10 @@ export interface Agent {
   identity: string;
   /** Folders this agent may read. Empty means it inherits the default. */
   context: string[];
+  /** Procedural renderer used when no uploaded profile picture is present. */
+  avatarStyle: AvatarStyle;
+  /** Pinned Blobatar silhouette; unset lets the seed choose. */
+  avatarKind?: string;
   avatarColor?: string;
   /** A picture exists on the profile (`profiles.get_asset` fetches it). */
   hasAvatar: boolean;
@@ -82,6 +87,8 @@ export const UI_META_KEY = "intellizen";
 
 export interface AgentUiMeta {
   role?: string;
+  avatar_style?: AvatarStyle;
+  avatar_kind?: string;
   avatar_color?: string;
   context?: string[];
 }
@@ -89,6 +96,8 @@ export interface AgentUiMeta {
 export function toUiMeta(agent: Agent): AgentUiMeta {
   const meta: AgentUiMeta = {};
   if (agent.role.trim()) meta.role = agent.role.trim();
+  if (agent.avatarStyle === "blob") meta.avatar_style = "blob";
+  if (agent.avatarKind) meta.avatar_kind = agent.avatarKind;
   if (agent.avatarColor) meta.avatar_color = agent.avatarColor;
   if (agent.context.length > 0) meta.context = agent.context;
   return meta;
@@ -118,6 +127,7 @@ export function agentFromProfileRow(row: ProfileRow): Agent | null {
   // Hermes Desktop's own roster colour, when this app has not pinned one.
   const bots = ui["hermes-bots"] && typeof ui["hermes-bots"] === "object" ? (ui["hermes-bots"] as { color?: unknown }) : {};
   const avatarColor = str(mine.avatar_color) || str(bots.color) || undefined;
+  const avatarStyle: AvatarStyle = mine.avatar_style === "blob" ? "blob" : "sphere";
   return {
     id: hermesAgentId(name),
     name,
@@ -128,6 +138,8 @@ export function agentFromProfileRow(row: ProfileRow): Agent | null {
     model: str(row.model),
     identity: "",
     context: Array.isArray(mine.context) ? mine.context.filter((p): p is string => typeof p === "string") : [],
+    avatarStyle,
+    avatarKind: str(mine.avatar_kind) || undefined,
     avatarColor,
     hasAvatar: row.has_avatar === true,
     isDefault: row.is_default === true,
@@ -146,7 +158,9 @@ export function agentFromAcp(entry: AcpAgent): Agent {
     model: entry.model ?? "",
     identity: entry.identity ?? "",
     context: entry.context ?? [],
-    avatarColor: entry.avatar || undefined,
+    avatarStyle: entry.avatarStyle === "blob" ? "blob" : "sphere",
+    avatarKind: entry.avatarKind,
+    avatarColor: entry.avatarColor || entry.avatar || undefined,
     hasAvatar: false,
     voiceId: entry.voice?.voiceId || undefined,
     voiceService: asVoiceService(entry.voice?.service),
@@ -171,6 +185,9 @@ export function acpFromAgent(agent: Agent, previous?: AcpAgent): AcpAgent {
     model: agent.model.trim() || undefined,
     role: agent.role.trim() || undefined,
     avatar: agent.avatarColor,
+    avatarStyle: agent.avatarStyle,
+    avatarKind: agent.avatarKind,
+    avatarColor: agent.avatarColor,
     voice: agent.voiceId ? { service: agent.voiceService ?? "minimax", voiceId: agent.voiceId } : undefined,
     identity: agent.identity || undefined,
     context: agent.context.length ? agent.context : undefined,
@@ -241,6 +258,7 @@ export function blankAgent(engine: AgentEngine = "hermes"): Agent {
     model: "",
     identity: "",
     context: [],
+    avatarStyle: "sphere",
     hasAvatar: false,
     isDefault: false,
     description: "",

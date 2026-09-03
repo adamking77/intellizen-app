@@ -19,6 +19,7 @@ import {
 } from "./decisions";
 import { getGatewayClient } from "./gateway";
 import type { GatewayEvent } from "./json-rpc-gateway";
+import type { HermesProfile } from "./profiles";
 import { createSession, interruptSession, isSessionNotFound, submitPrompt } from "./session";
 import {
   applyTranscriptAction,
@@ -44,7 +45,9 @@ export interface ProfileThread {
 export interface SessionStoreState {
   selectedProfile: string | null;
   selectedRoomId: string | null;
+  profileDirectory: Record<string, HermesProfile>;
   threads: Record<string, ProfileThread>;
+  setProfileDirectory: (profiles: HermesProfile[]) => void;
   selectProfile: (profile: string | null) => void;
   selectRoom: (roomId: string | null) => void;
   /** Make sure a live session exists for the profile; returns its id. */
@@ -135,7 +138,11 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
   return {
     selectedProfile: null,
     selectedRoomId: null,
+    profileDirectory: {},
     threads: {},
+
+    setProfileDirectory: (profiles) =>
+      set({ profileDirectory: Object.fromEntries(profiles.map((profile) => [profile.name, profile])) }),
 
     selectProfile: (profile) => set({ selectedProfile: profile, selectedRoomId: profile ? null : get().selectedRoomId }),
     selectRoom: (roomId) => set({ selectedRoomId: roomId }),

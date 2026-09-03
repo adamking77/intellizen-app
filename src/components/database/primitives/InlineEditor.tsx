@@ -223,16 +223,16 @@ function InlineRelationEditor({
             <span className="truncate">{getRecordTitle(candidate, targetDb)}</span>
           </label>
         ))}
-        {candidates.length === 0 && <div className="text-[11px] opacity-45">No matches</div>}
+        {candidates.length === 0 && <div className="text-[var(--t-section)] opacity-45">No matches</div>}
       </div>
       <div className="flex items-center justify-end gap-1">
-        <button className="text-[11px] opacity-70 hover:opacity-100" onClick={() => setSelected([])}>
+        <button className="text-[var(--t-section)] opacity-70 hover:opacity-100" onClick={() => setSelected([])}>
           Clear
         </button>
-        <button className="text-[11px] opacity-70 hover:opacity-100" onClick={onCancel}>
+        <button className="text-[var(--t-section)] opacity-70 hover:opacity-100" onClick={onCancel}>
           Cancel
         </button>
-        <button className="text-[11px] opacity-70 hover:opacity-100" onClick={() => onSave(selected)}>
+        <button className="text-[var(--t-section)] opacity-70 hover:opacity-100" onClick={() => onSave(selected)}>
           Done
         </button>
       </div>

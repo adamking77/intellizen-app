@@ -20,7 +20,7 @@ import {
 import { Avatar } from "./avatar";
 
 const INPUT =
-  "min-w-0 rounded-[var(--r-row)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[13px] text-[var(--text)] " +
+  "min-w-0 rounded-[var(--r-row)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] " +
   "placeholder:text-[var(--overlay-0)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-border)]";
 
 export function TeamSheet({
@@ -99,14 +99,14 @@ export function TeamSheet({
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-[120] bg-[color-mix(in_srgb,var(--crust)_42%,transparent)] backdrop-blur-[7px]" />
-        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center">
+        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <Dialog.Popup
             aria-label={team ? "Edit team" : "New team"}
-            className="flex max-h-[72%] w-[420px] flex-col overflow-hidden rounded-xl bg-[var(--raised)] outline-none shadow-[0_40px_120px_color-mix(in_srgb,var(--crust)_55%,transparent)]"
+            className="flex max-h-[calc(100dvh-24px)] w-[min(420px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--raised)] outline-none shadow-[var(--shadow-elevated)]"
           >
             <div className="px-[17px] pb-[11px] pt-[15px]">
-              <Dialog.Title className="font-ui text-[13px] font-medium text-[var(--text)]">{team ? "Edit team" : "New team"}</Dialog.Title>
-              <div className="mt-[3px] font-ui text-[12px] text-[var(--text-muted)]">
+              <Dialog.Title className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{team ? "Edit team" : "New team"}</Dialog.Title>
+              <div className="mt-[3px] font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
                 {MIN_TEAM_MEMBERS} to {MAX_TEAM_MEMBERS} agents. They answer in turn, in one log.
               </div>
             </div>
@@ -118,7 +118,7 @@ export function TeamSheet({
             ) : null}
 
             <div className="flex-1 overflow-y-auto px-[9px]">
-              {shown.length === 0 ? <div className="px-2 py-2.5 font-ui text-[12px] text-[var(--text-muted)]">No agent matches “{query}”.</div> : null}
+              {shown.length === 0 ? <div className="px-2 py-2.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No agent matches “{query}”.</div> : null}
               {shown.map((a) => {
                 const on = picked.includes(a.id);
                 // A full team greys what it cannot take rather than hiding it.
@@ -135,11 +135,11 @@ export function TeamSheet({
                     <input type="checkbox" checked={on} disabled={shut} onChange={() => toggle(a.id)} style={{ accentColor: "var(--accent)" }} />
                     <Avatar agent={a} size={22} image={images?.[a.id]} />
                     <div className="flex min-w-0 flex-col">
-                      <span className="font-ui text-[13px] text-[var(--text)]">{a.displayName}</span>
-                      <span className="font-mono text-[11px] text-[var(--text-muted)]">@{handleOf(a.displayName)}</span>
+                      <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{a.displayName}</span>
+                      <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">@{handleOf(a.displayName)}</span>
                     </div>
                     <div className="grow" />
-                    <span className="font-ui text-[12px] text-[var(--text-muted)]">{engineLabel(a.engine)}</span>
+                    <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{engineLabel(a.engine)}</span>
                   </label>
                 );
               })}
@@ -173,7 +173,7 @@ export function TeamSheet({
                 onClick={save}
                 disabled={picked.length < MIN_TEAM_MEMBERS || busy}
                 className={cn(
-                  "rounded-full px-3.5 py-1.5 font-ui text-[12px] disabled:opacity-45",
+                  "rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] disabled:opacity-45",
                   picked.length >= MIN_TEAM_MEMBERS
                     ? "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]"
                     : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-[var(--text)]",
@@ -182,7 +182,7 @@ export function TeamSheet({
                 {busy ? "Saving…" : team ? "Save" : "Create"}
               </button>
             </div>
-            {error ? <div className="bg-[var(--mantle)] px-[13px] pb-2.5 font-ui text-[12px] text-[var(--bad)]">{error}</div> : null}
+            {error ? <div className="bg-[var(--mantle)] px-[13px] pb-2.5 font-ui text-[var(--t-meta)] text-[var(--bad)]">{error}</div> : null}
           </Dialog.Popup>
         </Dialog.Viewport>
       </Dialog.Portal>

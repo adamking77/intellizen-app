@@ -45,6 +45,9 @@ export async function listAcpMembers(): Promise<GroupMember[]> {
       title: agent.role,
       model: agent.model,
       provider: ACP_ENGINE_LABEL[agent.engine],
+      avatar_style: agent.avatarStyle,
+      avatar_kind: agent.avatarKind,
+      avatar_color: agent.avatarColor || agent.avatar,
     }));
   } catch {
     return [];

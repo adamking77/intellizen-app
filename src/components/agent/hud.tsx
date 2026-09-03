@@ -23,6 +23,8 @@ import type { Message } from "@/engine/transcript";
 import { cn } from "@/lib/utils";
 import { isTauri } from "./panel-window";
 import type { RunState } from "./run-state";
+import type { HermesProfile } from "@/engine/profiles";
+import { Avatar, identityColor } from "@/components/agents/avatar";
 
 /** What the HUD has open above its bar. */
 export type HudOpen = "none" | "chat";
@@ -42,7 +44,7 @@ type ResizeDirection =
 const CLEAR = { top: 27, side: 33, bottom: 43 };
 
 const ICON =
-  "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] " +
+  "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] " +
   "transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent " +
   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
@@ -102,7 +104,8 @@ function ResizeFrame() {
 }
 
 export interface HudProps {
-  agent: string | null;
+  agent: HermesProfile | null;
+  target: string | null;
   messages: Message[];
   run: RunState;
   voice: VoiceHandle;
@@ -120,6 +123,7 @@ export interface HudProps {
 
 export function Hud({
   agent,
+  target,
   messages,
   run,
   voice,
@@ -134,13 +138,33 @@ export function Hud({
 }: HudProps) {
   const [draft, setDraft] = useState("");
   const log = useRef<HTMLDivElement | null>(null);
+  const atBottom = useRef(true);
+  const [behind, setBehind] = useState(false);
 
   useEffect(() => {
-    log.current?.scrollTo({ top: log.current.scrollHeight });
+    const el = log.current;
+    if (!el || open !== "chat") return;
+    if (atBottom.current) {
+      el.scrollTo({ top: el.scrollHeight });
+      setBehind(false);
+    } else {
+      setBehind(true);
+    }
   }, [messages, open]);
 
   const speaking = voice.mine ? "you" : voice.talking ? "agent" : null;
-  const name = agent ?? "Agents";
+  const name = agent?.displayName || agent?.name || target || "Agents";
+  const hue = identityColor(name, agent?.avatarColor);
+  const face: HermesProfile = agent ?? {
+    name: target ?? "agents",
+    displayName: name,
+    description: "",
+    model: null,
+    provider: null,
+    isDefault: false,
+    gatewayRunning: false,
+    avatarStyle: "sphere",
+  };
 
   // A window you can only move by one strip feels stuck, so the panel's own
   // ground drags it. Controls and the transcript's text do not — but the
@@ -178,16 +202,22 @@ export function Hud({
       {open === "chat" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px]"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-pill)]"
           style={SURFACE}
         >
           <div
             ref={log}
             data-hud-log
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 32;
+              atBottom.current = near;
+              if (near) setBehind(false);
+            }}
             className="flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto overscroll-contain px-3 pb-2 pt-[11px]"
           >
             {messages.length === 0 ? (
-              <span className="m-auto font-ui text-[12px] text-[var(--text-muted)]">
+              <span className="m-auto font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
                 {ready ? `Ask ${name} something.` : "No agent to ask."}
               </span>
             ) : null}
@@ -195,31 +225,55 @@ export function Hud({
               m.from === "you" ? (
                 <div
                   key={m.id}
-                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-1.5 font-ui text-[13px] leading-normal text-[var(--text)]"
+                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
                 >
                   {m.text}
                 </div>
               ) : (
-                <div key={m.id} className="flex flex-col gap-0.5">
-                  <span className="font-ui text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {m.from}
-                  </span>
-                  <div className="whitespace-pre-wrap rounded-[10px] bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-[11px] py-1.5 font-ui text-[13px] leading-normal text-[var(--text)]">
-                    {m.text.replace(/^\s+/, "")}
-                    {m.streaming ? (
-                      <span
-                        aria-hidden
-                        className="ml-0.5 inline-block h-[13px] w-0.5 -translate-y-px bg-[var(--accent)] align-middle"
-                      />
-                    ) : null}
+                <div key={m.id} className="flex gap-2">
+                  <div className="mt-0.5 shrink-0">
+                    <Avatar agent={face} size={20} image={face.avatarImage} animate={false} />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="t-section uppercase tracking-[0.14em] text-[var(--text-muted)]">{name}</span>
+                    <div
+                      className="whitespace-pre-wrap rounded-[var(--r-msg)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                      style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
+                    >
+                      {m.text.replace(/^\s+/, "")}
+                      {m.streaming ? (
+                        <span
+                          aria-hidden
+                          className="ml-0.5 inline-block h-[13px] w-0.5 -translate-y-px bg-[var(--accent)] align-middle"
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ),
             )}
           </div>
 
+          {behind ? (
+            <div className="flex shrink-0 justify-center py-1">
+              <button
+                type="button"
+                className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[var(--t-meta)] text-[var(--text)]"
+                onClick={() => {
+                  const el = log.current;
+                  if (!el) return;
+                  el.scrollTo({ top: el.scrollHeight });
+                  atBottom.current = true;
+                  setBehind(false);
+                }}
+              >
+                New reply ↓
+              </button>
+            </div>
+          ) : null}
+
           {voice.note ? (
-            <p role="status" className="px-3 pt-1 font-ui text-[11px] leading-snug text-[var(--bad)]">
+            <p role="status" className="px-3 pt-1 font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
               {voice.note}
             </p>
           ) : null}
@@ -231,6 +285,7 @@ export function Hud({
             voice={voice}
             speaking={speaking}
             name={name}
+            agentColor={hue}
             sending={sending}
             ready={ready}
           />
@@ -243,7 +298,7 @@ export function Hud({
               startResize("South");
             }}
           >
-            <div className="h-0.5 w-8 rounded-full bg-[var(--line-strong)]" />
+            <div className="h-0.5 w-8 rounded-[var(--r-pill)] bg-[var(--line-strong)]" />
           </div>
         </div>
       ) : null}
@@ -252,23 +307,21 @@ export function Hud({
       <div
         onMouseDown={drag}
         onDoubleClick={onRedock}
-        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-full px-[18px]"
+        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-[var(--r-pill)] px-[18px]"
         style={SURFACE}
         data-run-state={run.kind}
       >
         {speaking && open === "none" ? (
           <>
             {speaking === "you" ? (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--go-fg)]">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--go-fg)]">
                 <Mic className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
               </span>
             ) : (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] font-ui text-[10px] font-semibold text-[var(--accent)]">
-                {(name.trim()[0] ?? "?").toUpperCase()}
-              </span>
+              <Avatar agent={face} size={20} image={face.avatarImage} animate={false} speaking={voice.said} />
             )}
             <div className="min-w-0 flex-1">
-              <Waveform color="var(--accent)" height={14} bars={12} levels={voice.levels} />
+              <Waveform color={speaking === "agent" ? hue : "var(--accent)"} height={14} bars={12} levels={speaking === "agent" ? voice.saidLevels : voice.levels} />
             </div>
             <button
               type="button"
@@ -289,7 +342,8 @@ export function Hud({
           </>
         ) : (
           <>
-            <span className="truncate font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text)]">
+            <Avatar agent={face} size={20} image={face.avatarImage} animate={false} />
+            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">
               {name}
             </span>
             <HudRun run={run} agent={name} />
@@ -376,7 +430,7 @@ function HudRun({ run, agent }: { run: RunState; agent: string }) {
   return (
     <span
       className={cn(
-        "min-w-0 truncate font-ui text-[12px]",
+        "min-w-0 truncate font-ui text-[var(--t-meta)]",
         run.kind === "failed" ? "text-[var(--bad)]" : run.kind === "waiting" ? "text-[var(--wait)]" : "text-[var(--text-muted)]",
       )}
       title={run.kind === "failed" ? run.reason : undefined}
@@ -393,6 +447,7 @@ function HudComposer({
   voice,
   speaking,
   name,
+  agentColor,
   sending,
   ready,
 }: {
@@ -402,6 +457,7 @@ function HudComposer({
   voice: VoiceHandle;
   speaking: "you" | "agent" | null;
   name: string;
+  agentColor: string;
   sending: boolean;
   ready: boolean;
 }) {
@@ -411,9 +467,9 @@ function HudComposer({
     return (
       <div className={row}>
         <div className="min-w-0 flex-1">
-          <Waveform color="var(--accent)" height={14} bars={16} levels={voice.levels} />
+          <Waveform color={agentColor} height={14} bars={16} levels={voice.saidLevels} />
         </div>
-        <span className="font-ui text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">speaking</span>
+        <span className="font-ui text-[var(--t-section)] uppercase tracking-[0.14em] text-[var(--text-muted)]">speaking</span>
         <button type="button" onClick={voice.interrupt} aria-label="Stop" title="Stop" className={ICON}>
           <Square className="h-2 w-2" strokeWidth={0} fill="currentColor" aria-hidden />
         </button>
@@ -429,12 +485,12 @@ function HudComposer({
           onClick={voice.abandon}
           aria-label="Discard the recording"
           title="Discard the recording"
-          className="rounded-full px-2 py-0.5 font-ui text-[12px] text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+          className="rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
         >
           Cancel
         </button>
         {voice.interim ? (
-          <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-[var(--text)]">{voice.interim}</span>
+          <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">{voice.interim}</span>
         ) : (
           <div className="min-w-0 flex-1">
             <Waveform color="var(--accent)" height={14} bars={16} levels={voice.levels} />
@@ -466,7 +522,7 @@ function HudComposer({
         }}
         placeholder={sending ? "Working…" : ready ? `Message ${name}…` : "No agent to ask"}
         aria-label={`Message ${name}`}
-        className="min-w-0 flex-1 bg-transparent font-ui text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+        className="min-w-0 flex-1 bg-transparent font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
       />
       {voice.dictationOn ? (
         <button
@@ -491,7 +547,7 @@ function HudComposer({
           disabled={sending || !ready || !draft.trim()}
           aria-label={sending ? "Working — this turn cannot be stopped from here" : "Send"}
           title="Send"
-          className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+          className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
         >
           <ChevronRight className="h-3 w-3" strokeWidth={2.4} aria-hidden />
         </button>

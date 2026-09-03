@@ -44,6 +44,9 @@ importers:
       '@number-flow/react':
         specifier: ^0.6.0
         version: 0.6.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@outpacelabs/avatars':
+        specifier: ^0.6.0
+        version: 0.6.0(react@18.3.1)
       '@supabase/supabase-js':
         specifier: ^2.103.0
         version: 2.103.0
@@ -86,6 +89,9 @@ importers:
       '@xyflow/react':
         specifier: ^12.10.2
         version: 12.10.2(@types/react@18.3.28)(immer@11.1.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      blobatar:
+        specifier: ^2.6.0
+        version: 2.7.0(react@18.3.1)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -565,6 +571,11 @@ packages:
     peerDependencies:
       react: ^18 || ^19
       react-dom: ^18 || ^19
+
+  '@outpacelabs/avatars@0.6.0':
+    resolution: {integrity: sha512-pTAezn9+Hc3uUIBoaDYjciUgSycbWiUEVlcap7YmTpurQMBTYIcPokvB2vP2YYGlE3jGXzuX6AgVEEC/E63ohw==}
+    peerDependencies:
+      react: '>=18'
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -1254,6 +1265,17 @@ packages:
 
   bezier-js@6.1.4:
     resolution: {integrity: sha512-PA0FW9ZpcHbojUCMu28z9Vg/fNkwTj5YhusSAjHHDfHDGLxJ6YUKrAN2vk1fP2MMOxVw4Oko16FMlRGVBGqLKg==}
+
+  blobatar@2.7.0:
+    resolution: {integrity: sha512-tL1p2J3dXE/Z9U/ITwHqU7HBHmTH+Am+hif1J1hWAhvFT1VYC2HG+eXtN7081yuY+L2lrp9bs/VaF7dVH3S2jw==}
+    peerDependencies:
+      react: '>=18'
+      vue: '>=3'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      vue:
+        optional: true
 
   browserslist@4.28.2:
     resolution: {integrity: sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg==}
@@ -3092,6 +3114,10 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
+  '@outpacelabs/avatars@0.6.0(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
   '@rollup/rollup-android-arm-eabi@4.60.1':
@@ -3769,6 +3795,10 @@ snapshots:
   baseline-browser-mapping@2.10.18: {}
 
   bezier-js@6.1.4: {}
+
+  blobatar@2.7.0(react@18.3.1):
+    optionalDependencies:
+      react: 18.3.1
 
   browserslist@4.28.2:
     dependencies:

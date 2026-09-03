@@ -40,7 +40,7 @@ export function ContextSettings() {
         {context.map((path) => (
           <div key={path} className="flex items-center gap-3 rounded-[var(--r-row)] bg-[var(--mantle)] px-3 py-2.5">
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text)]">{path}</span>
-            <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[10px] text-[var(--overlay-1)]">read</span>
+            <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">read</span>
             <button type="button" className="pill" onClick={() => setContext(context.filter((item) => item !== path))} aria-label={`Remove ${path}`}>Remove</button>
           </div>
         ))}
@@ -55,7 +55,7 @@ export function ContextSettings() {
       {error ? <p className="text-xs text-[var(--danger)]">{error}</p> : null}
       <div className="flex items-center gap-3">
         <button type="button" className="action" onClick={() => void add()} disabled={busy}>{busy ? "Choosing…" : "Add folder"}</button>
-        <span className="text-[11px] text-[var(--overlay-1)]">Databases and APIs remain in each provider’s own connections.</span>
+        <span className="text-[var(--t-section)] text-[var(--overlay-1)]">Databases and APIs remain in each provider’s own connections.</span>
       </div>
     </div>
   );

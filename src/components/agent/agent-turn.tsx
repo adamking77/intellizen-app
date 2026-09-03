@@ -14,6 +14,7 @@ import {
 } from "@/components/agent/message-actions";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
 import type { HermesProfile } from "@/engine/profiles";
+import { Avatar, identityColor } from "@/components/agents/avatar";
 import type { Message, ToolRow } from "@/engine/transcript";
 import { writeTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ export function TurnFact({ text, title, truncate }: { text: string; title?: stri
   return (
     <span
       className={cn(
-        "px-0.5 font-ui text-[12px] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
+        "px-0.5 font-ui text-[var(--t-meta)] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
         truncate ? "min-w-0 truncate" : "shrink-0",
       )}
       title={title}
@@ -103,7 +104,7 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(tool.resultText);
   return (
-    <div className="rounded-md bg-[var(--crust)]">
+    <div className="rounded-[var(--r-row)] bg-[var(--crust)]">
       <button
         type="button"
         onClick={() => canOpen && setOpen((v) => !v)}
@@ -114,19 +115,19 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
         )}
         title={tool.name === tool.title ? tool.name : `${tool.name}: ${tool.title}`}
       >
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--text-muted)]">{tool.title}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tool.title}</span>
         {tool.ok === undefined ? (
-          <span className="font-mono text-[11px] text-[var(--text-muted)]">running</span>
+          <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">running</span>
         ) : (
           <>
             {tool.durationMs !== undefined ? (
-              <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+              <span className="font-mono text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
                 {tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
               </span>
             ) : null}
             <span
               className={cn(
-                "rounded-full px-2 py-px font-ui text-[11px] whitespace-nowrap",
+                "rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] whitespace-nowrap",
                 tool.ok
                   ? "bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] text-[var(--ok)]"
                   : "bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] text-[var(--bad)]",
@@ -138,7 +139,7 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
         )}
       </button>
       {open && tool.resultText ? (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[11px] leading-relaxed text-[var(--text-muted)]">
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[var(--t-section)] leading-relaxed text-[var(--text-muted)]">
           {tool.resultText}
         </pre>
       ) : null}
@@ -169,7 +170,7 @@ export function UserTurn({
   if (editing) {
     return (
       <div className="max-w-[82%] self-end">
-        <div className="rounded-[10px] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
+        <div className="rounded-[var(--r-msg)] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
           <textarea
             value={draft}
             autoFocus
@@ -184,13 +185,13 @@ export function UserTurn({
               }
             }}
             aria-label="Edit this message"
-            className="w-full resize-none bg-transparent font-ui text-[13px] leading-normal text-[var(--text)] outline-none"
+            className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[12px] text-[var(--text)] hover:opacity-90"
+              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)] hover:opacity-90"
             >
               Cancel
             </button>
@@ -201,7 +202,7 @@ export function UserTurn({
                 actions?.onEdit?.(draft.trim());
                 setDraft(null);
               }}
-              className="rounded-full bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[12px] text-[var(--go-fg)] hover:opacity-90 disabled:opacity-40"
+              className="rounded-[var(--r-pill)] bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--go-fg)] hover:opacity-90 disabled:opacity-40"
             >
               Send
             </button>
@@ -213,8 +214,8 @@ export function UserTurn({
 
   return (
     <div className="group relative max-w-[82%] self-end">
-      <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
-        <span className="whitespace-pre-wrap font-ui text-[13px] leading-normal text-[var(--text)]">{message.text}</span>
+      <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
+        <span className="whitespace-pre-wrap font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
       </div>
       <TurnBar align="end">
         {message.at !== undefined ? (
@@ -243,8 +244,8 @@ export function AgentTurn({
   now: number;
   onRetry?: (prompt: string) => void;
   actions?: TurnActions;
-  /** This very reply is the one being spoken. */
-  reading?: boolean;
+  /** Measured playback amplitude while this reply is being spoken. */
+  reading?: number;
   showReasoning?: boolean;
   /** Decision cards that arrived inside this turn, rendered where they arrived. */
   children?: React.ReactNode;
@@ -259,32 +260,39 @@ export function AgentTurn({
   };
   const tools = message.tools ?? [];
   const name = profile?.displayName || message.from;
-  const initial = (name.trim()[0] ?? "?").toUpperCase();
+  const agentColor = identityColor(name, profile?.avatarColor);
   const collapsed = tools.length > 2 && !runOpen;
   return (
     <div className="group flex gap-[9px]">
-      <div
-        aria-hidden
-        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] font-ui text-[11px] font-semibold text-[var(--accent)]"
-      >
-        {initial}
+      <div className="mt-0.5 shrink-0">
+        <Avatar
+          agent={{
+            displayName: name,
+            avatarStyle: profile?.avatarStyle ?? "sphere",
+            avatarKind: profile?.avatarKind,
+            avatarColor: profile?.avatarColor,
+          }}
+          size={24}
+          image={profile?.avatarImage}
+          speaking={reading}
+        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-[7px]">
-          <span className="font-ui text-[13px] text-[var(--text)]">{name}</span>
+          <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{name}</span>
           {profile?.provider || profile?.model ? (
-            <span className="truncate rounded-full bg-[color-mix(in_srgb,var(--runtime)_14%,transparent)] px-2 py-px font-mono text-[10px] text-[var(--runtime)] whitespace-nowrap">
+            <span className="truncate rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--runtime)_14%,transparent)] px-2 py-px font-mono text-[var(--t-count)] text-[var(--runtime)] whitespace-nowrap">
               {[profile.provider, profile.model].filter(Boolean).join(" · ")}
             </span>
           ) : null}
         </div>
 
         {showReasoning && message.thought ? (
-          <details className="rounded-md border-l-2 border-[var(--line-strong)] bg-[var(--crust)] px-2.5 py-[7px]">
-            <summary className="cursor-default list-none font-ui text-[12px] text-[var(--text-muted)]">
+          <details className="rounded-[var(--r-row)] bg-[var(--crust)] px-2.5 py-[7px]">
+            <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               Thought
             </summary>
-            <p className="mt-1 whitespace-pre-wrap font-ui text-[12px] leading-normal text-[var(--text-muted)]">
+            <p className="mt-1 whitespace-pre-wrap font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]">
               {message.thought.replace(/^\s+/, "")}
             </p>
           </details>
@@ -294,9 +302,9 @@ export function AgentTurn({
           <button
             type="button"
             onClick={() => setRunOpen(true)}
-            className="flex items-center gap-2 rounded-md bg-[var(--crust)] px-[9px] py-1.5 text-left"
+            className="flex items-center gap-2 rounded-[var(--r-row)] bg-[var(--crust)] px-[9px] py-1.5 text-left"
           >
-            <span className="flex-1 font-mono text-[12px] text-[var(--text-muted)]">{tools.length} steps</span>
+            <span className="flex-1 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
             <ChevronDown className="h-3 w-3 text-[var(--text-muted)]" strokeWidth={1.8} aria-hidden />
           </button>
         ) : (
@@ -306,11 +314,14 @@ export function AgentTurn({
         {children}
 
         {message.text || message.streaming ? (
-          <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-[11px] py-2">
+          <div
+            className="rounded-[var(--r-msg)] px-[11px] py-2"
+            style={{ background: `color-mix(in srgb, ${agentColor} 12%, transparent)` }}
+          >
             {message.text ? (
               <ReplyMarkdown
                 content={message.text.replace(/^\s+/, "")}
-                className="font-ui text-[13px] leading-normal text-[var(--text)]"
+                className="font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
               />
             ) : null}
             {message.streaming ? (
@@ -342,8 +353,8 @@ export function AgentTurn({
         ) : null}
 
         {message.failed ? (
-          <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
-            <p className="font-ui text-[13px] leading-normal text-[var(--bad)]">{message.failed}</p>
+          <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
+            <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
             {/* Word-labelled and always visible: an action you must hover to
                 discover is not offered, and the row survives greyscale. */}
             <div className="mt-2 flex gap-1.5">
@@ -364,7 +375,7 @@ export function AgentTurn({
                         )
                   }
                   className={cn(
-                    "rounded-full px-3 py-0.5 font-ui text-[12px] hover:opacity-90",
+                    "rounded-[var(--r-pill)] px-3 py-0.5 font-ui text-[var(--t-meta)] hover:opacity-90",
                     action.id === "retry"
                       ? "bg-[var(--go-bg)] text-[var(--go-fg)]"
                       : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)]",

@@ -48,11 +48,11 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
     <div className={className ?? "grid gap-2"}>
       <div className="grid grid-cols-2 gap-2">
         <label className="grid gap-1.5">
-          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Entity
           </span>
           <select
-            className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
             value={value.entity}
             onChange={(event) => onChange({ ...value, entity: event.target.value })}
           >
@@ -65,11 +65,11 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
         </label>
 
         <label className="grid gap-1.5">
-          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Area
           </span>
           <select
-            className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
             value={value.area}
             onChange={(event) => onChange({ ...value, area: event.target.value })}
           >
@@ -83,7 +83,7 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
       </div>
 
       <label className="grid gap-1.5">
-        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           Folder
         </span>
         <Input
@@ -98,7 +98,7 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
 
 export function TaxonomySummary({ taxonomy }: { taxonomy?: TaxonomyMetadata | null }) {
   return (
-    <span className="font-ui text-[11px] text-[var(--overlay-1)]">
+    <span className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
       {taxonomyEntityLabel(taxonomy)} / {taxonomyAreaLabel(taxonomy)} / {taxonomyFolderLabel(taxonomy)}
     </span>
   );

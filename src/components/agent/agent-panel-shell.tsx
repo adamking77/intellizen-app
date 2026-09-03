@@ -25,10 +25,10 @@ export function AgentPanelShell({
           : { width, background: "var(--mantle)" }
       }
       className={cn(
-        "relative flex shrink-0 flex-col border border-[var(--border)]",
+        "pane relative flex shrink-0 flex-col",
         standalone
-          ? "h-full w-full rounded-none border-0 bg-[var(--mantle)]"
-          : "h-full rounded-2xl",
+          ? "h-full w-full rounded-none bg-[var(--mantle)]"
+          : "h-full",
       )}
       onFocusCapture={onInteraction}
       onPointerDown={onInteraction}

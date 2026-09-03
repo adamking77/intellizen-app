@@ -26,10 +26,10 @@ export function UnitView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-3">
+      <header className="flex min-h-14 shrink-0 items-center gap-3 px-5 py-3">
         <FolderKanban className="h-4 w-4 shrink-0 text-[var(--accent)]" />
         <div className="min-w-0">
-          <h1 className="truncate font-ui text-[17px] font-semibold text-[var(--text)]">{unit?.name ?? "Unit"}</h1>
+          <h1 className="truncate font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{unit?.name ?? "Unit"}</h1>
           {unit && unit.path.length > 0 ? <p className="truncate text-meta">{breadcrumb(unit)}</p> : null}
         </div>
       </header>
@@ -44,7 +44,7 @@ export function UnitView() {
           emptyTitle={`No ${childKind}s yet`}
           emptyDescription={`New ${childKind}s are added from the tree in the sidebar: right-click ${unit?.name ?? "this unit"} and choose New ${childKind}.`}
         >
-          <div className="divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border)]">
+          <div className="divide-y divide-[var(--border-subtle)] rounded-[var(--r-plane)] border border-[var(--border)]">
             {rows.map((row) => {
               const count = countFor(counts, row);
               return (
@@ -54,12 +54,12 @@ export function UnitView() {
                   onClick={() => navigate(row.kind === "project" ? `/project/${row.id}` : `/unit/${row.id}`)}
                   className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
                 >
-                  <span className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
+                  <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)] group-hover:text-[var(--accent)]">
                     {row.name}
                   </span>
                   {row.caseLinked ? <StatusPill variant="new">CASE</StatusPill> : null}
                   <span className="shrink-0 text-meta">{row.kind}</span>
-                  <span className="w-14 shrink-0 text-right font-mono text-[11px] text-[var(--overlay-1)]">
+                  <span className="w-14 shrink-0 text-right font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
                     {docs.isLoading ? "…" : `${count} doc${count === 1 ? "" : "s"}`}
                   </span>
                 </button>

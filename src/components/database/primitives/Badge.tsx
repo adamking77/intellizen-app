@@ -14,7 +14,7 @@ export function Badge({ className, color, style, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-5 items-center rounded-full px-2 py-0.5 text-[12px] font-medium leading-none",
+        "inline-flex min-h-5 items-center rounded-[var(--r-pill)] px-2 py-0.5 text-[var(--t-meta)] font-medium leading-none",
         className,
       )}
       style={{

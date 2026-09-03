@@ -31,8 +31,8 @@ const SPEAKING_SERVICES: Catalog[] = [
   { id: "minimax", label: "MiniMax", models: ["speech-02-hd", "speech-02-turbo"], needsKey: false },
 ];
 
-const caps = "font-ui text-[11px] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
-const meta = "font-ui text-[11px] leading-[1.45] text-[var(--text-muted)]";
+const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
+const meta = "font-ui text-[var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
 
 function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -43,11 +43,11 @@ function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle:
       aria-label={label}
       onClick={onToggle}
       className={cn(
-        "flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-[2px] transition-colors",
+        "flex h-[22px] w-[38px] shrink-0 items-center rounded-[var(--r-pill)] p-[2px] transition-colors",
         on ? "justify-end bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]" : "justify-start bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",
       )}
     >
-      <span className={cn("h-[18px] w-[18px] rounded-full", on ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]")} />
+      <span className={cn("h-[18px] w-[18px] rounded-[var(--r-pill)]", on ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]")} />
     </button>
   );
 }
@@ -56,7 +56,7 @@ function Row({ label, detail, children }: { label: string; detail: string; child
   return (
     <div className="flex items-center gap-4 border-b border-[var(--hair)] px-0.5 py-3">
       <div className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="font-ui text-[13px] text-[var(--text)]">{label}</span>
+        <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{label}</span>
         <span className={meta}>{detail}</span>
       </div>
       {children}
@@ -119,7 +119,7 @@ function Half({
           {custom ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>Service id</span>
-              <Input className="h-8 text-[12px]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
+              <Input className="h-8 text-[var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
               <span className={meta}>
                 Recorded, not yet spoken through — this app has code for {catalog.map((p) => p.label).join(" and ")} only, and answers anything else by saying so rather than failing quietly.
               </span>
@@ -139,7 +139,7 @@ function Half({
                   ))}
                 </Select>
               ) : (
-                <Input className="h-8 text-[12px]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
+                <Input className="h-8 text-[var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
               )}
             </label>
           ) : null}
@@ -147,7 +147,7 @@ function Half({
           {needsKey ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>API key</span>
-              <Input className="h-8 text-[12px]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
+              <Input className="h-8 text-[var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
               <span className={meta}>
                 Credentials come from the environment — the same variable the service's own CLI reads. What is typed here is stored but not yet used.
               </span>
@@ -173,7 +173,7 @@ export function VoiceSettings() {
   return (
     <div className="flex flex-col gap-5">
       {/* An explanation, in the quiet register — not a notice. */}
-      <div className="flex items-start rounded-lg bg-[var(--input)] px-3 py-[9px]">
+      <div className="flex items-start rounded-[var(--r-plane)] bg-[var(--input)] px-3 py-[9px]">
         <span className={cn(meta, "leading-[1.5]")}>
           Both halves run on this machine — dictation through a local model, and speaking through the service you connect below. Nothing is sent anywhere you did not choose.
         </span>

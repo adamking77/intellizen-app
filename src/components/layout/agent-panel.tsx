@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpDown, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
+import { Avatar } from "@/components/agents/avatar";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
 import { AgentTurn, UserTurn, type TurnActions } from "@/components/agent/agent-turn";
 import { DecisionCard } from "@/components/agent/decision-card";
@@ -16,7 +17,7 @@ import {
 import { useEngineStore } from "@/engine/engine-store";
 import { ACP_ENGINE_LABEL, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
-import { defaultProfile, listProfiles, type HermesProfile } from "@/engine/profiles";
+import { defaultProfile, listProfiles, loadProfileAvatar, type HermesProfile } from "@/engine/profiles";
 import { transcriptBusy, type Decision, type Message } from "@/engine/transcript";
 import {
   AGENT_PANEL_COLLAPSED_KEY,
@@ -35,7 +36,7 @@ import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
 
 const ICON_BUTTON =
-  "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
 function panelStorage() {
   if (typeof window === "undefined") return null;
@@ -98,6 +99,16 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
   });
   const acpQuery = useQuery({ queryKey: ["acp", "agents"], queryFn: listAcpAgents, staleTime: 15_000 });
   const hermesProfiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
+  const [avatarImages, setAvatarImages] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    for (const candidate of hermesProfiles) {
+      if (!candidate.hasAvatar || candidate.name in avatarImages) continue;
+      setAvatarImages((current) => ({ ...current, [candidate.name]: null }));
+      void loadProfileAvatar(getGatewayClient(), candidate)
+        .then((image) => setAvatarImages((current) => ({ ...current, [candidate.name]: image })))
+        .catch(() => undefined);
+    }
+  }, [hermesProfiles, avatarImages]);
   const acpProfiles: HermesProfile[] = useMemo(
     () =>
       (acpQuery.data ?? []).map((agent) => ({
@@ -108,10 +119,24 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
         provider: ACP_ENGINE_LABEL[agent.engine],
         isDefault: false,
         gatewayRunning: true,
+        avatarStyle: agent.avatarStyle === "blob" ? "blob" : "sphere",
+        avatarKind: agent.avatarKind,
+        avatarColor: agent.avatarColor || agent.avatar,
       })),
     [acpQuery.data],
   );
-  const profiles = useMemo(() => [...hermesProfiles, ...acpProfiles], [hermesProfiles, acpProfiles]);
+  const profiles = useMemo(
+    () => [
+      ...hermesProfiles.map((candidate) => ({ ...candidate, avatarImage: avatarImages[candidate.name] })),
+      ...acpProfiles,
+    ],
+    [hermesProfiles, acpProfiles, avatarImages],
+  );
+  const setProfileDirectory = useSessionStore((state) => state.setProfileDirectory);
+
+  useEffect(() => {
+    setProfileDirectory(profiles);
+  }, [profiles, setProfileDirectory]);
 
   const { selectedProfile, thread, selectProfile, send, stop, decideApproval, decideClarify } =
     usePanelSession();
@@ -128,7 +153,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
 
   const profile: HermesProfile | null =
     profiles.find((p) => p.name === selectedProfile) ??
-    (selectedProfile ? { name: selectedProfile, isDefault: false, model: null, provider: null, gatewayRunning: engineOpen, description: "", displayName: "" } : null);
+    (selectedProfile ? { name: selectedProfile, isDefault: false, model: null, provider: null, gatewayRunning: engineOpen, description: "", displayName: "", avatarStyle: "sphere" } : null);
   const agentName = profile?.displayName || profile?.name || null;
   const isAcp = selectedProfile?.startsWith("acp:") ?? false;
   const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || (engineOpen && p.gatewayRunning), [engineOpen]);
@@ -304,7 +329,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
   if (!standalone && collapsed) {
     return (
       <aside
-        className="flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[28px] border border-[var(--border)] py-3"
+        className="pane flex h-auto max-h-full w-12 shrink-0 flex-col items-center self-start overflow-hidden rounded-[var(--r-pill)] py-3"
         style={{ background: "var(--mantle)" }}
       >
         <button
@@ -354,15 +379,28 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
             aria-haspopup="listbox"
             aria-expanded={picking}
             title="Who to talk to"
-            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-row)] px-1.5 py-0.5 hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
-            <span className="truncate font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text)]">
+            {profile ? (
+              <Avatar
+                agent={{
+                  displayName: agentName ?? profile.name,
+                  avatarStyle: profile.avatarStyle,
+                  avatarKind: profile.avatarKind,
+                  avatarColor: profile.avatarColor,
+                }}
+                size={20}
+                image={profile.avatarImage}
+                animate={false}
+              />
+            ) : null}
+            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
               {agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
             </span>
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
           {profile?.model ? (
-            <span className="truncate font-mono text-[10px] text-[var(--text-muted)]">{profile.model}</span>
+            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
           {!standalone ? (
@@ -417,7 +455,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
                 now={now}
                 onRetry={(prompt) => submit(prompt)}
                 actions={turnActions}
-                reading={voice.talking === m.id}
+                reading={voice.talking === m.id ? voice.said : undefined}
                 showReasoning={showReasoning !== "0"}
               >
                 {decisionsFor(m.id).map((decision) => (
@@ -450,7 +488,7 @@ export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRe
             <button
               type="button"
               onClick={jumpToLive}
-              className="rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[12px] text-[var(--text)]"
+              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
             >
               New reply ↓
             </button>
@@ -507,11 +545,11 @@ function EmptyState({
   return (
     <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5" data-panel-state={state}>
       {failed || profilesError ? (
-        <div className="rounded-[10px] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
-          <p className="font-ui text-[13px] leading-normal text-[var(--bad)]">
+        <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
+          <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">
             {failed ? "Hermes is offline." : "Hermes did not list its profiles."}
           </p>
-          <p className="mt-0.5 font-ui text-[12px] leading-normal text-[var(--text-muted)]">
+          <p className="mt-0.5 font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]">
             {failed
               ? engineError ?? "The engine is not connected. Relaunch the app to start it."
               : profilesError}
@@ -519,7 +557,7 @@ function EmptyState({
         </div>
       ) : (
         <>
-          <span className="font-ui text-[13px] text-[var(--text)]">
+          <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">
             {starting
               ? "Starting Hermes…"
               : profilesPending
@@ -528,7 +566,7 @@ function EmptyState({
                   ? `Ready — ${agentName} can answer.`
                   : "No profile selected."}
           </span>
-          <span className="font-ui text-[12px] text-[var(--text-muted)]">
+          <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
             {starting
               ? "The engine is starting. This takes a few seconds."
               : profilesPending

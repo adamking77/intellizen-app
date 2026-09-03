@@ -11,7 +11,7 @@ interface PropertyFieldProps {
 }
 
 export function PropertyField({ label, htmlFor, children, hint, className }: PropertyFieldProps) {
-  const labelClassName = "pt-2 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]";
+  const labelClassName = "pt-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]";
 
   return (
     <div className={cn("grid grid-cols-[92px_minmax(0,1fr)] gap-3", className)}>

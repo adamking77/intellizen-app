@@ -8,14 +8,14 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils";
 
 const CARD =
-  "flex w-full flex-col gap-[13px] rounded-xl bg-[var(--mantle)] p-4 text-left text-[var(--text)] " +
+  "flex w-full flex-col gap-[13px] rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 text-left text-[var(--text)] " +
   "transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--mantle))] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
 export function Tag({ children, tone, className }: { children: ReactNode; tone?: "bad" | "wait" | "ok"; className?: string }) {
   const color = tone ? `var(--${tone})` : "var(--subtext-0)";
   return (
     <span
-      className={cn("whitespace-nowrap rounded-full px-2 py-px font-ui text-[11px] leading-4", className)}
+      className={cn("whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4", className)}
       style={{
         color,
         background: tone ? `color-mix(in srgb, ${color} 14%, transparent)` : "color-mix(in srgb, var(--text) 10%, transparent)",
@@ -73,7 +73,7 @@ export function NewCard({ label, onClick, disabled }: { label: string; onClick: 
       className={cn(CARD, "min-h-[150px] items-center justify-center gap-2 text-[var(--text-muted)] disabled:opacity-50")}
     >
       <Plus size={20} strokeWidth={1.6} aria-hidden />
-      <span className="font-ui text-[13px]">{label}</span>
+      <span className="font-ui text-[var(--t-ui)]">{label}</span>
     </button>
   );
 }

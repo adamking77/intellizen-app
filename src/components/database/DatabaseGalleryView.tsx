@@ -118,7 +118,7 @@ export function DatabaseGalleryView({
                   onUpdateField={onUpdateField}
                 />
               ) : (
-                <span className="absolute right-2 bottom-2 text-[10px] opacity-60">
+                <span className="absolute right-2 bottom-2 text-[var(--t-count)] opacity-60">
                   Set card image field in View
                 </span>
               )}

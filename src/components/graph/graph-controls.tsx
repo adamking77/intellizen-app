@@ -23,7 +23,7 @@ export function GraphTopbarIconButton({
       aria-label={title}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--overlay-1)]",
+        "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)]",
         "transition-colors duration-150",
         "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
         "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--overlay-1)]",
@@ -49,7 +49,7 @@ export function GraphOverflowItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[12px] transition-colors duration-150",
+        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[var(--t-meta)] transition-colors duration-150",
         disabled
           ? "cursor-not-allowed text-[var(--overlay-0)]"
           : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -74,7 +74,7 @@ export function GraphRailTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full px-2.5 py-1 font-ui text-[11px] font-medium transition-colors duration-150",
+        "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-150",
         active
           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -99,7 +99,7 @@ export function GraphToolbarButton({
       title={title}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full px-2 transition-colors duration-150",
+        "inline-flex h-7 items-center gap-1.5 rounded-[var(--r-pill)] px-2 transition-colors duration-150",
         active
           ? "bg-[var(--accent-soft)] text-[var(--accent)]"
           : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -126,13 +126,13 @@ export function GraphSettingToggle({
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="flex min-h-9 items-center justify-between rounded-lg px-2.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+      className="flex min-h-9 items-center justify-between rounded-[var(--r-plane)] px-2.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
     >
       <span className="text-meta text-[var(--subtext-1)]">{label}</span>
       <span
         aria-hidden
         className={cn(
-          "relative h-5 w-9 rounded-full border transition-colors duration-150",
+          "relative h-5 w-9 rounded-[var(--r-pill)] border transition-colors duration-150",
           checked
             ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
             : "border-[var(--border)] bg-[var(--base)]",
@@ -140,7 +140,7 @@ export function GraphSettingToggle({
       >
         <span
           className={cn(
-            "absolute top-0.5 h-3.5 w-3.5 rounded-full transition-[left,background-color] duration-150",
+            "absolute top-0.5 h-3.5 w-3.5 rounded-[var(--r-pill)] transition-[left,background-color] duration-150",
             checked
               ? "left-[17px] bg-[var(--accent)]"
               : "left-0.5 bg-[var(--overlay-1)]",
@@ -163,7 +163,7 @@ export function GraphStatChip({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 rounded-md border px-2 py-1",
+        "flex items-center gap-1.5 rounded-[var(--r-row)] border px-2 py-1",
         accent
           ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
           : "border-[var(--border)] bg-[color-mix(in_srgb,var(--mantle)_85%,transparent)]",
@@ -171,7 +171,7 @@ export function GraphStatChip({
     >
       <span
         className={cn(
-          "font-ui text-[10px] font-semibold uppercase tracking-[0.14em]",
+          "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]",
           accent ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
         )}
       >
@@ -179,7 +179,7 @@ export function GraphStatChip({
       </span>
       <span
         className={cn(
-          "font-mono text-[11px] tabular-nums",
+          "font-mono text-[var(--t-section)] tabular-nums",
           accent ? "text-[var(--accent)]" : "text-[var(--text)]",
         )}
       >
@@ -198,10 +198,10 @@ export function GraphStatBlock({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
         {label}
       </span>
-      <span className="font-mono text-[16px] tabular-nums text-[var(--text)]">
+      <span className="font-mono text-[var(--t-title)] tabular-nums text-[var(--text)]">
         {value}
       </span>
     </div>
@@ -229,7 +229,7 @@ export function GraphSlider({
     <label className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <span className="text-meta">{label}</span>
-        <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+        <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
           {displayValue}
         </span>
       </div>

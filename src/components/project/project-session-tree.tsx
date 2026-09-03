@@ -41,7 +41,7 @@ export function ProjectSessionTree({
           >
             <span className="h-5 w-5 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1 truncate text-left">{session.title}</span>
-            <span className="shrink-0 font-mono text-[9px] text-[var(--overlay-1)]">{session.profile}</span>
+            <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{session.profile}</span>
           </button>
         );
       })}

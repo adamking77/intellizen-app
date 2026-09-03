@@ -24,7 +24,7 @@ export function CollapsedRailTrigger({
       aria-label={label}
       title={label}
       className={cn(
-        "absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full",
+        "absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)]",
         "border border-[var(--border)] bg-[var(--mantle)] text-[var(--overlay-1)]",
         "transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",

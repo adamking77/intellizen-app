@@ -113,7 +113,7 @@ export function InvestigationCreateModal({
           }}
         >
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Case name
             </span>
             <Input
@@ -125,7 +125,7 @@ export function InvestigationCreateModal({
           </label>
 
           <div className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Use case
             </span>
             <div className="grid gap-2">
@@ -135,7 +135,7 @@ export function InvestigationCreateModal({
                   type="button"
                   onClick={() => setUseCase(uc.id)}
                   className={cn(
-                    "flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                    "flex items-start gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
                     useCase === uc.id
                       ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
                       : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
@@ -143,7 +143,7 @@ export function InvestigationCreateModal({
                 >
                   <span
                     className={cn(
-                      "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 transition-colors",
+                      "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[var(--r-pill)] border-2 transition-colors",
                       useCase === uc.id
                         ? "border-[var(--accent)] bg-[var(--accent)]"
                         : "border-[var(--overlay-0)] bg-transparent",
@@ -152,7 +152,7 @@ export function InvestigationCreateModal({
                   <span className="min-w-0">
                     <span
                       className={cn(
-                        "block font-ui text-[12.5px] font-medium",
+                        "block font-ui text-[var(--t-ui)] font-medium",
                         useCase === uc.id ? "text-[var(--accent)]" : "text-[var(--text)]",
                       )}
                     >
@@ -168,14 +168,14 @@ export function InvestigationCreateModal({
           </div>
 
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Evidence pile{" "}
               <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                 (optional)
               </span>
             </span>
             <select
-              className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >
@@ -188,7 +188,7 @@ export function InvestigationCreateModal({
             </select>
           </label>
 
-          <p className="font-ui text-[11px] text-[var(--overlay-1)]">
+          <p className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
             {linkedProject ? (
               <>
                 Linked to{" "}
@@ -206,7 +206,7 @@ export function InvestigationCreateModal({
             <button
               type="button"
               onClick={onClose}
-              className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+              className="font-ui text-[var(--t-meta)] text-[var(--subtext-0)] hover:text-[var(--text)]"
             >
               Cancel
             </button>

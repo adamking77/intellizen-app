@@ -6,7 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
 import { EjectedPanel } from "@/components/agent/ejected-panel";
 import { useEject } from "@/components/agent/use-eject";
-import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, TrafficLights, useWindowDrag, WindowResizeHandles } from "./window-chrome";
+import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
 import { toast, toastError } from "@/lib/toast";
@@ -17,6 +17,7 @@ import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
 import { AGENT_PANEL_OPEN_EVENT } from "@/lib/agent-panel-persistence";
 import { useSessionStore } from "@/engine/session-store";
+import { useWindowSize } from "@/lib/use-window-size";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
@@ -52,6 +53,7 @@ export function AppShell() {
   const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
   const [agentPanelToggleRequest, setAgentPanelToggleRequest] = useState(0);
   const roomOpen = useSessionStore((state) => Boolean(state.selectedRoomId));
+  const { isNarrow } = useWindowSize();
 
   useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
 
@@ -150,18 +152,18 @@ export function AppShell() {
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) dragWindow(event);
         }}
-        className={cn("app-shell flex h-dvh min-h-0 gap-2 p-2", !isTauriRuntime && "bg-[var(--crust)]")}
+        className={cn("app-shell flex h-dvh min-h-0", !isTauriRuntime && "browser-shell")}
         // Non-zero alpha keeps the transparent gutters hit-testable on macOS
         // without painting a visible outline around the window.
         style={isTauriRuntime ? { background: "rgba(0,0,0,0.001)" } : undefined}
       >
         {!focusMode && <Sidebar key={sidebarKey} />}
         <main
-          className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)]"
+          className="pane relative flex min-w-0 flex-1 flex-col overflow-hidden"
           style={{ background: PANE_BG }}
         >
-          {/* Window chrome strip: traffic lights + drag surface, sogo-style,
-              inside the main pane. */}
+          {/* Native macOS traffic lights live over the sidebar. This strip is
+              only a drag surface and a home for window-level actions. */}
           <div
             onMouseDown={dragWindow}
             onDoubleClick={(event) => {
@@ -169,11 +171,11 @@ export function AppShell() {
               if (!isTauriRuntime) return;
               void getCurrentWindow().toggleMaximize();
             }}
-            className="flex h-9 shrink-0 cursor-default items-center border-b border-[var(--border)]"
+            className={cn("window-strip flex h-[34px] shrink-0 cursor-default items-center", focusMode && "pl-[78px]")}
+            data-tauri-drag-region
           >
-            <TrafficLights className="pl-4 pr-3" />
             {focusMode && (
-              <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="t-count uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 ⌘⇧F to leave focus
               </span>
             )}
@@ -213,14 +215,14 @@ export function AppShell() {
           </div>
           <PaneResizeEdges west east />
         </main>
-        {focusMode ? null : agentPanelDetached ? (
+        {focusMode || isNarrow ? null : agentPanelDetached ? (
           <button
             type="button"
             onClick={() => eject()}
             aria-label="Focus ejected agent panel"
             title="Focus ejected agent panel"
             className={cn(
-              "flex h-auto w-12 shrink-0 flex-col items-center self-start rounded-[28px] border border-[var(--border)] py-3",
+              "pane flex h-auto w-12 shrink-0 flex-col items-center self-start rounded-[var(--r-pill)] py-3",
               "text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]",
             )}
             style={{ background: PANE_BG_RAISED }}
@@ -276,7 +278,7 @@ function ChromeButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-35 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-35 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
     >
       {children}
     </button>

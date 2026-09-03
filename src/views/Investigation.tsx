@@ -689,11 +689,11 @@ export function InvestigationView() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar */}
       <div className={cn(
-        "flex shrink-0 justify-between gap-4 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4",
+        "flex shrink-0 justify-between gap-4 bg-[var(--base)] px-3 py-4 sm:px-6",
         isNarrow ? "flex-col items-start" : "items-end",
       )}>
         <div className="flex flex-col gap-3">
-          <span className="text-label">Case workspace</span>
+          <span className="t-title text-[var(--text)]">Case workspace</span>
           <IndicatorStrip items={indicators} />
         </div>
         <div className="flex items-center gap-2">
@@ -761,28 +761,28 @@ export function InvestigationView() {
                     {isSelected && (
                       <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]" />
                     )}
-                    <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-full" style={{ background: dotColor }} />
+                    <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dotColor }} />
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className={cn("min-w-0 flex-1 truncate font-ui text-[13px] font-medium", isSelected ? "text-[var(--accent)]" : "text-[var(--text)]")}>
+                        <p className={cn("min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium", isSelected ? "text-[var(--accent)]" : "text-[var(--text)]")}>
                           {inv.name}
                         </p>
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                        <span className="shrink-0 font-mono text-[var(--t-count)] tabular-nums text-[var(--overlay-1)]">
                           {complete ? "done" : `${inv.current_phase}/3`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
+                        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                           {USE_CASE_LABELS[uc]}
                         </span>
                         <span className="text-[var(--overlay-0)]">·</span>
-                        <span className="font-ui text-[10px] text-[var(--subtext-0)]">
+                        <span className="font-ui text-[var(--t-count)] text-[var(--subtext-0)]">
                           {complete ? "Complete" : PHASES[inv.current_phase - 1]?.name ?? ""}
                         </span>
                         {inv.status === "archived" && (
                           <>
                             <span className="text-[var(--overlay-0)]">·</span>
-                            <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
+                            <span className="font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
                           </>
                         )}
                       </div>
@@ -792,7 +792,7 @@ export function InvestigationView() {
                             key={idx}
                             aria-hidden
                             className={cn(
-                              "h-0.5 flex-1 rounded-full",
+                              "h-0.5 flex-1 rounded-[var(--r-pill)]",
                               s === "done" ? "bg-[var(--success)]" : s === "current" ? "bg-[var(--accent)]" : "bg-[var(--overlay-0)]",
                             )}
                           />
@@ -837,15 +837,15 @@ export function InvestigationView() {
               <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-5 py-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2 className="truncate text-heading">{selectedInvestigation.name}</h2>
-                  <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">{selectedInvestigation.case_id}</span>
-                  <span className="shrink-0 rounded-full border border-[var(--border-subtle)] bg-[var(--mantle)] px-2 py-0.5 font-ui text-[10px] font-medium text-[var(--subtext-0)]">
+                  <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{selectedInvestigation.case_id}</span>
+                  <span className="shrink-0 rounded-[var(--r-pill)] border border-[var(--border-subtle)] bg-[var(--mantle)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium text-[var(--subtext-0)]">
                     {USE_CASE_LABELS[useCase]}
                   </span>
                   {parentProject && (
                     <button
                       type="button"
                       onClick={() => { setPendingProjectSelectionId(parentProject.id); navigate("/intel"); }}
-                      className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[10.5px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
+                      className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]/70"
                     >
                       <FolderOpen className="h-2.5 w-2.5" />
                       <span className="max-w-[160px] truncate">Evidence: {parentProject.name}</span>
@@ -902,7 +902,7 @@ export function InvestigationView() {
                         disabled={updateCaseStageMutation.isPending}
                         onClick={() => updateCaseStageMutation.mutate(stage.value)}
                         className={cn(
-                          "rounded-full border px-3 py-2 text-left font-ui text-[11.5px] font-medium transition-colors disabled:opacity-60",
+                          "rounded-[var(--r-pill)] border px-3 py-2 text-left font-ui text-[var(--t-meta)] font-medium transition-colors disabled:opacity-60",
                           stage.value === clientCaseStage
                             ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
                             : "border-[var(--border-subtle)] bg-[var(--mantle)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
@@ -935,16 +935,16 @@ export function InvestigationView() {
                         disabled={isLocked}
                         title={phase.hint}
                         className={cn(
-                          "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-all",
+                          "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-[var(--r-row)] border px-3 py-2 text-left transition-all",
                           isActive ? "border-[var(--accent-border)] bg-[var(--accent-soft)]" : isLocked ? "cursor-not-allowed border-[var(--border-subtle)] opacity-60" : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
                         )}
                       >
                         <div className="flex w-full items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <span className={cn("font-mono text-[10px]", isActive ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
+                            <span className={cn("font-mono text-[var(--t-count)]", isActive ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
                               0{phase.id}
                             </span>
-                            <span className={cn("font-ui text-[11.5px] font-medium", isActive ? "text-[var(--accent)]" : isDone ? "text-[var(--text)]" : "text-[var(--subtext-0)]")}>
+                            <span className={cn("font-ui text-[var(--t-meta)] font-medium", isActive ? "text-[var(--accent)]" : isDone ? "text-[var(--text)]" : "text-[var(--subtext-0)]")}>
                               {phase.name}
                             </span>
                           </div>
@@ -953,7 +953,7 @@ export function InvestigationView() {
                           ) : isLocked ? (
                             <Lock className="h-3 w-3 text-[var(--overlay-1)]" />
                           ) : isActive ? (
-                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+                            <span className="h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)]" />
                           ) : null}
                         </div>
                       </button>
@@ -971,7 +971,7 @@ export function InvestigationView() {
                   </div>
 
                   {isPhaseLocked && (
-                    <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-meta text-[var(--warning)]">
+                    <div className="mb-4 flex items-center gap-2 rounded-[var(--r-row)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-meta text-[var(--warning)]">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
                       Locked — finish earlier phases first.
                     </div>
@@ -1027,7 +1027,7 @@ export function InvestigationView() {
                       )}
 
                       {needsEthicsGate && (
-                        <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                        <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-4">
                           <p className="text-label">Ethics gates — all four required</p>
                           <p className="mt-1 text-meta text-[var(--subtext-0)]">Confirm before any intelligence gathering begins.</p>
                           <div className="mt-3 grid gap-2">
@@ -1089,15 +1089,15 @@ export function InvestigationView() {
                       }}
                     >
                     <div className="space-y-5">
-                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="font-medium text-ui text-[var(--text)]">
                             {investigationSignals?.length ?? 0} signal{investigationSignals?.length !== 1 ? "s" : ""} attached
                           </p>
                           {collectGateComplete ? (
-                            <span className="font-mono text-[11px] text-[var(--success)]">Ready to confirm</span>
+                            <span className="font-mono text-[var(--t-section)] text-[var(--success)]">Ready to confirm</span>
                           ) : (
-                            <span className="font-mono text-[11px] text-[var(--warning)]">No signals yet</span>
+                            <span className="font-mono text-[var(--t-section)] text-[var(--warning)]">No signals yet</span>
                           )}
                         </div>
                         <p className="mt-1 text-meta text-[var(--subtext-0)]">
@@ -1106,7 +1106,7 @@ export function InvestigationView() {
                       </div>
 
                       {/* Exa collection */}
-                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] p-4">
+                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-label">Exa collection</p>
@@ -1122,7 +1122,7 @@ export function InvestigationView() {
                             className="gap-1.5 shrink-0"
                           >
                             {isCollecting ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="h-3 w-3" />
                             ) : (
                               <Zap className="h-3 w-3" />
                             )}
@@ -1141,7 +1141,7 @@ export function InvestigationView() {
 
                       {/* Parent project — auto-import status */}
                       {parentProject && (
-                        <div className="flex items-center gap-2 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-3 py-2.5">
+                        <div className="flex items-center gap-2 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--accent-soft)]/40 px-3 py-2.5">
                           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
                           <p className="text-meta text-[var(--subtext-0)]">
                             Signals from{" "}
@@ -1160,15 +1160,15 @@ export function InvestigationView() {
                         <div className="space-y-2">
                           <p className="text-label">Attached ({investigationSignals!.length})</p>
                           {investigationSignals!.map((sig) => (
-                            <div key={sig.id} className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                            <div key={sig.id} className="flex items-start justify-between gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-ui font-medium text-[var(--text)]">{sig.intel_signals?.title}</p>
                                 <div className="mt-0.5 flex items-center gap-2">
-                                  <span className="truncate font-mono text-[11px] text-[var(--overlay-1)]">{sig.intel_signals?.source}</span>
+                                  <span className="truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{sig.intel_signals?.source}</span>
                                   {sig.intel_signals?.published_at && (
                                     <>
                                       <span className="text-[var(--overlay-0)]">·</span>
-                                      <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">
+                                      <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                                         {new Date(sig.intel_signals.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                       </span>
                                     </>
@@ -1182,7 +1182,7 @@ export function InvestigationView() {
                                 type="button"
                                 onClick={() => removeSignalMutation.mutate(sig.id)}
                                 disabled={removeSignalMutation.isPending}
-                          className="mt-0.5 shrink-0 rounded-full p-1 text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)] disabled:opacity-50"
+                          className="mt-0.5 shrink-0 rounded-[var(--r-pill)] p-1 text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--danger)] disabled:opacity-50"
                                 aria-label="Remove signal"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1197,15 +1197,15 @@ export function InvestigationView() {
                         <div className="space-y-2">
                           <p className="text-label">From saved signals ({importableSavedSignals.length})</p>
                           {importableSavedSignals.map((signal) => (
-                            <div key={signal.id} className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                            <div key={signal.id} className="flex items-start justify-between gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-ui font-medium text-[var(--text)]">{signal.title}</p>
                                 <div className="mt-0.5 flex items-center gap-2">
-                                  <span className="truncate font-mono text-[11px] text-[var(--overlay-1)]">{signal.source}</span>
+                                  <span className="truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{signal.source}</span>
                                   {signal.published_at && (
                                     <>
                                       <span className="text-[var(--overlay-0)]">·</span>
-                                      <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">
+                                      <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                                         {new Date(signal.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                       </span>
                                     </>
@@ -1244,12 +1244,12 @@ export function InvestigationView() {
                       onRetry={() => void investigationSignalsQuery.refetch()}
                     >
                     <div className="space-y-5">
-                      <div className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="font-medium text-ui text-[var(--text)]">
                             {investigationSignals?.length ?? 0} signal{investigationSignals?.length !== 1 ? "s" : ""} ready
                           </p>
-                          <span className={cn("font-mono text-[11px]", analysisComplete ? "text-[var(--success)]" : "text-[var(--accent)]")}>
+                          <span className={cn("font-mono text-[var(--t-section)]", analysisComplete ? "text-[var(--success)]" : "text-[var(--accent)]")}>
                             {analysisComplete ? "Analysis complete" : "Ready to run"}
                           </span>
                         </div>
@@ -1289,15 +1289,15 @@ export function InvestigationView() {
                 >
                   <span className="flex items-center gap-2">
                     <span>Analysis output</span>
-                    {isRunningAnalysis && <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />}
-                    {analysisOutput && !isRunningAnalysis && <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />}
+                    {isRunningAnalysis && <Loader2 className="h-3 w-3 text-[var(--accent)]" />}
+                    {analysisOutput && !isRunningAnalysis && <span className="h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--success)]" />}
                   </span>
                   {outputOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
                 </button>
                 {outputOpen && (
                   <div className="max-h-[260px] overflow-y-auto border-t border-[var(--border)] px-5 py-3">
                     {analysisOutput ? (
-                      <pre className="whitespace-pre-wrap font-mono text-[11px] text-[var(--subtext-1)]">{analysisOutput}</pre>
+                      <pre className="whitespace-pre-wrap font-mono text-[var(--t-section)] text-[var(--subtext-1)]">{analysisOutput}</pre>
                     ) : (
                       <p className="text-meta text-[var(--subtext-0)]">Run the analysis to see output here.</p>
                     )}
@@ -1325,7 +1325,7 @@ export function InvestigationView() {
               {(vaultFiles ?? []).length > 0 ? (
                 <div className="shrink-0 border-t border-[var(--border)]">
                   <div className="px-5 py-3">
-                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                       Files
                     </span>
                   </div>
@@ -1398,8 +1398,8 @@ function DeleteInvestigationModal({
         </>
       )}
     >
-      <p className="font-mono text-[11px] text-[var(--overlay-1)]">{caseId}</p>
-      <p className="mt-3 font-ui text-[12px] text-[var(--subtext-0)]">
+      <p className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{caseId}</p>
+      <p className="mt-3 font-ui text-[var(--t-meta)] text-[var(--subtext-0)]">
         Source signals and evidence-pile signals are not deleted.
       </p>
     </AppDialog>
@@ -1419,7 +1419,7 @@ function PhaseActionFoot({
         {hint}
       </span>
       <Button onClick={onRun} disabled={disabled} className="gap-1.5">
-        {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : runIcon}
+        {running ? <Loader2 className="h-3.5 w-3.5" /> : runIcon}
         {running ? "Running…" : runLabel}
       </Button>
     </div>

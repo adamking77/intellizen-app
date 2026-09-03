@@ -7,7 +7,7 @@ export function VentureScope({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full border border-[var(--border)] px-2.5 py-1 font-ui text-[11px] text-[var(--subtext-0)]",
+        "inline-flex shrink-0 items-center rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--subtext-0)]",
         className,
       )}
       title="Current venture scope"

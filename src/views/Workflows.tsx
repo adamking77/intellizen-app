@@ -135,9 +135,9 @@ function catalogStateLabel(state: WorkflowCatalogState) {
 
 function InfoCell({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
-    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
-      <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">{label}</div>
-      <div className="mt-1 truncate font-ui text-[12px] text-[var(--text)]">{value ?? "None"}</div>
+    <div className="min-w-0 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
+      <div className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">{label}</div>
+      <div className="mt-1 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{value ?? "None"}</div>
     </div>
   );
 }
@@ -157,7 +157,7 @@ function WorkflowCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        "w-full rounded-md border px-3 py-3 text-left transition-colors",
+        "w-full rounded-[var(--r-row)] border px-3 py-3 text-left transition-colors",
         selected
           ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
           : "border-[var(--border)] bg-[var(--mantle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
@@ -165,8 +165,8 @@ function WorkflowCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="line-clamp-2 font-ui text-[13px] font-semibold leading-snug text-[var(--text)]">{workflow.name}</p>
-          <p className="mt-1 truncate font-mono text-[10px] text-[var(--overlay-1)]">{workflow.workflow_id}</p>
+          <p className="line-clamp-2 font-ui text-[var(--t-ui)] font-semibold leading-snug text-[var(--text)]">{workflow.name}</p>
+          <p className="mt-1 truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{workflow.workflow_id}</p>
         </div>
         <Badge variant={catalogStateVariant(item.state)} className="shrink-0">
           {catalogStateLabel(item.state)}
@@ -178,7 +178,7 @@ function WorkflowCard({
         {workflow.entity ? <Badge variant="neutral">{workflow.entity}</Badge> : null}
       </div>
       {item.blockers[0] ? (
-        <p className="mt-3 line-clamp-2 font-ui text-[10.5px] leading-snug text-[var(--danger)]">
+        <p className="mt-3 line-clamp-2 font-ui text-[var(--t-count)] leading-snug text-[var(--danger)]">
           {item.blockers[0].message}
         </p>
       ) : null}
@@ -443,9 +443,9 @@ export function WorkflowsView() {
   if (workflowQuery.error) {
     return (
       <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
-          <span className="text-label">Workflows unavailable</span>
-          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
+        <div className="bg-[var(--base)] px-3 py-4 sm:px-6">
+          <span className="t-title text-[var(--text)]">Workflows unavailable</span>
+          <p className="mt-2 font-ui text-[var(--t-ui)] text-[var(--danger)]">
             {workflowQuery.error instanceof Error ? workflowQuery.error.message : "Workflow registry could not be loaded."}
           </p>
         </div>
@@ -455,10 +455,10 @@ export function WorkflowsView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 bg-[var(--base)] px-3 py-4 sm:px-6">
         <div>
-          <span className="text-label">Workflows</span>
-          <p className="mt-1 font-ui text-[12px] text-[var(--overlay-1)]">
+          <span className="t-title text-[var(--text)]">Workflows</span>
+          <p className="mt-1 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
             Executable definitions and canonical SOP records
           </p>
         </div>
@@ -472,16 +472,16 @@ export function WorkflowsView() {
           disabled={workflowQuery.isFetching}
           className="gap-1.5"
         >
-          <RefreshCw className={cn("h-3.5 w-3.5", workflowQuery.isFetching && "animate-spin")} />
+          <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {!designerOpen ? (
-          <aside className="flex h-[46%] w-full shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)] lg:h-auto lg:w-[390px] lg:border-b-0 lg:border-r">
-          <div className="space-y-3 border-b border-[var(--border)] p-4">
-            <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-1">
+          <aside className="flex h-[46%] w-full shrink-0 flex-col bg-[var(--mantle)] lg:h-auto lg:w-[390px]">
+          <div className="space-y-3 p-4">
+            <div className="grid grid-cols-2 gap-1 rounded-[var(--r-row)] bg-[var(--base)] p-1">
               {([
                 { id: "executable" as const, label: "Executable", count: laneCounts.executable },
                 { id: "sop-only" as const, label: "SOP only", count: laneCounts.sopOnly },
@@ -494,9 +494,9 @@ export function WorkflowsView() {
                     setStateFilter("all");
                   }}
                   className={cn(
-                    "h-8 min-w-0 rounded px-2 font-ui text-[11px] font-medium transition-colors",
+                    "h-8 min-w-0 rounded px-2 font-ui text-[var(--t-section)] font-medium transition-colors",
                     lane === filter.id
-                      ? "bg-[var(--base)] text-[var(--text)]"
+                      ? "bg-[var(--selected)] text-[var(--text)]"
                       : "text-[var(--overlay-1)] hover:text-[var(--subtext-0)]",
                   )}
                 >
@@ -513,10 +513,10 @@ export function WorkflowsView() {
                     type="button"
                     onClick={() => setStateFilter(filter.id)}
                     className={cn(
-                      "rounded-full border px-2 py-1 font-ui text-[10px] transition-colors",
+                      "rounded-[var(--r-pill)] px-2 py-1 font-ui text-[var(--t-count)] transition-colors",
                       stateFilter === filter.id
-                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text)]"
-                        : "border-[var(--border)] text-[var(--overlay-1)] hover:text-[var(--text)]",
+                        ? "bg-[var(--selected)] text-[var(--text)]"
+                        : "text-[var(--overlay-1)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
                     )}
                   >
                     {filter.label}
@@ -525,13 +525,13 @@ export function WorkflowsView() {
               </div>
             ) : null}
 
-            <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5">
+            <label className="flex h-9 items-center gap-2 rounded-[var(--r-row)] bg-[var(--input)] px-2.5">
               <Search className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search workflows"
-                className="min-w-0 flex-1 bg-transparent font-ui text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
+                className="min-w-0 flex-1 bg-transparent font-ui text-[var(--t-meta)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
               />
             </label>
 
@@ -539,7 +539,7 @@ export function WorkflowsView() {
               value={ownerFilter}
               onChange={(event) => setOwnerFilter(event.target.value)}
               aria-label="Workflow owner role filter"
-              className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[12px] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+              className="h-9 w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none"
             >
               <option value="">All owner roles</option>
               {ownerOptions.map((owner) => (
@@ -552,8 +552,8 @@ export function WorkflowsView() {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {workflowQuery.isLoading ? (
-              <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div role="status" className="flex items-center gap-2 px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+                <Loader2 className="h-4 w-4" />
                 Loading workflows...
               </div>
             ) : filteredItems.length > 0 ? (
@@ -568,7 +568,7 @@ export function WorkflowsView() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-md border border-dashed border-[var(--border)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+              <div className="px-4 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                 No workflows match this view.
               </div>
             )}
@@ -576,7 +576,7 @@ export function WorkflowsView() {
           </aside>
         ) : null}
 
-        <main className={cn("min-w-0 flex-1", designerOpen ? "overflow-hidden" : "overflow-y-auto px-6 py-5")}>
+        <main className={cn("min-w-0 flex-1", designerOpen ? "overflow-hidden" : "overflow-y-auto px-3 py-4 sm:px-6 sm:py-5")}>
           {selected && selectedItem?.executable && designerOpen ? (
             <WorkflowDesigner
               workflow={selected}
@@ -594,7 +594,7 @@ export function WorkflowsView() {
           ) : selected ? (
             <div className="mx-auto flex max-w-[1180px] flex-col gap-5">
               <section className="border-b border-[var(--border)] pb-5">
-                <div className="flex items-start justify-between gap-5">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-5">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge variant={catalogStateVariant(selectedItem?.state ?? "sop-only")}>
@@ -603,10 +603,10 @@ export function WorkflowsView() {
                       {selected.entity ? <Badge variant="neutral">{selected.entity}</Badge> : null}
                       <Badge variant="outline">{formatElapsed(selected.updated_at)}</Badge>
                     </div>
-                    <h1 className="font-ui text-[24px] font-semibold leading-tight text-[var(--text)]">{selected.name}</h1>
-                    <p className="mt-2 font-mono text-[11px] text-[var(--overlay-1)]">{selected.workflow_id}</p>
+                    <h1 className="t-title leading-tight text-[var(--text)]">{selected.name}</h1>
+                    <p className="mt-2 font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{selected.workflow_id}</p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
                     {selectedItem?.executable ? (
                       <Button
                         disabled={!selectedItem.runnable}
@@ -640,12 +640,12 @@ export function WorkflowsView() {
                 {selectedActiveRun ? (
                   <Link
                     to={`/workflows?run=${selectedActiveRun.id}`}
-                    className="mt-4 flex items-center justify-between gap-4 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 font-ui text-[12px] text-[var(--text)]"
+                    className="mt-4 flex items-center justify-between gap-4 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--text)]"
                   >
                     <span className="min-w-0 truncate">
                       Current work · {selectedActiveRun.name}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] uppercase text-[var(--overlay-1)]">
+                    <span className="shrink-0 font-mono text-[var(--t-count)] uppercase text-[var(--overlay-1)]">
                       {selectedActiveRun.status ?? "In progress"}
                     </span>
                   </Link>
@@ -653,14 +653,14 @@ export function WorkflowsView() {
               </section>
 
               {selectedItem?.state === "sop-only" ? (
-                <section className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                <section className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                   <div className="flex items-start gap-2">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--overlay-1)]" />
                     <div>
-                      <p className="font-ui text-[12px] font-semibold text-[var(--text)]">
+                      <p className="font-ui text-[var(--t-meta)] font-semibold text-[var(--text)]">
                         Canonical SOP record
                       </p>
-                      <p className="mt-1 font-ui text-[11px] leading-relaxed text-[var(--overlay-1)]">
+                      <p className="mt-1 font-ui text-[var(--t-section)] leading-relaxed text-[var(--overlay-1)]">
                         This record has no validated schema-v1 definition. It is reference material and cannot enter the designer or runner.
                       </p>
                     </div>
@@ -669,14 +669,14 @@ export function WorkflowsView() {
               ) : null}
 
               {selectedItem && selectedItem.blockers.length > 0 ? (
-                <section className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-4 py-3">
-                  <div className="flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--danger)]">
+                <section className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-4 py-3">
+                  <div className="flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--danger)]">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Exact blockers
                   </div>
                   <ul className="mt-2 space-y-1.5">
                     {selectedItem.blockers.map((blocker, index) => (
-                      <li key={`${blocker.kind}-${blocker.stepId ?? index}`} className="font-ui text-[11px] leading-relaxed text-[var(--subtext-0)]">
+                      <li key={`${blocker.kind}-${blocker.stepId ?? index}`} className="font-ui text-[var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
                         <span className="font-semibold capitalize text-[var(--text)]">{blocker.kind}</span>
                         {" · "}
                         {blocker.message}
@@ -696,10 +696,10 @@ export function WorkflowsView() {
                 <section>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="font-ui text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-1)]">
+                      <p className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
                         {selectedRun ? "Live run topology" : "Topology preview"}
                       </p>
-                      <p className="mt-1 font-ui text-[11px] text-[var(--subtext-0)]">
+                      <p className="mt-1 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">
                         {selectedRun
                           ? selectedRun.name
                           : "The same graph enters design, dry-run, and run modes."}
@@ -748,7 +748,7 @@ export function WorkflowsView() {
                   />
                 </section>
               ) : selectedRun ? (
-                <section className="rounded-md border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[11px] text-[var(--overlay-1)]">
+                <section className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
                   This run has no valid schema-v1 snapshot, so it cannot be represented as an executable topology.
                 </section>
               ) : null}
@@ -763,7 +763,7 @@ export function WorkflowsView() {
               <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-5">
                   <div>
-                    <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <div className="mb-2 flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">
                       <Route className="h-3.5 w-3.5" />
                       Trigger / Inputs
                     </div>
@@ -771,31 +771,31 @@ export function WorkflowsView() {
                       <InfoCell label="Trigger" value={selected.trigger} />
                       <InfoCell label="Default routing" value={selected.default_routing} />
                     </div>
-                    <pre className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.required_inputs)}
                     </pre>
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <div className="mb-2 flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">
                       <ShieldCheck className="h-3.5 w-3.5" />
                       Approval Gates
                     </div>
-                    <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.approval_gates)}
                     </pre>
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <div className="mb-2 flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Success / Failure
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
-                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                         {normalizeSnippet(selected.success_criteria)}
                       </pre>
-                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                         {normalizeSnippet(selected.failure_behavior)}
                       </pre>
                     </div>
@@ -804,16 +804,16 @@ export function WorkflowsView() {
 
                 <div className="space-y-5">
                   <div>
-                    <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <div className="mb-2 flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">
                       <FileText className="h-3.5 w-3.5" />
                       Source / Output
                     </div>
-                    <div className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+                    <div className="space-y-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                       <InfoCell label="Source path" value={selected.source_path} />
                       <InfoCell label="Related databases" value={selected.related_databases.join(", ") || null} />
                       <div>
-                        <div className="font-ui text-[10px] font-semibold uppercase text-[var(--overlay-1)]">Expected output</div>
-                        <p className="mt-1 whitespace-pre-wrap font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                        <div className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">Expected output</div>
+                        <p className="mt-1 whitespace-pre-wrap font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                           {normalizeSnippet(selected.expected_output)}
                         </p>
                       </div>
@@ -821,18 +821,18 @@ export function WorkflowsView() {
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center gap-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">
+                    <div className="mb-2 flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">
                       <UserRound className="h-3.5 w-3.5" />
                       Receipt Template
                     </div>
-                    <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.receipt_template)}
                     </pre>
                   </div>
 
                   <div>
-                    <div className="mb-2 font-ui text-[11px] font-semibold uppercase text-[var(--overlay-1)]">Body Preview</div>
-                    <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[12px] leading-relaxed text-[var(--subtext-0)]">
+                    <div className="mb-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">Body Preview</div>
+                    <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.body_preview)}
                     </pre>
                   </div>
@@ -840,7 +840,7 @@ export function WorkflowsView() {
               </section>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-md border border-dashed border-[var(--border)] font-ui text-[13px] text-[var(--overlay-1)]">
+            <div className="flex h-full items-center justify-center rounded-[var(--r-row)] border border-dashed border-[var(--border)] p-4 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
               Select a workflow template to inspect its source, routing, and approval policy.
             </div>
           )}
@@ -874,7 +874,7 @@ export function WorkflowsView() {
         }
       >
         {driftResolution?.response === "reviewed-migration" ? (
-          <dl className="grid gap-2 font-mono text-[10.5px] text-[var(--subtext-0)]">
+          <dl className="grid gap-2 font-mono text-[var(--t-count)] text-[var(--subtext-0)]">
             <div>
               <dt className="text-[var(--overlay-1)]">Source run</dt>
               <dd>{driftResolution.sourceRunId}</dd>

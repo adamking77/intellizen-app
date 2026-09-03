@@ -23,17 +23,16 @@ import type {
 
 const DEFAULT_COLUMN_WIDTH = 168;
 
-// Stored per-option as data, so literal hex is required — values come from
-// the Catppuccin Mocha palette per DESIGN.md.
+// Stored as CSS theme tokens so saved options follow the active flavor.
 const OPTION_COLOR_PRESETS: Array<{ label: string; value: string }> = [
-  { label: "Gray", value: "#6c7086" },
-  { label: "Red", value: "#f38ba8" },
-  { label: "Peach", value: "#fab387" },
-  { label: "Yellow", value: "#f9e2af" },
-  { label: "Green", value: "#a6e3a1" },
-  { label: "Teal", value: "#94e2d5" },
-  { label: "Blue", value: "#89b4fa" },
-  { label: "Mauve", value: "#cba6f7" },
+  { label: "Gray", value: "var(--overlay-1)" },
+  { label: "Red", value: "var(--red)" },
+  { label: "Peach", value: "var(--peach)" },
+  { label: "Yellow", value: "var(--yellow)" },
+  { label: "Green", value: "var(--green)" },
+  { label: "Teal", value: "var(--teal)" },
+  { label: "Blue", value: "var(--blue)" },
+  { label: "Mauve", value: "var(--mauve)" },
 ];
 
 const FIELD_TYPES: WorkspaceDatabaseFieldType[] = [
@@ -759,10 +758,10 @@ export function DatabaseTableView({
                         colSpan={visibleFields.length + 2}
                         className="border-b border-[var(--border-subtle)] bg-[var(--surface-wash)] px-3 py-1.5"
                       >
-                        <span className="font-ui text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                           {group.key}
                         </span>
-                        <span className="ml-2 font-mono text-[10px] text-[var(--subtext-0)]">{group.rows.length}</span>
+                        <span className="ml-2 font-mono text-[var(--t-count)] text-[var(--subtext-0)]">{group.rows.length}</span>
                       </td>
                     </tr>
                     {group.rows.map((record) => renderRowGroup(record))}

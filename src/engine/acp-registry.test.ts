@@ -38,6 +38,9 @@ describe("ACP registry rows", () => {
         args: ["--x", 3],
         voice: { service: "macos-say", voice_id: "Daniel" },
         context: ["/one", 3, "/two"],
+        avatar_style: "blob",
+        avatar_kind: "drop",
+        avatar_color: "var(--mauve)",
         stray: true,
       }),
     ).toEqual({
@@ -48,6 +51,9 @@ describe("ACP registry rows", () => {
       args: ["--x"],
       voice: { service: "macos-say", voiceId: "Daniel" },
       context: ["/one", "/two"],
+      avatarStyle: "blob",
+      avatarKind: "drop",
+      avatarColor: "var(--mauve)",
     });
   });
 

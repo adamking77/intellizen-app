@@ -39,30 +39,30 @@ export function RecordActivitySection({ recordId, isWorkflowRun }: { recordId: s
         <span className="db-record-section-count">{events.length}</span>
       </div>
       {eventsQuery.isLoading ? (
-        <p className="font-ui text-[12px] text-[var(--overlay-1)]">Loading activity…</p>
+        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading activity…</p>
       ) : eventsQuery.error ? (
-        <p className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[12px] text-[var(--danger)]">
+        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           Activity could not be loaded.
         </p>
       ) : events.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No structured activity recorded yet.
         </p>
       ) : (
         <ul className="space-y-1.5">
           {events.map((event) => (
-            <li key={event.id} className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={event.id} className="rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">{event.event_kind.replace(/_/g, " ")}</span>
-                <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">{formatDateTime(event.created_at)}</span>
+                <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--accent)]">{event.event_kind.replace(/_/g, " ")}</span>
+                <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{formatDateTime(event.created_at)}</span>
               </div>
-              <div className="mt-0.5 flex items-center gap-1.5 font-ui text-[11px] text-[var(--subtext-0)]">
+              <div className="mt-0.5 flex items-center gap-1.5 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">
                 <span className="font-medium text-[var(--text)]">{event.actor}</span>
                 {event.durable_role ? <span className="text-[var(--overlay-1)]">· {event.durable_role}</span> : null}
                 {event.decision_role ? <span className="text-[var(--caution)]">· {event.decision_role}</span> : null}
               </div>
               {event.summary ? (
-                <p className="mt-0.5 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">{event.summary}</p>
+                <p className="mt-0.5 line-clamp-2 font-ui text-[var(--t-section)] leading-snug text-[var(--subtext-0)]">{event.summary}</p>
               ) : null}
             </li>
           ))}
@@ -109,22 +109,22 @@ export function RecordHistorySection({ recordId }: { recordId: string }) {
         <span className="db-record-section-count">{revisions.length}</span>
       </div>
       {revisionsQuery.isLoading ? (
-        <p className="font-ui text-[12px] text-[var(--overlay-1)]">Loading history…</p>
+        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading history…</p>
       ) : revisionsQuery.error ? (
-        <p className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[12px] text-[var(--danger)]">
+        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           History could not be loaded.
         </p>
       ) : revisions.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No prior versions captured yet. Edits from here on are versioned automatically.
         </p>
       ) : (
         <ul className="space-y-1">
           {revisions.map((revision) => (
-            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="min-w-0">
-                <span className="font-mono text-[10.5px] text-[var(--text)]">{formatDateTime(revision.revised_at)}</span>
-                <span className="ml-2 font-ui text-[10.5px] text-[var(--overlay-1)]">
+                <span className="font-mono text-[var(--t-count)] text-[var(--text)]">{formatDateTime(revision.revised_at)}</span>
+                <span className="ml-2 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
                   {(revision.body ?? "").length > 0 ? `${(revision.body ?? "").length} chars` : "fields only"}
                 </span>
               </div>
@@ -188,30 +188,30 @@ export function DatabaseTrashPanel({
   }
 
   return (
-    <div className="mb-4 max-w-2xl rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+    <div className="mb-4 max-w-2xl rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Trash</span>
+        <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Trash</span>
         <button type="button" className="db-btn" onClick={onClose}>
           Close
         </button>
       </div>
       {trashQuery.isLoading ? (
-        <p className="font-ui text-[12px] text-[var(--overlay-1)]">Loading trash…</p>
+        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading trash…</p>
       ) : trashQuery.error ? (
-        <p className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[12px] text-[var(--danger)]">
+        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           Trash could not be loaded.
         </p>
       ) : deleted.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No deleted records. Deletions from here on land in the trash automatically.
         </p>
       ) : (
         <ul className="space-y-1">
           {deleted.map((revision) => (
-            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="min-w-0">
-                <p className="truncate font-ui text-[12px] text-[var(--text)]">{titleFor(revision)}</p>
-                <p className="font-mono text-[10px] text-[var(--overlay-1)]">deleted {formatDateTime(revision.revised_at)}</p>
+                <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{titleFor(revision)}</p>
+                <p className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">deleted {formatDateTime(revision.revised_at)}</p>
               </div>
               <button
                 type="button"
@@ -295,11 +295,11 @@ export function RecordBacklinksSection({
           <li key={`${backlink.databaseId}-${backlink.record.id}`}>
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              className="flex w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
               onClick={() => onOpenRecord?.(backlink.databaseId, backlink.record.id)}
             >
-              <span className="min-w-0 truncate font-ui text-[11.5px] text-[var(--text)]">{backlink.recordTitle}</span>
-              <span className="shrink-0 font-ui text-[10px] text-[var(--overlay-1)]">
+              <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{backlink.recordTitle}</span>
+              <span className="shrink-0 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
                 {backlink.databaseName} · {backlink.fieldName}
               </span>
             </button>

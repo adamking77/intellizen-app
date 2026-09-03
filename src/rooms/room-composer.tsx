@@ -127,7 +127,7 @@ export function RoomComposer({
         <ul
           role="listbox"
           aria-label="Mention a member"
-          className="absolute bottom-full left-4 z-30 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--mantle)] py-1"
+          className="absolute bottom-full left-4 z-30 mb-1 max-h-48 w-64 overflow-y-auto rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] py-1"
           style={{ boxShadow: "var(--shadow-elevated)" }}
         >
           {matches.map((option, index) => (
@@ -146,8 +146,8 @@ export function RoomComposer({
                   index === active ? "bg-[var(--selected)]" : "hover:bg-[var(--hover)]",
                 )}
               >
-                <span className="font-ui text-[13px] text-[var(--text)]">@{option.handle}</span>
-                <span className="truncate font-ui text-[11px] text-[var(--text-muted)]">
+                <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">@{option.handle}</span>
+                <span className="truncate font-ui text-[var(--t-section)] text-[var(--text-muted)]">
                   {option.label}
                 </span>
               </button>

@@ -76,7 +76,7 @@ export function ProvidersSettings() {
         path="hermes serve · gateway + REST"
       />
 
-      {providers.isPending ? [0, 1, 2, 3].map((row) => <div key={row} className="h-[62px] animate-pulse border-b border-[var(--hair)] bg-[var(--line)] opacity-20" />) : null}
+      {providers.isPending ? [0, 1, 2, 3].map((row) => <div key={row} className="h-[62px] border-b border-[var(--hair)] bg-[var(--line)] opacity-20" />) : null}
       {providers.error ? <p className="rounded-[var(--r-row)] bg-[var(--mantle)] px-3 py-2 text-xs text-[var(--danger)]">ACP discovery failed — {errorMessage(providers.error)}</p> : null}
       {(providers.data ?? []).map((provider) => (
         <ProviderLine
@@ -91,7 +91,7 @@ export function ProvidersSettings() {
         />
       ))}
 
-      <p className="pt-3 text-[11px] leading-5 text-[var(--overlay-1)]">
+      <p className="pt-3 text-[var(--t-section)] leading-5 text-[var(--overlay-1)]">
         Credentials remain with Hermes or the provider CLI. IntelliZen stores no provider credential here.
       </p>
     </div>
@@ -118,13 +118,13 @@ function ProviderLine({
   return (
     <div className="flex min-h-[62px] items-center gap-3 border-b border-[var(--hair)] py-2.5">
       <span className="w-28 shrink-0 font-ui text-sm text-[var(--text)]">{name}</span>
-      <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[10px] text-[var(--overlay-1)]">{kind}</span>
+      <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{kind}</span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-[10px] text-[var(--overlay-1)]">{path}</p>
-        <p className={cn("mt-0.5 truncate text-[11px]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
+        <p className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{path}</p>
+        <p className={cn("mt-0.5 truncate text-[var(--t-section)]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
       </div>
       <span className={cn(
-        "shrink-0 rounded-full px-2 py-0.5 font-ui text-[10px]",
+        "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)]",
         bad ? "bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]" : "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)]",
       )}>{state}</span>
       {onManage ? <button type="button" className="action" onClick={onManage}>Agents</button> : null}

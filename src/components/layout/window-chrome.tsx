@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -277,78 +277,5 @@ export function PaneResizeEdges({
         onPointerDown={(event) => void beginWindowResize(event, east ? "East" : "West")}
       />
     </>
-  );
-}
-
-/**
- * Custom macOS traffic lights for the frameless window. Red hides the window
- * (Rust CloseRequested handler enforces the same for any native close path;
- * ⌘Q quits), yellow minimizes, green zooms. Rendered in the main pane's
- * chrome strip, sogo-style.
- */
-export function TrafficLights({ className }: { className?: string }) {
-  const [focused, setFocused] = useState(true);
-
-  useEffect(() => {
-    if (!isTauriRuntime) return;
-    const appWindow = getCurrentWindow();
-    const unlisten = appWindow.onFocusChanged(({ payload }) => setFocused(payload));
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, []);
-
-  if (!isTauriRuntime) return null;
-
-  const act = (action: (w: ReturnType<typeof getCurrentWindow>) => Promise<void>) => () => {
-    void action(getCurrentWindow()).catch((err) => toastError("Window action failed", err));
-  };
-
-  const lightClass = (color: string) =>
-    cn(
-      "flex h-3 w-3 items-center justify-center rounded-full",
-      "shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.2)] transition-colors duration-200",
-      focused ? color : "bg-[var(--overlay-1)]/40 text-transparent",
-    );
-
-  return (
-    <div className={cn("group/lights flex shrink-0 items-center gap-2", className)}>
-      <button
-        type="button"
-        aria-label="Hide window"
-        title="Hide (⌘Q quits)"
-        onClick={act((w) => w.hide())}
-        onMouseDown={(event) => event.stopPropagation()}
-        className={lightClass("bg-[#ff5f57] text-[#4d0000]")}
-      >
-        <svg viewBox="0 0 8 8" width="6" height="6" className="opacity-0 transition-opacity group-hover/lights:opacity-100">
-          <path d="M1.5 1.5 L6.5 6.5 M6.5 1.5 L1.5 6.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        aria-label="Minimize window"
-        title="Minimize"
-        onClick={act((w) => w.minimize())}
-        onMouseDown={(event) => event.stopPropagation()}
-        className={lightClass("bg-[#febc2e] text-[#5a3300]")}
-      >
-        <svg viewBox="0 0 8 8" width="6" height="6" className="opacity-0 transition-opacity group-hover/lights:opacity-100">
-          <path d="M1.4 4 L6.6 4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        aria-label="Zoom window"
-        title="Zoom"
-        onClick={act((w) => w.toggleMaximize())}
-        onMouseDown={(event) => event.stopPropagation()}
-        className={lightClass("bg-[#28c840] text-[#003800]")}
-      >
-        <svg viewBox="0 0 8 8" width="6" height="6" className="opacity-0 transition-opacity group-hover/lights:opacity-100">
-          <path d="M2.2 2.2 L5.8 2.2 L5.8 5.8 Z M5.8 5.8 L2.2 5.8 L2.2 2.2 Z" fill="currentColor" />
-        </svg>
-      </button>
-    </div>
   );
 }

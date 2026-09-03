@@ -83,7 +83,7 @@ export function AssignProjectsModal({
       <div className="-mx-5 -my-4">
         {/* Search */}
         <div className="border-b border-[var(--border-subtle)] px-4 py-2.5">
-          <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--base)] px-3 py-1.5 focus-within:border-[var(--accent)]">
+          <div className="flex items-center gap-2 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-3 py-1.5 focus-within:border-[var(--accent)]">
             <Search className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
             <input
               autoFocus
@@ -91,7 +91,7 @@ export function AssignProjectsModal({
               placeholder="Filter evidence piles…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="min-w-0 flex-1 bg-transparent font-ui text-[12px] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-1)] focus:outline-none"
             />
           </div>
         </div>
@@ -100,11 +100,11 @@ export function AssignProjectsModal({
         <div className="flex max-h-[320px] flex-col overflow-y-auto">
           {assignableProjects.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-5 py-10 text-center">
-              <p className="font-ui text-[13px] text-[var(--subtext-0)]">All evidence piles already assigned</p>
-              <p className="font-ui text-[11px] text-[var(--overlay-1)]">Create a new evidence pile from the work-item pane.</p>
+              <p className="font-ui text-[var(--t-ui)] text-[var(--subtext-0)]">All evidence piles already assigned</p>
+              <p className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">Create a new evidence pile from the work-item pane.</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="px-5 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+            <div className="px-5 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
               No evidence piles match "{query}"
             </div>
           ) : (
@@ -124,13 +124,13 @@ export function AssignProjectsModal({
                       : "border-[var(--overlay-0)] bg-transparent",
                 )}>
                   {(allChecked || someChecked) && (
-                    <span className="block h-[2px] w-2 rounded-full bg-[var(--crust)]" />
+                    <span className="block h-[2px] w-2 rounded-[var(--r-pill)] bg-[var(--crust)]" />
                   )}
                 </span>
-                <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   {allChecked ? "Deselect all" : "Select all"}
                 </span>
-                <span className="ml-auto font-mono text-[10px] text-[var(--overlay-1)]">
+                <span className="ml-auto font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                   {filtered.length}
                 </span>
               </button>
@@ -161,12 +161,12 @@ export function AssignProjectsModal({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className={cn(
-                        "block truncate font-ui text-[13px]",
+                        "block truncate font-ui text-[var(--t-ui)]",
                         isChecked ? "font-medium text-[var(--accent)]" : "text-[var(--text)]",
                       )}>
                         {project.name}
                       </span>
-                      <span className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
+                      <span className="block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                         {project.type.replace("_", " ")}
                         {project.operation_id ? " · reassigning" : ""}
                       </span>

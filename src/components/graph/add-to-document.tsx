@@ -146,20 +146,20 @@ export function AddGraphToDocument({
         </div>
         {choice === "existing" ? (
           docs.isPending ? (
-            <p className="font-ui text-[12px] text-[var(--text-muted)]">Loading documents…</p>
+            <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Loading documents…</p>
           ) : docs.error ? (
-            <p className="font-ui text-[12px] text-[var(--bad)]">Documents could not be loaded.</p>
+            <p className="font-ui text-[var(--t-meta)] text-[var(--bad)]">Documents could not be loaded.</p>
           ) : records.length ? (
             <Select value={recordId} onChange={(event) => setRecordId(event.target.value)} aria-label="Document">
               {records.map((record) => <option key={record.id} value={record.id}>{documentDisplayTitle(record)}</option>)}
             </Select>
           ) : (
-            <p className="font-ui text-[12px] text-[var(--text-muted)]">No documents yet. Choose New document.</p>
+            <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No documents yet. Choose New document.</p>
           )
         ) : (
           <Input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Document title" autoFocus />
         )}
-        {add.error ? <p role="alert" className="font-ui text-[12px] text-[var(--bad)]">{add.error instanceof Error ? add.error.message : "The graph could not be added."}</p> : null}
+        {add.error ? <p role="alert" className="font-ui text-[var(--t-meta)] text-[var(--bad)]">{add.error instanceof Error ? add.error.message : "The graph could not be added."}</p> : null}
       </div>
     </AppDialog>
   );

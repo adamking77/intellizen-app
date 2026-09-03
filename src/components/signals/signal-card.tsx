@@ -107,7 +107,7 @@ export function SignalCard({
           }}
           aria-label={`Open ${title}`}
           className={cn(
-            "min-w-0 text-left font-ui text-[13px] leading-snug line-clamp-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]",
+            "min-w-0 text-left font-ui text-[var(--t-ui)] leading-snug line-clamp-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]",
             isSelected || isActive
               ? "text-[var(--text)] font-medium"
               : "text-[var(--subtext-1)] group-hover/row:text-[var(--text)]",
@@ -118,15 +118,15 @@ export function SignalCard({
 
         {/* Meta row: topic chip · source · score · date · actions */}
         <div className="flex items-center gap-5">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[var(--t-section)]">
             <span className="inline-flex shrink-0 items-center gap-1.5" title={label}>
               <span
                 aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                className="h-1.5 w-1.5 shrink-0 rounded-[var(--r-pill)]"
                 style={{ background: color }}
               />
               <span
-                className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em]"
+                className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]"
                 style={{ color }}
               >
                 {label}
@@ -136,7 +136,7 @@ export function SignalCard({
             {source || host ? (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="min-w-0 truncate font-mono text-[11px] text-[var(--overlay-1)]">
+                <span className="min-w-0 truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
                   {source ?? host}
                 </span>
               </>
@@ -147,7 +147,7 @@ export function SignalCard({
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
                 <span
                   className={cn(
-                    "font-mono text-[11px] tabular-nums",
+                    "font-mono text-[var(--t-section)] tabular-nums",
                     score > 0.7
                       ? "text-[var(--accent)]"
                       : score > 0.5
@@ -163,7 +163,7 @@ export function SignalCard({
             {publishedAt ? (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
                   {formatDate(publishedAt)}
                 </span>
               </>
@@ -174,7 +174,7 @@ export function SignalCard({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); void openUrl(url); }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               title="Open URL"
               aria-label="Open URL"
             >
@@ -184,7 +184,7 @@ export function SignalCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSave(); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
                 title="Save to evidence pile"
                 aria-label="Save to evidence pile"
               >
@@ -195,7 +195,7 @@ export function SignalCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
                 title="Dismiss"
                 aria-label="Dismiss"
               >

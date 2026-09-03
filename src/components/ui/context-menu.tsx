@@ -42,7 +42,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     <div
       ref={ref}
       style={{ top: clampedY, left: clampedX }}
-      className="fixed z-[9999] min-w-[160px] rounded-xl border border-[var(--border)] bg-[var(--base)] p-1.5 shadow-[var(--shadow-elevated)]"
+      className="fixed z-[9999] min-w-[160px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--base)] p-1.5 shadow-[var(--shadow-elevated)]"
     >
       {items.map((item) => (
         <button
@@ -50,7 +50,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           type="button"
           onClick={() => { item.onSelect(); onClose(); }}
           className={cn(
-            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
+            "flex w-full items-center gap-2.5 rounded-[var(--r-plane)] px-2.5 py-1.5 text-left text-[var(--t-ui)] transition-colors",
             item.variant === "danger"
               ? "text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
               : "text-[var(--text)] hover:bg-[var(--surface-wash)]",

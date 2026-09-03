@@ -29,7 +29,7 @@ export function FieldShell({
   return (
     <section
       className={cn(
-        "rounded-lg border border-[var(--border-subtle)] bg-[var(--mantle)]/55",
+        "rounded-[var(--r-plane)] border border-[var(--border-subtle)] bg-[var(--mantle)]/55",
         "transition-[border-color,background-color] duration-150 focus-within:border-[var(--accent-border)] focus-within:bg-[var(--mantle)]",
         className,
       )}
@@ -40,7 +40,7 @@ export function FieldShell({
           {label}
         </span>
         <div className="flex min-w-0 items-center gap-2">
-          {meta ? <span className="font-mono text-[10px] text-[var(--overlay-1)]">{meta}</span> : null}
+          {meta ? <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{meta}</span> : null}
           <SaveState state={status} onRetry={onRetry} />
           {actions}
         </div>

@@ -105,11 +105,12 @@ export const FLAVORS: Flavor[] = [
 export const FLAVOR_KEY = "intelizen:flavor";
 export const ACCENT_KEY = "intelizen:accent";
 export const PANES_KEY = "intelizen:panes";
+export const THEME_CHANGED_EVENT = "intelizen:theme-changed";
 
 /** How the shell's panes sit: separate rounded panels over the window, or
  *  one surface divided by hairlines. Read by `[data-panes]` rules in index.css. */
 export type Panes = "connected" | "segmented";
-export const DEFAULT_PANES: Panes = "segmented";
+export const DEFAULT_PANES: Panes = "connected";
 
 export function loadPanes(): Panes {
   return readPreference(PANES_KEY, DEFAULT_PANES) === "connected" ? "connected" : "segmented";
@@ -146,6 +147,7 @@ export function applyTheme(flavorId: string, accentHex: string) {
   // Every accent use in the app reads --accent, so setting it here moves
   // selection, focus, active nav, links and primary actions together.
   document.documentElement.style.setProperty("--accent", accentHex);
+  window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
 
   // Tell macOS which appearance the window is wearing so the native vibrancy
   // and traffic lights follow the flavor rather than the system setting.

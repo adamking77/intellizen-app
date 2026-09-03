@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T14:30:00Z",
+  "title": "Design System: IntelliZen",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "User Accent", "canonical": "#89b4fa", "tonalRamp": ["#101827", "#182744", "#203961", "#2f4f80", "#4c70a3", "#7295c5", "#a3bee0", "#dce8f5"] },
+      "work": { "role": "neutral", "displayName": "Work Plane", "canonical": "#1d1d2c", "tonalRamp": ["#101018", "#1d1d2c", "#323245", "#4a4a5f", "#65657b", "#85859a", "#aaaabb", "#e7e7ed"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Page Title", "purpose": "Top-level view identity in light tracked capitals." },
+      "interface": { "displayName": "Interface", "purpose": "Controls, rows, and compact operating text." },
+      "identifier": { "displayName": "Identifier", "purpose": "Models, paths, timestamps, and machine values." }
+    },
+    "shadows": [
+      { "name": "transient", "value": "0 18px 44px color-mix(in srgb, var(--crust) 55%, transparent)", "purpose": "Dialogs and popovers only." },
+      { "name": "hud", "value": "0 18px 44px color-mix(in srgb, var(--crust) 60%, transparent)", "purpose": "Detached HUD only." }
+    ],
+    "motion": [
+      { "name": "fast", "value": "90ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Immediate control feedback." },
+      { "name": "base", "value": "120ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Disclosures and ordinary state changes." },
+      { "name": "slow", "value": "200ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Pane continuity." }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "640px" },
+      { "name": "compact", "value": "960px" },
+      { "name": "wide", "value": "1200px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact user-owned primary action.",
+      "html": "<button class=\"ds-button-primary\">Run workflow</button>",
+      "css": ".ds-button-primary{border:0;border-radius:999px;padding:5px 13px;background:var(--go-bg);color:var(--go-fg);font:400 13px/1.35 var(--font-ui);transition:background 90ms var(--ease-out)}.ds-button-primary:hover{background:color-mix(in srgb,var(--go-bg) 88%,var(--text))}.ds-button-primary:focus-visible{outline:2px solid var(--base);box-shadow:0 0 0 4px var(--accent)}"
+    },
+    {
+      "name": "Selected Navigation Row",
+      "kind": "nav",
+      "refersTo": "navigation-selected",
+      "description": "A raised whole-row selection without stripe or ring.",
+      "html": "<button class=\"ds-nav-row\" aria-current=\"page\">Home</button>",
+      "css": ".ds-nav-row{width:100%;border:0;border-radius:4px;padding:7px 10px;background:var(--selected);color:var(--text);font:450 13px/1.35 var(--font-ui);text-align:left}.ds-nav-row:hover{background:var(--selected-hover)}.ds-nav-row:focus-visible{outline:2px solid var(--crust);box-shadow:0 0 0 4px var(--accent)}"
+    },
+    {
+      "name": "Agent Message",
+      "kind": "custom",
+      "refersTo": "message-agent",
+      "description": "An attributed agent utterance carrying the agent identity hue.",
+      "html": "<div class=\"ds-agent-message\"><span class=\"ds-agent-name\">Fiona</span><p>Research pass complete.</p></div>",
+      "css": ".ds-agent-message{border-radius:10px;padding:8px 11px;background:color-mix(in srgb,var(--agent-color) 12%,transparent);color:var(--text);font:400 13px/1.45 var(--font-ui)}.ds-agent-name{display:block;margin-bottom:4px;color:var(--agent-color);font-size:11px;letter-spacing:.14em;text-transform:uppercase}.ds-agent-message p{margin:0}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "description": "A compact editable row with a functional edge.",
+      "html": "<input class=\"ds-field\" value=\"Research lead\" aria-label=\"Role\">",
+      "css": ".ds-field{box-sizing:border-box;width:100%;border:1px solid var(--edge);border-radius:4px;padding:7px 9px;background:var(--input);color:var(--text);font:400 13px/1.35 var(--font-ui)}.ds-field:focus-visible{outline:2px solid var(--base);box-shadow:0 0 0 4px var(--accent)}"
+    },
+    {
+      "name": "Status Tag",
+      "kind": "chip",
+      "description": "A semantic state that always includes a word.",
+      "html": "<span class=\"ds-status\">waiting</span>",
+      "css": ".ds-status{display:inline-flex;border-radius:999px;padding:2px 8px;background:color-mix(in srgb,var(--wait) 14%,transparent);color:var(--wait);font:400 12px/1.35 var(--font-ui)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Editorial Instrument",
+    "overview": "IntelliZen is a precise macOS operating surface for intelligence work. Stable planes, deliberate whitespace, and attributed data make sophisticated work feel calm. The interface is advanced through behavior and clarity, never through glow, glass, ornamental gradients, or generic dashboard furniture.",
+    "keyCharacteristics": ["Three stable planes: rail, panel, and work.", "Editorial hierarchy from space and type rather than decoration.", "Dense desktop controls with complete keyboard parity.", "Agent identity carried consistently by avatar, bubble, voice, and HUD.", "Explicit loading, content, empty, error, and recovery states."],
+    "rules": [
+      { "name": "Three-Plane Rule", "body": "Depth comes from the relationship among rail, panel, and work, not borders around each pane.", "section": "colors" },
+      { "name": "Closed Scale Rule", "body": "Chrome uses only 16, 14, 13, 12, 11, and 10px.", "section": "typography" },
+      { "name": "No Ghost Card Rule", "body": "Do not combine a structural border, rounded container, and wide shadow on the same persistent surface.", "section": "elevation" }
+    ],
+    "dos": ["Keep loading, content, empty, error, disabled, and recovery visually distinct.", "Pair color with text, position, shape, or iconography.", "Verify every primary surface at desktop, 390px, and 200% zoom."],
+    "donts": ["Use generic card grids as page scaffolding or nest cards inside cards.", "Use arbitrary radii, font sizes, shadows, or palette utilities.", "Pulse, spin, or shimmer to communicate waiting."]
+  }
+}

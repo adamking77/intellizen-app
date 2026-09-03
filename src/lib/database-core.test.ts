@@ -326,8 +326,8 @@ describe("database-core", () => {
       options: ["Backlog", "Blocked", "Shipped"],
     };
 
-    expect(resolveFieldOptionColor(field, "Blocked")).toBe("#f38ba8");
-    expect(resolveFieldOptionColor(field, "Shipped")).toBe("#a6e3a1");
+    expect(resolveFieldOptionColor(field, "Blocked")).toBe("var(--bad)");
+    expect(resolveFieldOptionColor(field, "Shipped")).toBe("var(--ok)");
   });
 
   it("prefers explicit option colors over semantic colors", () => {

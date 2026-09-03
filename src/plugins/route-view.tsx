@@ -14,7 +14,7 @@ export function PluginRouteView() {
   if (!plugin) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <p className="rounded-xl border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-plane)] border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
           No plugin named “{id}” is loaded.
         </p>
       </div>
@@ -30,7 +30,7 @@ export function PluginRouteView() {
   if (!route) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <p className="rounded-xl border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-plane)] border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
           “{plugin.name}” has no page at /{sub}.
         </p>
       </div>
@@ -39,7 +39,7 @@ export function PluginRouteView() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="shrink-0 border-b border-[var(--border)] px-3 py-4 sm:px-6">
-        <span className="text-label">{route.title ?? plugin.name}</span>
+        <span className="t-title text-[var(--text)]">{route.title ?? plugin.name}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <PluginSlot name={plugin.name} render={route.render} resetKey={plugin.loadedAt} />

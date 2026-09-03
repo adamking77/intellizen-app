@@ -23,10 +23,10 @@ import { hasGroupChatNameBase } from "@/rooms/group-chat";
 import { createRoom, ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
 import type { GroupMember } from "@/rooms/types";
 
-const TITLE = "font-ui text-[16px] font-light uppercase tracking-[0.16em] text-[var(--text)]";
+const TITLE = "font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]";
 const GRID = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]";
 const ACTION =
-  "rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[12px] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
+  "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
 
 /** Point the real panel at this profile, reveal it, and focus its composer. */
 function talkTo(target: string) {
@@ -123,6 +123,9 @@ export function AgentsView() {
       title: agent.role,
       model: agent.model || null,
       provider: agent.provider || engineLabel(agent.engine),
+      avatar_style: agent.avatarStyle,
+      avatar_kind: agent.avatarKind,
+      avatar_color: agent.avatarColor,
     }));
     const keys = members.map(groupMemberKey).sort().join("|");
     const existing = listRooms().find(
@@ -136,7 +139,7 @@ export function AgentsView() {
   const acpTrouble = list.data?.acpTrouble ?? null;
 
   return (
-    <div className="relative h-full overflow-y-auto bg-[var(--base)] px-6 py-5">
+    <div className="relative h-full overflow-y-auto bg-[var(--base)] px-3 py-4 sm:px-6 sm:py-5">
       {offline ? (
         <Notice tone="bad">Hermes is offline{engineError ? ` — ${engineError}` : ""}. Hermes profiles are unavailable; ACP agents and teams remain editable.</Notice>
       ) : list.error ? (
@@ -146,12 +149,12 @@ export function AgentsView() {
       ) : null}
 
       {list.isSuccess && agents.length === 0 ? (
-        <p className="max-w-[520px] pb-4 font-ui text-[12px] leading-[1.5] text-[var(--text-muted)]">
+        <p className="max-w-[520px] pb-4 font-ui text-[var(--t-meta)] leading-[1.5] text-[var(--text-muted)]">
           No agents yet. Make one below — a Hermes profile, or a Claude Code, Codex, Gemini or Qwen agent over ACP.
         </p>
       ) : null}
 
-      <div className="flex items-center gap-3.5 pb-4">
+      <div className="flex flex-wrap items-center gap-3.5 pb-4">
         <h1 className={TITLE}>Agents</h1>
         {list.isSuccess ? <Tag>{agents.length} configured</Tag> : null}
         <div className="grow" />
@@ -163,7 +166,7 @@ export function AgentsView() {
       {list.isPending ? (
         <div className={GRID} aria-busy>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[150px] animate-pulse rounded-xl bg-[var(--mantle)]" />
+            <div key={i} className="h-[150px] rounded-[var(--r-plane)] bg-[var(--mantle)] opacity-60" />
           ))}
         </div>
       ) : (
@@ -181,15 +184,15 @@ export function AgentsView() {
             >
               <Avatar agent={a} size={48} image={images[a.id]} />
               <div className="flex flex-col gap-[3px]">
-                <span className="font-ui text-[14px] text-[var(--text)]">{a.displayName}</span>
-                <span className="line-clamp-2 font-ui text-[12px] leading-[1.4] text-[var(--text-muted)]" title={a.role}>
+                <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{a.displayName}</span>
+                <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>
                   {a.role}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-[7px]">
                 <Tag>{engineLabel(a.engine)}</Tag>
-                <span className="font-mono text-[11px] text-[var(--text-muted)]">{a.model}</span>
-                {a.isDefault ? <span className="font-mono text-[10px] text-[var(--text-muted)]">default</span> : null}
+                <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">{a.model}</span>
+                {a.isDefault ? <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span> : null}
               </div>
             </Card>
           ))}
@@ -198,7 +201,7 @@ export function AgentsView() {
       )}
 
       {/* Teams: below the agents, because a team is made of them. */}
-      <div className="flex items-center gap-3.5 pb-4 pt-[30px]">
+      <div className="flex flex-wrap items-center gap-3.5 pb-4 pt-[30px]">
         <h1 className={TITLE}>Teams</h1>
         {(teams.data?.length ?? 0) > 0 ? <Tag>{teams.data!.length}</Tag> : null}
         <div className="grow" />
@@ -209,7 +212,7 @@ export function AgentsView() {
       {teams.error ? (
         <Notice tone="bad">Teams could not be read — {errorMessage(teams.error)}.</Notice>
       ) : agents.length < 2 ? (
-        <span className="font-ui text-[12px] text-[var(--text-muted)]">A team is two or more agents answering in turn. Make a second agent first.</span>
+        <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">A team is two or more agents answering in turn. Make a second agent first.</span>
       ) : (
         <div className={GRID}>
           {(teams.data ?? []).map((t) => {
@@ -227,12 +230,12 @@ export function AgentsView() {
               >
                 <TeamStack agents={members} size={34} images={images} />
                 <div className="flex flex-col gap-[3px]">
-                  <span className="font-ui text-[14px] text-[var(--text)]">{t.name}</span>
-                  <span className="font-ui text-[12px] text-[var(--text-muted)]">{members.map((m) => m.displayName).join(", ")}</span>
+                  <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{t.name}</span>
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{members.map((m) => m.displayName).join(", ")}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-[7px]">
                   <Tag>{members.length} agents</Tag>
-                  <span className="font-ui text-[12px] text-[var(--text-muted)]">
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
                     {t.projects.length === 0 ? "no project yet" : t.projects.length === 1 ? "1 project" : `${t.projects.length} projects`}
                   </span>
                 </div>
@@ -315,7 +318,7 @@ export function AgentsView() {
 function Notice({ tone, children }: { tone: "bad" | "wait"; children: React.ReactNode }) {
   return (
     <div
-      className="mb-4 rounded-[var(--r-row)] border px-3 py-2 font-ui text-[12px] leading-[1.5]"
+      className="mb-4 rounded-[var(--r-row)] border px-3 py-2 font-ui text-[var(--t-meta)] leading-[1.5]"
       style={{ borderColor: `var(--${tone})`, color: `var(--${tone})`, background: `color-mix(in srgb, var(--${tone}) 11%, transparent)` }}
     >
       {children}

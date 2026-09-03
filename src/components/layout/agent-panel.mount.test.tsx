@@ -180,9 +180,10 @@ describe("AgentPanel on the gateway", () => {
     const panel = await mountPanel();
     await type(panel, turn.prompt);
     await pressEnter(panel);
-    expect(client.calls.map((c) => c.method)).toEqual(["profiles.list", "session.create", "prompt.submit"]);
-    expect(client.calls[1].params).toEqual({ cols: 96, source: "desktop", profile: "default" });
-    expect(client.calls[2].params).toEqual({ session_id: turn.sessionId, text: turn.prompt });
+    const turnCalls = client.calls.filter((call) => call.method !== "profiles.get_asset");
+    expect(turnCalls.map((c) => c.method)).toEqual(["profiles.list", "session.create", "prompt.submit"]);
+    expect(turnCalls[1].params).toEqual({ cols: 96, source: "desktop", profile: "default" });
+    expect(turnCalls[2].params).toEqual({ session_id: turn.sessionId, text: turn.prompt });
     expect(textarea(panel).value).toBe("");
     expect(panel.container.querySelector('[data-run-state="working"]')).not.toBeNull();
     expect(panel.container.querySelector('button[aria-label="Stop this turn"]')).not.toBeNull();

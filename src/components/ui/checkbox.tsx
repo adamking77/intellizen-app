@@ -34,7 +34,7 @@ export function Checkbox({
       />
       <div
         className={cn(
-          "h-4 w-4 rounded-[4px] border inline-flex items-center justify-center",
+          "h-4 w-4 rounded-[var(--r-row)] border inline-flex items-center justify-center",
           "transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
           checked
             ? "bg-[var(--accent)] border-[var(--accent)]"
@@ -44,7 +44,7 @@ export function Checkbox({
         )}
       >
         {checked ? <Check className="h-3 w-3 text-[var(--crust)]" strokeWidth={3} /> : null}
-        {!checked && indeterminate ? <div className="h-[2px] w-2 rounded-full bg-[var(--accent)]" /> : null}
+        {!checked && indeterminate ? <div className="h-[2px] w-2 rounded-[var(--r-pill)] bg-[var(--accent)]" /> : null}
       </div>
     </label>
   );

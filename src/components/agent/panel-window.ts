@@ -11,6 +11,7 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { ApprovalChoice } from "@/engine/contract";
 import type { ProfileThread } from "@/engine/session-store";
+import type { HermesProfile } from "@/engine/profiles";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
 
 /** The label the ejected panel's window carries; `panel_window.rs` builds it. */
@@ -114,6 +115,7 @@ export function sizeFor(mode: PanelMode): { w: number; h: number } {
 /** What the panel renders from: the session store's data, nothing else. */
 export interface PanelFrame {
   selectedProfile: string | null;
+  profileDirectory: Record<string, HermesProfile>;
   threads: Record<string, ProfileThread>;
 }
 

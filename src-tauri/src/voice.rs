@@ -122,6 +122,28 @@ pub async fn synthesize(text: &str, voice: &str, model: &str) -> Result<PathBuf,
     Ok(path)
 }
 
+/// Prepare speech for frontend playback. The webview plays this file through
+/// an AudioContext so the avatar can follow the actual waveform instead of a
+/// decorative timer.
+#[tauri::command]
+pub async fn voice_prepare(
+    text: String,
+    voice: Option<String>,
+    model: Option<String>,
+) -> Result<String, String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Ok(String::new());
+    }
+    let path = synthesize(
+        &text,
+        voice.as_deref().unwrap_or(""),
+        model.as_deref().unwrap_or(""),
+    )
+    .await?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 /// Speak one sentence and return when it has been heard.
 ///
 /// `voice` is a MiniMax voice id — the agent's own when it has one, Hermes's

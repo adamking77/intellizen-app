@@ -6,7 +6,7 @@ import type { ApprovalDecision, ClarifyDecision, Decision } from "@/engine/trans
 import { cn } from "@/lib/utils";
 
 const PILL =
-  "rounded-full px-3 py-1 font-ui text-[12px] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 const PILL_GO = "bg-[color-mix(in_srgb,var(--wait)_18%,transparent)] text-[var(--wait)] hover:opacity-90";
 const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:opacity-90";
 
@@ -29,12 +29,12 @@ export function DecisionCard({
   return (
     <div
       data-decision={decision.kind}
-      className="flex flex-col gap-[9px] rounded-xl bg-[color-mix(in_srgb,var(--wait)_13%,transparent)] p-[13px]"
+      className="flex flex-col gap-[9px] rounded-[var(--r-plane)] bg-[color-mix(in_srgb,var(--wait)_13%,transparent)] p-[13px]"
     >
       <div className="flex items-center gap-2">
-        <span className="font-ui text-[13px] text-[var(--text)]">{asker}</span>
+        <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{asker}</span>
         <div className="flex-1" />
-        <span className="rounded-full bg-[color-mix(in_srgb,var(--wait)_16%,transparent)] px-2 py-px font-ui text-[11px] text-[var(--wait)] whitespace-nowrap">
+        <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--wait)_16%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--wait)] whitespace-nowrap">
           waiting on you
         </span>
       </div>
@@ -58,13 +58,13 @@ function ApprovalBody({
 }) {
   return (
     <>
-      <span className="font-ui text-[13px] font-medium text-[var(--wait)]">This step needs your confirmation</span>
-      <div className="rounded-md bg-[var(--crust)] px-[9px] py-[9px]">
-        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--text)]">
+      <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--wait)]">This step needs your confirmation</span>
+      <div className="rounded-[var(--r-row)] bg-[var(--crust)] px-[9px] py-[9px]">
+        <pre className="whitespace-pre-wrap break-words font-mono text-[var(--t-section)] leading-relaxed text-[var(--text)]">
           {decision.command || decision.description}
         </pre>
         {decision.command && decision.description ? (
-          <p className="mt-1.5 font-ui text-[12px] text-[var(--text-muted)]">{decision.description}</p>
+          <p className="mt-1.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{decision.description}</p>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-[7px]">
@@ -103,7 +103,7 @@ function ClarifyBody({
   if (single && only.choices.length > 0 && !only.multiSelect) {
     return (
       <>
-        <span className="font-ui text-[13px] font-medium text-[var(--wait)]">{only.question}</span>
+        <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--wait)]">{only.question}</span>
         <div className="flex flex-wrap items-center gap-[7px]">
           {only.choices.map((choice) => (
             <button
@@ -142,21 +142,21 @@ function ClarifyBody({
         const key = keyOf(i);
         return (
           <div key={key} className="flex flex-col gap-1.5">
-            <span className="font-ui text-[13px] font-medium text-[var(--wait)]">{q.question}</span>
+            <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--wait)]">{q.question}</span>
             {q.choices.length === 0 ? (
               <input
                 type="text"
                 value={typed[key] ?? ""}
                 onChange={(e) => setTyped((t) => ({ ...t, [key]: e.target.value }))}
                 placeholder="Your answer"
-                className="rounded-lg border border-[var(--border)] bg-[var(--base)] px-2.5 py-1.5 font-ui text-[13px] text-[var(--text)] outline-none focus-visible:border-[var(--accent)]"
+                className="rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--base)] px-2.5 py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] outline-none focus-visible:border-[var(--accent)]"
               />
             ) : q.multiSelect ? (
               <div className="flex flex-col gap-1">
                 {q.choices.map((choice) => {
                   const checked = (answers[key] ?? []).includes(choice);
                   return (
-                    <label key={choice} className="flex items-center gap-2 font-ui text-[13px] text-[var(--text)]">
+                    <label key={choice} className="flex items-center gap-2 font-ui text-[var(--t-ui)] text-[var(--text)]">
                       <input
                         type="checkbox"
                         checked={checked}

@@ -1389,7 +1389,7 @@ export function DatabaseEditorView({
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-[13px] text-[var(--subtext-0)]">
+      <div className="flex h-full items-center justify-center text-[var(--t-ui)] text-[var(--subtext-0)]">
         Loading database…
       </div>
     );
@@ -1399,8 +1399,8 @@ export function DatabaseEditorView({
     return (
       <div className="flex h-full items-center justify-center">
         <div className="max-w-md text-center">
-          <div className="text-[18px] font-semibold text-[var(--text)]">Database unavailable</div>
-          <div className="mt-2 text-[13px] text-[var(--subtext-0)]">
+          <div className="text-[var(--t-title)] font-semibold text-[var(--text)]">Database unavailable</div>
+          <div className="mt-2 text-[var(--t-ui)] text-[var(--subtext-0)]">
             {error instanceof Error ? error.message : "The selected database could not be loaded."}
           </div>
           <Button className="mt-4" variant="secondary" onClick={() => navigate("/databases")}>
@@ -1425,18 +1425,18 @@ export function DatabaseEditorView({
       />
 
       {/* Database header */}
-      <div className="shrink-0 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,black_6%)] px-6 pb-4 pt-5">
+      <div className="shrink-0 bg-[var(--base)] px-3 pb-4 pt-5 sm:px-6">
         {!embedded ? (
           <div className="mb-3 flex items-center gap-1.5">
             <Link
               to="/databases"
-              className="flex items-center gap-0.5 text-[11px] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
+              className="flex items-center gap-0.5 text-[var(--t-section)] text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]"
             >
               <ChevronLeft className="h-3 w-3" />
               Databases
             </Link>
             <ChevronRight className="h-3 w-3 text-[var(--overlay-0)]" />
-            <span className="text-[11px] text-[var(--subtext-0)]">{bundle.database.name}</span>
+            <span className="text-[var(--t-section)] text-[var(--subtext-0)]">{bundle.database.name}</span>
           </div>
         ) : null}
 
@@ -1449,10 +1449,10 @@ export function DatabaseEditorView({
             void handleUpdateDatabaseName(e.target.value);
           }}
           disabled={isSystemDatabase}
-          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[22px] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
+          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[var(--t-title)] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
         />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5 font-ui text-[11px] text-[var(--overlay-1)]">
+          <div className="flex flex-wrap items-center gap-1.5 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
             {databaseBreadcrumb.map((part, index) => (
               <span key={`${part}-${index}`} className="inline-flex items-center gap-1.5">
                 {index > 0 ? <ChevronRight className="h-3 w-3 text-[var(--overlay-0)]" /> : null}
@@ -1489,7 +1489,7 @@ export function DatabaseEditorView({
           />
         ) : null}
         {taxonomyEditorOpen && !isSystemDatabase ? (
-          <div className="mb-4 grid max-w-2xl gap-3 rounded-md border border-[var(--border)] bg-[var(--mantle)] p-3">
+          <div className="mb-4 grid max-w-2xl gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
             <TaxonomyFields value={taxonomyDraft} onChange={setTaxonomyDraft} />
             <div className="flex justify-end gap-2">
               <Button

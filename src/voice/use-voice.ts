@@ -14,11 +14,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 import type { Message } from "@/engine/transcript";
 import { startBrowserDictation, type BrowserDictationSession } from "@/services/voice";
-import { micTrouble, pushLevel, record, sayable, transcribe, type Recorder } from "./dictation";
+import { levelOf, micTrouble, pushLevel, record, sayable, transcribe, type Recorder } from "./dictation";
 import { useVoicePrefs } from "./voice-prefs";
 
 export interface VoiceHost {
@@ -64,6 +64,9 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
 
   const [convo, setConvo] = useState(false);
   const [talking, setTalking] = useState<string | null>(null);
+  const [said, setSaid] = useState(0);
+  const [saidLevels, setSaidLevels] = useState<number[]>([]);
+  const audio = useRef<{ element: HTMLAudioElement; finish: () => void } | null>(null);
   const spoken = useRef<Set<string>>(new Set());
   const speakingId = useRef<string | null>(null);
   const convoRef = useRef(false);
@@ -96,21 +99,70 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
         : "";
 
   const hush = useCallback(() => {
+    audio.current?.element.pause();
+    audio.current?.finish();
     void invoke("voice_stop").catch(() => undefined);
     speakingId.current = null;
     setTalking(null);
+    setSaid(0);
+    setSaidLevels([]);
   }, []);
 
   /** Speak one piece of text and wait for it to finish. */
-  const say = useCallback(
-    (text: string) =>
-      invoke<void>("voice_speak", {
-        text: sayable(text),
-        voice: voiceId || null,
-        model: prefs.speaking.model || null,
-      }),
-    [voiceId, prefs.speaking.model],
-  );
+  const say = useCallback(async (text: string) => {
+    const path = await invoke<string>("voice_prepare", {
+      text: sayable(text),
+      voice: voiceId || null,
+      model: prefs.speaking.model || null,
+    });
+    if (!path) return;
+
+    const element = new Audio(convertFileSrc(path));
+    let frameId = 0;
+    let context: AudioContext | undefined;
+    let settled = false;
+    let resolveDone: (() => void) | undefined;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.cancelAnimationFrame(frameId);
+      void context?.close();
+      if (audio.current?.element === element) audio.current = null;
+      setSaid(0);
+      setSaidLevels([]);
+      resolveDone?.();
+    };
+    audio.current?.element.pause();
+    audio.current?.finish();
+    audio.current = { element, finish };
+
+    try {
+      context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 512;
+      context.createMediaElementSource(element).connect(analyser);
+      analyser.connect(context.destination);
+      const samples = new Float32Array(analyser.fftSize);
+      const watch = () => {
+        analyser.getFloatTimeDomainData(samples);
+        const level = levelOf(samples);
+        setSaid(level);
+        setSaidLevels((levels) => pushLevel(levels, level, bars));
+        frameId = window.requestAnimationFrame(watch);
+      };
+      frameId = window.requestAnimationFrame(watch);
+    } catch {
+      // Playback still works when an analyser is unavailable; only the
+      // measured avatar response is omitted.
+    }
+
+    await new Promise<void>((resolve) => {
+      resolveDone = resolve;
+      element.onended = finish;
+      element.onerror = finish;
+      void element.play().catch(finish);
+    });
+  }, [voiceId, prefs.speaking.model, bars]);
 
   /** Read one reply aloud, on request. Separate from the loop. */
   const readAloud = useCallback(
@@ -278,6 +330,8 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
     () => () => {
       listening.current?.cancel();
       browserListening.current?.stop();
+      audio.current?.element.pause();
+      audio.current?.finish();
       void invoke("voice_stop").catch(() => undefined);
     },
     [],
@@ -297,6 +351,10 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
     hearing,
     /** The id of the reply being spoken, or null. */
     talking,
+    /** Measured playback amplitude for the speaking agent avatar. */
+    said,
+    /** Rolling measured playback levels for the speaking waveform. */
+    saidLevels,
     /** Live microphone levels for a waveform. */
     levels,
     /** Whatever went wrong, in a sentence. */

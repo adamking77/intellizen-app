@@ -50,15 +50,15 @@ export function QueryState({
       <div
         role="alert"
         className={cn(
-          "rounded-xl border border-[color-mix(in_srgb,var(--danger)_42%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-5 py-4",
+          "rounded-[var(--r-plane)] border border-[color-mix(in_srgb,var(--danger)_42%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-5 py-4",
           className,
         )}
       >
         <div className="flex items-start gap-3">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" />
           <div className="min-w-0 flex-1">
-            <p className="font-ui text-[13px] font-semibold text-[var(--text)]">{errorTitle}</p>
-            <p className="mt-1 break-words font-ui text-[12px] leading-5 text-[var(--subtext-0)]">
+            <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{errorTitle}</p>
+            <p className="mt-1 break-words font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
               {errorMessage(error)}
             </p>
             {onRetry ? (
@@ -77,12 +77,12 @@ export function QueryState({
     return loadingFallback ?? (
       <div
         className={cn(
-          "flex min-h-28 items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8",
+          "flex min-h-28 items-center justify-center gap-2 rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8",
           className,
         )}
       >
-        <Loader2 aria-hidden className="h-4 w-4 animate-spin text-[var(--accent)]" />
-        <span className="font-ui text-[12px] text-[var(--subtext-0)]">{loadingLabel}</span>
+        <Loader2 aria-hidden className="h-4 w-4 text-[var(--accent)]" />
+        <span className="font-ui text-[var(--t-meta)] text-[var(--subtext-0)]">{loadingLabel}</span>
       </div>
     );
   }
@@ -91,13 +91,13 @@ export function QueryState({
     return (
       <div
         className={cn(
-          "rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8 text-center",
+          "rounded-[var(--r-plane)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8 text-center",
           className,
         )}
       >
-        <p className="font-ui text-[13px] font-semibold text-[var(--text)]">{emptyTitle}</p>
+        <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{emptyTitle}</p>
         {emptyDescription ? (
-          <p className="mx-auto mt-1 max-w-[440px] font-ui text-[12px] leading-5 text-[var(--subtext-0)]">
+          <p className="mx-auto mt-1 max-w-[440px] font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
             {emptyDescription}
           </p>
         ) : null}

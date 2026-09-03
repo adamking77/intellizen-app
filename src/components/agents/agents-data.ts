@@ -1,11 +1,12 @@
 // Reading and writing agents through their doors: Hermes profiles over the
 // gateway (`profiles.*`) and REST (delete), ACP entries through the registry.
 
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 import { deleteAcpAgent, listAcpAgents, saveAcpAgent, type AcpAgent } from "@/engine/acp-registry";
 import { request, type GatewayClientLike } from "@/engine/contract";
 import { hermesRest } from "@/engine/rest";
+import { levelOf } from "@/voice/dictation";
 
 import {
   acpFromAgent,
@@ -85,10 +86,47 @@ export async function saveVoice(profile: string, service: VoiceService, voiceId:
   });
 }
 
-/** Say one line in this voice. The extra params are for the extended
- *  `voice_speak`; the current one ignores them and speaks through MiniMax. */
-export function previewVoice(text: string, service: VoiceService | undefined, voiceId: string | undefined): Promise<void> {
-  return invoke<void>("voice_speak", { text, voice: voiceId || undefined, service, apiKey: undefined });
+/** Say one line in this voice and expose its measured playback amplitude so
+ *  the editor's avatar moves with the sound, exactly like chat. */
+export async function previewVoice(
+  text: string,
+  _service: VoiceService | undefined,
+  voiceId: string | undefined,
+  onLevel?: (level: number) => void,
+): Promise<void> {
+  const path = await invoke<string>("voice_prepare", { text, voice: voiceId || null, model: null });
+  if (!path) return;
+  const element = new Audio(convertFileSrc(path));
+  let frameId = 0;
+  let context: AudioContext | undefined;
+  try {
+    context = new AudioContext();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    context.createMediaElementSource(element).connect(analyser);
+    analyser.connect(context.destination);
+    const samples = new Float32Array(analyser.fftSize);
+    const watch = () => {
+      analyser.getFloatTimeDomainData(samples);
+      onLevel?.(levelOf(samples));
+      frameId = window.requestAnimationFrame(watch);
+    };
+    frameId = window.requestAnimationFrame(watch);
+  } catch {
+    // Speaking still works when Web Audio is unavailable; only the measured
+    // avatar response is omitted.
+  }
+  try {
+    await new Promise<void>((resolve) => {
+      element.onended = () => resolve();
+      element.onerror = () => resolve();
+      void element.play().catch(() => resolve());
+    });
+  } finally {
+    window.cancelAnimationFrame(frameId);
+    void context?.close();
+    onLevel?.(0);
+  }
 }
 
 /** The profile's picture as a data URL, or null when it has none. */

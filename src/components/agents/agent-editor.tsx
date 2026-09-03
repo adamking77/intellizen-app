@@ -12,17 +12,17 @@ import { errorMessage } from "@/lib/toast";
 import { flavorById, loadTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-import { changed, ENGINES, isHermes, validProfileName, VOICE_SERVICES, type Agent, type AgentEngine, type VoiceService } from "./agent-model";
+import { changed, ENGINES, isHermes, validProfileName, VOICE_SERVICES, type Agent, type AgentEngine, type AvatarStyle, type VoiceService } from "./agent-model";
 import { previewVoice } from "./agents-data";
-import { Avatar } from "./avatar";
+import { Avatar, BLOB_KINDS } from "./avatar";
 
 function voiceLabel(service: VoiceService | undefined): string {
   return VOICE_SERVICES.find((s) => s.id === service)?.label ?? "the voice service";
 }
 
-const CAPS = "font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]";
+const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
 const FIELD =
-  "w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[13px] text-[var(--text)] " +
+  "w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
   "placeholder:text-[var(--overlay-0)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-border)]";
 const PILL = "pill";
 
@@ -60,6 +60,7 @@ export function AgentEditor({
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [previewLevel, setPreviewLevel] = useState(0);
   const file = useRef<HTMLInputElement>(null);
 
   // The detail read lands after mount; take it once, without clobbering
@@ -130,18 +131,59 @@ export function AgentEditor({
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-[120] bg-[color-mix(in_srgb,var(--crust)_42%,transparent)] backdrop-blur-[7px]" />
-        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center">
+        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
           <Dialog.Popup
             aria-label={creating ? "New agent" : "Edit agent"}
-            className="flex max-h-[86%] w-[588px] flex-col overflow-y-auto rounded-xl bg-[var(--raised)] outline-none shadow-[0_40px_120px_color-mix(in_srgb,var(--crust)_55%,transparent)]"
+            className="flex max-h-[calc(100dvh-24px)] w-[min(588px,calc(100vw-24px))] flex-col overflow-y-auto rounded-[var(--r-plane)] bg-[var(--raised)] outline-none shadow-[var(--shadow-elevated)]"
           >
-            <div className="flex items-start gap-[18px] px-[22px] pt-5">
+            <div className="flex flex-col items-start gap-[18px] px-4 pt-5 sm:flex-row sm:px-[22px]">
               {/* Identity column: things the agent is. */}
-              <div className="flex w-[168px] shrink-0 flex-col items-center gap-2.5">
-                <Avatar agent={draft} size={76} image={image} />
+              <div className="flex w-full shrink-0 flex-col items-center gap-2.5 sm:w-[168px]">
+                <Avatar agent={draft} size={76} image={image} speaking={previewing ? previewLevel : undefined} />
+
+                <div className="flex gap-[3px] rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-[3px]">
+                  {(["sphere", "blob"] as AvatarStyle[]).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      className={PILL}
+                      aria-selected={draft.avatarStyle === style}
+                      onClick={() => set({ avatarStyle: style, avatarKind: style === "blob" ? draft.avatarKind : undefined })}
+                    >
+                      {style === "sphere" ? "Sphere" : "Blob"}
+                    </button>
+                  ))}
+                </div>
+
+                {draft.avatarStyle === "blob" ? (
+                  <div className="grid grid-cols-4 gap-1" aria-label="Blob silhouette">
+                    <button
+                      type="button"
+                      title="Auto — the name decides"
+                      aria-pressed={!draft.avatarKind}
+                      onClick={() => set({ avatarKind: undefined })}
+                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] aria-pressed:bg-[var(--selected)]"
+                    >
+                      Auto
+                    </button>
+                    {BLOB_KINDS.map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        title={kind}
+                        aria-label={`${kind} blob`}
+                        aria-pressed={draft.avatarKind === kind}
+                        onClick={() => set({ avatarKind: kind })}
+                        className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent aria-pressed:bg-[var(--selected)]"
+                      >
+                        <Avatar agent={{ ...draft, avatarStyle: "blob", avatarKind: kind }} size={26} animate={false} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
 
                 {hermes && !creating ? (
-                  <div className="flex gap-[3px] rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-[3px]">
+                  <div className="flex gap-[3px] rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-[3px]">
                     <button type="button" className={PILL} style={{ padding: "4px 12px", fontSize: 11 }} onClick={() => file.current?.click()}>
                       {image ? "Replace picture" : "Picture"}
                     </button>
@@ -159,7 +201,7 @@ export function AgentEditor({
                     type="button"
                     title="Auto — the name decides"
                     onClick={() => set({ avatarColor: undefined })}
-                    className="h-5 w-5 rounded-full bg-[var(--mantle)] font-ui text-[10px] text-[var(--text-muted)]"
+                    className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[var(--t-count)] text-[var(--text-muted)]"
                     style={{ boxShadow: !draft.avatarColor ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined }}
                   >
                     A
@@ -172,7 +214,7 @@ export function AgentEditor({
                       aria-label={a.name}
                       aria-pressed={draft.avatarColor === a.hex}
                       onClick={() => set({ avatarColor: a.hex })}
-                      className="h-5 w-5 rounded-full"
+                      className="h-5 w-5 rounded-[var(--r-pill)]"
                       style={{
                         background: a.hex,
                         boxShadow: draft.avatarColor === a.hex ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined,
@@ -180,8 +222,8 @@ export function AgentEditor({
                     />
                   ))}
                 </div>
-                <span className="text-center font-ui text-[12px] leading-[1.4] text-[var(--text-muted)]">
-                  {image ? "A picture." : draft.avatarColor ? "Pinned." : "Drawn from the name."}
+                <span className="text-center font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
+                  {image ? "Picture override." : draft.avatarKind || draft.avatarColor ? "Pinned." : "Drawn from the name."}
                 </span>
 
                 {/* Voice, at the foot of the identity column: something the
@@ -204,7 +246,7 @@ export function AgentEditor({
                     ))}
                   </select>
                   <input
-                    className={cn(FIELD, "font-mono text-[12px]")}
+                    className={cn(FIELD, "font-mono text-[var(--t-meta)]")}
                     value={draft.voiceId ?? ""}
                     placeholder="Voice id"
                     aria-label="Voice id"
@@ -223,14 +265,14 @@ export function AgentEditor({
                       onClick={() => {
                         setPreviewing(true);
                         setError(null);
-                        previewVoice(`Hello, I am ${name || "your agent"}.`, draft.voiceService, draft.voiceId)
+                        previewVoice(`Hello, I am ${name || "your agent"}.`, draft.voiceService, draft.voiceId, setPreviewLevel)
                           .catch((e) => setError(errorMessage(e)))
                           .finally(() => setPreviewing(false));
                       }}
                     >
                       {previewing ? "Speaking…" : "Preview"}
                     </button>
-                    <span className="font-ui text-[12px] leading-[1.4] text-[var(--text-muted)]">
+                    <span className="font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
                       {draft.voiceId ? `From ${voiceLabel(draft.voiceService)}.` : "No voice yet."}
                     </span>
                   </div>
@@ -257,7 +299,7 @@ export function AgentEditor({
                   onChange={(e) => set({ name: e.target.value, displayName: hermes ? draft.displayName : e.target.value })}
                 />
                 {hermes && creating && name && !validProfileName(name) ? (
-                  <span className="font-ui text-[12px] text-[var(--wait)]">A profile name is a lowercase slug: letters, digits, - and _.</span>
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--wait)]">A profile name is a lowercase slug: letters, digits, - and _.</span>
                 ) : null}
 
                 <div className="flex flex-col gap-1">
@@ -288,7 +330,7 @@ export function AgentEditor({
                       <div className={cn(FIELD, "px-[10px] py-2 text-[var(--text-muted)]")}>Reading…</div>
                     ) : (
                       <input
-                        className={cn(FIELD, "px-[10px] py-2 font-mono text-[12px]")}
+                        className={cn(FIELD, "px-[10px] py-2 font-mono text-[var(--t-meta)]")}
                         value={draft.model}
                         placeholder={hermes ? "model id" : "model id (optional)"}
                         onChange={(e) => set({ model: e.target.value })}
@@ -300,19 +342,19 @@ export function AgentEditor({
                   <div className="flex flex-col gap-1">
                     <span className={CAPS}>Provider</span>
                     <input
-                      className={cn(FIELD, "px-[10px] py-2 font-mono text-[12px]")}
+                      className={cn(FIELD, "px-[10px] py-2 font-mono text-[var(--t-meta)]")}
                       value={draft.provider}
                       placeholder={creating ? "inherits the launch profile's" : "provider id"}
                       onChange={(e) => set({ provider: e.target.value })}
                     />
-                    <span className="font-ui text-[12px] leading-[1.4] text-[var(--text-muted)]">
+                    <span className="font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
                       Provider and model are pinned together, or not at all.
                     </span>
                   </div>
                 ) : null}
 
                 {detailError ? (
-                  <div className="rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[12px] text-[var(--bad)]">
+                  <div className="rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
                     Hermes did not describe this profile — {detailError}
                   </div>
                 ) : null}
@@ -323,9 +365,9 @@ export function AgentEditor({
               <div className="flex flex-col gap-[7px]">
                 <div className="flex items-baseline gap-2">
                   <span className={CAPS}>Identity</span>
-                  <span className="font-ui text-[12px] text-[var(--text-muted)]">voice, judgement, what it will not do</span>
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">voice, judgement, what it will not do</span>
                   <div className="grow" />
-                  <span className="font-mono text-[11px] text-[var(--text-muted)]">SOUL.md</span>
+                  <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">SOUL.md</span>
                 </div>
                 <textarea
                   className={cn(FIELD, "min-h-0 resize-y px-[11px] py-2.5 leading-[1.55]")}
@@ -334,7 +376,7 @@ export function AgentEditor({
                   disabled={loadingDetail}
                   onChange={(e) => set({ identity: e.target.value })}
                 />
-                <span className="font-ui text-[12px] text-[var(--text-muted)]">
+                <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
                   {hermes ? (
                     <>
                       Saves to the profile's own <span className="font-mono">SOUL.md</span> through the gateway.
@@ -349,7 +391,7 @@ export function AgentEditor({
                 <div className="flex items-baseline gap-2">
                   <span className={CAPS}>Context</span>
                   <div className="grow" />
-                  <span className="font-ui text-[12px] text-[var(--text-muted)]">{inherited ? "inheriting the default" : "overrides the default"}</span>
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{inherited ? "inheriting the default" : "overrides the default"}</span>
                   {!inherited ? (
                     <button type="button" className={PILL} style={{ padding: "2px 9px", fontSize: 11 }} onClick={() => set({ context: [] })}>
                       Reset
@@ -359,15 +401,15 @@ export function AgentEditor({
                 <div className="flex flex-col gap-px">
                   {context.map((path) => (
                     <div key={path} className="flex items-center gap-[9px] rounded-[var(--r-row)] bg-[var(--input)] px-[10px] py-2">
-                      <span className="grow truncate font-mono text-[12px] text-[var(--text)]">{path}</span>
-                      <span className="rounded-full bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-px font-ui text-[11px] text-[var(--subtext-0)]">read</span>
+                      <span className="grow truncate font-mono text-[var(--t-meta)] text-[var(--text)]">{path}</span>
+                      <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--subtext-0)]">read</span>
                       <button type="button" className={PILL} style={{ padding: "2px 7px" }} title={`Remove ${path}`} onClick={() => set({ context: context.filter((p) => p !== path) })}>
                         <X size={12} strokeWidth={1.9} aria-hidden />
                       </button>
                     </div>
                   ))}
                   {context.length === 0 ? (
-                    <span className="px-0.5 py-2 font-ui text-[12px] text-[var(--text-muted)]">
+                    <span className="px-0.5 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
                       No folders — this agent sees only what it is told in the prompt.
                     </span>
                   ) : null}
@@ -382,14 +424,14 @@ export function AgentEditor({
 
             {confirm ? (
               <div className="mx-[22px] mt-4 flex items-center gap-3 rounded-[var(--r-row)] border border-[var(--wait)] bg-[color-mix(in_srgb,var(--wait)_11%,transparent)] px-[10px] py-2">
-                <span className="grow font-ui text-[12px] text-[var(--wait)]">{confirm}</span>
+                <span className="grow font-ui text-[var(--t-meta)] text-[var(--wait)]">{confirm}</span>
                 <button type="button" className={PILL} disabled={busy} onClick={() => void save(true)}>
                   Use it anyway
                 </button>
               </div>
             ) : null}
             {error ? (
-              <div className="mx-[22px] mt-4 rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[12px] text-[var(--bad)]">
+              <div className="mx-[22px] mt-4 rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
                 {error}
               </div>
             ) : null}
@@ -398,7 +440,7 @@ export function AgentEditor({
               {!creating ? (
                 <button
                   type="button"
-                  className="rounded-full px-3.5 py-1.5 font-ui text-[12px] text-[var(--bad)] hover:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)]"
+                  className="rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--bad)] hover:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)]"
                   disabled={busy}
                   onClick={() => onDelete(draft)}
                 >
@@ -406,7 +448,7 @@ export function AgentEditor({
                 </button>
               ) : null}
               <div className="grow" />
-              {creating && !name ? <span className="font-ui text-[12px] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
+              {creating && !name ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
               <button type="button" className={PILL} onClick={onClose} disabled={busy}>
                 Cancel
               </button>
@@ -414,7 +456,7 @@ export function AgentEditor({
                 type="button"
                 disabled={!nameOk || !dirty || busy || loadingDetail}
                 className={cn(
-                  "rounded-full px-3.5 py-1.5 font-ui text-[12px] transition-colors disabled:opacity-45",
+                  "rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] transition-colors disabled:opacity-45",
                   dirty ? "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]" : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-[var(--text)]",
                 )}
                 onClick={() => void save(false)}

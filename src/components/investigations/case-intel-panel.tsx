@@ -49,11 +49,11 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
         onClick={() => setExpanded((open) => !open)}
         className="flex w-full items-center justify-between px-5 py-3 transition-colors hover:bg-[var(--surface-wash)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
       >
-        <span className="flex items-center gap-1.5 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <span className="flex items-center gap-1.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           <Fingerprint className="h-3.5 w-3.5" />
           Intelligence
         </span>
-        <span className="font-mono text-[10px] text-[var(--subtext-0)]">
+        <span className="font-mono text-[var(--t-count)] text-[var(--subtext-0)]">
           {entities.length} entities · {claims.length} claims
         </span>
       </button>
@@ -61,9 +61,9 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
       {expanded ? (
         <div className="space-y-3 px-5 pb-4">
           {loading ? (
-            <p className="font-ui text-[12px] text-[var(--overlay-1)]">Loading case intelligence…</p>
+            <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading case intelligence…</p>
           ) : loadError ? (
-            <p className="rounded-md border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[12px] text-[var(--danger)]">
+            <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
               Case intelligence could not be loaded.
             </p>
           ) : (
@@ -74,10 +74,10 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                     <span
                       key={entity.id}
                       title={entity.summary ?? entity.entity_type}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2 py-0.5 font-ui text-[11px] text-[var(--subtext-0)]"
+                      className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--border)] px-2 py-0.5 font-ui text-[var(--t-section)] text-[var(--subtext-0)]"
                     >
                       <span
-                        className="h-1.5 w-1.5 rounded-full"
+                        className="h-1.5 w-1.5 rounded-[var(--r-pill)]"
                         style={{ backgroundColor: ENTITY_TONE[entity.entity_type] }}
                       />
                       {entity.name}
@@ -85,7 +85,7 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                   ))}
                 </div>
               ) : (
-                <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
+                <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                   No canonical entities resolved for this case yet. Collation (Phase 3) populates them.
                 </p>
               )}
@@ -93,11 +93,11 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
               {claims.length > 0 ? (
                 <ul className="space-y-1">
                   {claims.slice(0, 5).map((claim) => (
-                    <li key={claim.id} className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5">
+                    <li key={claim.id} className="rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "rounded border px-1 font-mono text-[10px]",
+                            "rounded border px-1 font-mono text-[var(--t-count)]",
                             claim.source_reliability && claim.info_credibility
                               ? "border-[var(--accent-border)] text-[var(--accent)]"
                               : "border-[var(--border)] text-[var(--overlay-1)]",
@@ -107,9 +107,9 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                           {claim.source_reliability ?? "?"}
                           {claim.info_credibility ?? "?"}
                         </span>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">{claim.claim_origin ?? "ungraded"}</span>
+                        <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">{claim.claim_origin ?? "ungraded"}</span>
                       </div>
-                      <p className="mt-1 line-clamp-2 font-ui text-[11px] leading-snug text-[var(--subtext-0)]">{claim.claim}</p>
+                      <p className="mt-1 line-clamp-2 font-ui text-[var(--t-section)] leading-snug text-[var(--subtext-0)]">{claim.claim}</p>
                     </li>
                   ))}
                 </ul>
@@ -133,9 +133,9 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                 dispatchPrompt: `Begin Phase 1 (Operational Planning) of the 6-phase OSINT investigation for case ${caseId} ("${subject}") per SOP document 1676. Produce the operational plan with PLAN justification (Proportionality, Legality, Accountability, Necessity), subject definition, scope, seed entities, and initial hypotheses. Do NOT begin collection until the plan gate passes. Requested by ${OPERATOR_ACTOR}.`,
               })
             }
-            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 font-ui text-[var(--t-meta)] font-medium text-[var(--accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
-            {isStartingWorkflow ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {isStartingWorkflow ? <RefreshCw className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             Start 6-phase OSINT investigation
           </button>
         </div>

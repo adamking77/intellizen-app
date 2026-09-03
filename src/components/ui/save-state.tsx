@@ -21,7 +21,7 @@ export function SaveState({ state, onRetry, className }: SaveStateProps) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-5 items-center gap-2 font-mono text-[10px]",
+        "inline-flex min-h-5 items-center gap-2 font-mono text-[var(--t-count)]",
         state === "saved"
           ? "text-[var(--success)]"
           : state === "error"
@@ -36,7 +36,7 @@ export function SaveState({ state, onRetry, className }: SaveStateProps) {
       {state === "error" && onRetry ? (
         <button
           type="button"
-          className="rounded-full px-2 py-0.5 font-ui font-medium text-[var(--accent)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+          className="rounded-[var(--r-pill)] px-2 py-0.5 font-ui font-medium text-[var(--accent)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
           onClick={onRetry}
         >
           Retry

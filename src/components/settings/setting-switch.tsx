@@ -20,14 +20,14 @@ export function SettingSwitch({
       disabled={disabled}
       onClick={onToggle}
       className={cn(
-        "relative h-[20px] w-[34px] shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)] disabled:opacity-40",
+        "relative h-[20px] w-[34px] shrink-0 rounded-[var(--r-pill)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)] disabled:opacity-40",
         on ? "bg-[var(--accent)]" : "bg-[var(--line-strong)]",
       )}
     >
       <span
         aria-hidden
         className={cn(
-          "absolute top-[3px] h-[14px] w-[14px] rounded-full bg-[var(--crust)] transition-[left]",
+          "absolute top-[3px] h-[14px] w-[14px] rounded-[var(--r-pill)] bg-[var(--crust)] transition-[left]",
           on ? "left-[17px]" : "left-[3px]",
         )}
       />

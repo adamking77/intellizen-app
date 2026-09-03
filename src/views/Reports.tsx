@@ -85,8 +85,8 @@ function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabas
 
 function EditorFallback() {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-wash)]">
-      <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+    <div className="flex min-h-[280px] items-center justify-center rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--surface-wash)]">
+      <Loader2 className="h-4 w-4 text-[var(--accent)]" />
     </div>
   );
 }
@@ -420,13 +420,13 @@ export function ReportsView() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <header className={cn(
-        "shrink-0 border-b border-[var(--border)]",
+        "shrink-0",
         isCramped ? "flex flex-col items-stretch gap-3 px-4 py-3" : "flex h-14 items-center justify-between px-5",
       )}>
         <div className="flex min-w-0 items-center gap-3">
           <FileText className="h-4 w-4 text-[var(--accent)]" />
           <div className="min-w-0">
-            <span className="text-label">Docs</span>
+            <span className="t-title text-[var(--text)]">Docs</span>
             <p className="truncate text-meta">
               {realDocumentCount} document{realDocumentCount === 1 ? "" : "s"} · {projectParam ? "one project" : "Supabase rows linked to portable markdown"}
             </p>
@@ -479,13 +479,13 @@ export function ReportsView() {
               <ChevronDown className="h-3 w-3" />
             </Button>
             {showCreateMenu ? (
-              <div className="absolute right-0 top-10 z-40 w-72 rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]">
+              <div className="absolute right-0 top-10 z-40 w-72 rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]">
                 <p className="px-2 pb-1 pt-1 text-label">From a template</p>
                 {templates.length > 0 ? templates.map((template) => (
                   <button
                     key={template.id}
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left font-ui text-[12px] text-[var(--text)] hover:bg-[var(--surface-wash)]"
+                    className="flex w-full items-center gap-2 rounded-[var(--r-plane)] px-2 py-2 text-left font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--surface-wash)]"
                     onClick={() => createMutation.mutate(template)}
                     disabled={createMutation.isPending}
                   >
@@ -498,7 +498,7 @@ export function ReportsView() {
                 <div className="my-1 border-t border-[var(--border-subtle)]" />
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left font-ui text-[12px] text-[var(--text)] hover:bg-[var(--surface-wash)]"
+                  className="flex w-full items-center gap-2 rounded-[var(--r-plane)] px-2 py-2 text-left font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--surface-wash)]"
                   onClick={() => createMutation.mutate(null)}
                   disabled={createMutation.isPending}
                 >
@@ -543,14 +543,14 @@ export function ReportsView() {
                       type="button"
                       onClick={() => setSelectedRecordId(null)}
                       aria-label="Back to document list"
-                      className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border)] text-[var(--subtext-0)] transition-colors hover:text-[var(--text)]"
+                      className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--r-pill)] border border-[var(--border)] text-[var(--subtext-0)] transition-colors hover:text-[var(--text)]"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
                     </button>
                   ) : null}
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
-                      <h1 className="truncate font-ui text-[17px] font-semibold text-[var(--text)]">{selectedTitle}</h1>
+                      <h1 className="truncate font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{selectedTitle}</h1>
                       {selectedRecord._isTemplate ? <span className="shrink-0 text-label">Template</span> : null}
                     </div>
                     <DocumentProvenance record={selectedRecord} />
@@ -565,7 +565,7 @@ export function ReportsView() {
                       </Button>
                     ) : (
                       <span className={cn(
-                        "px-2 font-mono text-[10px]",
+                        "px-2 font-mono text-[var(--t-count)]",
                         saveStatus === "saved" ? "text-[var(--success)]" : "text-[var(--overlay-1)]",
                       )}>
                         {saveStatus === "dirty" ? "Editing…" : saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
@@ -722,8 +722,8 @@ function DocsTable({
       {groups.map((group) => (
         <section key={group.type}>
           <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--base)] px-4 py-2">
-            <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</span>
-            <span className="rounded-full border border-[var(--border)] px-1.5 font-mono text-[10px] text-[var(--overlay-1)]">{group.items.length}</span>
+            <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</span>
+            <span className="rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{group.items.length}</span>
           </header>
           {group.items.map((record) => (
             <DocumentRow key={record.id} record={record} selected={selectedRecordId === record.id} onSelect={onSelect} />
@@ -761,7 +761,7 @@ function DocumentRow({
       )}
     >
       <span className="min-w-0">
-        <span className="block truncate font-ui text-[13px] font-medium text-[var(--text)]">{documentDisplayTitle(record)}</span>
+        <span className="block truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{documentDisplayTitle(record)}</span>
         <span className="mt-1 block truncate text-meta">
           {author ? `${author} · ` : ""}{attachment || taxonomyEntityLabel({ entity })}{updated ? ` · ${updated}` : ""}
         </span>
@@ -769,7 +769,7 @@ function DocumentRow({
       <span className="flex shrink-0 items-center gap-1.5 self-center">
         {freshness ? (
           <span className={cn(
-            "rounded-full px-2 py-0.5 font-ui text-[10px] font-medium",
+            "rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium",
             freshness === "new" ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "bg-[var(--surface-wash)] text-[var(--subtext-0)]",
           )}>
             {freshness === "new" ? "New" : "Changed"}

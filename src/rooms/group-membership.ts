@@ -58,6 +58,9 @@ export function memberFromProfile(profile: HermesProfile): GroupMember {
     ...(profile.displayName ? { display_name: profile.displayName } : {}),
     model: profile.model,
     provider: profile.provider,
+    avatar_style: profile.avatarStyle,
+    avatar_kind: profile.avatarKind,
+    avatar_color: profile.avatarColor,
   };
 }
 
@@ -71,6 +74,9 @@ export function durableGroupChatMembers(members: GroupMember[]): GroupMember[] {
     ...(member.display_name ? { display_name: member.display_name } : {}),
     ...(member.model ? { model: member.model } : {}),
     ...(member.provider ? { provider: member.provider } : {}),
+    ...(member.avatar_style ? { avatar_style: member.avatar_style } : {}),
+    ...(member.avatar_kind ? { avatar_kind: member.avatar_kind } : {}),
+    ...(member.avatar_color ? { avatar_color: member.avatar_color } : {}),
   }));
 }
 

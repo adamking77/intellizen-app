@@ -19,28 +19,28 @@ export type RunState =
 export function RunStatus({ run, agent }: { run: RunState; agent: string }) {
   if (run.kind === "idle") return null;
   const dot = (tone: string) => (
-    <span aria-hidden className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: tone }} />
+    <span aria-hidden className="inline-block h-1.5 w-1.5 shrink-0 rounded-[var(--r-pill)]" style={{ background: tone }} />
   );
   return (
     <div className="flex shrink-0 items-center gap-1.5 px-0.5 pb-1.5" data-run-state={run.kind}>
       {run.kind === "opening" ? (
         <>
           {dot("var(--text-muted)")}
-          <span className="truncate font-ui text-[12px] text-[var(--text-muted)]">Opening a session with {agent}…</span>
+          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Opening a session with {agent}…</span>
         </>
       ) : run.kind === "working" ? (
         <>
           {dot("var(--text-muted)")}
-          <span className="truncate font-ui text-[12px] text-[var(--text-muted)]">
+          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
             {run.label ? `${agent} · ${run.label}` : `${agent} is working…`}
           </span>
         </>
       ) : run.kind === "waiting" ? (
         <>
-          <span className="rounded-full bg-[color-mix(in_srgb,var(--wait)_16%,transparent)] px-2 py-px font-ui text-[11px] text-[var(--wait)] whitespace-nowrap">
+          <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--wait)_16%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--wait)] whitespace-nowrap">
             waiting on you
           </span>
-          <span className="truncate font-ui text-[12px] text-[var(--text-muted)]">{agent} needs a decision above.</span>
+          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{agent} needs a decision above.</span>
         </>
       ) : run.kind === "done" ? (
         <>
@@ -49,14 +49,14 @@ export function RunStatus({ run, agent }: { run: RunState; agent: string }) {
           ) : (
             <Check className="h-3 w-3 shrink-0 text-[var(--ok)]" strokeWidth={1.5} aria-hidden />
           )}
-          <span className="truncate font-ui text-[12px] text-[var(--text-muted)]">
+          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
             {run.outcome.status === "interrupted" ? "Stopped" : `Done in ${doneIn(run.outcome.tookMs)}`}
           </span>
         </>
       ) : (
         <>
           {dot("var(--bad)")}
-          <span className="truncate font-ui text-[12px] text-[var(--text-muted)]">Failed · {run.reason}</span>
+          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Failed · {run.reason}</span>
         </>
       )}
     </div>
@@ -122,9 +122,9 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && draft.trim().length > 0;
   return (
-    <div className="flex shrink-0 flex-col gap-2 rounded-lg border-t border-[var(--edge)] bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 rounded-[var(--r-plane)] border-t border-[var(--edge)] bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
-        <p role="status" className="font-ui text-[11px] leading-snug text-[var(--bad)]">
+        <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
         </p>
       ) : null}
@@ -138,7 +138,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         disabled={!ready}
         readOnly={dictating}
         aria-label={agent ? `Message ${agent}` : "Message"}
-        className="w-full resize-none bg-transparent font-ui text-[13px] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
       />
       <div className="flex items-center gap-2">
         {onEject ? (
@@ -147,13 +147,13 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             onClick={onEject}
             aria-label="Eject agent panel"
             title="Eject to its own window"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
             <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
         ) : null}
         {dictate}
-        {permission ? <span className="font-ui text-[12px] text-[var(--text-muted)]">{permission}</span> : null}
+        {permission ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{permission}</span> : null}
         <div className="flex-1" />
         {/* The send slot: the conversation toggle while there is nothing to
             send, Send once there is. A composer with text has an obvious next
@@ -166,7 +166,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             onClick={onStop}
             aria-label="Stop this turn"
             title="Stop"
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-full border border-[var(--line-strong)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] border border-[var(--line-strong)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
           >
             <Square className="h-[11px] w-[11px]" strokeWidth={2.2} aria-hidden />
           </button>
@@ -178,7 +178,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             aria-label="Send"
             title="Send"
             className={cn(
-              "inline-flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity",
+              "inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity",
               "disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
             )}
           >

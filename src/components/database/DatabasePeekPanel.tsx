@@ -535,7 +535,7 @@ export function DatabasePeekPanel({
               <div className="db-record-section-head">
                 <div className="db-record-section-title">Summary</div>
                 <button
-                  className="db-btn db-record-editor-btn db-record-key-config-btn text-[11px] opacity-65 hover:opacity-100"
+                  className="db-btn db-record-editor-btn db-record-key-config-btn text-[var(--t-section)] opacity-65 hover:opacity-100"
                   onClick={() => {
                     if (headerFieldsLocked) return;
                     setShowHeaderPicker((v) => !v);
@@ -567,7 +567,7 @@ export function DatabasePeekPanel({
                   className="db-dropdown-panel db-record-header-fields-panel absolute right-6 top-9 z-20 p-2 min-w-[240px]"
                 >
                   <div className="db-record-header-fields-title text-xs font-medium mb-1">Pin properties to header</div>
-                  <div className="db-record-header-fields-hint text-[11px] mb-2">Choose up to 5 and drag to reorder.</div>
+                  <div className="db-record-header-fields-hint text-[var(--t-section)] mb-2">Choose up to 5 and drag to reorder.</div>
                   <div className="db-record-header-fields-list max-h-[220px] overflow-y-auto space-y-0.5">
                     {headerFieldOrder.map((fieldId) => {
                       const field = bodyFields.find((candidate) => candidate.id === fieldId);
@@ -660,7 +660,7 @@ export function DatabasePeekPanel({
                   disabled={workflowsQuery.isFetching}
                   title="Refresh workflows"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${workflowsQuery.isFetching ? "animate-spin" : ""}`} />
+                  <RefreshCw className="h-3.5 w-3.5" />
                 </button>
               </div>
               <div className="db-record-workflow-launcher">
@@ -687,7 +687,7 @@ export function DatabasePeekPanel({
                   disabled={!activeWorkflowId || isStartingWorkflow || workflowsQuery.isLoading}
                 >
                   {isStartingWorkflow ? (
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <RefreshCw className="h-3.5 w-3.5" />
                   ) : (
                     <Play className="h-3.5 w-3.5" />
                   )}
@@ -1041,7 +1041,7 @@ function WorkflowRunOperationsSection({
           </div>
           {pendingAction ? (
             <div className="mt-2 space-y-1.5">
-              <label className="font-ui text-[10.5px] font-medium text-[var(--subtext-0)]">
+              <label className="font-ui text-[var(--t-count)] font-medium text-[var(--subtext-0)]">
                 {pendingAction === "approve" ? "Decision note (required)" : pendingAction === "block" ? "Blocker reason (required)" : "Decision needed (required)"}
               </label>
               <textarea

@@ -298,9 +298,9 @@ export function HomeView() {
   if (error || pinsError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="border-b border-[var(--border)] bg-[var(--base)] px-3 py-4 sm:px-6">
-          <span className="text-label">Home unavailable</span>
-          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
+        <div className="bg-[var(--base)] px-3 py-4 sm:px-6">
+          <span className="t-title text-[var(--text)]">Home unavailable</span>
+          <p className="mt-2 font-ui text-[var(--t-ui)] text-[var(--danger)]">
             {error instanceof Error
               ? error.message
               : pinsError instanceof Error
@@ -314,11 +314,11 @@ export function HomeView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <div className="shrink-0 border-b border-[var(--border)] bg-[var(--base)] px-3 py-4 sm:px-6">
+      <div className="shrink-0 bg-[var(--base)] px-3 py-4 sm:px-6">
         <div className="flex flex-col gap-2">
-          <span className="text-label">Home</span>
+          <span className="t-title text-[var(--text)]">Home</span>
           <p
-            className="font-ui text-[12px]"
+            className="font-ui text-[var(--t-meta)]"
             style={{ color: ROTATION_ACCENTS[rotation.week] }}
           >
             {rotation.week} week · {rotation.daysRemaining} days remaining
@@ -334,7 +334,7 @@ export function HomeView() {
               onClick={() => setWidgetPickerOpen((open) => !open)}
               aria-expanded={widgetPickerOpen}
               aria-haspopup="menu"
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-3 font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-pill)] bg-[var(--hover)] px-3 font-ui text-[var(--t-meta)] text-[var(--subtext-0)] transition-colors hover:bg-[var(--hover-strong)] hover:text-[var(--text)]"
             >
               <Plus className="h-3.5 w-3.5" />
               Add widget
@@ -342,21 +342,21 @@ export function HomeView() {
             {widgetPickerOpen ? (
               <div
                 role="menu"
-                className="absolute right-0 top-full z-40 mt-2 w-[300px] rounded-xl border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]"
+                className="absolute right-0 top-full z-40 mt-2 w-[min(300px,calc(100vw-24px))] rounded-[var(--r-plane)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]"
               >
                 <div className="mb-1 flex items-center justify-between px-2 py-1">
-                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Available widgets</span>
+                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Available widgets</span>
                   <button
                     type="button"
                     onClick={() => setWidgetPickerOpen(false)}
                     aria-label="Close widget picker"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 {widgetPresets.length === 0 ? (
-                  <p className="px-2 py-3 font-ui text-[11px] text-[var(--overlay-1)]">No database widgets are available in this scope.</p>
+                  <p className="px-2 py-3 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No database widgets are available in this scope.</p>
                 ) : widgetPresets.map((preset) => {
                   const pinned = isHomeWidgetPresetPinned(databasePins, preset);
                   return (
@@ -366,12 +366,12 @@ export function HomeView() {
                       role="menuitem"
                       disabled={pinned}
                       onClick={() => handleAddWidgetPreset(preset)}
-                      className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-wash)] disabled:opacity-50"
+                      className="block w-full rounded-[var(--r-plane)] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-wash)] disabled:opacity-50"
                     >
-                      <span className="block font-ui text-[12px] font-medium text-[var(--text)]">
+                      <span className="block font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">
                         {preset.label}{pinned ? " · Added" : ""}
                       </span>
-                      <span className="mt-0.5 block font-ui text-[10px] leading-4 text-[var(--overlay-1)]">{preset.description}</span>
+                      <span className="mt-0.5 block font-ui text-[var(--t-count)] leading-4 text-[var(--overlay-1)]">{preset.description}</span>
                     </button>
                   );
                 })}
@@ -382,8 +382,8 @@ export function HomeView() {
           </div>
           <PluginWidgetBoard />
           {isLoading || isLoadingPins ? (
-            <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[13px] text-[var(--overlay-1)]">
-              <Loader2 className="h-4 w-4 animate-spin" />
+            <div role="status" className="flex items-center gap-2 px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
+              <Loader2 className="h-4 w-4" />
               <span>Loading pinned views...</span>
             </div>
           ) : pinnedWidgets.length > 0 ? (
@@ -400,17 +400,17 @@ export function HomeView() {
               onUpdateWidgetMetadata={(widget, metadata) => handleUpdateWidgetMetadata(widget.pin.id, metadata)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--border)] py-16 text-center">
-              <p className="font-ui text-[14px] font-medium text-[var(--subtext-0)]">
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <p className="font-ui text-[var(--t-body)] font-medium text-[var(--subtext-0)]">
                 No pinned views
               </p>
-              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+              <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                 Open a database view and pin it to see it here.
               </p>
               <button
                 type="button"
                 onClick={() => navigate("/databases")}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--mantle)] px-3 py-1.5 font-ui text-[12px] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] px-3 py-1.5 font-ui text-[var(--t-meta)] text-[var(--subtext-0)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
               >
                 Open Databases
               </button>

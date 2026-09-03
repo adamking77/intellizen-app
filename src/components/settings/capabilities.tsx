@@ -78,7 +78,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
       />
 
       {capabilities.isPending && engineOpen ? (
-        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 animate-pulse rounded bg-[var(--line)] opacity-40" />)}</div>
+        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 rounded bg-[var(--line)] opacity-40" />)}</div>
       ) : null}
 
       {GROUPS.map((group) => {
@@ -87,9 +87,9 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
         return (
           <section key={group.id} className="pt-2">
             <div className="flex items-baseline gap-2 border-b border-[var(--hair)] pb-2">
-              <h2 className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</h2>
-              <span className="font-mono text-[10px] text-[var(--overlay-1)]">{rows.length}</span>
-              <span className="text-[11px] text-[var(--overlay-1)]">{group.description}</span>
+              <h2 className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</h2>
+              <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
+              <span className="text-[var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
             </div>
             {rows.map((row) => {
               const pending = toggle.isPending && toggle.variables?.id === row.id && toggle.variables.kind === row.kind;
@@ -102,8 +102,8 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
                     onToggle={() => toggle.mutate({ id: row.id, kind: row.kind, enabled: !row.enabled })}
                   />
                   <span className="w-52 shrink-0 truncate font-ui text-xs text-[var(--text)]">{row.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--subtext-0)]">{row.description || "—"}</span>
-                  <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[10px] text-[var(--overlay-1)]">{row.detail}</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--t-section)] text-[var(--subtext-0)]">{row.description || "—"}</span>
+                  <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
                 </div>
               );
             })}

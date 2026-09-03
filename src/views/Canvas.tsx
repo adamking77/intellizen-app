@@ -369,24 +369,24 @@ export function CanvasView() {
             onClick={handleCreateCanvas}
             disabled={isCreating}
             className={cn(
-              "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors",
+              "inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors",
               "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
               isCreating && "opacity-60",
             )}
             title="New canvas"
             aria-label="New canvas"
           >
-            {isCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FilePlus2 className="h-3.5 w-3.5" />}
+            {isCreating ? <Loader2 className="h-3.5 w-3.5" /> : <FilePlus2 className="h-3.5 w-3.5" />}
           </button>
         )}
       >
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loadingCanvases ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+                <Loader2 className="h-4 w-4 text-[var(--accent)]" />
               </div>
             ) : canvases.length === 0 ? (
-              <p className="px-2 py-2 text-[11px] text-[var(--overlay-1)]">No canvases yet.</p>
+              <p className="px-2 py-2 text-[var(--t-section)] text-[var(--overlay-1)]">No canvases yet.</p>
             ) : (
               <div className="space-y-0.5">
                 {canvases.map((canvas) => {
@@ -409,17 +409,17 @@ export function CanvasView() {
                         onClick={() => selectCanvas(canvas.id)}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <div className={cn("truncate text-[12px]", isActive ? "text-[var(--accent)]" : "text-[var(--subtext-1)]")}>
+                        <div className={cn("truncate text-[var(--t-meta)]", isActive ? "text-[var(--accent)]" : "text-[var(--subtext-1)]")}>
                           {canvas.name}
                         </div>
-                        <div className="mt-0.5 font-mono text-[10px] text-[var(--overlay-1)]">
+                        <div className="mt-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                           {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(canvas.updated_at))}
                         </div>
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleDeleteCanvas(canvas.id)}
-                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
+                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
                         title="Delete canvas"
                         aria-label={`Delete ${canvas.name}`}
                       >
@@ -440,7 +440,7 @@ export function CanvasView() {
           label="Expand canvas sidebar"
         />
 
-        <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--base)] px-4">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-3 bg-[var(--base)] px-4">
           <div className={cn("flex min-w-0 flex-1 items-center", !sidebarOpen && "pl-11")}>
             {selectedCanvas ? (
               <input
@@ -458,14 +458,14 @@ export function CanvasView() {
                     (event.target as HTMLInputElement).blur();
                   }
                 }}
-                className="min-w-0 flex-1 border-none bg-transparent p-0 text-[13px] text-[var(--subtext-1)] outline-none"
+                className="min-w-0 flex-1 border-none bg-transparent p-0 text-[var(--t-ui)] text-[var(--subtext-1)] outline-none"
               />
             ) : null}
           </div>
           {loadingCanvas ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--overlay-1)]" />
+            <Loader2 className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
           ) : currentSummary ? (
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}
             </span>
           ) : null}

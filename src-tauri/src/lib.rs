@@ -526,6 +526,7 @@ pub fn run() {
             proposals::proposal_reject_hunk,
             supabase_proxy::supabase_proxy_request,
             voice::voice_speak,
+            voice::voice_prepare,
             voice::voice_stop,
             voice::voice_transcribe,
             voice::voice_models,

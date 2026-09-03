@@ -192,14 +192,14 @@ function PinnedWidgetCard({
   return (
     <div
       className={cn(
-        "db-dashboard-widget group flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--base)]",
+        "db-dashboard-widget group flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--base)]",
         widthClass,
         heightClass,
       )}
       data-view-type={widget.kind === "database-view" ? widget.view.type : "genui"}
     >
       <div className="relative flex items-start gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
-        <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
+        <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-row)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
           <GripVertical className="h-3.5 w-3.5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -208,25 +208,25 @@ function PinnedWidgetCard({
               {sourceLabel}
             </div>
             {(effectiveView?.filter.length ?? 0) > 0 ? (
-              <span className="shrink-0 rounded-full border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--overlay-1)]">
+              <span className="shrink-0 rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                 {effectiveView?.filter.length} filter{effectiveView?.filter.length === 1 ? "" : "s"}
               </span>
             ) : null}
           </div>
-          <div className="mt-1 truncate font-ui text-[13px] font-medium leading-5 text-[var(--text)]">
+          <div className="mt-1 truncate font-ui text-[var(--t-ui)] font-medium leading-5 text-[var(--text)]">
             {title}
           </div>
           {widget.kind === "database-view" && widget.database.taxonomy?.entity_label ? (
-            <div className="mt-0.5 truncate font-ui text-[10px] text-[var(--overlay-1)]">
+            <div className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
               {widget.database.taxonomy.entity_label}
             </div>
           ) : null}
         </div>
-        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-[var(--base)] opacity-70 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-[var(--r-row)] bg-[var(--base)] opacity-70 transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:opacity-100 group-focus-within:opacity-100">
           {widget.kind === "genui" && widget.pin.widget.kind === "html" ? (
             <button
               type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               onClick={() => setRefreshKey((current) => current + 1)}
               aria-label="Refresh generated widget"
             >
@@ -236,7 +236,7 @@ function PinnedWidgetCard({
           {onOpen ? (
             <button
               type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               onClick={onOpen}
               aria-label="Open source view"
             >
@@ -245,7 +245,7 @@ function PinnedWidgetCard({
           ) : null}
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             onClick={beginEditing}
             aria-label="Edit widget"
           >
@@ -253,7 +253,7 @@ function PinnedWidgetCard({
           </button>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             onClick={onRemove}
             aria-label="Remove widget"
           >
@@ -263,22 +263,22 @@ function PinnedWidgetCard({
       </div>
       {editing ? (
         <div className="border-b border-[var(--border-subtle)] bg-[var(--mantle)] px-4 py-3">
-          <label className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          <label className="block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Title
             <input
               value={titleDraft}
               onChange={(event) => setTitleDraft(event.target.value)}
-              className="mt-1 h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] normal-case tracking-normal text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+              className="mt-1 h-8 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
             />
           </label>
           {widget.kind === "database-view" ? (
             <div className="mt-3 space-y-3">
-              <label className="block font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <label className="block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Group by
                 <select
                   value={groupByDraft}
                   onChange={(event) => setGroupByDraft(event.target.value)}
-                  className="mt-1 h-8 w-full rounded-md border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[12px] normal-case tracking-normal text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                  className="mt-1 h-8 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
                 >
                   <option value="">No grouping</option>
                   {widget.database.schema.map((field) => (
@@ -288,7 +288,7 @@ function PinnedWidgetCard({
               </label>
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Filters</span>
+                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Filters</span>
                   <button
                     type="button"
                     disabled={widget.database.schema.length === 0}
@@ -297,20 +297,20 @@ function PinnedWidgetCard({
                       if (!field) return;
                       setFilterDraft((current) => [...current, { fieldId: field.id, op: "contains", value: "" }]);
                     }}
-                    className="inline-flex items-center gap-1 rounded-full px-1.5 py-1 font-ui text-[10px] text-[var(--accent)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-1 font-ui text-[var(--t-count)] text-[var(--accent)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
                   >
                     <Plus className="h-3 w-3" />
                     Add filter
                   </button>
                 </div>
                 {filterDraft.length === 0 ? (
-                  <p className="mt-1 font-ui text-[11px] text-[var(--overlay-1)]">No filters applied.</p>
+                  <p className="mt-1 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No filters applied.</p>
                 ) : (
                   <div className="mt-1.5 space-y-2">
                     {filterDraft.map((filter, index) => {
                       const needsValue = !["is_empty", "is_not_empty", "is_today", "before_today"].includes(filter.op);
                       return (
-                        <div key={`${filter.fieldId}-${index}`} className="rounded-md border border-[var(--border)] bg-[var(--base)] p-2">
+                        <div key={`${filter.fieldId}-${index}`} className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] p-2">
                           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5">
                             <select
                               aria-label={`Filter ${index + 1} field`}
@@ -318,7 +318,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, fieldId: event.target.value } : item
                               ))}
-                              className="h-8 min-w-0 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[11px] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                              className="h-8 min-w-0 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
                             >
                               {widget.database.schema.map((field) => (
                                 <option key={field.id} value={field.id}>{field.name}</option>
@@ -330,7 +330,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, op: event.target.value } : item
                               ))}
-                              className="h-8 min-w-0 rounded-md border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[11px] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+                              className="h-8 min-w-0 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
                             >
                               {FILTER_OPERATORS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select>
@@ -338,7 +338,7 @@ function PinnedWidgetCard({
                               type="button"
                               onClick={() => setFilterDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                               aria-label={`Remove filter ${index + 1}`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--danger)]"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -351,7 +351,7 @@ function PinnedWidgetCard({
                                 itemIndex === index ? { ...item, value: event.target.value } : item
                               ))}
                               placeholder={filter.op === "within_last_days" ? "Number of days" : "Value"}
-                              className="mt-1.5 h-8 w-full rounded-md border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
+                              className="mt-1.5 h-8 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)] focus:border-[var(--accent-border)]"
                             />
                           ) : null}
                         </div>
@@ -366,14 +366,14 @@ function PinnedWidgetCard({
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="rounded-full border border-[var(--border)] px-2.5 py-1 font-ui text-[11px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+              className="rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--subtext-0)] hover:text-[var(--text)]"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={saveMetadata}
-              className="rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[11px] text-[var(--accent)]"
+              className="rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent)]"
             >
               Save
             </button>

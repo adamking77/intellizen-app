@@ -113,7 +113,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
           }}
         >
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Name
             </span>
             <Input
@@ -126,11 +126,11 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
 
           <div className="grid grid-cols-2 gap-2">
             <label className="grid gap-1.5">
-              <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Type
               </span>
               <select
-                className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                 value={type}
                 onChange={(event) => setType(event.target.value as ProjectType)}
               >
@@ -142,11 +142,11 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
             </label>
 
             <label className="grid gap-1.5">
-              <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Watch domain
               </span>
               <select
-                className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                 value={watchDomain}
                 onChange={(event) => setWatchDomain(event.target.value)}
               >
@@ -162,14 +162,14 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
 
           {selectableOperations.length > 0 && (
             <label className="grid gap-1.5">
-              <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 Work item{" "}
                 <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                   (optional)
                 </span>
               </span>
               <select
-                className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
                 value={operationId ?? ""}
                 onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
               >
@@ -189,7 +189,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
             <button
               type="button"
               onClick={onClose}
-              className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+              className="font-ui text-[var(--t-meta)] text-[var(--subtext-0)] hover:text-[var(--text)]"
             >
               Cancel
             </button>

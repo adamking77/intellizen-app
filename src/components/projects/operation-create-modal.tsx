@@ -93,7 +93,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
           }}
         >
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Name
             </span>
             <Input
@@ -105,11 +105,11 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
           </label>
 
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Work type
             </span>
             <select
-              className="h-9 rounded-md border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[12px] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
               value={workType}
               onChange={(event) => setWorkType(event.target.value as IntelWorkType)}
             >
@@ -117,7 +117,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <span className="font-ui text-[11px] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
               {INTEL_WORK_TYPES.find((option) => option.value === workType)?.description}
             </span>
           </label>
@@ -125,7 +125,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
           <TaxonomyFields value={taxonomy} onChange={setTaxonomy} />
 
           <label className="grid gap-1.5">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               Description{" "}
               <span className="font-normal normal-case tracking-normal text-[var(--overlay-1)]">
                 (optional)
@@ -143,7 +143,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
             <button
               type="button"
               onClick={onClose}
-              className="font-ui text-[12px] text-[var(--subtext-0)] hover:text-[var(--text)]"
+              className="font-ui text-[var(--t-meta)] text-[var(--subtext-0)] hover:text-[var(--text)]"
             >
               Cancel
             </button>

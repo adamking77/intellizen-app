@@ -546,18 +546,18 @@ export function ProjectsView() {
         {isSelected && (
           <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]" />
         )}
-        <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
+        <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dot }} />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <p className={cn(
-              "min-w-0 flex-1 truncate font-ui text-[13px] font-medium",
+              "min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium",
               isSelected ? "text-[var(--accent)]" : indent ? "text-[var(--subtext-0)]" : "text-[var(--text)]",
             )}>
               {project.name}
             </p>
             <span
               className={cn(
-                "shrink-0 font-mono text-[10px] tabular-nums",
+                "shrink-0 font-mono text-[var(--t-count)] tabular-nums",
                 signalCountsQuery.error ? "text-[var(--danger)]" : "text-[var(--overlay-1)]",
               )}
               title={signalCountsQuery.error ? `Signal count unavailable: ${signalCountsQuery.error.message}` : undefined}
@@ -566,20 +566,20 @@ export function ProjectsView() {
               {signalCountsQuery.isLoading ? "…" : signalCountsQuery.error ? "!" : count ?? 0}
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-2 text-[11px]">
+          <div className="flex min-w-0 items-center gap-2 text-[var(--t-section)]">
             {indent && (
               <>
-                <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence pile</span>
+                <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence pile</span>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
               </>
             )}
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--subtext-0)]">
               {project.type.replace("_", " ")}
             </span>
             {!entityFilter ? (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="min-w-0 truncate font-ui text-[10px] text-[var(--overlay-1)]">
+                <span className="min-w-0 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
                   {taxonomyEntityLabel(project.taxonomy ?? { entity: project.entity })}
                 </span>
               </>
@@ -587,13 +587,13 @@ export function ProjectsView() {
             {project.status === "archived" && (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
+                <span className="font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--warning)]">Archived</span>
               </>
             )}
             {domain && (
               <>
                 <span aria-hidden className="text-[var(--overlay-0)]">·</span>
-                <span className="min-w-0 truncate font-mono text-[11px] text-[var(--overlay-1)]">{domain}</span>
+                <span className="min-w-0 truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{domain}</span>
               </>
             )}
           </div>
@@ -606,12 +606,12 @@ export function ProjectsView() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Topbar */}
       <div className={cn(
-        "flex shrink-0 justify-between gap-4 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4",
+        "flex shrink-0 justify-between gap-4 bg-[var(--base)] px-3 py-4 sm:px-6",
         isNarrow ? "flex-col items-start" : "items-end",
       )}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-label">Intel</span>
+            <span className="t-title text-[var(--text)]">Intel</span>
           </div>
           <IndicatorStrip items={indicators} />
         </div>
@@ -650,13 +650,13 @@ export function ProjectsView() {
           <div className="flex-1 overflow-y-auto">
             {loadingOperationalData ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
-                <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+                <Loader2 className="h-4 w-4 text-[var(--accent)]" />
                 <p className="text-label">Loading intel</p>
               </div>
             ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
                 <p className="text-label">No work items</p>
-                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                   Create a work item, then add evidence piles for the signals, files, and graph material inside it.
                 </p>
                 <Button size="sm" onClick={() => setCreateProjectOpen(true)} className="mt-2 gap-1.5">
@@ -708,12 +708,12 @@ export function ProjectsView() {
                         />
                         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className={cn(
-                            "min-w-0 truncate font-ui text-[13px] font-semibold",
+                            "min-w-0 truncate font-ui text-[var(--t-ui)] font-semibold",
                             isOpSelected ? "text-[var(--accent)]" : "text-[var(--text)]",
                           )}>
                             {operation.name}
                           </span>
-                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             {intelWorkTypeLabel(getIntelWorkType(operation.taxonomy))} · {opProjects.length} evidence pile{opProjects.length === 1 ? "" : "s"}
                             {!entityFilter ? ` · ${taxonomyEntityLabel(operation.taxonomy ?? { entity: operation.entity })}` : ""}
                           </span>
@@ -723,7 +723,7 @@ export function ProjectsView() {
                             role="button"
                             aria-label={isCollapsed ? "Expand" : "Collapse"}
                             onClick={toggleCollapse}
-                            className="ml-auto shrink-0 rounded-full p-0.5 text-[var(--overlay-1)] hover:text-[var(--text)]"
+                            className="ml-auto shrink-0 rounded-[var(--r-pill)] p-0.5 text-[var(--overlay-1)] hover:text-[var(--text)]"
                           >
                             {isCollapsed
                               ? <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -742,7 +742,7 @@ export function ProjectsView() {
                   <div>
                     {(operationGroups.length > 0) && (
                       <div className="border-b border-[var(--border-subtle)] px-4 py-2.5">
-                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-0)]">
+                        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-0)]">
                           Unassigned
                         </span>
                       </div>
@@ -852,7 +852,7 @@ export function ProjectsView() {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
               <p className="text-label">Select a work item or evidence pile</p>
-              <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+              <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                 Pick one from the list to inspect details.
               </p>
             </div>
@@ -989,7 +989,7 @@ function ProjectDetailPane({
       <div className="flex shrink-0 flex-col border-b border-[var(--border)] bg-[var(--base)]">
         {/* Evidence-pile eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
-          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">
             Evidence pile · {project.type.replace("_", " ")}
           </span>
           <StatusPill variant={project.status === "active" ? "active" : "paused"}>
@@ -1011,16 +1011,16 @@ function ProjectDetailPane({
                   else if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
                 }}
                 disabled={renamePending}
-                className="min-w-0 flex-1 rounded-sm border border-[var(--accent-border)] bg-[var(--mantle)] px-1.5 py-0.5 font-ui text-[15px] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                className="min-w-0 flex-1 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--mantle)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
               />
             ) : (
               <button
                 type="button"
                 onClick={onEditNameStart}
                 title="Click to rename"
-                className="group/rename flex min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
+                className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-row)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
               >
-                <span className="min-w-0 truncate font-ui text-[15px] font-semibold text-[var(--text)]">{project.name}</span>
+                <span className="min-w-0 truncate font-ui text-[var(--t-body)] font-semibold text-[var(--text)]">{project.name}</span>
                 <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
               </button>
             )}
@@ -1096,7 +1096,7 @@ function ProjectDetailPane({
         {vaultFiles.length > 0 && (
           <div className="shrink-0 border-b border-[var(--border)]">
             <div className="px-5 py-3">
-              <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Files</span>
+              <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Files</span>
             </div>
             <div className="flex flex-col gap-0.5 px-3 pb-3">
               {vaultFiles.map((file) => (
@@ -1109,8 +1109,8 @@ function ProjectDetailPane({
         {/* Evidence */}
         <div className="px-5 pt-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence signals</span>
-            <span className="font-mono text-[10px] text-[var(--overlay-1)]">
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence signals</span>
+            <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
               {projectSignalsLoading ? "…" : projectSignalsError ? "!" : projectSignals.length}
             </span>
           </div>
@@ -1225,7 +1225,7 @@ function OperationDetailPane({
         {/* Work-item eyebrow */}
         <div className="flex items-center gap-2 px-5 pt-3">
           <Layers aria-hidden strokeWidth={1.5} className="h-3 w-3 shrink-0 text-[var(--accent)]" />
-          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--accent)]">
             Work item · {intelWorkTypeLabel(workType)}
           </span>
           <StatusPill variant={operation.status === "active" ? "active" : "paused"}>
@@ -1247,16 +1247,16 @@ function OperationDetailPane({
                 else if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
               }}
               disabled={renamePending}
-              className="min-w-0 flex-1 rounded-sm border border-[var(--accent-border)] bg-[var(--base)] px-1.5 py-0.5 font-ui text-[15px] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
+              className="min-w-0 flex-1 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--base)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
             />
           ) : (
             <button
               type="button"
               onClick={onEditNameStart}
               title="Click to rename"
-              className="group/rename flex min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
+              className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-row)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
             >
-              <span className="min-w-0 truncate font-ui text-[15px] font-semibold text-[var(--text)]">{operation.name}</span>
+              <span className="min-w-0 truncate font-ui text-[var(--t-body)] font-semibold text-[var(--text)]">{operation.name}</span>
               <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
             </button>
           )}
@@ -1320,7 +1320,7 @@ function OperationDetailPane({
                       disabled={metadataPending}
                       onClick={() => onCaseStageChange(stage.value)}
                       className={cn(
-                        "rounded-full border px-2 py-1.5 font-ui text-[11px] transition-colors disabled:opacity-60",
+                        "rounded-[var(--r-pill)] border px-2 py-1.5 font-ui text-[var(--t-section)] transition-colors disabled:opacity-60",
                         stage.value === caseStage
                           ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]"
                           : "border-[var(--border-subtle)] bg-[var(--base)] text-[var(--subtext-0)] hover:border-[var(--border)] hover:text-[var(--text)]",
@@ -1351,9 +1351,9 @@ function OperationDetailPane({
         {/* Evidence-piles summary */}
         <div className="px-5 pt-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence piles</span>
+            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Evidence piles</span>
             <span
-              className={cn("font-mono text-[10px]", signalCountsError ? "text-[var(--danger)]" : "text-[var(--overlay-1)]")}
+              className={cn("font-mono text-[var(--t-count)]", signalCountsError ? "text-[var(--danger)]" : "text-[var(--overlay-1)]")}
               title={signalCountsError ? `Signal counts unavailable: ${signalCountsError.message}` : undefined}
             >
               {operationProjects.length} pile{operationProjects.length === 1 ? "" : "s"} · {signalCountsLoading ? "…" : signalCountsError ? "counts unavailable" : `${totalSignals} signals`}
@@ -1369,7 +1369,7 @@ function OperationDetailPane({
             </div>
           )}
           {operationProjects.length === 0 ? (
-            <div className="mb-5 rounded-md border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[12px] text-[var(--overlay-1)]">
+            <div className="mb-5 rounded-[var(--r-row)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
               No evidence piles yet. Add one to collect signals, files, and graph material inside this work item.
             </div>
           ) : (
@@ -1382,14 +1382,14 @@ function OperationDetailPane({
                     key={p.id}
                     type="button"
                     onClick={() => onSelectProject(p.id)}
-                    className="flex items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-[var(--surface-wash)]"
+                    className="flex items-center gap-3 rounded-[var(--r-row)] px-3 py-2 text-left transition-colors hover:bg-[var(--surface-wash)]"
                   >
-                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
-                    <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-[var(--text)]">{p.name}</span>
-                    <span className="shrink-0 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--subtext-0)]">
+                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dot }} />
+                    <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">{p.name}</span>
+                    <span className="shrink-0 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--subtext-0)]">
                       {p.type.replace("_", " ")}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--overlay-1)]">
+                    <span className="shrink-0 font-mono text-[var(--t-count)] tabular-nums text-[var(--overlay-1)]">
                       {signalCountsLoading ? "…" : signalCountsError ? "!" : count ?? 0}
                     </span>
                   </button>
@@ -1428,7 +1428,7 @@ function DeleteConfirmModal({
         </>
       )}
     >
-      {footnote ? <p className="font-ui text-[12px] text-[var(--overlay-1)]">{footnote}</p> : <span />}
+      {footnote ? <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">{footnote}</p> : <span />}
     </AppDialog>
   );
 }

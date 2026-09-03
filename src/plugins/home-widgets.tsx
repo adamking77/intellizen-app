@@ -73,7 +73,7 @@ export function PluginWidgetMenuItems({ onAdded }: { onAdded?: () => void }) {
   return (
     <>
       <div className="mt-1 px-2 pb-1 pt-2">
-        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           Plugin widgets
         </span>
       </div>
@@ -90,13 +90,13 @@ export function PluginWidgetMenuItems({ onAdded }: { onAdded?: () => void }) {
               add(key);
               onAdded?.();
             }}
-            className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-wash)] disabled:opacity-50"
+            className="block w-full rounded-[var(--r-plane)] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-wash)] disabled:opacity-50"
           >
-            <span className="block font-ui text-[12px] font-medium text-[var(--text)]">
+            <span className="block font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">
               {widget.label}
               {added ? " · Added" : ""}
             </span>
-            <span className="mt-0.5 block font-ui text-[10px] leading-4 text-[var(--overlay-1)]">
+            <span className="mt-0.5 block font-ui text-[var(--t-count)] leading-4 text-[var(--overlay-1)]">
               {widget.description ?? widget.pluginName}
             </span>
           </button>
@@ -124,17 +124,17 @@ export function PluginWidgetBoard() {
         return (
           <section
             key={key}
-            className="flex min-h-[120px] flex-col rounded-xl border border-[var(--border)] bg-[var(--mantle)]"
+            className="flex min-h-[120px] flex-col rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)]"
           >
             <header className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-3">
-              <span className="truncate font-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                 {name}
               </span>
               <button
                 type="button"
                 onClick={() => remove(key)}
                 aria-label={`Remove ${name}`}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -145,7 +145,7 @@ export function PluginWidgetBoard() {
               ) : plugin?.status === "error" ? (
                 <PluginErrorBox name={plugin.name} error={plugin.error ?? "unknown error"} />
               ) : (
-                <p className="font-ui text-[12px] text-[var(--overlay-1)]">
+                <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                   Waiting for plugin “{pluginId}” to load.
                 </p>
               )}

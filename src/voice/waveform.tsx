@@ -52,7 +52,7 @@ export function Waveform({
       {Array.from({ length: bars }, (_, i) => (
         <div
           key={i}
-          className="w-[2px] shrink-0 rounded-full transition-[height] duration-[70ms] ease-linear"
+          className="w-[2px] shrink-0 rounded-[var(--r-pill)] transition-[height] duration-[70ms] ease-linear"
           style={{ height: Math.round(min + amp(i) * (height - min)), background: color }}
         />
       ))}

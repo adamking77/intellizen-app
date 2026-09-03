@@ -292,9 +292,22 @@
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --t-fast: 120ms;
-  --t-base: 150ms;
-  --t-slow: 180ms;
+  --t-fast: 90ms;
+  --t-base: 120ms;
+  --t-slow: 200ms;
+
+  /* Closed shape and type roles shared with Hermes. */
+  --r-plane: 12px;
+  --r-row: 4px;
+  --r-msg: 10px;
+  --r-pill: 999px;
+  --t-title: 16px;
+  --t-section: 11px;
+  --t-body: 14px;
+  --t-ui: 13px;
+  --t-meta: 12px;
+  --t-count: 10px;
+  --focus-inner: var(--base);
 
   /* Type families */
   --font-ui: "Geist Variable", system-ui, -apple-system, sans-serif;
@@ -367,25 +380,59 @@
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
 
-/* Panes: `data-panes` on <html> (src/lib/theme.ts). Segmented is the
-   default: separate rounded panels over the window. Connected is one
-   surface: no gutters, no radii, panes divided by a hairline. */
+/* Panes: the window ground is the seam. Connected is the default and uses a
+   one-pixel gap between square panes; segmented uses 10px gutters and 12px
+   pane corners. Neither mode draws pane borders. */
 :root[data-panes="connected"] .app-shell {
-  gap: 0;
+  gap: 1px;
   padding: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--r-plane);
+  background: var(--edge) !important;
 }
 
-:root[data-panes="connected"] .app-shell > * {
+:root[data-panes="connected"] .app-shell > .pane {
   align-self: stretch;
   max-height: none;
   border: 0;
   border-radius: 0;
 }
 
-:root[data-panes="connected"] .app-shell > * + * {
-  border-left: 1px solid var(--edge);
+:root[data-panes="segmented"] .app-shell {
+  gap: 10px;
+  padding: 34px 10px 10px;
+  background: color-mix(in srgb, var(--crust) 70%, transparent) !important;
+}
+
+:root[data-panes="segmented"] .app-shell.browser-shell {
+  padding-top: 10px;
+}
+
+:root[data-panes="segmented"] .app-shell > .pane {
+  border: 0;
+  border-radius: var(--r-plane);
+  overflow: hidden;
+}
+
+.sidebar-lights {
+  height: 44px;
+}
+
+:root[data-panes="segmented"] .sidebar-lights,
+.browser-shell .sidebar-lights {
+  height: 8px;
+}
+
+:root[data-panes="connected"] .sidebar-collapsed {
+  height: 100%;
+}
+
+:root[data-panes="segmented"] .sidebar-collapsed {
+  height: auto;
+  max-height: 100%;
+  align-self: flex-start;
+  border-radius: 28px !important;
+  padding-bottom: 8px;
 }
 
 * {
@@ -411,6 +458,7 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
 }
 
 :root {
@@ -463,16 +511,16 @@ pre {
   --bn-colors-editor-text: var(--text);
   --bn-colors-editor-background: transparent;
   --bn-colors-menu-text: var(--text);
-  --bn-colors-menu-background: var(--base);
+  --bn-colors-menu-background: var(--raised);
   --bn-colors-tooltip-text: var(--text);
-  --bn-colors-tooltip-background: var(--base);
+  --bn-colors-tooltip-background: var(--raised);
   --bn-colors-hovered-text: var(--text);
   --bn-colors-hovered-background: var(--surface-wash);
   --bn-colors-selected-text: var(--text);
-  --bn-colors-selected-background: var(--accent-soft);
+  --bn-colors-selected-background: var(--selected);
   --bn-colors-disabled-text: var(--overlay-1);
   --bn-colors-disabled-background: var(--surface-0);
-  --bn-colors-shadow: rgba(0, 0, 0, 0.45);
+  --bn-colors-shadow: var(--shadow-elevated);
   --bn-colors-border: var(--border);
   --bn-colors-side-menu: var(--accent);
 }
@@ -787,10 +835,10 @@ pre {
 .bn-form-popover,
 .bn-panel-popover,
 .bn-emoji-picker-popover {
-  border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
-  background: var(--base) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38) !important;
+  border: 0 !important;
+  border-radius: var(--r-plane) !important;
+  background: var(--raised) !important;
+  box-shadow: var(--shadow-elevated) !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -807,7 +855,7 @@ pre {
 .mantine-Menu-item,
 .bn-toolbar .mantine-Button-root,
 .bn-toolbar .mantine-ActionIcon-root {
-  border-radius: 8px !important;
+  border-radius: var(--r-row) !important;
   background: transparent !important;
   color: var(--text) !important;
   transition: background-color 120ms ease, color 120ms ease;
@@ -917,10 +965,10 @@ pre {
 .bn-root .bn-form-popover,
 .bn-root .bn-panel-popover,
 .bn-root .bn-emoji-picker-popover {
-  border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
-  background: var(--base) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38) !important;
+  border: 0 !important;
+  border-radius: var(--r-plane) !important;
+  background: var(--raised) !important;
+  box-shadow: var(--shadow-elevated) !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -937,7 +985,7 @@ pre {
 .bn-root .mantine-Menu-item,
 .bn-root .bn-toolbar .mantine-Button-root,
 .bn-root .bn-toolbar .mantine-ActionIcon-root {
-  border-radius: 8px !important;
+  border-radius: var(--r-row) !important;
   background: transparent !important;
   color: var(--text) !important;
 }
@@ -985,10 +1033,10 @@ pre {
 
 .text-label {
   font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--t-section);
+  font-weight: 300;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   color: var(--overlay-1);
 }
 
@@ -1084,7 +1132,7 @@ pre {
   justify-content: space-between;
   height: 56px;
   padding: 0 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   background: var(--base);
   flex-shrink: 0;
 }
@@ -1141,7 +1189,7 @@ pre {
 }
 
 .animate-fade-in {
-  animation: fade-in 180ms var(--ease-out);
+  animation: fade-in var(--t-base) var(--ease-out);
 }
 
 @keyframes route-fade {
@@ -1150,7 +1198,7 @@ pre {
 }
 
 .animate-route-fade {
-  animation: route-fade 150ms var(--ease-out);
+  animation: route-fade var(--t-base) var(--ease-out);
 }
 
 @keyframes slide-in-right {
@@ -1159,7 +1207,7 @@ pre {
 }
 
 .inbox-detail-panel {
-  animation: slide-in-right 220ms var(--ease-out);
+  animation: slide-in-right var(--t-slow) var(--ease-out);
 }
 
 /* Sonner toast close button — right-aligned, blue */
@@ -1727,7 +1775,7 @@ pre {
 }
 
 .db-bulk-actions-visible {
-  animation: fade-in 150ms ease-out;
+  animation: fade-in var(--t-base) var(--ease-out);
 }
 
 .db-bulk-count {
@@ -4139,8 +4187,7 @@ pre {
   flex: 1;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--base) 84%, var(--mantle) 16%) 0%, var(--base) 100%);
+  background: var(--base);
 }
 
 .db-timeline-notice {
@@ -4799,4 +4846,75 @@ pre {
 
 .pill[aria-selected="true"]:hover {
   background: var(--selected-hover);
+}
+
+/* Closed type roles. Product chrome uses these instead of inventing local
+   sizes and weights; document content keeps its separate reading scale. */
+.t-title {
+  font-family: var(--font-ui);
+  font-size: var(--t-title);
+  font-weight: 300;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.t-section {
+  font-family: var(--font-ui);
+  font-size: var(--t-section);
+  font-weight: 300;
+}
+
+.t-body { font-size: var(--t-body); }
+.t-ui { font-size: var(--t-ui); }
+.t-meta { font-size: var(--t-meta); }
+.t-count { font-size: var(--t-count); }
+
+/* Shared avatar behavior. Speech follows measured audio amplitude; a team
+   stack dims idle members and restores anyone actively running. */
+.avatar-speaking {
+  display: inline-flex;
+  flex-shrink: 0;
+  transform: scale(var(--avatar-scale, 1));
+  filter: brightness(var(--avatar-brightness, 1)) saturate(var(--avatar-saturation, 1));
+  transition: transform var(--t-fast) var(--ease-out), filter var(--t-fast) var(--ease-out);
+  transform-origin: center;
+  will-change: transform, filter;
+}
+
+.team-avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.team-avatar-stack__member {
+  display: inline-flex;
+  border-radius: var(--r-pill);
+  box-shadow: 0 0 0 2px var(--avatar-ring, var(--mantle));
+  opacity: 0.58;
+}
+
+.team-avatar-stack__member[data-running="true"] {
+  opacity: 1;
+}
+
+/* One visible two-ring treatment across native controls and custom rows. */
+:where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-inner) !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 4px var(--accent) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .avatar-speaking {
+    transform: none !important;
+    filter: none !important;
+  }
 }

@@ -53,13 +53,13 @@ export function IndicatorStrip({ items, className, ...props }: IndicatorStripPro
               {item.status && (
                 <span
                   aria-hidden
-                  className="h-1.5 w-1.5 rounded-full"
+                  className="h-1.5 w-1.5 rounded-[var(--r-pill)]"
                   style={{ background: dotColor[item.status] }}
                 />
               )}
               <span
                 className={cn(
-                  "font-mono text-[12px] leading-none transition-colors",
+                  "font-mono text-[var(--t-meta)] leading-none transition-colors",
                   item.active ? "text-[var(--accent)]" : "text-[var(--text)]",
                 )}
               >

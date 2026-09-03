@@ -34,17 +34,17 @@ export function AppDialog({
         <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center px-4 py-6">
           <Dialog.Popup
             className={cn(
-              "max-h-full min-w-[320px] max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)] outline-none",
+              "max-h-full min-w-[320px] max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] outline-none",
               className,
             )}
             style={{ boxShadow: "var(--shadow-elevated)" }}
           >
             <header className="border-b border-[var(--border-subtle)] px-5 py-4">
-              <Dialog.Title className="font-ui text-[16px] font-semibold text-[var(--text)]">
+              <Dialog.Title className="font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">
                 {title}
               </Dialog.Title>
               {description ? (
-                <Dialog.Description className="mt-1 font-ui text-[13px] leading-5 text-[var(--subtext-0)]">
+                <Dialog.Description className="mt-1 font-ui text-[var(--t-ui)] leading-5 text-[var(--subtext-0)]">
                   {description}
                 </Dialog.Description>
               ) : null}

@@ -102,21 +102,20 @@ export function Sidebar() {
     <aside
       style={{
         width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED,
-        background: "var(--mantle)",
+        background: "var(--crust)",
       }}
       className={cn(
-        "relative z-10 flex shrink-0 flex-col overflow-hidden border border-[var(--border)]",
-        "transition-[width] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-        collapsed
-          ? "h-auto max-h-full self-start rounded-[28px] pb-2"
-          : "h-full rounded-2xl",
+        "pane relative z-10 flex shrink-0 flex-col overflow-hidden",
+        "transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out)]",
+        collapsed ? "sidebar-collapsed" : "h-full",
       )}
     >
+      <div className="sidebar-lights shrink-0" data-tauri-drag-region />
       {/* Header */}
       <div
         onMouseDown={dragWindow}
         className={cn(
-          "flex h-14 shrink-0 cursor-default items-center",
+          "flex h-10 shrink-0 cursor-default items-center",
           collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
@@ -126,7 +125,7 @@ export function Sidebar() {
             onClick={toggle}
             aria-label="Expand sidebar"
             title={entityFilter ? "Expand — entity scope active" : "Expand"}
-            className="relative inline-flex items-center justify-center rounded-full transition-opacity duration-150 hover:opacity-70"
+            className="relative inline-flex items-center justify-center rounded-[var(--r-pill)] transition-opacity duration-150 hover:opacity-70"
           >
             <svg aria-label="InteliZen" role="img" viewBox="0 0 28 28" className="h-7 w-7 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
               <circle cx="14" cy="14" r="11.5" />
@@ -136,14 +135,14 @@ export function Sidebar() {
             {entityFilter ? (
               <span
                 aria-hidden
-                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)] ring-2 ring-[var(--mantle)]"
+                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)] ring-2 ring-[var(--mantle)]"
               />
             ) : null}
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <img src="/app-icon.svg" alt="" aria-hidden className="h-6 w-6 rounded-md" />
-            <span className="font-ui text-[13px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
+            <img src="/app-icon.svg" alt="" aria-hidden className="h-6 w-6 rounded-[var(--r-row)]" />
+            <span className="font-ui text-[var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent)]">
               InteliZen
             </span>
           </div>
@@ -153,8 +152,8 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             className={cn(
-            "inline-flex h-6 w-6 items-center justify-center rounded-full",
-              "font-ui text-[13px] text-[var(--overlay-1)]",
+            "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)]",
+              "font-ui text-[var(--t-ui)] text-[var(--overlay-1)]",
               "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
             )}
@@ -178,7 +177,7 @@ export function Sidebar() {
             to="/home"
             aria-label="Workspace"
             title="Workspace"
-            className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-full text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
+            className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
           >
             <FolderTree aria-hidden strokeWidth={1.5} className="h-[18px] w-[18px]" />
           </NavLink>
@@ -206,7 +205,7 @@ export function Sidebar() {
                 <>
                   <span>{item.label}</span>
                   {showCount ? (
-                    <span className="ml-auto font-mono text-[10px] text-[var(--accent)]">
+                    <span className="ml-auto font-mono text-[var(--t-count)] text-[var(--accent)]">
                       {showCount}
                     </span>
                   ) : null}
@@ -215,7 +214,7 @@ export function Sidebar() {
               {collapsed && showCount ? (
                 <span
                   aria-hidden
-                  className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+                  className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)]"
                 />
               ) : null}
             </NavLink>
@@ -227,9 +226,11 @@ export function Sidebar() {
 
       {/* Footer */}
       <div
+        role="status"
+        aria-live="polite"
         className={cn(
           "flex h-10 shrink-0 items-center",
-          collapsed ? "justify-center border-t-0 px-0" : "justify-between border-t border-[var(--border)] px-4",
+          collapsed ? "justify-center px-0" : "justify-between px-4",
         )}
       >
         {collapsed ? (
@@ -237,13 +238,13 @@ export function Sidebar() {
             to="/settings?section=providers"
             aria-label="Open settings"
             title={engineTitle}
-            className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="relative inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             <Settings className="h-4 w-4" />
             <span
               aria-hidden
               className={cn(
-                "absolute right-1 top-1 h-1.5 w-1.5 rounded-full ring-2 ring-[var(--mantle)]",
+                "absolute right-1 top-1 h-1.5 w-1.5 rounded-[var(--r-pill)] ring-2 ring-[var(--crust)]",
                 ENGINE_DOT_CLASS[engineTag],
               )}
             />
@@ -258,14 +259,14 @@ export function Sidebar() {
             >
               <span
                 className={cn(
-                  "shrink-0 whitespace-nowrap rounded-full px-2 py-px font-ui text-[11px] leading-4",
+                  "shrink-0 whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4",
                   ENGINE_TAG_CLASS[engineTag],
                 )}
               >
                 {engineTag}
               </span>
               {engineTag === "connected" && engineInfo ? (
-                <span className="truncate font-mono text-[10px] text-[var(--overlay-1)]">
+                <span className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                   {engineInfo.version} · :{engineInfo.port}
                 </span>
               ) : null}

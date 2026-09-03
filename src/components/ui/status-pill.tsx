@@ -36,7 +36,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[11px] leading-none",
+        "inline-flex items-center rounded-[var(--r-pill)] px-2 py-0.5 font-mono text-[var(--t-section)] leading-none",
         styles[variant],
         className,
       )}

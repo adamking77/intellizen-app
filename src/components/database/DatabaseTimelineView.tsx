@@ -57,17 +57,12 @@ interface TimelineInteraction {
 const ROW_HEIGHT = 44;
 const BAR_HEIGHT = 24;
 const HEADER_ROW_HEIGHT = 28;
-const DEFAULT_BAR_COLOR = "#89b4fa";
+const DEFAULT_BAR_COLOR = "var(--blue)";
 const MIN_CHART_WIDTH = 1680;
 const COMPACT_BAR_WIDTH = 104;
 
-function withAlpha(hex: string, alpha: number) {
-  const normalized = hex.trim().replace("#", "");
-  if (normalized.length !== 6) return hex;
-  const red = Number.parseInt(normalized.slice(0, 2), 16);
-  const green = Number.parseInt(normalized.slice(2, 4), 16);
-  const blue = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+function withAlpha(color: string, alpha: number) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function resolveTimelineRecordColor(
@@ -328,8 +323,8 @@ export function DatabaseTimelineView({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <div className="max-w-sm">
-          <p className="font-ui text-[14px] font-medium text-[var(--text)]">Configure Timeline</p>
-          <p className="mt-1 text-[13px] text-[var(--overlay-1)]">
+          <p className="font-ui text-[var(--t-body)] font-medium text-[var(--text)]">Configure Timeline</p>
+          <p className="mt-1 text-[var(--t-ui)] text-[var(--overlay-1)]">
             {dateFields.length === 0
               ? "Create Start and End date fields to place records on the timeline."
               : "Use the available date fields or choose start and end fields in View Settings."}

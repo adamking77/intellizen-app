@@ -28,7 +28,7 @@ export interface VoiceButtonProps {
 }
 
 const icon =
-  "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors " +
+  "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors " +
   "hover:bg-[var(--hover-strong)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent " +
   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
@@ -71,12 +71,12 @@ function DictateButton({ onTranscript, voice, size = 14, className }: VoiceButto
         disabled={v.hearing}
         aria-label={label}
         title={label}
-        className={cn(icon, v.hearing && "animate-pulse")}
+        className={icon}
       >
         <Mic style={{ width: size, height: size }} strokeWidth={1.7} aria-hidden />
       </button>
       {v.note ? (
-        <span role="status" className="truncate font-ui text-[11px] text-[var(--bad)]" title={v.note}>
+        <span role="status" className="truncate font-ui text-[var(--t-section)] text-[var(--bad)]" title={v.note}>
           {v.note}
         </span>
       ) : null}
@@ -100,7 +100,7 @@ function ConverseButton({ voice, size = 13, className }: VoiceButtonProps) {
       title={label}
       className={cn(
         className ??
-          "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
+          "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
       )}
       // A running conversation gets its own unmistakable control rather than
       // the same one tinted.

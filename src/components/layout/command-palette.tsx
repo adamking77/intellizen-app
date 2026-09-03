@@ -245,7 +245,7 @@ function CommandPalette() {
 
       <div
         className={cn(
-          "relative z-10 w-[560px] max-w-[90vw] overflow-hidden rounded-xl",
+          "relative z-10 w-[560px] max-w-[90vw] overflow-hidden rounded-[var(--r-plane)]",
           "bg-[var(--mantle)] border border-[var(--surface-1)]",
           "shadow-[0_8px_24px_rgba(0,0,0,0.4)]",
           "animate-fade-in",
@@ -283,7 +283,7 @@ function CommandPalette() {
           placeholder="Type a command or search…"
           className={cn(
             "w-full bg-[var(--crust)] px-4 py-3",
-            "font-ui text-[15px] text-[var(--text)]",
+            "font-ui text-[var(--t-body)] text-[var(--text)]",
             "placeholder:text-[var(--overlay-0)]",
             "border-b border-[var(--border)]",
             "focus:outline-none",
@@ -292,7 +292,7 @@ function CommandPalette() {
 
         <div id="cp-listbox" role="listbox" aria-label="Commands" className="max-h-[50vh] overflow-y-auto py-2">
           {groups.length === 0 && (
-            <div className="px-4 py-6 text-center font-ui text-[13px] text-[var(--overlay-1)]">
+            <div className="px-4 py-6 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
               No results
             </div>
           )}
@@ -300,7 +300,7 @@ function CommandPalette() {
             return (
               <div key={group.heading} className="pb-2">
                 <div className="px-4 pb-1 pt-2">
-                  <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                     {group.heading}
                   </span>
                 </div>
@@ -318,7 +318,7 @@ function CommandPalette() {
                       onClick={() => execute(cmd)}
                       className={cn(
                         "flex w-full items-center justify-between px-4 py-2 text-left",
-                        "font-ui text-[13px]",
+                        "font-ui text-[var(--t-ui)]",
                         "transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
                         isActive
                           ? "bg-[var(--accent-soft)] text-[var(--text)]"
@@ -327,7 +327,7 @@ function CommandPalette() {
                     >
                       <span>{cmd.label}</span>
                       {cmd.hint && (
-                        <span className="font-mono text-[11px] text-[var(--overlay-1)]">
+                        <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
                           {cmd.hint}
                         </span>
                       )}
@@ -340,7 +340,7 @@ function CommandPalette() {
         </div>
 
         <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--base)] px-4 py-2">
-          <div className="flex items-center gap-3 font-ui text-[10px] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          <div className="flex items-center gap-3 font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             <span>
               <span className="font-mono">↑↓</span> Navigate
             </span>
@@ -351,7 +351,7 @@ function CommandPalette() {
               <span className="font-mono">Esc</span> Close
             </span>
           </div>
-          <span className="font-mono text-[10px] text-[var(--overlay-1)]">⌘K</span>
+          <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">⌘K</span>
         </div>
       </div>
     </div>

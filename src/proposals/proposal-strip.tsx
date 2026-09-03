@@ -6,7 +6,7 @@ import { hunkStat, proposalStat, type Hunk, type Proposal } from "./types";
 import { useProposals } from "./use-proposals";
 
 const PILL =
-  "rounded-full px-3 py-1 font-ui text-[12px] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
+  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:opacity-90";
 const PILL_PRIMARY = "bg-[var(--accent)] text-[var(--crust)] hover:opacity-90";
 
@@ -74,10 +74,10 @@ export function ProposalCard({
     });
 
   return (
-    <div data-proposal={proposal.id} className="mb-3 rounded-xl bg-[var(--mantle)] px-3 py-2.5">
+    <div data-proposal={proposal.id} className="mb-3 rounded-[var(--r-plane)] bg-[var(--mantle)] px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <span className="font-ui text-[13px] text-[var(--text)]">{proposal.author}</span>
-        <span className="font-ui text-[11px] text-[var(--subtext-0)]">proposes</span>
+        <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{proposal.author}</span>
+        <span className="font-ui text-[var(--t-section)] text-[var(--subtext-0)]">proposes</span>
         <Counts stat={stat} />
         <div className="flex-1" />
         <button
@@ -111,12 +111,12 @@ export function ProposalCard({
         </button>
       </div>
 
-      {proposal.note ? <div className="mt-1.5 font-ui text-[11px] text-[var(--subtext-0)]">{proposal.note}</div> : null}
+      {proposal.note ? <div className="mt-1.5 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">{proposal.note}</div> : null}
 
       {error ? (
         <div
           role="status"
-          className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--bad)_40%,transparent)] bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] px-2.5 py-1.5 font-ui text-[12px] text-[var(--text)]"
+          className="mt-2 rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--bad)_40%,transparent)] bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] px-2.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
         >
           {error}
         </div>
@@ -127,15 +127,15 @@ export function ProposalCard({
           {proposal.hunks.map((h) => {
             const off = rejected.has(h.id);
             return (
-              <div key={h.id} data-rejected={off || undefined} className={cn("overflow-hidden rounded-md bg-[var(--crust)]", off && "opacity-55")}>
+              <div key={h.id} data-rejected={off || undefined} className={cn("overflow-hidden rounded-[var(--r-row)] bg-[var(--crust)]", off && "opacity-55")}>
                 <label className="flex items-center gap-2 px-2 py-1.5">
                   <input type="checkbox" checked={!off} onChange={() => toggle(h.id)} disabled={busy} className="accent-[var(--accent)]" />
-                  <span className="font-ui text-[10px] uppercase tracking-wide text-[var(--subtext-0)]">line {h.at + 1}</span>
+                  <span className="font-ui text-[var(--t-count)] uppercase tracking-wide text-[var(--subtext-0)]">line {h.at + 1}</span>
                   <Counts stat={hunkStat(h)} />
                   <div className="flex-1" />
-                  {off ? <span className="font-ui text-[11px] text-[var(--subtext-0)]">not taken</span> : null}
+                  {off ? <span className="font-ui text-[var(--t-section)] text-[var(--subtext-0)]">not taken</span> : null}
                 </label>
-                <div className="overflow-x-auto pb-1 font-mono text-[11px] leading-[1.55]">
+                <div className="overflow-x-auto pb-1 font-mono text-[var(--t-section)] leading-[1.55]">
                   {h.old.map((line, i) => (
                     <Line key={`o${i}`} sign="−" tone="bad" text={line} />
                   ))}
@@ -154,7 +154,7 @@ export function ProposalCard({
 
 function Counts({ stat }: { stat: { added: number; removed: number } }) {
   return (
-    <span className="font-mono text-[11px] tabular-nums">
+    <span className="font-mono text-[var(--t-section)] tabular-nums">
       <span className="text-[var(--ok)]">+{stat.added}</span> <span className="text-[var(--bad)]">−{stat.removed}</span>
     </span>
   );

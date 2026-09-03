@@ -19,6 +19,8 @@ describe("listProfiles", () => {
       gatewayRunning: true,
       description: "",
       displayName: "",
+      avatarColor: "#8b5cf6",
+      hasAvatar: true,
     });
     expect(profiles.filter((p) => p.isDefault)).toHaveLength(1);
     expect(defaultProfile(profiles)?.name).toBe("default");

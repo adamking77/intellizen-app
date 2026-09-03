@@ -5,16 +5,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const selectVariants = cva(
-  "block w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--mantle)] " +
+  "block w-full appearance-none rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] " +
     "font-ui text-[var(--text)] transition-[border-color,box-shadow,background-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
     "focus:outline-none focus:border-[var(--accent)] focus:shadow-[0_0_0_1px_var(--accent-border)] " +
     "disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {
       controlSize: {
-        xs: "h-7 px-2.5 pr-7 text-[12px]",
-        sm: "h-8 px-2.5 pr-7 text-[12px]",
-        default: "h-9 px-3 pr-8 text-[13px]",
+        xs: "h-7 px-2.5 pr-7 text-[var(--t-meta)]",
+        sm: "h-8 px-2.5 pr-7 text-[var(--t-meta)]",
+        default: "h-9 px-3 pr-8 text-[var(--t-ui)]",
       },
     },
     defaultVariants: {

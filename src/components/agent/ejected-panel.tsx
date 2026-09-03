@@ -36,9 +36,10 @@ import {
   type PanelMode,
 } from "./panel-window";
 import { runStateOf } from "./run-state";
+import type { HermesProfile } from "@/engine/profiles";
 
 const ICON =
-  "inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--overlay-1)] transition-colors " +
+  "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors " +
   "hover:bg-[var(--surface-wash)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
 
 const NO_THREADS: Record<string, ProfileThread> = {};
@@ -96,6 +97,7 @@ export function EjectedPanel() {
   const dragWindow = useWindowDrag();
 
   const selected = frame?.selectedProfile ?? null;
+  const identity = selected ? frame?.profileDirectory?.[selected] ?? null : null;
   const threads = frame?.threads ?? NO_THREADS;
   const thread = useMemo(
     () => (selected ? (threads[selected] ?? emptyThread(selected)) : null),
@@ -106,6 +108,7 @@ export function EjectedPanel() {
     return (
       <HudWindow
         profile={selected}
+        identity={identity}
         thread={thread}
         open={mode.open}
         onOpen={(open) => setMode({ type: "open", open })}
@@ -117,14 +120,14 @@ export function EjectedPanel() {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--mantle)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
         {/* Frameless floating window: this strip is its title bar. There is
             no close button — Redock is the way home. */}
         <div
           onMouseDown={dragWindow}
-          className="flex h-[30px] shrink-0 cursor-default items-center gap-2 border-b border-[var(--border)] pl-3 pr-1.5"
+          className="flex h-[30px] shrink-0 cursor-default items-center gap-2 pl-3 pr-1.5"
         >
-          <span className="font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--overlay-1)]">
+          <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]">
             Agent Panel
           </span>
           <div className="flex-1" />
@@ -160,6 +163,7 @@ export function EjectedPanel() {
  *  sends through the channel rather than through the store. */
 function HudWindow({
   profile,
+  identity,
   thread,
   open,
   onOpen,
@@ -167,6 +171,7 @@ function HudWindow({
   onRedock,
 }: {
   profile: string | null;
+  identity: HermesProfile | null;
   thread: ProfileThread | null;
   open: HudOpen;
   onOpen: (open: HudOpen) => void;
@@ -208,7 +213,8 @@ function HudWindow({
 
   return (
     <Hud
-      agent={profile}
+      agent={identity}
+      target={profile}
       messages={messages}
       run={run}
       voice={voice}

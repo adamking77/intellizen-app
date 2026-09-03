@@ -28,7 +28,7 @@ export function SettingsView() {
   return (
     <div className="flex h-full min-h-0 bg-[var(--base)]">
       <aside className="w-52 shrink-0 border-r border-[var(--border)] bg-[var(--mantle)] px-3 py-5">
-        <span className="mb-2 block px-2 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
+        <span className="mb-2 block px-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
         <nav className="flex flex-col gap-0.5" aria-label="Settings sections">
           {SECTIONS.map((item) => (
             <button

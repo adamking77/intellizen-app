@@ -20,6 +20,9 @@ export interface GroupMember {
   display_name?: string;
   model?: null | string;
   provider?: null | string;
+  avatar_style?: "sphere" | "blob";
+  avatar_kind?: string;
+  avatar_color?: string;
 }
 
 export interface GroupMessageAuthor {

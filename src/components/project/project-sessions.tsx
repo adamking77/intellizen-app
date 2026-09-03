@@ -72,16 +72,16 @@ export function ProjectSessions({
               type="button"
               onClick={() => setSelectedKey(projectSessionKey(session))}
               className={cn(
-                "mb-1 w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--hover)]",
+                "mb-1 w-full rounded-[var(--r-plane)] px-3 py-2.5 text-left transition-colors hover:bg-[var(--hover)]",
                 selected?.id === session.id && selected.profile === session.profile && "bg-[var(--selected)]",
               )}
             >
               <div className="flex items-start gap-2">
                 <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
                 <div className="min-w-0">
-                  <p className="truncate font-ui text-[12px] font-medium text-[var(--text)]">{session.title}</p>
+                  <p className="truncate font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">{session.title}</p>
                   {session.preview ? <p className="mt-0.5 line-clamp-2 text-meta">{session.preview}</p> : null}
-                  <p className="mt-1 font-mono text-[9px] text-[var(--overlay-1)]">
+                  <p className="mt-1 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                     {session.profile} · {session.messageCount} messages · {formatTime(session.lastActive)}
                   </p>
                 </div>
@@ -105,7 +105,7 @@ export function ProjectSessions({
                 <article key={message.id} className={cn("py-4", message.role === "user" && "bg-[var(--surface-wash)] px-4")}>
                   <p className="mb-2 text-label">{message.role === "assistant" ? selected?.profile : message.name ?? message.role}</p>
                   {message.role === "tool" || message.role === "system" ? (
-                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-5 text-[var(--subtext-0)]">{message.text}</pre>
+                    <pre className="whitespace-pre-wrap font-mono text-[var(--t-section)] leading-5 text-[var(--subtext-0)]">{message.text}</pre>
                   ) : (
                     <ReplyMarkdown content={message.text} />
                   )}

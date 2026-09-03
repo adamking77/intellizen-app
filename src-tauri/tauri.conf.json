@@ -21,13 +21,21 @@
         "minHeight": 620,
         "resizable": true,
         "theme": "Dark",
-        "decorations": false,
         "transparent": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "maximizable": true,
+        "minimizable": true,
+        "closable": true,
         "backgroundColor": "#00000000"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://jicrdrwtwubveyvzyyrh.supabase.co wss://jicrdrwtwubveyvzyyrh.supabase.co https://hermes-agent-production-c98b.up.railway.app https://api.exa.ai https://api.opensanctions.org https://api.gleif.org https://api.company-information.service.gov.uk https://www.sec.gov https://data.sec.gov; media-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'self' genui:"
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$TEMP/intellizen-voice-*.mp3"]
+      },
+      "csp": "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https:; font-src 'self' data:; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://jicrdrwtwubveyvzyyrh.supabase.co wss://jicrdrwtwubveyvzyyrh.supabase.co https://hermes-agent-production-c98b.up.railway.app https://api.exa.ai https://api.opensanctions.org https://api.gleif.org https://api.company-information.service.gov.uk https://www.sec.gov https://data.sec.gov; media-src 'self' data: blob: asset:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'self' genui:"
     }
   },
   "bundle": {

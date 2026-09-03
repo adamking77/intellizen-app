@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "re
 
 import type { HermesProfile } from "@/engine/profiles";
 import { nextIndex } from "@/components/layout/use-roving";
+import { Avatar } from "@/components/agents/avatar";
 import { cn } from "@/lib/utils";
 
 /** Who you are talking to. A popover on the name in the panel's header,
@@ -85,13 +86,13 @@ export function TargetPicker({
       role="listbox"
       aria-label="Who to talk to"
       onKeyDown={onKeyDown}
-      className="absolute left-0 top-8 z-30 flex max-h-[340px] min-w-[208px] max-w-[264px] flex-col gap-px overflow-y-auto rounded-xl bg-[var(--raised)] p-[5px] shadow-[var(--shadow-elevated)]"
+      className="absolute left-0 top-8 z-30 flex max-h-[340px] min-w-[208px] max-w-[min(264px,calc(100vw-24px))] flex-col gap-px overflow-y-auto rounded-[var(--r-plane)] bg-[var(--raised)] p-[5px] shadow-[var(--shadow-elevated)]"
     >
-      <div className="px-2 pb-1 pt-[7px] font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <div className="px-2 pb-1 pt-[7px] font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
         Agents
       </div>
       {profiles.length === 0 ? (
-        <div className="px-2 py-1.5 font-ui text-[12px] text-[var(--text-muted)]">No agents listed.</div>
+        <div className="px-2 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No agents listed.</div>
       ) : null}
       {profiles.map((p, i) => {
         const selected = p.name === target;
@@ -109,19 +110,30 @@ export function TargetPicker({
             onFocus={() => setActive(i)}
             onClick={() => pick(p.name)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-ui text-[13px] text-[var(--text)] outline-none",
+              "flex w-full items-center gap-2 rounded-[var(--r-row)] px-2 py-1.5 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none",
               "hover:bg-[var(--hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
               selected && "bg-[var(--accent-soft)]",
               !on && "text-[var(--text-muted)]",
             )}
           >
+            <Avatar
+              agent={{
+                displayName: p.displayName || p.name,
+                avatarStyle: p.avatarStyle,
+                avatarKind: p.avatarKind,
+                avatarColor: p.avatarColor,
+              }}
+              size={20}
+              image={p.avatarImage}
+              animate={false}
+            />
             <span className="min-w-0 flex-1 truncate">{p.displayName || p.name}</span>
             {p.model ? (
-              <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">{p.model}</span>
+              <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">{p.model}</span>
             ) : null}
-            {!on ? <span className="shrink-0 font-ui text-[11px] text-[var(--text-muted)]">offline</span> : null}
+            {!on ? <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">offline</span> : null}
             {p.isDefault ? (
-              <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">default</span>
+              <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span>
             ) : null}
           </button>
         );
