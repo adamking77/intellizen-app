@@ -75,7 +75,11 @@ post-completion workflow-led redesign.
   present; no duplicate legacy-project mapping
 - Canonical MCP hierarchy contract: `list_hierarchy` is exposed in both the
   admin registry and reviewed read-only worker allowlist; a direct admin probe
-  returned 29 total nodes and Sogo V3's exact linked folder
+  returned 29 total nodes and Sogo V3's exact linked folder; the worker registry
+  exposed 12 reviewed tools including `list_hierarchy`
+- Full `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke` rerun after `5ba8c21`:
+  passed, including product contracts, TypeScript, production frontend build,
+  strict Clippy, and all non-ignored native tests
 
 ## Completed local workflow evidence
 

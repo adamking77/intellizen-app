@@ -65,7 +65,11 @@ not count as Day 1.
   running.
 - Canonical MCP: rebuilt from the same repository; 65 tools exposed, including
   read-only `list_hierarchy`; live readback returned 29 nodes and the exact
-  Sogo V3 folder.
+  Sogo V3 folder. The reviewed worker registry exposes 12 tools and includes
+  the same read-only hierarchy surface.
+- Post-repair `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke`: passed after
+  `5ba8c21` (product contracts, TypeScript, production frontend build, strict
+  Clippy, 39 native tests passed, two intentional live/manual ignores).
 - Scheduled proof readback: job `9c1e6c93e398` is paused with no running claim
   or last error after Adam rejected the app-finished classification.
 - Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
