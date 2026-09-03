@@ -53,7 +53,11 @@ export function createNativeSupabaseFetch(
       },
     })) as SupabaseProxyResponse;
 
-    return new Response(base64ToBytes(response.bodyBase64), {
+    const body = method === "HEAD" || [204, 205, 304].includes(response.status)
+      ? null
+      : base64ToBytes(response.bodyBase64);
+
+    return new Response(body, {
       status: response.status,
       statusText: response.statusText,
       headers: response.headers,

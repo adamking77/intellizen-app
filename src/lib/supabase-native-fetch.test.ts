@@ -53,4 +53,21 @@ describe("native Supabase fetch", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ message: "duplicate" });
   });
+
+  it("returns bodyless success responses without inventing an empty body", async () => {
+    const invoke = vi.fn(async () => ({
+      status: 204,
+      statusText: "No Content",
+      headers: [],
+      bodyBase64: "",
+    }));
+
+    const response = await createNativeSupabaseFetch(invoke)(
+      "https://example.supabase.co/rest/v1/hierarchy_nodes?id=eq.project-1",
+      { method: "PATCH", body: JSON.stringify({ folders: ["/work"] }) },
+    );
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+  });
 });
