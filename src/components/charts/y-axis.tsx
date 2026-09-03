@@ -83,5 +83,3 @@ const YAxisInner = memo(function YAxisInner({
 });
 
 YAxis.displayName = "YAxis";
-
-export default YAxis;

@@ -1524,22 +1524,6 @@ async function getWorkspaceTaskRecord(id: string): Promise<WorkspaceRecordRow> {
   return data as WorkspaceRecordRow;
 }
 
-async function updateWorkspaceTaskRecord(
-  id: string,
-  updates: { fields?: Record<string, unknown>; body?: string | null },
-): Promise<WorkspaceRecordRow> {
-  const { data, error } = await supabase
-    .schema("workspace").from("records")
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.tasks)
-    .select("id, database_id, entity, fields, body, taxonomy, updated_at")
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data as WorkspaceRecordRow;
-}
-
 /**
  * Atomically append a markdown section to a record body (and merge a partial
  * fields patch) through workspace.append_record_section, so concurrent agent

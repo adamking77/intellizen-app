@@ -50,8 +50,6 @@ export type OperationStatus = "active" | "on_hold" | "archived";
 export type SignalStatus = "new" | "saved" | "dismissed";
 export type ProjectType = "report" | "scoping" | "research" | "client_case";
 export type ProjectStatus = "active" | "on_hold" | "archived";
-export type MonitorFrequency = "daily" | "weekly";
-export type MonitorStatus = "active" | "paused";
 export type SearchMode =
   | "internal"
   | "web"
@@ -84,23 +82,7 @@ export interface IntelSignal {
   updated_at: string;
 }
 
-export type FionaInboxStatus = "pending" | "in_progress" | "complete" | "blocked" | string;
-export type FionaInboxPriority = "low" | "normal" | "high" | "urgent" | string;
-
-export interface FionaInboxItem {
-  id: string;
-  from_agent: string;
-  task: string;
-  context: Record<string, unknown> | null;
-  priority: FionaInboxPriority;
-  status: FionaInboxStatus;
-  result: unknown;
-  created_at: string;
-  updated_at: string;
-}
-
 export type AgentWorkSource = "workspace.records";
-export type AgentWorkOutcome = "done" | "blocked" | "deferred" | "needs_approval";
 export type WorkflowRunStatus =
   | "Queued"
   | "In progress"
@@ -132,79 +114,6 @@ export interface AgentWorkItem {
   latest_receipt?: string | null;
   body_preview: string;
   updated_at: string;
-}
-
-export interface AgentProjectItem {
-  id: string;
-  source: AgentWorkSource;
-  database_id: string;
-  title: string;
-  stage: string | null;
-  priority: string | null;
-  assignee: string[];
-  agent_owner: string | null;
-  week_theme: string | null;
-  task_ids: string[];
-  body_preview: string;
-  updated_at: string;
-}
-
-export interface AgentWorkReceiptInput {
-  summary: string;
-  sources_used?: string[];
-  actions_taken?: string[];
-  files_touched?: string[];
-  records_touched?: string[];
-  artifacts_created?: string[];
-  verification?: string[];
-  approval_needed?: string | null;
-  blocked_items?: string[];
-  follow_up_tasks?: string[];
-  next_step?: string | null;
-}
-
-export interface AgentWorkFollowupInput {
-  title: string;
-  assignee?: string;
-  priority?: string;
-  body?: string;
-}
-
-export interface AgentDelegationSourceContext {
-  records?: string[];
-  documents?: string[];
-  artifacts?: string[];
-}
-
-export interface DelegateAgentWorkInput {
-  parentWorkItemId: string;
-  requestedRole: string;
-  requestedActor?: string | null;
-  reason: string;
-  sourceContext?: AgentDelegationSourceContext;
-  expectedOutput: string;
-  allowedTools?: string[];
-  approvalLimits?: string[];
-  returnPath: string;
-  receiptRequired?: boolean;
-  confirmWrite?: boolean;
-}
-
-export interface DelegateAgentWorkResult {
-  dry_run: boolean;
-  child_work_item_id: string | null;
-  delegation_id: string;
-  status: "preview" | "created";
-  child_work_item: AgentWorkItem;
-  parent_work_item?: AgentWorkItem | null;
-}
-
-export interface VoiceDraftTaskInput {
-  transcript: string;
-  requestedBy: string;
-  sourceRoute?: string | null;
-  sourceProvider?: string | null;
-  confirmWrite?: boolean;
 }
 
 export interface WorkflowTemplateItem {
@@ -327,19 +236,6 @@ export interface Project {
   updated_at: string;
 }
 
-export interface Monitor {
-  id: number;
-  entity?: string;
-  name: string;
-  query: string;
-  watch_domain: string;
-  frequency: MonitorFrequency;
-  status: MonitorStatus;
-  last_run: string | null;
-  signal_count: number;
-  created_at: string;
-}
-
 export interface ProjectSignal {
   id: number;
   project_id: number;
@@ -361,15 +257,6 @@ export interface SignalDraft {
   info_credibility?: number | null;
   raw_payload: unknown;
   status?: SignalStatus;
-}
-
-export interface MonitorInsert {
-  entity?: string;
-  name: string;
-  query: string;
-  watch_domain: string;
-  frequency: MonitorFrequency;
-  status?: MonitorStatus;
 }
 
 export interface SearchResultItem {
@@ -435,7 +322,6 @@ export type InvestigationStatus = "active" | "archived" | "completed";
 export type InvestigationUseCase = "scoping" | "post" | "sit_rep";
 export type VaultFileType = "plan" | "collect" | "collate" | "timeline" | "ach" | "report" | "sweep" | "assessment" | "brief" | "analysis" | "graph_export";
 export type ReportType = "internal" | "client" | "deep" | "public";
-export type WorkspaceNodeKind = "folder" | "file";
 export type CanvasBackground = "plain" | "dots" | "grid";
 export type CanvasShape = "rect" | "pill" | "diamond" | "parallelogram" | "circle";
 export type CanvasBorder = "none" | "subtle" | "strong";
@@ -512,23 +398,6 @@ export interface VaultFile {
   generated_by: string;
   content: string | null;
   created_at: string;
-}
-
-export interface WorkspaceNodeSummary {
-  id: number;
-  parent_id: number | null;
-  case_id: string | null;
-  project_id: number | null;
-  project_record_id?: string | null;
-  kind: WorkspaceNodeKind;
-  name: string;
-  path: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WorkspaceNode extends WorkspaceNodeSummary {
-  content: string | null;
 }
 
 // ── OSINT entity layer (intel schema) ──────────────────────────────────────

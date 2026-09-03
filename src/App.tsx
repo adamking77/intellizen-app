@@ -3,6 +3,7 @@ import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-d
 
 import { AgentPanelWindow, AppShell } from "@/components/layout/app-shell";
 import { PluginRouteView } from "@/plugins/route-view";
+import { RoomView } from "@/views/Room";
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -31,7 +32,6 @@ const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView")
 const AgentsView = lazyNamed(() => import("@/views/Agents"), "AgentsView"); // wave-1 agents-page
 const UnitView = lazyNamed(() => import("@/views/Unit"), "UnitView");
 const ProjectView = lazyNamed(() => import("@/views/Project"), "ProjectView");
-const RoomView = lazyNamed(() => import("@/views/Room"), "RoomView");
 
 function RouteLoadingFallback() {
   return (
@@ -159,14 +159,7 @@ function App() {
             }
           />
           <Route path="/reports" element={<Navigate to="/docs" replace />} />
-          <Route
-            path="/room/:id?"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <RoomView />
-              </Suspense>
-            }
-          />
+          <Route path="/room/:id?" element={<RoomView />} />
           {/* wave-1 plugins: every plugin page lives under /plugin/<id> */}
           <Route path="/plugin/:id/*" element={<PluginRouteView />} />
           <Route

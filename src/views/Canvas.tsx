@@ -488,5 +488,3 @@ export function CanvasView() {
     </div>
   );
 }
-
-export default CanvasView;

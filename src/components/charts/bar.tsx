@@ -351,5 +351,3 @@ export function Bar(props: BarProps) {
 }
 
 Bar.displayName = "Bar";
-
-export default Bar;

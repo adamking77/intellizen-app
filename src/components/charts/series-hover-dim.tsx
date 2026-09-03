@@ -46,5 +46,3 @@ export function SeriesHoverDim({
 }
 
 SeriesHoverDim.displayName = "SeriesHoverDim";
-
-export default SeriesHoverDim;

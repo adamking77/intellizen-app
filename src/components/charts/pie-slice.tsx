@@ -443,5 +443,3 @@ export function PieSlice({
 }
 
 PieSlice.displayName = "PieSlice";
-
-export default PieSlice;

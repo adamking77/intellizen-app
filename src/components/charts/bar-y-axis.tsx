@@ -138,5 +138,3 @@ const BarYAxisInner = memo(function BarYAxisInner({
 });
 
 BarYAxis.displayName = "BarYAxis";
-
-export default BarYAxis;

@@ -119,5 +119,3 @@ export function PieCenter({
 }
 
 PieCenter.displayName = "PieCenter";
-
-export default PieCenter;

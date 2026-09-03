@@ -327,5 +327,3 @@ function DatePillTrackerInner({
     </motion.div>
   );
 }
-
-export default ChartTooltip;

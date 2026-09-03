@@ -158,5 +158,3 @@ const XAxisInner = memo(function XAxisInner({
 });
 
 XAxis.displayName = "XAxis";
-
-export default XAxis;

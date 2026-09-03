@@ -108,5 +108,3 @@ export function usePie(): PieContextValue {
   }
   return context;
 }
-
-export default PieContext;
