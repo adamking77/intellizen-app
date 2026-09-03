@@ -3,13 +3,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FileText, Loader2, Plus } from "lucide-react";
 
+import { ProjectBoard } from "@/components/project/project-board";
+import { ProjectData } from "@/components/project/project-data";
+import { ProjectSessions } from "@/components/project/project-sessions";
+import { ProjectCanvases, ProjectGraph } from "@/components/project/project-visuals";
 import { Button } from "@/components/ui/button";
 import { QueryState } from "@/components/ui/query-state";
-import { getDocumentsWorkspaceBundle, listInvestigations } from "@/lib/data";
+import { getDocumentsWorkspaceBundle, listCanvasDocuments, listInvestigations } from "@/lib/data";
+import { listGraphNodes } from "@/lib/data/graph";
 import { createPortableDocument } from "@/lib/document-persistence";
 import { DOCUMENTS_DB_FIELDS, quickNoteTitle } from "@/lib/documents";
 import { locate } from "@/lib/hierarchy";
 import { breadcrumb, findProjectNode, projectDocuments, shortenHome } from "@/lib/project-center";
+import { projectRoomTabs, type ProjectRoomTab } from "@/lib/project-room";
 import { toast, toastError } from "@/lib/toast";
 import { useHierarchy } from "@/lib/use-hierarchy";
 import { useAppStore } from "@/store";
@@ -17,8 +23,6 @@ import { CENTER_DOCS_QUERY_KEY } from "@/views/Unit";
 
 const InvestigationView = lazy(() => import("@/views/Investigation").then((m) => ({ default: m.InvestigationView })));
 const ProjectsView = lazy(() => import("@/views/Projects").then((m) => ({ default: m.ProjectsView })));
-
-type Tab = "files" | "case";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -34,15 +38,26 @@ function LazyFallback() {
   );
 }
 
-/** The project room: Files now, Case for migrated intel work. */
+const TAB_LABELS: Record<ProjectRoomTab, string> = {
+  files: "Files",
+  board: "Board",
+  data: "Data",
+  sessions: "Sessions",
+  canvas: "Canvas",
+  graph: "Graph",
+  case: "Case",
+};
+
+/** The project room defined by ROADMAP.md's center rule. */
 export function ProjectView() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setPendingProjectSelectionId = useAppStore((s) => s.setPendingProjectSelectionId);
   const { tree, isLoading, error } = useHierarchy();
-  const [tab, setTab] = useState<Tab>("files");
+  const [tab, setTab] = useState<ProjectRoomTab>("files");
+  const selectedSessionKey = searchParams.get("session");
 
   const node = findProjectNode(tree, id);
   const scoped = locate(tree, { kind: "project", id });
@@ -52,9 +67,22 @@ export function ProjectView() {
   const hasCase = investigationId != null || legacyProjectId != null;
 
   useEffect(() => setTab("files"), [id]);
+  useEffect(() => {
+    if (selectedSessionKey) setTab("sessions");
+  }, [selectedSessionKey]);
 
   const docs = useQuery({ queryKey: CENTER_DOCS_QUERY_KEY, queryFn: () => getDocumentsWorkspaceBundle() });
   const files = useMemo(() => projectDocuments(docs.data?.records ?? [], id), [docs.data?.records, id]);
+  const canvases = useQuery({ queryKey: ["canvas-documents"], queryFn: listCanvasDocuments });
+  const projectCanvases = useMemo(
+    () => legacyProjectId == null ? [] : (canvases.data ?? []).filter((canvas) => canvas.project_id === legacyProjectId),
+    [canvases.data, legacyProjectId],
+  );
+  const graphNodes = useQuery({
+    queryKey: ["graph-nodes", legacyProjectId],
+    queryFn: () => listGraphNodes(legacyProjectId),
+    enabled: legacyProjectId != null,
+  });
 
   const investigations = useQuery({
     queryKey: ["investigations", "center"],
@@ -93,7 +121,11 @@ export function ProjectView() {
     onError: (err) => toastError("Couldn't create document", err),
   });
 
-  const tabs: Tab[] = hasCase ? ["files", "case"] : ["files"];
+  const tabs = projectRoomTabs({
+    hasCanvas: projectCanvases.length > 0,
+    hasGraph: (graphNodes.data?.length ?? 0) > 0,
+    hasCase,
+  });
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
@@ -116,9 +148,12 @@ export function ProjectView() {
                 role="tab"
                 aria-selected={tab === t}
                 variant={tab === t ? "accent-soft" : "ghost"}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t);
+                  if (selectedSessionKey) setSearchParams({}, { replace: true });
+                }}
               >
-                {t === "files" ? "Files" : "Case"}
+                {TAB_LABELS[t]}
               </Button>
             ))}
           </div>
@@ -166,6 +201,22 @@ export function ProjectView() {
             </div>
           </QueryState>
         </div>
+      ) : tab === "board" ? (
+        <ProjectBoard folders={node.folders} />
+      ) : tab === "data" ? (
+        <ProjectData projectId={id} legacyProjectId={legacyProjectId} />
+      ) : tab === "sessions" ? (
+        <ProjectSessions
+          folders={node.folders}
+          projectId={id}
+          selectedSessionKey={selectedSessionKey}
+          transcriptOnly={Boolean(selectedSessionKey)}
+          tree={tree}
+        />
+      ) : tab === "canvas" ? (
+        <ProjectCanvases canvases={projectCanvases} />
+      ) : tab === "graph" && legacyProjectId != null ? (
+        <ProjectGraph projectId={legacyProjectId} nodes={graphNodes.data ?? []} />
       ) : investigationId != null && !caseId ? (
         <div className="p-5">
           <QueryState

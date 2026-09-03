@@ -103,7 +103,9 @@ that feedback before Fable remaining-work item 6 begins.
   exact path, the same job fired again at 14:13. Hermes execution
   `f3a77ae6af3d4ee3b062b9d348f75096` completed cleanly and Workflow Run
   `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with passed
-  verification and seven receipts. The job is restored to daily `07:00`.
+  verification and seven receipts. It was then restored to daily `07:00` for
+  the original acceptance plan; Adam later directed that it stay paused until
+  the app is functionally finished.
 - **E.18 failed.** Copying the Graph embed reported success only after a graph
   was selected, a prerequisite the UI did not make discoverable. Quick Note
   creation was slow enough to invite repeated clicks, and the pasted embed did

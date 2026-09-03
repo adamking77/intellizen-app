@@ -302,8 +302,9 @@ is no later required build wave after the Done list below.
 > `docs/verification/wave-1-capability-examples.md`. Adam confirmed that
 > `hermes-app` remains at its current path as the reference donor, and that he
 > wrote and approves the acceptance script. The three separate full-scene
-> acceptance days remain outstanding. Hermes cron job `9c1e6c93e398` runs the
-> existing role-directed proof as `fiona` daily at 07:00. A manual transport
+> acceptance days remain outstanding. Hermes cron job `9c1e6c93e398` proved
+> the existing role-directed workflow as `fiona`; its current paused state is
+> recorded below. A manual transport
 > preflight reached Hermes but
 > violated the workflow's execution contract by reconstructing low-level
 > dispatch and running tests; its Workflow Run is recorded **Blocked** and does
@@ -317,8 +318,10 @@ is no later required build wave after the Done list below.
 > `f3a77ae6af3d4ee3b062b9d348f75096` completed cleanly, and Workflow Run
 > `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with a
 > passed independent verification and seven durable receipts. No tests, file
-> writes, external actions, or simulated action occurred. E.17 is complete;
-> the job is restored to its normal daily 07:00 schedule. A final runtime audit
+> writes, external actions, or simulated action occurred. E.17 is complete.
+> At Adam's direction, job `9c1e6c93e398` was paused on 2026-09-03 and must
+> not resume until the app is functionally finished and the three-day
+> acceptance run begins. A final runtime audit
 > also found Fiona's
 > profile misbound to Isla's obsolete MCP wrapper. Fiona now resolves through
 > her own wrapper to this repository's single MCP build; Hermes connected,
@@ -326,15 +329,16 @@ is no later required build wave after the Done list below.
 > Exact local artifact identities and gates are recorded in
 > `docs/verification/wave-1-release.md`.
 
-**Completion execution guardrail.** From this point, the plan is only: create
-one live schedule for the existing runnable proof workflow; run the approved
-ten-line scene unchanged on three separate days; record each day's evidence;
-then mark Fable 5.1 complete. Do not rerun the automated suites, rebuild the
-artifacts, redesign a workflow or page, add another fixture, or change
-`hermes-app` unless an acceptance line fails or product code changes.
-The multi-day acceptance record blocks only the final Fable 5.1 completion
-claim. It is not a stop-work condition for later app work Adam explicitly
-directs, and it must never be used to leave the active build goal blocked.
+**Completion execution guardrail.** App construction comes first. A native
+readback found that Phase 0.3's project room did not expose the required Board,
+Data, or Sessions tabs even though the earlier readiness record marked that
+line ready. Repair and verify any remaining roadmap gap in the built `.app`,
+finish the final artifacts, and only then begin the approved ten-line scene on
+three separate days. Job `9c1e6c93e398` and the acceptance heartbeat stay
+paused until that app-finished gate. The acceptance period must never block or
+delay app construction, and readiness checks never count as acceptance days.
+Do not redesign a workflow or page without Adam's approval, add another
+fixture, or change `hermes-app` unless a roadmap requirement demands it.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what

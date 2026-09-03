@@ -43,7 +43,10 @@ The correct unsigned release flow is:
    `codesign --force --deep --sign - src-tauri/target/release/bundle/macos/IntelliZen.app`.
 3. Verify the app bundle before packaging:
    `codesign --verify --deep --strict --verbose=4 src-tauri/target/release/bundle/macos/IntelliZen.app`.
-4. Package the verified app into the DMG, then run `hdiutil verify` on the DMG.
+4. Package with an explicit ad-hoc identity so Tauri does not recreate an
+   unsealed app inside the DMG:
+   `pnpm tauri bundle --bundles app dmg --config '{"bundle":{"macOS":{"signingIdentity":"-"}}}' --ci`.
+   Then run `hdiutil verify` on the DMG.
 5. Mount the DMG and verify the app inside it again with `codesign --verify --deep --strict --verbose=4`.
 6. `spctl --assess` will reject the app because it is unsigned; that is expected. The failure must be the unsigned/Gatekeeper rejection, **not** `code has no resources but signature indicates they must be present`.
 7. GitHub release notes must say: first launch requires right-click `IntelliZen.app` -> `Open` to bypass Gatekeeper.

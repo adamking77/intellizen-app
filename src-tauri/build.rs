@@ -4,6 +4,9 @@ const KEY_NAMES: [&str; 2] = ["EXA_API_KEY", "VITE_EXA_API_KEY"];
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    // The release binary embeds Vite's output. Make frontend-only changes
+    // invalidate the Rust package instead of silently reusing an older app.
+    println!("cargo:rerun-if-changed=../dist");
     println!("cargo:rerun-if-changed=../.env.local");
     println!("cargo:rerun-if-changed=../.env");
 
@@ -11,7 +14,18 @@ fn main() {
         println!("cargo:rustc-env=INTELLIZEN_COMPILED_EXA_API_KEY={value}");
     }
 
+    clear_stale_codegen_assets();
     tauri_build::build()
+}
+
+fn clear_stale_codegen_assets() {
+    let Some(out_dir) = env::var_os("OUT_DIR") else {
+        return;
+    };
+    let assets = PathBuf::from(out_dir).join("tauri-codegen-assets");
+    if assets.exists() {
+        fs::remove_dir_all(&assets).expect("remove stale Tauri codegen assets");
+    }
 }
 
 fn resolve_exa_api_key() -> Option<String> {

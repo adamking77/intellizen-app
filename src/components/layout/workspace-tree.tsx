@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { ChevronRight, Ellipsis, Plus } from "lucide-react";
 
 import { useTreeRoving } from "@/components/layout/use-roving";
+import { ProjectSessionTree } from "@/components/project/project-session-tree";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import type { DepartmentNode, NodeKind, ProjectNode, WorkspaceNode } from "@/lib/hierarchy";
+import { groupSessionsByProject, projectSessionKey } from "@/lib/project-room";
 import { toastError } from "@/lib/toast";
 import { useHierarchy } from "@/lib/use-hierarchy";
 import { cn } from "@/lib/utils";
+import { listHermesSessions } from "@/services/hermes-project-sessions";
 
 // The hierarchy in the sidebar: department → workspace → project (recursive).
 // Behaviour ported from hermes-app's Tree.tsx; rows reuse the nav's density so
@@ -36,6 +40,7 @@ interface Meta {
   parentId: string | null;
   folders: string[];
   childCount: number;
+  itemCount?: number;
 }
 
 interface MenuState {
@@ -190,7 +195,7 @@ function Row({
   onDrop,
   onDragEnd,
 }: RowProps) {
-  const hasChildren = node.childCount > 0;
+  const hasChildren = (node.itemCount ?? node.childCount) > 0;
   const folder = node.folders[0];
   return (
     <div
@@ -256,6 +261,7 @@ function Row({
         />
       </button>
       <span className="min-w-0 flex-1 truncate">{node.name}</span>
+      {(node.itemCount ?? 0) > 0 ? <span className="text-meta">{node.itemCount}</span> : null}
       <button
         type="button"
         tabIndex={-1}
@@ -283,6 +289,16 @@ export function WorkspaceTree() {
   const location = useLocation();
   const navigate = useNavigate();
   const roving = useTreeRoving();
+  const allSessions = useQuery({
+    queryKey: ["hermes-sessions", "project-room"],
+    queryFn: listHermesSessions,
+    retry: false,
+  });
+  const sessionGroups = useMemo(
+    () => groupSessionsByProject(tree, allSessions.data ?? []),
+    [allSessions.data, tree],
+  );
+  const selectedSessionKey = new URLSearchParams(location.search).get("session");
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [editing, setEditing] = useState<string | null>(null);
@@ -315,7 +331,7 @@ export function WorkspaceTree() {
 
   const select = (node: Meta) => {
     navigate(routeFor(node));
-    if (node.childCount > 0 && !expanded.has(node.id)) expand(node.id, true);
+    if ((node.itemCount ?? node.childCount) > 0 && !expanded.has(node.id)) expand(node.id, true);
   };
 
   const startAdding = (parent: Meta | null) => {
@@ -456,13 +472,36 @@ export function WorkspaceTree() {
   };
 
   const renderProjects = (projects: ProjectNode[], parentId: string, depth: number): React.ReactNode[] =>
-    projects.map((p) =>
-      branch(
-        { kind: "project", id: p.id, name: p.name, parentId, folders: p.folders, childCount: p.projects.length },
+    projects.map((p) => {
+      const sessions = sessionGroups.get(p.id) ?? [];
+      return branch(
+        {
+          kind: "project",
+          id: p.id,
+          name: p.name,
+          parentId,
+          folders: p.folders,
+          childCount: p.projects.length,
+          itemCount: p.projects.length + sessions.length,
+        },
         depth,
-        () => renderProjects(p.projects, p.id, depth + 1),
-      ),
-    );
+        () => (
+          <>
+            {renderProjects(p.projects, p.id, depth + 1)}
+            <ProjectSessionTree
+              depth={depth + 1}
+              projectId={p.id}
+              selectedKey={location.pathname === `/project/${p.id}` ? selectedSessionKey : null}
+              sessions={sessions}
+              onSelect={(session) => {
+                const params = new URLSearchParams({ tab: "sessions", session: projectSessionKey(session) });
+                navigate(`/project/${p.id}?${params.toString()}`);
+              }}
+            />
+          </>
+        ),
+      );
+    });
 
   const renderWorkspace = (w: WorkspaceNode, parentId: string) =>
     branch(

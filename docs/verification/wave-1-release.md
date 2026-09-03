@@ -7,7 +7,9 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 - Branch: `v3/phase-0`
 - Roadmap base: `063de674171dddfb561a052308d9f4c9d981f8a3`
 - Wave 1 completion commit: `23182215da9047ef133a54029dcb7a175fe30807`
-- State: committed locally on `v3/phase-0`; not pushed
+- Phase 0.3 project-room repair: current local candidate; final native walk
+  pending because the Mac was locked when the artifact was built
+- State: local on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
 
@@ -15,8 +17,8 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 
 | Artifact | Bytes | Built | SHA-256 |
 | --- | ---: | --- | --- |
-| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 13:27:07 +04 | `27387dfe274ad61cd0ec5750b654e6667e843e3f1887767a608f12ef746f5898` |
-| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,764,808 | 2026-09-03 13:27:29 +04 | `958c9e35fe186d055adfdbb88fcf30d3894cb391f25ffde5e3bb2dfbad9da405` |
+| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 15:52:10 +04 | `4b61034376df4e5bd8cb057b4c2c63238e0716e239663ac6b679e1e645e08996` |
+| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,808,749 | 2026-09-03 15:52:32 +04 | `caaff60d374daf8a26509062b010c3ffd982ac0ace565f38fe934a31346aaa17` |
 
 Exactly one IntelliZen process (`86743`) was running when this receipt was collected,
 from the `.app` above.
@@ -33,7 +35,7 @@ This closes the stale sidebar label that previously claimed v0.4.0.
 ## Gates
 
 - `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke`: passed
-- Frontend: 383 passed, one intentional skip
+- Frontend: 391 passed, one intentional skip
 - Rust: 39 passed, two intentional live/manual ignores
 - Pinned Hermes gateway parity: 26/26 passed
 - D.13 installed fixture and broken-plugin isolation: passed
@@ -42,6 +44,8 @@ This closes the stale sidebar label that previously claimed v0.4.0.
 - Service-role JWT scan: passed against `dist/`, the `.app`, and the DMG
 - Strict ad-hoc code-sign verification: passed for the `.app` and the copy
   mounted from the DMG; `hdiutil verify` passed for the DMG
+- Gatekeeper assessment: expected unsigned rejection (`spctl` exit 3), with
+  no resource-seal error
 - Native Hermes REST transport regression: targeted test passed; the release
   app loaded cron jobs through Tauri's native HTTP bridge rather than a
   browser request blocked by Hermes's absent CORS preflight support
@@ -89,6 +93,9 @@ This closes the stale sidebar label that previously claimed v0.4.0.
 - The cron job was restored to `0 7 * * *`. Final scheduler readback returned
   `scheduled` and enabled, next run `2026-09-04T07:00:00+04:00`, last status
   `ok`, with no in-flight claim or last error.
+- Later state update, 2026-09-03: Adam directed that acceptance begin only
+  after the app is functionally finished. Job `9c1e6c93e398` now reads
+  `enabled: false`, `state: paused`; the proof evidence above remains valid.
 - The Fiona gateway had one separate stale binding: its profile config pointed
   at Isla's wrapper, whose server path no longer exists. Fiona's config now
   points to her documented wrapper at

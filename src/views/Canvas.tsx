@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePlus2, Loader2, Trash2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { createEmptyCanvasDocument, serializeCanvasDocument } from "@/components/canvas/CanvasSerializer";
@@ -88,6 +89,11 @@ function stableCanvasValue(value: unknown): unknown {
 
 export function CanvasView() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const requestedCanvas = searchParams.get("canvas");
+  const requestedId = requestedCanvas && Number.isFinite(Number(requestedCanvas))
+    ? Number(requestedCanvas)
+    : null;
   const selectedIdRef = useRef<number | null>(null);
   const loadedCanvasIdRef = useRef<number | null>(null);
   const draftCanvasIdRef = useRef<number | null>(null);
@@ -140,10 +146,12 @@ export function CanvasView() {
       return;
     }
 
-    if (selectedId == null || !canvases.some((canvas) => canvas.id === selectedId)) {
+    if (requestedId != null && canvases.some((canvas) => canvas.id === requestedId)) {
+      selectCanvas(requestedId);
+    } else if (selectedId == null || !canvases.some((canvas) => canvas.id === selectedId)) {
       selectCanvas(canvases[0].id);
     }
-  }, [canvases, selectedId]);
+  }, [canvases, requestedId, selectedId]);
 
   const { data: selectedCanvas, isLoading: loadingCanvas } = useQuery({
     queryKey: ["canvas-document", selectedId],

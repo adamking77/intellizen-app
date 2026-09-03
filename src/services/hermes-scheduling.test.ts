@@ -10,7 +10,7 @@ import {
   runCronJobNow,
   scheduledWorkflowPrompt,
 } from "./hermes-cron";
-import { createKanbanCard, listKanbanBoards } from "./hermes-kanban";
+import { createKanbanCard, listKanbanBoard, listKanbanBoards } from "./hermes-kanban";
 
 beforeEach(() => hermesRest.mockReset());
 
@@ -63,6 +63,25 @@ describe("Hermes scheduling services", () => {
         }),
       },
     ]);
+  });
+
+  it("maps a project board into display columns", async () => {
+    hermesRest.mockResolvedValueOnce({
+      columns: [{ name: "running", tasks: [{ id: "card-1", title: "Build", assignee: "keel", latest_summary: "Wired" }] }],
+    });
+
+    await expect(listKanbanBoard("app build")).resolves.toEqual([{
+      name: "running",
+      cards: [{
+        id: "card-1",
+        title: "Build",
+        status: "running",
+        assignee: "keel",
+        projectId: null,
+        latestSummary: "Wired",
+      }],
+    }]);
+    expect(hermesRest).toHaveBeenCalledWith("/api/plugins/kanban/board?board=app%20build");
   });
 
   it("puts the workflow definition and progress-card identities into the cron prompt", () => {

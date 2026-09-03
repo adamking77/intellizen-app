@@ -6,6 +6,8 @@ export interface KanbanBoard {
   description: string;
   isCurrent: boolean;
   total: number;
+  projectId: string | null;
+  defaultWorkdir: string | null;
 }
 
 export interface KanbanCard {
@@ -13,6 +15,13 @@ export interface KanbanCard {
   title: string;
   status: string;
   assignee: string | null;
+  projectId?: string | null;
+  latestSummary?: string | null;
+}
+
+export interface KanbanColumn {
+  name: string;
+  cards: KanbanCard[];
 }
 
 export interface KanbanCardCreate {
@@ -37,6 +46,25 @@ export async function listKanbanBoards(): Promise<KanbanBoard[]> {
     description: text(row.description),
     isCurrent: row.is_current === true,
     total: typeof row.total === "number" ? row.total : 0,
+    projectId: typeof row.project_id === "string" && row.project_id ? row.project_id : null,
+    defaultWorkdir: typeof row.default_workdir === "string" && row.default_workdir ? row.default_workdir : null,
+  }));
+}
+
+export async function listKanbanBoard(board: string): Promise<KanbanColumn[]> {
+  const result = await hermesRest<{ columns?: Array<{ name?: unknown; tasks?: Record<string, unknown>[] }> }>(
+    `${BASE}/board?board=${encodeURIComponent(board)}`,
+  );
+  return (result.columns ?? []).map((column) => ({
+    name: text(column.name) || "todo",
+    cards: (column.tasks ?? []).map((task) => ({
+      id: text(task.id),
+      title: text(task.title) || "Untitled card",
+      status: text(task.status) || text(column.name) || "todo",
+      assignee: typeof task.assignee === "string" && task.assignee ? task.assignee : null,
+      projectId: typeof task.project_id === "string" && task.project_id ? task.project_id : null,
+      latestSummary: typeof task.latest_summary === "string" && task.latest_summary ? task.latest_summary : null,
+    })),
   }));
 }
 
@@ -56,10 +84,18 @@ export async function createKanbanCard(board: string, card: KanbanCardCreate): P
     },
   );
   if (!result.task) throw new Error("Kanban returned no card");
+  const projectId = typeof result.task.project_id === "string" && result.task.project_id
+    ? result.task.project_id
+    : null;
+  const latestSummary = typeof result.task.latest_summary === "string" && result.task.latest_summary
+    ? result.task.latest_summary
+    : null;
   return {
     id: text(result.task.id),
     title: text(result.task.title),
     status: text(result.task.status) || "todo",
     assignee: typeof result.task.assignee === "string" && result.task.assignee ? result.task.assignee : null,
+    ...(projectId ? { projectId } : {}),
+    ...(latestSummary ? { latestSummary } : {}),
   };
 }
