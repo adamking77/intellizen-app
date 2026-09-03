@@ -105,7 +105,7 @@ that feedback before Fable remaining-work item 6 begins.
   `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with passed
   verification and seven receipts. It was then restored to daily `07:00` for
   the original acceptance plan; Adam later directed that it stay paused until
-  the app is functionally finished.
+  the app is functionally finished and the three-day acceptance run begins.
 - **E.18 failed.** Copying the Graph embed reported success only after a graph
   was selected, a prerequisite the UI did not make discoverable. Quick Note
   creation was slow enough to invite repeated clicks, and the pasted embed did
@@ -140,7 +140,12 @@ that feedback before Fable remaining-work item 6 begins.
   writes a linked snapshot, opens Docs directly, and never uses the clipboard.
   The native proof created **Wave 1 graph proof 2026-09-03** and rendered its
   linked snapshot with **Open graph**.
-- `pnpm check`, 383 frontend tests (one intentional skip), `git diff --check`,
+- The rebuilt project room exposes Files, Board, Data and Sessions. The final
+  native walk rendered each surface, opened Data's linked Operations record,
+  and caught a real Sessions 422. `69625a9` replaced the invalid 2,000-row
+  request with pagination over Hermes's 500-row contract; the rebuilt Sessions
+  surface then passed.
+- `pnpm check`, 392 frontend tests (one intentional skip), `git diff --check`,
   and the local-only `pnpm smoke` gate passed on 2026-09-03.
 - A read-only live hierarchy query returned 23 project nodes, including all 16
   legacy projects and all 9 investigations, with no duplicate legacy-project

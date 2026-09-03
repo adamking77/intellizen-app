@@ -6,12 +6,12 @@ evidence index, not a substitute for Adam's three acceptance days.
 
 ## Verdict
 
-**Not complete yet.** A native readback found that the project room was missing
-Board, Data, and Sessions despite the earlier readiness claim. That Phase 0.3
-gap is repaired in `1354a85` and must pass in the rebuilt `.app`. The final
-artifacts have already been refreshed and verified from that repair. Only after
-the app is functionally finished does requirement 5 begin: Adam runs the
-unchanged ten-line scene on three separate calendar days.
+**Application construction is complete; Fable Done is not complete yet.** The
+rebuilt `.app` passed the repaired project-room walk after `1354a85` and the
+pinned Hermes session-page fix in `69625a9`. Final artifacts and gates are
+green. The only remaining Done requirement is Adam's unchanged ten-line scene
+on three separate calendar days; readiness and this completion walk do not
+count as Day 1.
 
 ## Stage-by-stage evidence
 
@@ -19,7 +19,7 @@ unchanged ten-line scene on three separate calendar days.
 | --- | --- | --- | --- |
 | 0.1 | Flavors, accents, and appearance | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
 | 0.2 | Hierarchy tree and row operations | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
-| 0.3 | Selection controls the center surface | `1354a85` adds Files, Board, Data, and Sessions plus contextual Canvas, Graph, and Case surfaces. Automated coverage is green; exact-app native use remains pending. | **Open** |
+| 0.3 | Selection controls the center surface | Native walk in the rebuilt `.app`: Files, Board, Data and Sessions rendered; Data opened its linked Operations record. Sessions' discovered 422 was repaired at `69625a9` and the rebuilt surface passed. | Used in built app |
 | 0.4 | Three-panel shell, collapse, focus, shortcuts | `ROADMAP.md` Phase 0 walk, 2026-09-02 | Used in built app |
 | A.1 | App attaches to Hermes and names the engine | `ROADMAP.md` Phase A walk, 2026-09-02 | Used in built app |
 | A.2 | Streaming Hermes turn in the panel | `ROADMAP.md` Phase A walk, 2026-09-02 | Used in built app |
@@ -44,7 +44,7 @@ unchanged ten-line scene on three separate calendar days.
 
 | Requirement | Proof | Result |
 | --- | --- | --- |
-| 1. Every stage used in a built `.app` and dated | Phase 0.3 project-room repair at `1354a85` awaits exact-app native verification. | **Open** |
+| 1. Every stage used in a built `.app` and dated | Phase 0.3 exact-app repair walk completed 2026-09-03; the other dated stage evidence is listed above. | Complete |
 | 2. Six agent capability examples | `docs/verification/wave-1-capability-examples.md` names the corresponding native action, record, delegation, approval, room, or plugin proof. | Complete |
 | 3. Donor retired; old workers removed; Intel cases retained | `docs/verification/hermes-app-reference-retention.md`; current tree has no `runtimes.rs`, `runtime_bindings.rs`, or `runtime_auth.rs`; release evidence records 16 legacy projects and 9 investigations in 23 project nodes. | Complete |
 | 4. Smoke, parity, `.app`, and DMG | The local smoke and parity gates are green after the Phase 0.3 repair. The `.app` and DMG were rebuilt, signed ad hoc, verified, scanned, and recorded below. | Complete |
@@ -52,16 +52,16 @@ unchanged ten-line scene on three separate calendar days.
 
 ## Current assembled state
 
-- Source completion commit: `1354a85`
+- Source completion commit: `69625a9`
 - Evidence reconciliation commit: `4d7d9b3`
-- Project-room repair candidate executable SHA-256:
-  `4b61034376df4e5bd8cb057b4c2c63238e0716e239663ac6b679e1e645e08996`
-- Project-room repair candidate DMG SHA-256:
-  `caaff60d374daf8a26509062b010c3ffd982ac0ace565f38fe934a31346aaa17`
-- Current runtime readback: zero IntelliZen UI processes while macOS is locked;
+- Final executable SHA-256:
+  `954a92b602e65c6994c52e9a033543be9798110caaf9e88dc015dc9987263b53`
+- Final DMG SHA-256:
+  `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6`
+- Current runtime readback: one exact release IntelliZen process (`13144`);
   zero retired donor UI processes; Fiona's independent launch agent is running.
-- Scheduled proof readback: job `9c1e6c93e398` is paused until the app is
-  functionally finished and the acceptance run begins.
+- Scheduled proof readback: job `9c1e6c93e398` remains paused until Adam begins
+  the acceptance run.
 - Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
 
 ## Acceptance-day ledger

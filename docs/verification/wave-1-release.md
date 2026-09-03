@@ -7,8 +7,9 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 - Branch: `v3/phase-0`
 - Roadmap base: `063de674171dddfb561a052308d9f4c9d981f8a3`
 - Wave 1 completion commit: `23182215da9047ef133a54029dcb7a175fe30807`
-- Phase 0.3 project-room repair: `1354a85`; exact-app native walk pending
-  because the Mac was locked after the artifact was built
+- Phase 0.3 project-room repair: `1354a85`
+- Pinned Hermes session-page repair found by the exact-app walk: `69625a9`
+- App-finished gate: passed in the rebuilt `.app` on 2026-09-03
 - State: local on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
@@ -17,10 +18,10 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 
 | Artifact | Bytes | Built | SHA-256 |
 | --- | ---: | --- | --- |
-| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 15:52:10 +04 | `4b61034376df4e5bd8cb057b4c2c63238e0716e239663ac6b679e1e645e08996` |
-| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,808,749 | 2026-09-03 15:52:32 +04 | `caaff60d374daf8a26509062b010c3ffd982ac0ace565f38fe934a31346aaa17` |
+| `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 16:22:00 +04 | `954a92b602e65c6994c52e9a033543be9798110caaf9e88dc015dc9987263b53` |
+| `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,809,228 | 2026-09-03 16:22:21 +04 | `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6` |
 
-Exactly one IntelliZen process (`86743`) was running when this receipt was collected,
+Exactly one IntelliZen process (`13144`) was running when this receipt was collected,
 from the `.app` above.
 
 The final completion audit also found and quit one stray process from the
@@ -32,10 +33,18 @@ Native accessibility readback from that exact app showed the complete Wave 1
 navigation and the engine status help text ending in `IntelliZen v0.1.1`.
 This closes the stale sidebar label that previously claimed v0.4.0.
 
+The same exact-app walk selected **Agama Yoga Rebrand Watch** in the tree and
+proved the repaired center rule. Files rendered its document state; Board
+rendered the project-folder linkage state; Data found **Spec Op: Shadow Lotus**
+in Operations and opened that exact record; Sessions initially exposed a real
+422 caused by the old 2,000-row request, then passed after `69625a9` rebuilt the
+client around Hermes's 500-row page contract. The final Sessions state was the
+correct folder-aware empty state because this project currently has no folder.
+
 ## Gates
 
 - `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke`: passed
-- Frontend: 391 passed, one intentional skip
+- Frontend: 392 passed, one intentional skip
 - Rust: 39 passed, two intentional live/manual ignores
 - Pinned Hermes gateway parity: 26/26 passed
 - D.13 installed fixture and broken-plugin isolation: passed
