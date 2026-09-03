@@ -6,14 +6,17 @@ evidence index, not a substitute for Adam's three acceptance days.
 
 ## Verdict
 
-**Not complete.** The rebuilt `.app` passed the repaired project-room walk
+**Engineering completion stage verified; full roadmap acceptance pending.**
+The rebuilt `.app` passed the repaired project-room walk
 after `1354a85`, the pinned Hermes session-page fix in `69625a9`, and the
 bodyless Supabase response fix in `a3c2dd9`. The `.app` and DMG have now been
-refreshed and verified from that source. Adam also rejected the earlier claim
-that the full app was finished. The app-finished gate is therefore open while
-the user-visible completion audit continues. The unchanged ten-line scene on
-three separate calendar days remains later; readiness and completion walks do
-not count as Day 1.
+refreshed and verified from that source. The remaining user-visible audit is
+complete: every top-level route rendered once without a page-level failure,
+the live Sogo project room read its real Board and Sessions data, and the D.13
+proof fixtures were retired from the active product without deleting the
+evidence. Adam's app-finished confirmation is still required before beginning
+the unchanged ten-line scene on three separate calendar days. Readiness and
+completion walks do not count as Day 1.
 
 ## Stage-by-stage evidence
 
@@ -60,7 +63,7 @@ not count as Day 1.
   `ec4699b7318d7d6f25feb39fe9831e708f641478c5f4d4d092de392b8a1fcf97`
 - Current rebuilt DMG SHA-256:
   `6241add3a91ef12c98091e4031f9f491337e78b45effb8a9223f5c57e73aa7e3`
-- Current runtime readback: one exact release IntelliZen app (`19132`); zero retired donor
+- Current runtime readback: one exact release IntelliZen app (`21219`); zero retired donor
   UI processes; Hermes is attached and Fiona's independent launch agent is
   running.
 - Canonical MCP: rebuilt from the same repository; 65 tools exposed, including
@@ -70,6 +73,10 @@ not count as Day 1.
 - Post-repair `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke`: passed after
   `5ba8c21` (product contracts, TypeScript, production frontend build, strict
   Clippy, 39 native tests passed, two intentional live/manual ignores).
+- D.13 cleanup: the saved proof widget was removed and both installed fixtures
+  were moved intact to `~/.hermes/plugins/.retired-wave1-proof/`. A full
+  exact-app restart showed no proof widget, route, or deliberate failure entry;
+  the four archived file hashes match the original D.13 evidence.
 - Scheduled proof readback: job `9c1e6c93e398` is paused with no running claim
   or last error after Adam rejected the app-finished classification.
 - Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.

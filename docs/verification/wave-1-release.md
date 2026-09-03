@@ -13,7 +13,8 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
   `a3c2dd9`
 - Canonical MCP hierarchy read added after the live completion audit; the
   rebuilt server exposes 65 tools and `list_hierarchy` read back 29 live nodes
-- App-finished gate: open after Adam rejected the earlier completion claim
+- App-finished gate: engineering stage verified; awaiting Adam's explicit
+  confirmation before Day 1
 - State: local on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
@@ -25,7 +26,7 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 | `src-tauri/target/release/bundle/macos/IntelliZen.app/Contents/MacOS/intellizen` | 10,698,160 | 2026-09-03 17:04:08 +04 | `ec4699b7318d7d6f25feb39fe9831e708f641478c5f4d4d092de392b8a1fcf97` |
 | `src-tauri/target/release/bundle/dmg/IntelliZen_0.1.1_aarch64.dmg` | 5,809,291 | 2026-09-03 17:04:29 +04 | `6241add3a91ef12c98091e4031f9f491337e78b45effb8a9223f5c57e73aa7e3` |
 
-Exactly one IntelliZen process (`19132`) was running when this receipt was collected,
+Exactly one IntelliZen process (`21219`) was running when the final cleanup receipt was collected,
 from the `.app` above.
 
 The final completion audit also found and quit one stray process from the
@@ -80,6 +81,11 @@ post-completion workflow-led redesign.
 - Full `ALLOW_LOCAL_ACCESS_KEY_BUILD=1 pnpm smoke` rerun after `5ba8c21`:
   passed, including product contracts, TypeScript, production frontend build,
   strict Clippy, and all non-ignored native tests
+- Post-proof product cleanup: removed the saved D.13 Home widget; moved the
+  healthy and deliberately broken fixture directories intact to
+  `~/.hermes/plugins/.retired-wave1-proof/`; verified after a full exact-app
+  restart that no proof route, widget, or isolated-failure entry remained.
+  The archived plugin and manifest hashes match the original proof identities.
 
 ## Completed local workflow evidence
 

@@ -372,7 +372,15 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > the minimal read-only `list_hierarchy` tool now returns the same live nodes,
 > including Sogo V3's folder, through the one existing MCP build. The `.app`
 > and DMG were refreshed and strictly verified after the native transport fix.
-> The app-finished gate remains open and acceptance remains 0 of 3 days.
+> The post-proof cleanup removed the saved D.13 Home widget and moved both
+> installed proof fixtures into the loader-ignored
+> `~/.hermes/plugins/.retired-wave1-proof/` archive without deleting them.
+> After a full exact-app restart, neither fixture appeared on Home or in the
+> sidebar, their four hashes still matched the proved originals, and exactly
+> one release IntelliZen process was running. The user-visible completion
+> stage is verified and ready for Adam's app-finished confirmation. Until that
+> confirmation, the cron job and heartbeat stay paused and acceptance remains
+> 0 of 3 days.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what
