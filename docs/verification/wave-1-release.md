@@ -5,8 +5,9 @@ Collected 2026-09-03 for the Fable 5.1 Done list.
 ## Source
 
 - Branch: `v3/phase-0`
-- Base commit: `063de674171dddfb561a052308d9f4c9d981f8a3`
-- State: base plus the current uncommitted Wave 1 completion changes
+- Roadmap base: `063de674171dddfb561a052308d9f4c9d981f8a3`
+- Wave 1 completion commit: `23182215da9047ef133a54029dcb7a175fe30807`
+- State: committed locally on `v3/phase-0`; not pushed
 - Distribution status: local-only; the build contains Adam's local access key
   and is not a publishable artifact
 

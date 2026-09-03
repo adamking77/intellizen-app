@@ -5,7 +5,8 @@ Fable 5.1 `ROADMAP.md`, remaining-work item 5. One sitting in the built app.
 ## Artifact
 
 - App: `src-tauri/target/release/bundle/macos/IntelliZen.app`
-- Base: `063de67` plus the current uncommitted Wave 1 completion changes
+- Build tree: roadmap base `063de67`, preserved in local completion commit
+  `23182215da9047ef133a54029dcb7a175fe30807`
 - Hermes: connected on `127.0.0.1:60780`
 - Walk owner: Adam
 - Date: 2026-09-03
