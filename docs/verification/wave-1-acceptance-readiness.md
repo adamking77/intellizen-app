@@ -21,6 +21,8 @@ exist; it may not block construction.
 
 ## Day 1 boundary
 
-The app-finished gate passed on 2026-09-03 and the final artifacts exist. Day 1
-has not begun; it starts only when Adam runs the exact approved text in
-`ROADMAP.md`. Readiness checks and stage proofs do not count as Day 1.
+The project-room repair and final artifacts passed on 2026-09-03, but Adam did
+not accept the full app as finished. The app-finished gate remains open and
+both acceptance mechanisms are paused. Day 1 has not begun; it starts only
+after that gate and when Adam runs the exact approved text in `ROADMAP.md`.
+Readiness checks and stage proofs do not count as Day 1.

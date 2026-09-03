@@ -6,12 +6,13 @@ evidence index, not a substitute for Adam's three acceptance days.
 
 ## Verdict
 
-**Application construction is complete; Fable Done is not complete yet.** The
-rebuilt `.app` passed the repaired project-room walk after `1354a85` and the
-pinned Hermes session-page fix in `69625a9`. Final artifacts and gates are
-green. The only remaining Done requirement is Adam's unchanged ten-line scene
-on three separate calendar days; readiness and this completion walk do not
-count as Day 1.
+**Not complete.** The rebuilt `.app` passed the repaired project-room walk
+after `1354a85` and the pinned Hermes session-page fix in `69625a9`. Final
+artifacts and automated gates are green, but Adam rejected the resulting claim
+that the full app was finished. The app-finished gate is therefore open while
+the user-visible completion audit continues. The unchanged ten-line scene on
+three separate calendar days remains later; readiness and completion walks do
+not count as Day 1.
 
 ## Stage-by-stage evidence
 
@@ -60,11 +61,9 @@ count as Day 1.
   `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6`
 - Current runtime readback: one exact release IntelliZen process (`13144`);
   zero retired donor UI processes; Fiona's independent launch agent is running.
-- Scheduled proof readback: after the app-finished gate, job `9c1e6c93e398`
-  was resumed unchanged and is scheduled for `2026-09-04T07:00:00+04:00` with
-  no running claim or last error.
-- Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is active at
-  07:15. Activation is post-completion observation, not an acceptance day.
+- Scheduled proof readback: job `9c1e6c93e398` is paused with no running claim
+  or last error after Adam rejected the app-finished classification.
+- Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
 
 ## Acceptance-day ledger
 

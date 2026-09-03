@@ -341,7 +341,7 @@ checks never count as acceptance days.
 Do not redesign a workflow or page without Adam's approval, add another
 fixture, or change `hermes-app` unless a roadmap requirement demands it.
 
-> **App-finished gate passed 2026-09-03.** Project-room repair `1354a85`
+> **Project-room gate passed 2026-09-03; app-finished gate remains open.** Project-room repair `1354a85`
 > restored Files, Board, Data, Sessions and the contextual tabs. The first
 > exact-app walk then exposed a 422 from Hermes because the client exceeded
 > the pinned endpoint's 500-session page limit. Repair `69625a9` paginates the
@@ -349,10 +349,12 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > Board, Data and Sessions all rendered; Data found and opened its linked
 > Operations record, and Sessions reached the correct folder-aware empty state
 > without an API error. Frontend tests, `pnpm smoke`, signing, DMG verification,
-> the mounted-app signature check and artifact scans are green. Construction is
-> finished. The acceptance ledger remains **0 of 3 days**. After the
-> app-finished gate passed, the saved cron job and evidence heartbeat were
-> resumed for the post-completion phase; neither activation counts as Day 1.
+> the mounted-app signature check and artifact scans are green. Adam then
+> rejected the claim that the full app was finished. The brief activation of
+> the saved cron job and evidence heartbeat was reversed immediately: both are
+> paused, and the acceptance ledger remains **0 of 3 days**. Continue the
+> user-visible completion audit; do not begin acceptance until Adam confirms
+> the app-finished gate.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what
