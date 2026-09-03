@@ -60,9 +60,11 @@ count as Day 1.
   `d7f0a6e3194c0c9f4fdc6fdd6e14d41f7871717a7e380b50c67a480964f7e4f6`
 - Current runtime readback: one exact release IntelliZen process (`13144`);
   zero retired donor UI processes; Fiona's independent launch agent is running.
-- Scheduled proof readback: job `9c1e6c93e398` remains paused until Adam begins
-  the acceptance run.
-- Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
+- Scheduled proof readback: after the app-finished gate, job `9c1e6c93e398`
+  was resumed unchanged and is scheduled for `2026-09-04T07:00:00+04:00` with
+  no running claim or last error.
+- Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is active at
+  07:15. Activation is post-completion observation, not an acceptance day.
 
 ## Acceptance-day ledger
 

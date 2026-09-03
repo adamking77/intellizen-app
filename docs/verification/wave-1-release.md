@@ -105,6 +105,11 @@ correct folder-aware empty state because this project currently has no folder.
 - Later state update, 2026-09-03: Adam directed that acceptance begin only
   after the app is functionally finished. Job `9c1e6c93e398` now reads
   `enabled: false`, `state: paused`; the proof evidence above remains valid.
+- App-finished state update, 2026-09-03: after the final native gate and
+  artifacts passed, the existing job was resumed without changing its schedule
+  or prompt. Readback returned `enabled: true`, `state: scheduled`, next run
+  `2026-09-04T07:00:00+04:00`, with no running claim or last error. This starts
+  the post-completion observation track; it does not count an acceptance day.
 - The Fiona gateway had one separate stale binding: its profile config pointed
   at Isla's wrapper, whose server path no longer exists. Fiona's config now
   points to her documented wrapper at

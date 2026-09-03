@@ -17,7 +17,7 @@ exist; it may not block construction.
 | 7. Home contains only chosen/agent-added items | Saved views and the explicitly installed proof widget use the same pin/widget contract. | Ready; evaluated with step 1. |
 | 8. Ask any agent from the panel | Fiona answered **Agents** from `/agents` in the release app; Wave 1 ACP also passed a streamed native contract turn. | Ready. |
 | 9. Eject, HUD, and voice | Adam confirmed panel collapse/expand, microphone capture, and essentially real-time composer transcription; the Wave 1 walk covers eject/HUD/redock. | Ready. |
-| 10. Close; inspect scheduled records tomorrow | The release app created Hermes cron job `9c1e6c93e398` for **V2 Gate 4 role-directed proof** under profile `fiona`. Its scheduler-fired proof completed cleanly and ordinary Workflow Run `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with passed verification and seven receipts. At Adam's direction the job remains paused until the three-day acceptance run actually begins. | Technically proved; intentionally paused until Day 1 begins. |
+| 10. Close; inspect scheduled records tomorrow | The release app created Hermes cron job `9c1e6c93e398` for **V2 Gate 4 role-directed proof** under profile `fiona`. Its scheduler-fired proof completed cleanly and ordinary Workflow Run `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with passed verification and seven receipts. After the app-finished gate passed, the unchanged job was resumed for its next 07:00 run; the evidence heartbeat follows at 07:15. | Technically proved; active for post-completion observation. No day counted yet. |
 
 ## Day 1 boundary
 

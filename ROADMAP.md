@@ -350,8 +350,9 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > Operations record, and Sessions reached the correct folder-aware empty state
 > without an API error. Frontend tests, `pnpm smoke`, signing, DMG verification,
 > the mounted-app signature check and artifact scans are green. Construction is
-> finished. The acceptance ledger remains **0 of 3 days**; the cron job and
-> heartbeat remain paused until Adam begins Day 1.
+> finished. The acceptance ledger remains **0 of 3 days**. After the
+> app-finished gate passed, the saved cron job and evidence heartbeat were
+> resumed for the post-completion phase; neither activation counts as Day 1.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what
