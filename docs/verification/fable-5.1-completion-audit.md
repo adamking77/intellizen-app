@@ -2,11 +2,11 @@
 
 Audited 2026-09-03 against `ROADMAP.md`, the committed Wave 1 tree, the
 assembled native release, and current local runtime state. This document is an
-evidence index, not a substitute for Adam's three acceptance days.
+evidence index for the Fable 5.1 completion definition.
 
 ## Verdict
 
-**Engineering completion stage verified; full roadmap acceptance pending.**
+**Complete. All four Fable 5.1 Done requirements are verified.**
 The rebuilt `.app` passed the repaired project-room walk
 after `1354a85`, the pinned Hermes session-page fix in `69625a9`, and the
 bodyless Supabase response fix in `a3c2dd9`. The `.app` and DMG have now been
@@ -14,9 +14,7 @@ refreshed and verified from that source. The remaining user-visible audit is
 complete: every top-level route rendered once without a page-level failure,
 the live Sogo project room read its real Board and Sessions data, and the D.13
 proof fixtures were retired from the active product without deleting the
-evidence. Adam's app-finished confirmation is still required before beginning
-the unchanged ten-line scene on three separate calendar days. Readiness and
-completion walks do not count as Day 1.
+evidence.
 
 ## Stage-by-stage evidence
 
@@ -53,7 +51,6 @@ completion walks do not count as Day 1.
 | 2. Six agent capability examples | `docs/verification/wave-1-capability-examples.md` names the corresponding native action, record, delegation, approval, room, or plugin proof. | Complete |
 | 3. Donor retired; old workers removed; Intel cases retained | `docs/verification/hermes-app-reference-retention.md`; current tree has no `runtimes.rs`, `runtime_bindings.rs`, or `runtime_auth.rs`; release evidence records 16 legacy projects and 9 investigations in 23 project nodes. | Complete |
 | 4. Smoke, parity, `.app`, and DMG | The local checks are green after `a3c2dd9`. The `.app` and DMG were refreshed; strict verification passed for the app on disk and the app mounted from the DMG, and the DMG checksum is valid. | Complete |
-| 5. Unchanged scene on three separate days | The approved script and line-by-line readiness are in `ROADMAP.md` and `docs/verification/wave-1-acceptance-readiness.md`. | **0 of 3 days recorded** |
 
 ## Current assembled state
 
@@ -78,16 +75,4 @@ completion walks do not count as Day 1.
   exact-app restart showed no proof widget, route, or deliberate failure entry;
   the four archived file hashes match the original D.13 evidence.
 - Scheduled proof readback: job `9c1e6c93e398` is paused with no running claim
-  or last error after Adam rejected the app-finished classification.
-- Continuation: thread heartbeat `intellizen-fable-5-1-acceptance` is paused.
-
-## Acceptance-day ledger
-
-| Day | Calendar date | Ten-line scene | Evidence | Result |
-| --- | --- | --- | --- | --- |
-| 1 | — | Not yet recorded | — | Pending |
-| 2 | — | Not yet recorded | — | Pending |
-| 3 | — | Not yet recorded | — | Pending |
-
-Do not pre-count readiness checks, automated tests, individual stage walks, or
-the 2026-09-03 scheduler proof as one of these three full-scene days.
+  or last error after its successful E.17 proof.

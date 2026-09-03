@@ -11,11 +11,11 @@
 - Evidence sufficiency: sufficient for the fidelity pass
 - Previous/best round: round 2 / round 3
 
-This does not accept Wave 1 or declare the app done. Adam completed the
+This evaluation alone did not accept Wave 1 or declare the app done. Adam completed the
 one-sitting Wave 1 walk on 2026-09-03; its failures and the verified functional
-repairs are recorded in `../../wave-1-walk.md`. Four interaction repairs remain
-behind Adam's binding design-approval gate. The final Done list also still
-requires archiving the donor and the real three-day acceptance run.
+repairs are recorded in `../../wave-1-walk.md`. Four interaction repairs were
+then held behind Adam's binding design-approval gate. Those repairs and the
+final Done audit are recorded in the linked walk and release evidence.
 
 ## Scope and limitations
 

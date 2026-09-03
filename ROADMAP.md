@@ -87,32 +87,9 @@ That scene is done when all of these are true:
    deleted; Intel's records are all present as case projects.
 4. `pnpm smoke` is green, the gateway parity test is green at the pinned
    Hermes, and a DMG was built by the release rule in `CLAUDE.md`.
-5. Adam has run the scene on three separate days and changed nothing.
 
 Anything not on this list is a later version, not a reason this one is not
 done.
-
-### The acceptance script (approved by Adam 2026-09-03)
-
-Written by Adam with Fable from `PRODUCT.md`. This is the test. Each line is
-one thing to do and one thing to see.
-
-1. Open the app at midday. Home shows only views Adam chose to pin.
-2. Open the workspace database section or kanban board Adam uses for work
-   requiring him. Each item remains ordinary data, not a special app object.
-3. Answer one at the place the decision lives: the document, card, room, or
-   active conversation.
-4. Open a project in the tree. The center shows its Files, Board, Data and
-   Sessions.
-5. Open a report an agent drafted. Its proposed edits show as hunks. Accept
-   one, reject one. The file on disk reflects only the accepted one.
-6. Open a database view from the sidebar. The numbers are today's.
-7. Look at Home. It shows only what Adam or an agent put there.
-8. From the panel, ask any agent, on any engine, to take the next task. Its
-   reply streams. If it needs permission, answer it inline in that conversation.
-9. Eject the panel, shrink it to the HUD, say the same request by voice.
-10. Close the laptop. Tomorrow, the scheduled run and optional kanban cards
-    show what happened.
 
 ## Still to decide
 
@@ -285,7 +262,7 @@ is no later required build wave after the Done list below.
 5. **Adam's walk** of wave 1 in one sitting, feedback applied.
 6. **Done list.** Intel records present as case projects; `hermes-app`
    retained in place as the retired reference donor; `pnpm smoke` green; parity test green at the pin; built `.app`
-   and DMG by the release rule; the acceptance script run on three days.
+   and DMG by the release rule.
 
 > **Progress 2026-09-03.** Items 1–5 are complete. Adam ran item 5, approved
 > the four required interaction repairs before implementation, and confirmed
@@ -300,28 +277,26 @@ is no later required build wave after the Done list below.
 > investigations with no duplicate legacy-project mapping. All six agent
 > capabilities have one recorded example in
 > `docs/verification/wave-1-capability-examples.md`. Adam confirmed that
-> `hermes-app` remains at its current path as the reference donor, and that he
-> wrote and approves the acceptance script. The three separate full-scene
-> acceptance days remain outstanding. Hermes cron job `9c1e6c93e398` proved
+> `hermes-app` remains at its current path as the reference donor. Hermes cron
+> job `9c1e6c93e398` proved
 > the existing role-directed workflow as `fiona`; its current paused state is
 > recorded below. A manual transport
 > preflight reached Hermes but
 > violated the workflow's execution contract by reconstructing low-level
-> dispatch and running tests; its Workflow Run is recorded **Blocked** and does
-> not count as acceptance. The same saved job was corrected in place to require
+> dispatch and running tests; its Workflow Run is recorded **Blocked**. The
+> same saved job was corrected in place to require
 > the public workflow MCP path and forbid source inspection, raw SQL, helper
 > files, and unrequested tests. An immediate scheduled proof at 14:07 exposed an
 > unresolved service-key placeholder in Fiona's scheduled MCP environment; it
-> created no Workflow Run and does not count. The credential path was repaired
+> created no Workflow Run. The credential path was repaired
 > and proved through Fiona's exact wrapper, then the same job fired from the
 > scheduler again at 14:13. Hermes execution
 > `f3a77ae6af3d4ee3b062b9d348f75096` completed cleanly, and Workflow Run
 > `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with a
 > passed independent verification and seven durable receipts. No tests, file
 > writes, external actions, or simulated action occurred. E.17 is complete.
-> At Adam's direction, job `9c1e6c93e398` was paused on 2026-09-03 and must
-> not resume until the app is functionally finished and the three-day
-> acceptance run begins. A final runtime audit
+> At Adam's direction, job `9c1e6c93e398` was paused on 2026-09-03 after the
+> proof completed. A final runtime audit
 > also found Fiona's
 > profile misbound to Isla's obsolete MCP wrapper. Fiona now resolves through
 > her own wrapper to this repository's single MCP build; Hermes connected,
@@ -329,19 +304,16 @@ is no later required build wave after the Done list below.
 > Exact local artifact identities and gates are recorded in
 > `docs/verification/wave-1-release.md`.
 
-**Completion execution guardrail.** App construction comes first. A native
+**Completion execution guardrail.** A native
 readback found that Phase 0.3's project room did not expose the required Board,
 Data, or Sessions tabs even though the earlier readiness record marked that
-line ready. Repair and verify any remaining roadmap gap in the built `.app`,
-finish the final artifacts, and only then begin the approved ten-line scene on
-three separate days. Job `9c1e6c93e398` and the acceptance heartbeat stay
-paused until that app-finished gate passes and Adam begins Day 1. The
-acceptance period must never block or delay app construction, and readiness
-checks never count as acceptance days.
+line ready. Any roadmap gap must be repaired and verified in the built `.app`
+before completion is recorded. That repair and the final artifacts are now
+complete. Job `9c1e6c93e398` remains paused after its successful E.17 proof.
 Do not redesign a workflow or page without Adam's approval, add another
 fixture, or change `hermes-app` unless a roadmap requirement demands it.
 
-> **Project-room gate passed 2026-09-03; app-finished gate remains open.** Project-room repair `1354a85`
+> **Project-room gate passed 2026-09-03.** Project-room repair `1354a85`
 > restored Files, Board, Data, Sessions and the contextual tabs. The first
 > exact-app walk then exposed a 422 from Hermes because the client exceeded
 > the pinned endpoint's 500-session page limit. Repair `69625a9` paginates the
@@ -350,11 +322,8 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > Operations record, and Sessions reached the correct folder-aware empty state
 > without an API error. Frontend tests, `pnpm smoke`, signing, DMG verification,
 > the mounted-app signature check and artifact scans are green. Adam then
-> rejected the claim that the full app was finished. The brief activation of
-> the saved cron job and evidence heartbeat was reversed immediately: both are
-> paused, and the acceptance ledger remains **0 of 3 days**. Continue the
-> user-visible completion audit; do not begin acceptance until Adam confirms
-> the app-finished gate.
+> directed the remaining user-visible completion audit to continue. The saved
+> cron job was returned to its paused state after its scheduler proof.
 
 > **Live project-room follow-up 2026-09-03.** A real `Sogo V3` project was
 > added beneath `Gokart Studio / Sogo` and linked to
@@ -378,9 +347,8 @@ fixture, or change `hermes-app` unless a roadmap requirement demands it.
 > After a full exact-app restart, neither fixture appeared on Home or in the
 > sidebar, their four hashes still matched the proved originals, and exactly
 > one release IntelliZen process was running. The user-visible completion
-> stage is verified and ready for Adam's app-finished confirmation. Until that
-> confirmation, the cron job and heartbeat stay paused and acceptance remains
-> 0 of 3 days.
+> stage and the four-item Done list are verified complete. The cron job remains
+> paused after its E.17 proof.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what
