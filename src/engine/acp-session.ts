@@ -12,14 +12,6 @@ import type { GatewayClientLike } from "./contract";
 import type { ConnectionState, GatewayEvent } from "./json-rpc-gateway";
 import { TurnError } from "./session";
 
-/** Who a panel turn goes to. The gateway path keeps `session-store.ts`;
- *  the ACP path is this file. */
-// wave-1: panel wires this — the target picker yields a Target and the
-// composer routes "hermes" to useSessionStore and "acp" to the helpers below.
-export type Target =
-  | { kind: "hermes"; profile: string }
-  | { kind: "acp"; agentId: string };
-
 export const ACP_EVENT = "acp:event";
 
 /** A gateway-shaped event plus the agent it came from. */
@@ -118,7 +110,7 @@ export function resetAcpSubscription() {
  *  complete the ACP handshake. */
 export async function startAcpAgent(agentId: string, cwd?: string | null): Promise<AcpStarted> {
   await ensureListening();
-  return bridge.invoke<AcpStarted>("acp_start", { agentId, cwd: cwd || null });
+  return bridge.invoke<AcpStarted>("acp_start", cwd ? { agentId, cwd } : { agentId });
 }
 
 /** The session id, like `createSession` for the gateway. */

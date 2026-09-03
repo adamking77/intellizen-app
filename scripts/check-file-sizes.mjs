@@ -12,7 +12,6 @@ const extensions = new Set([".ts", ".tsx", ".rs"]);
 const legacyBudgets = new Map(
   Object.entries({
     "mcp-server/src/index.ts": 5380, // wave-1 proposals: +3 lines (import, tool entry, dispatch)
-    "src-tauri/src/runtimes.rs": 1089,
     "src/components/canvas/CanvasEditor.tsx": 1811,
     "src/components/database/DatabaseChartView.tsx": 1587,
     "src/components/database/DatabasePeekPanel.tsx": 1317,

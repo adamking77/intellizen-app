@@ -1,0 +1,5 @@
+name: intellizen-wave1-broken
+version: "0.1.0"
+description: "D.13 deliberate failure-isolation fixture."
+author: GenZen
+hooks: []

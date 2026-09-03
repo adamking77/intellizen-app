@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
-import { PictureInPicture2 } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftClose, PanelRightClose, PictureInPicture2 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
 import { EjectedPanel } from "@/components/agent/ejected-panel";
@@ -15,6 +15,8 @@ import { createRouteConversationContext, publishConversationContext } from "@/li
 import { HomePinSync } from "@/components/home/home-pin-sync";
 import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
+import { AGENT_PANEL_OPEN_EVENT } from "@/lib/agent-panel-persistence";
+import { useSessionStore } from "@/engine/session-store";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
@@ -44,30 +46,50 @@ function isEditableTarget(target: EventTarget | null) {
 export function AppShell() {
   useEngineBoot();
   const location = useLocation();
-  const { ejected: agentPanelDetached, eject } = useEject();
+  const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject();
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
+  const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
+  const [agentPanelToggleRequest, setAgentPanelToggleRequest] = useState(0);
+  const roomOpen = useSessionStore((state) => Boolean(state.selectedRoomId));
 
   useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
+
+  useEffect(() => {
+    const open = () => {
+      if (agentPanelDetached) {
+        redock();
+        setFocusMode(false);
+        setAgentPanelOpenRequest((request) => request + 1);
+        return;
+      }
+      setFocusMode(false);
+      setAgentPanelOpenRequest((request) => request + 1);
+    };
+    window.addEventListener(AGENT_PANEL_OPEN_EVENT, open);
+    return () => window.removeEventListener(AGENT_PANEL_OPEN_EVENT, open);
+  }, [agentPanelDetached, redock]);
+
+  const toggleFocusMode = useCallback(() => setFocusMode((on) => !on), []);
+  const toggleSidebar = useCallback(() => {
+    let collapsed = false;
+    try {
+      const raw = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      // No explicit choice: sidebar.tsx auto-collapses when cramped (<1100).
+      collapsed = raw === null ? window.innerWidth < 1100 : raw === "1";
+    } catch {
+      /* ignore */
+    }
+    writeFlag(SIDEBAR_COLLAPSED_KEY, !collapsed);
+    setSidebarKey((k) => k + 1);
+  }, []);
 
   // Shell shortcuts: ⌘⇧F focus mode, ⌘\ sidebar, Escape or ⌘⇧A leaves focus. The
   // palette dispatches the same commands as a custom event.
   useEffect(() => {
     const run = (command: ShellCommand) => {
-      if (command === "focus-mode") {
-        setFocusMode((on) => !on);
-        return;
-      }
-      let collapsed = false;
-      try {
-        const raw = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-        // No explicit choice: sidebar.tsx auto-collapses when cramped (<1100).
-        collapsed = raw === null ? window.innerWidth < 1100 : raw === "1";
-      } catch {
-        /* ignore */
-      }
-      writeFlag(SIDEBAR_COLLAPSED_KEY, !collapsed);
-      setSidebarKey((k) => k + 1);
+      if (command === "focus-mode") toggleFocusMode();
+      else toggleSidebar();
     };
     const onCommand = (event: Event) => run((event as CustomEvent<ShellCommand>).detail);
     const onKeyDown = (event: KeyboardEvent) => {
@@ -93,7 +115,7 @@ export function AppShell() {
       window.removeEventListener(SHELL_COMMAND_EVENT, onCommand);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [toggleFocusMode, toggleSidebar]);
 
   useEffect(() => {
     publishConversationContext(createRouteConversationContext(location));
@@ -155,6 +177,36 @@ export function AppShell() {
                 ⌘⇧F to leave focus
               </span>
             )}
+            <div className="flex-1" />
+            <div className="flex items-center gap-0.5 pr-3 text-[var(--overlay-1)]">
+              <ChromeButton label="Toggle sidebar" onClick={toggleSidebar}>
+                <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </ChromeButton>
+              <ChromeButton label="Focus mode" pressed={focusMode} onClick={toggleFocusMode}>
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </ChromeButton>
+              <ChromeButton
+                label="Collapse or expand agent panel"
+                onClick={() => setAgentPanelToggleRequest((request) => request + 1)}
+                disabled={agentPanelDetached}
+              >
+                <PanelRightClose className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </ChromeButton>
+              <ChromeButton
+                label="Eject agent panel"
+                onClick={() => eject(false)}
+                disabled={agentPanelDetached || agentPanelEjecting || roomOpen}
+              >
+                <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </ChromeButton>
+              <ChromeButton
+                label="Reduce agent panel to HUD"
+                onClick={() => eject(true)}
+                disabled={agentPanelDetached || agentPanelEjecting || roomOpen}
+              >
+                <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </ChromeButton>
+            </div>
           </div>
           <div className="min-h-0 flex-1">
             <Outlet />
@@ -176,7 +228,11 @@ export function AppShell() {
             <PictureInPicture2 className="h-4 w-4" />
           </button>
         ) : (
-          <AgentPanel onEject={() => eject()} />
+          <AgentPanel
+            onEject={() => eject()}
+            openRequest={agentPanelOpenRequest}
+            toggleRequest={agentPanelToggleRequest}
+          />
         )}
       </div>
       <WindowResizeHandles />
@@ -196,6 +252,34 @@ export function AppShell() {
         }}
       />
     </CommandPaletteProvider>
+  );
+}
+
+function ChromeButton({
+  label,
+  pressed,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-35 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]"
+    >
+      {children}
+    </button>
   );
 }
 

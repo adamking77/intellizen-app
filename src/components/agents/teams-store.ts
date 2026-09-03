@@ -1,10 +1,5 @@
 // Teams live in `$APPDATA/teams.json`, beside `engine.json`. The donor kept
 // them in SQLite; a handful of records in one file is the whole need here.
-//
-// wave-1: overseer wires this — writing under $APPDATA needs
-// `"fs:allow-appdata-write-recursive"` in src-tauri/capabilities/default.json
-// (reads are in the plugin's default set). Until then a save fails and the
-// sheet says so.
 
 import { BaseDirectory, exists, mkdir, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
 

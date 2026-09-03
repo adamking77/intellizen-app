@@ -29,8 +29,10 @@ import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { PluginPanelActions } from "@/plugins/panel-actions";
 import { previewAgentMessageDocument, saveAgentMessageDocument } from "@/services/agent-message-document";
-import { useVoice } from "@/voice/use-voice";
+import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { VoiceButton } from "@/voice/voice-button";
+import { RoomView } from "@/views/Room";
+import { useSessionStore } from "@/engine/session-store";
 
 const ICON_BUTTON =
   "inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]";
@@ -47,6 +49,8 @@ function panelStorage() {
 interface AgentPanelProps {
   mode?: "docked" | "standalone";
   onEject?: () => void;
+  openRequest?: number;
+  toggleRequest?: number;
 }
 
 // Permissions stated as a word, the donor's wording ("Ask first").
@@ -60,7 +64,7 @@ const PERMISSION_WORD = {
  *  donor's `AgentPanel` restricted to one turn through the gateway and its
  *  decisions: a target picker on the name, the thread, run status directly
  *  above the composer, the composer. */
-export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
+export function AgentPanel({ mode = "docked", onEject, openRequest = 0, toggleRequest = 0 }: AgentPanelProps) {
   const standalone = mode === "standalone";
   const { isCramped } = useWindowSize();
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() =>
@@ -111,6 +115,8 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
 
   const { selectedProfile, thread, selectProfile, send, stop, decideApproval, decideClarify } =
     usePanelSession();
+  const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
+  const selectRoom = useSessionStore((state) => state.selectRoom);
 
   // The first selection is the profile Hermes marks default; nothing is
   // hard-coded. An explicit choice is never overridden afterwards.
@@ -132,6 +138,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
   const closePicker = useCallback(() => setPicking(false), []);
   const [draft, setDraft] = useState("");
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const focusComposerWhenOpen = useRef(false);
   const log = useRef<HTMLDivElement | null>(null);
 
   // A relative stamp must not freeze: re-render once a minute.
@@ -167,25 +174,40 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     }
   }, [messages, pending.length]);
 
+  const open = useCallback(() => {
+    focusComposerWhenOpen.current = true;
+    if (!standalone) {
+      setUserCollapsed(false);
+      try {
+        window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "0");
+      } catch {
+        /* the panel still opens for this session */
+      }
+    }
+    composerRef.current?.focus();
+  }, [standalone]);
+
+  useEffect(() => {
+    if (collapsed || !focusComposerWhenOpen.current || !composerRef.current) return;
+    composerRef.current.focus();
+    focusComposerWhenOpen.current = false;
+  }, [collapsed]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLowerCase() !== "a") return;
       event.preventDefault();
-      if (!standalone) {
-        setUserCollapsed(false);
-        try {
-          window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "0");
-        } catch {
-          /* the panel still opens for this session */
-        }
-      }
-      window.setTimeout(() => composerRef.current?.focus(), 0);
+      open();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [standalone]);
+  }, [open]);
 
-  function toggleCollapsed() {
+  useEffect(() => {
+    if (openRequest > 0) open();
+  }, [open, openRequest]);
+
+  const toggleCollapsed = useCallback(() => {
     if (standalone) return;
     setUserCollapsed(() => {
       const next = !collapsed;
@@ -196,7 +218,14 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
       }
       return next;
     });
-  }
+  }, [collapsed, standalone]);
+
+  const handledToggleRequest = useRef(0);
+  useEffect(() => {
+    if (toggleRequest <= 0 || toggleRequest === handledToggleRequest.current) return;
+    handledToggleRequest.current = toggleRequest;
+    toggleCollapsed();
+  }, [toggleCollapsed, toggleRequest]);
 
   const submit = (text = draft) => {
     const trimmed = text.trim();
@@ -291,6 +320,19 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
     );
   }
 
+  if (!standalone && selectedRoomId) {
+    return (
+      <AgentPanelShell
+        standalone={false}
+        width={panelWidth}
+        onResizeStart={startPanelResize}
+        onInteraction={() => undefined}
+      >
+        <RoomView roomId={selectedRoomId} panel onClose={() => selectRoom(null)} />
+      </AgentPanelShell>
+    );
+  }
+
   return (
     <AgentPanelShell
       standalone={standalone}
@@ -323,8 +365,6 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
             <span className="truncate font-mono text-[10px] text-[var(--text-muted)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
-          {/* wave-1 plugins: actions contributed by ~/.hermes/plugins */}
-          {!isAcp ? <PluginPanelActions profile={selectedProfile} send={(text) => submit(text)} /> : null}
           {!standalone ? (
             <button
               type="button"
@@ -417,11 +457,13 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           </div>
         ) : null}
 
+        {!isAcp ? <PluginPanelActions profile={selectedProfile} send={(text) => submit(text)} /> : null}
+
         <RunStatus run={run} agent={agentName ?? "The agent"} />
 
         <Composer
           ref={composerRef}
-          draft={draft}
+          draft={joinVoiceText(draft, voice.interim)}
           onDraft={setDraft}
           onSend={() => submit()}
           onStop={onStop}
@@ -432,6 +474,7 @@ export function AgentPanel({ mode = "docked", onEject }: AgentPanelProps) {
           agent={agentName}
           permission={transcript?.approvalMode ? PERMISSION_WORD[transcript.approvalMode] : null}
           note={voice.note}
+          dictating={voice.mine || voice.hearing}
           dictate={<VoiceButton mode="dictate" voice={voice} onTranscript={() => undefined} />}
           converse={<VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} />}
           sendOnEnter={sendOnEnter !== "0"}

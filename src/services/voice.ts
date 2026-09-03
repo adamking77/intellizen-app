@@ -235,7 +235,6 @@ export function startBrowserDictation(handlers: BrowserDictationHandlers): Brows
     handlers.onError?.(event.error ?? "Recognition error");
   };
   recognition.onend = () => {
-    handlers.onInterim?.("");
     handlers.onEnd?.();
   };
   recognition.start();

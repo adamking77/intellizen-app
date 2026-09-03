@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { GraphEdgeRecord, GraphNodeRecord } from "@/lib/types";
 import {
+  buildGraphDocumentBody,
   buildGraphEmbedBlock,
+  documentHasGraphEmbed,
   parseGraphEmbedBlocks,
   serializeGraphSvg,
   TOKEN_GRAPH_PALETTE,
@@ -23,6 +25,20 @@ describe("graph export contract", () => {
     expect(parseGraphEmbedBlocks(`${block}\n\`\`\`graph {bad}\n\`\`\``)).toEqual([
       { id: "7", mode: "construct" },
     ]);
+  });
+
+  it("reads the fenced-code form preserved by the document editor", () => {
+    expect(parseGraphEmbedBlocks('```graph\n{"id":"7","mode":"insight"}\n```')).toEqual([
+      { id: "7", mode: "insight" },
+    ]);
+  });
+
+  it("builds a linked snapshot document and detects the same embed on retry", () => {
+    const spec = { id: "42", mode: "insight" } as const;
+    const markdown = buildGraphDocumentBody("Relationship map", spec);
+    expect(markdown).toContain("# Relationship map");
+    expect(documentHasGraphEmbed(markdown, spec)).toBe(true);
+    expect(documentHasGraphEmbed(markdown, { ...spec, mode: "construct" })).toBe(false);
   });
 
   it("serializes a safe, self-contained construct SVG", () => {

@@ -1,0 +1,105 @@
+{
+  "artifact": {
+    "id": "intellizen-wave-1",
+    "version": "063de67+working-tree-round-2",
+    "location": "/Users/adamking/projects/genzen-solutions/intellizen-app"
+  },
+  "review_mode": "diagnostic donor-fidelity rerun; no project EVAL.md exists",
+  "policy_version": "design-artifact-evaluator fallback 2026-09-03",
+  "page_task_shape": "native desktop workspace shell with persistent agent interaction",
+  "evidence_sufficiency": "partial",
+  "evidence": [
+    {
+      "id": "R2-SET-01",
+      "type": "browser screenshots",
+      "location": "evidence/screenshots/current-settings-*.png",
+      "scope": "all settings sections after fix",
+      "limitation": "Tauri-backed data unavailable"
+    },
+    {
+      "id": "R2-SHELL-01",
+      "type": "browser screenshot",
+      "location": "evidence/screenshots/current-shell-toolbar.png",
+      "scope": "main-strip toolbar after fix"
+    },
+    {
+      "id": "R2-SMOKE-01",
+      "type": "interaction smoke",
+      "location": "evidence/interaction-smoke.md",
+      "scope": "sidebar, focus, and panel toolbar actions"
+    },
+    {
+      "id": "R1-DONOR",
+      "type": "native screenshots and design references",
+      "location": "../round-1/evidence/screenshots/donor-*",
+      "scope": "donor comparison set"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "D2",
+      "label": "Information architecture and interaction",
+      "why_not_higher": "Native eject and HUD still require executable evidence.",
+      "subchecks": [
+        {
+          "id": "D2.1",
+          "label": "Shell actions are discoverable",
+          "verdict": "fixed",
+          "evidence_ids": ["R2-SHELL-01", "R2-SMOKE-01", "R1-DONOR"],
+          "deduction_reason": "The donor-style control cluster is visible and its safe actions complete.",
+          "recommendation": "Retain; verify native eject and HUD after unlock.",
+          "return_destination": "native verification"
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "label": "System craft and visual fidelity",
+      "why_not_higher": "Required native populated and floating states remain uncaptured.",
+      "subchecks": [
+        {
+          "id": "D3.1",
+          "label": "Settings heading anatomy matches donor",
+          "verdict": "fixed",
+          "evidence_ids": ["R2-SET-01", "R1-DONOR"],
+          "deduction_reason": "Appearance now has the donor title; the applicable page titles share the donor's compact uppercase treatment.",
+          "recommendation": "Retain.",
+          "return_destination": "none"
+        },
+        {
+          "id": "D3.2",
+          "label": "HUD and ejected panel visually match donor",
+          "verdict": "not proven",
+          "evidence_ids": ["R1-DONOR"],
+          "deduction_reason": "The current native floating windows were unavailable while macOS was locked.",
+          "recommendation": "Capture the native ejected panel and HUD after unlock.",
+          "return_destination": "native verification"
+        }
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "id": "B1",
+      "active": true,
+      "evidence_ids": ["R1-DONOR", "R2-SHELL-01"],
+      "impact": "Roadmap item 4 cannot receive a full screen-for-screen pass without current native populated and floating states.",
+      "required_action": "Unlock macOS and complete the native capture matrix."
+    }
+  ],
+  "verdict": "BLOCKED",
+  "return_plan": [
+    {
+      "priority": 1,
+      "finding": "Round-one code deviations are fixed; native evidence remains incomplete.",
+      "evidence_ids": ["R2-SET-01", "R2-SHELL-01", "R2-SMOKE-01"],
+      "action": "After unlock, capture populated Agents, row menu, team sheet, live panel messages, ejected panel, and HUD, and smoke the native toolbar buttons.",
+      "return_destination": "docs/verification/wave-1-fidelity/round-3",
+      "owner_or_decision": "Keel",
+      "next_round_evidence": "Native side-by-side screenshots and interaction log."
+    }
+  ],
+  "stop_state": "human_decision_required",
+  "best_valid_version": "063de67+working-tree-round-2",
+  "learning_candidates": []
+}

@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { getGatewayClient } from "@/engine/gateway";
 import { listProfiles } from "@/engine/profiles";
 import { errorMessage } from "@/lib/toast";
+
+import { SETTINGS_TITLE } from "./settings-style";
 import { cn } from "@/lib/utils";
 import { listHermesCapabilities, setHermesCapability, type HermesCapabilityKind } from "@/services/hermes-settings";
 
@@ -48,7 +50,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
     <div className="space-y-4">
       <header className="flex items-start gap-4 pb-1">
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl text-[var(--text)]">Capabilities</h1>
+          <h1 className={SETTINGS_TITLE}>Capabilities</h1>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">
             What this Hermes profile can use. Changes are written through Hermes and apply to its next session.
           </p>

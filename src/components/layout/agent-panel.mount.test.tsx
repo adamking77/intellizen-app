@@ -43,7 +43,11 @@ async function settle() {
   });
 }
 
-async function mountPanel(mode: "docked" | "standalone" = "docked"): Promise<Mounted> {
+async function mountPanel(
+  mode: "docked" | "standalone" = "docked",
+  openRequest = 0,
+  toggleRequest = 0,
+): Promise<Mounted> {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -53,7 +57,12 @@ async function mountPanel(mode: "docked" | "standalone" = "docked"): Promise<Mou
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <AgentPanel mode={mode} onEject={() => undefined} />
+        <AgentPanel
+          mode={mode}
+          onEject={() => undefined}
+          openRequest={openRequest}
+          toggleRequest={toggleRequest}
+        />
       </QueryClientProvider>,
     );
   });
@@ -66,6 +75,7 @@ async function mountPanel(mode: "docked" | "standalone" = "docked"): Promise<Mou
       await act(async () => root.unmount());
       container.remove();
       queryClient.clear();
+      useSessionStore.setState({ selectedProfile: null, selectedRoomId: null, threads: {} });
     },
   };
 }
@@ -101,7 +111,7 @@ describe("AgentPanel on the gateway", () => {
     client.respondWith((call) => (call.method === "profiles.list" ? loadProfilesList().result : undefined));
     resetSessionStoreSubscription();
     setGatewayClient(client as unknown as JsonRpcGatewayClient);
-    useSessionStore.setState({ selectedProfile: null, threads: {} });
+    useSessionStore.setState({ selectedProfile: null, selectedRoomId: null, threads: {} });
     useEngineStore.setState({ connection: "open", info: null, error: null });
     acpDisk.text = "";
   });
@@ -118,6 +128,26 @@ describe("AgentPanel on the gateway", () => {
     const panel = await mountPanel();
     expect(panel.container.querySelector('button[aria-label="Expand agent panel"]')).not.toBeNull();
     expect(panel.container.querySelector("textarea")).toBeNull();
+    await panel.unmount();
+  });
+
+  it("opens a collapsed panel through its public request and focuses the composer", async () => {
+    const focus = vi.spyOn(HTMLTextAreaElement.prototype, "focus");
+    window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "1");
+    const panel = await mountPanel("docked", 1);
+    await settle();
+    expect(panel.container.querySelector('button[aria-label="Expand agent panel"]')).toBeNull();
+    expect(focus).toHaveBeenCalled();
+    expect(window.localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY)).toBe("0");
+    await panel.unmount();
+    focus.mockRestore();
+  });
+
+  it("toggles the docked panel through the shell toolbar request", async () => {
+    const panel = await mountPanel("docked", 0, 1);
+    await settle();
+    expect(panel.container.querySelector('button[aria-label="Expand agent panel"]')).not.toBeNull();
+    expect(window.localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY)).toBe("1");
     await panel.unmount();
   });
 
@@ -251,6 +281,7 @@ describe("AgentPanel on the gateway", () => {
         };
       },
     });
+    useSessionStore.getState().selectProfile("acp:cc");
 
     const panel = await mountPanel();
     expect(panel.container.querySelector('button[aria-haspopup="listbox"]')?.textContent).toContain("Claude Code");
@@ -268,6 +299,34 @@ describe("AgentPanel on the gateway", () => {
       emit?.({ agent_id: "cc", type: "message.complete", session_id: "acp-1", payload: { status: "complete" } });
     });
     expect(panel.container.textContent).toContain("Hi Adam");
+    await panel.unmount();
+  });
+
+  it("switches from a Hermes profile to an ACP target in the picker", async () => {
+    acpDisk.text = JSON.stringify([{ id: "cc", name: "Claude Code", engine: "claude-code", command: "claude-agent-acp", args: [] }]);
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    setAcpBridge({
+      invoke: async <T,>(command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return (command === "acp_start" ? { agentId: "cc", sessionId: "acp-picker", pid: 42 } : undefined) as T;
+      },
+      listen: async () => () => undefined,
+    });
+
+    const panel = await mountPanel();
+    const trigger = panel.container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+    expect(trigger.textContent).toContain("default");
+    await act(async () => trigger.click());
+    const acp = Array.from(panel.container.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+      .find((option) => option.textContent?.includes("Claude Code"))!;
+    await act(async () => acp.click());
+    expect(trigger.textContent).toContain("Claude Code");
+    await type(panel, "hello from the picker");
+    await pressEnter(panel);
+    expect(calls.slice(0, 2)).toEqual([
+      { command: "acp_start", args: { agentId: "cc" } },
+      { command: "acp_prompt", args: { agentId: "cc", text: "hello from the picker" } },
+    ]);
     await panel.unmount();
   });
 

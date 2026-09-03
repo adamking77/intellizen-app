@@ -22,6 +22,12 @@ plug-in.**
   one thing Hermes cannot do cleanly for us, and the reason the cockpit exists.
 - Supabase stays. It is where the business data lives. Read and write.
 
+**Workflow-design approval gate, settled by Adam 2026-09-03.** Before an
+agent designs or redesigns any user workflow or interaction sequence, it must
+show Adam the proposed flow and receive his explicit approval. Agents may
+diagnose defects and implement an already-approved flow, but may not turn a
+working mechanism into a product workflow on their own.
+
 Opus's earlier rules (no Tailwind, no state library, no router, no cloud, hand
 roll everything) are retired. They were never Adam's.
 
@@ -76,8 +82,9 @@ That scene is done when all of these are true:
 1. Every stage in this file has been used by Adam in a built `.app`, not
    `tauri dev`, and recorded as used with the date.
 2. The six agent capabilities below each have one recorded example.
-3. `hermes-app` is archived; IntelliZen's old Hermes door and subprocess
-   workers are deleted; Intel's records are all present as case projects.
+3. `hermes-app` is retired as an active app and retained in place as the
+   reference donor; IntelliZen's old Hermes door and subprocess workers are
+   deleted; Intel's records are all present as case projects.
 4. `pnpm smoke` is green, the gateway parity test is green at the pinned
    Hermes, and a DMG was built by the release rule in `CLAUDE.md`.
 5. Adam has run the scene on three separate days and changed nothing.
@@ -85,10 +92,10 @@ That scene is done when all of these are true:
 Anything not on this list is a later version, not a reason this one is not
 done.
 
-### The acceptance script (draft for Adam to correct)
+### The acceptance script (approved by Adam 2026-09-03)
 
-Written from `PRODUCT.md`. Adam edits this until it is what he actually does;
-then it is the test. Each line is one thing to do and one thing to see.
+Written by Adam with Fable from `PRODUCT.md`. This is the test. Each line is
+one thing to do and one thing to see.
 
 1. Open the app at midday. Home shows only views Adam chose to pin.
 2. Open the workspace database section or kanban board Adam uses for work
@@ -113,7 +120,6 @@ Decided with the code open, at the stage that needs it. Not before.
 
 | Decision | Whose | When | Recommendation |
 |---|---|---|---|
-| The acceptance script: the exact steps of Adam's midday pass | Claude drafts, Adam corrects | Before Phase 0.3 | Drafted from `PRODUCT.md`; Adam edits it until it is what he actually does. |
 | How an agent asks permission (its own prompt or the app's) | Claude | Phase B.5 | Every request stays in the conversation, room, document, or card that raised it. No global queue. |
 | Gateway polling vs events for room members; plugin entry format | Claude | B.7, D.12 | Engineering calls. |
 
@@ -155,7 +161,7 @@ what is in the wrong place. Adam does not need to name components.
 | Agent sessions, streaming replies, tool calls, approvals, profiles, memory, skills, config | **Hermes gateway**: JSON-RPC over WebSocket at `/api/ws` from `hermes serve` | Same door Hermes Desktop uses. Typed TypeScript client is MIT; we copy `json-rpc-gateway.ts` and `websocket-url.ts` into `src/engine/`. |
 | Cron, kanban board and dispatch, plugin routes | **Hermes REST** under `/api/cron`, `/api/plugins/kanban`, `/api/plugins/<id>` | Kanban also pushes events on a WebSocket. |
 | Rooms (many agents, one log, @mentions, passes, caps, needs-you) | **Bot mode's engine**, vendored | `group-rounds.ts`, `group-membership.ts`, `group-activity.ts` and the pure half of `group-chat.ts` are plain TypeScript, MIT. Adapter is two functions: `request` and `requestProfile`. Our adapter routes a member either to the gateway or to ACP. |
-| Claude Code, Codex, Gemini, Qwen as agents | **ACP over stdio**, from `hermes-app/crates/agent/src/acp.rs` | Official adapters: `@zed-industries/claude-code-acp`, `@zed-industries/codex-acp`; `gemini --experimental-acp`; `qwen --acp`. Permission requests become real. |
+| Claude Code, Codex, Gemini, Qwen as agents | **ACP over stdio**, from `hermes-app/crates/agent/src/acp.rs` | Official adapters: `@zed-industries/claude-code-acp`, `@agentclientprotocol/codex-acp`; `gemini --experimental-acp`; `qwen --acp`. Permission requests become real. (`@zed-industries/codex-acp` is the obsolete package and failed a real first prompt on 2026-09-03.) |
 | Agents writing into the workspace | **Our MCP server** (`mcp-server/`) | Already ~40 tools. Gains: move card, propose document edit, pin widget, author plugin. Fix the Hermes wrapper at `~/.hermes/mcp-servers/intellizen/run.sh`, which points at a folder that no longer exists. |
 | Floating panel, HUD, eject window, voice, message actions | **hermes-app donor** | `AgentPanel`, `Hud`, `EjectedPanel`, `useEject`, `useVoice`, `dictation.ts`, the Rust `speak`/`transcribe` commands. Rewritten onto IntelliZen's primitives as they move; the behaviour is what transfers. |
 | Document proposals (agent edit arrives as hunks you accept or reject) | **hermes-app donor** | `crates/store/src/proposals.rs`, `Proposal.tsx`. Swap the hand-written diff for the `similar` crate. |
@@ -249,11 +255,16 @@ spec per stage, written the morning it starts, not before.
 
 ### Wave 1 status — stages 5 to 18 (merged 2026-09-03)
 
-> **Built and merged, awaiting Adam's walk.** Every stage from B.5 to E.18
+“Wave 1” is an implementation-batch name, not the first of multiple remaining
+product waves. The full roadmap has 18 stages: Phase 0 and Phase A were already
+complete, and this batch completed every remaining stage in Phases B–E. There
+is no later required build wave after the Done list below.
+
+> **Built, merged, walked, and repaired after feedback.** Every stage from B.5 to E.18
 > was built in parallel by eleven builders (`docs/stages/wave-1.md`,
 > `docs/stages/wave-1-spec.md`) and merged on `v3/phase-0` at `d912421`.
 > Checks green on the combined tree: file sizes, product contracts, tsc,
-> 423 tests, clippy. Not yet walked by Adam; not pushed. **Do not rebuild
+> 423 tests, clippy. Adam's 2026-09-03 walk and repair evidence is below; not pushed. **Do not rebuild
 > these stages.** Pick up only the items below.
 
 **Remaining work, in order. Each item is one builder's job.**
@@ -273,8 +284,57 @@ spec per stage, written the morning it starts, not before.
    surface in the "Design fidelity and feedback" table, fixes applied.
 5. **Adam's walk** of wave 1 in one sitting, feedback applied.
 6. **Done list.** Intel records present as case projects; `hermes-app`
-   archived; `pnpm smoke` green; parity test green at the pin; built `.app`
+   retained in place as the retired reference donor; `pnpm smoke` green; parity test green at the pin; built `.app`
    and DMG by the release rule; the acceptance script run on three days.
+
+> **Progress 2026-09-03.** Items 1–5 are complete. Adam ran item 5, approved
+> the four required interaction repairs before implementation, and confirmed
+> real-time microphone transcription in the composer. Room chat now stays in
+> the right panel, plugin actions are direct buttons, and Graph writes a linked
+> snapshot straight into a chosen document and opens Docs. The ACP, Schedule,
+> Docs-latency, document-frontmatter, and Graph-embed defects are also repaired
+> and verified. The Workflows page redesign remains explicitly deferred. For item 6, the
+> local-only `pnpm smoke` gate, pinned Hermes parity test, plugin-isolation
+> proof, `.app`, DMG, and service-role scans are green. The live hierarchy has
+> 23 project nodes and preserves all 16 legacy projects plus all 9
+> investigations with no duplicate legacy-project mapping. All six agent
+> capabilities have one recorded example in
+> `docs/verification/wave-1-capability-examples.md`. Adam confirmed that
+> `hermes-app` remains at its current path as the reference donor, and that he
+> wrote and approves the acceptance script. The three separate full-scene
+> acceptance days remain outstanding. Hermes cron job `9c1e6c93e398` runs the
+> existing role-directed proof as `fiona` daily at 07:00. A manual transport
+> preflight reached Hermes but
+> violated the workflow's execution contract by reconstructing low-level
+> dispatch and running tests; its Workflow Run is recorded **Blocked** and does
+> not count as acceptance. The same saved job was corrected in place to require
+> the public workflow MCP path and forbid source inspection, raw SQL, helper
+> files, and unrequested tests. An immediate scheduled proof at 14:07 exposed an
+> unresolved service-key placeholder in Fiona's scheduled MCP environment; it
+> created no Workflow Run and does not count. The credential path was repaired
+> and proved through Fiona's exact wrapper, then the same job fired from the
+> scheduler again at 14:13. Hermes execution
+> `f3a77ae6af3d4ee3b062b9d348f75096` completed cleanly, and Workflow Run
+> `f33278cb-85aa-48e7-bdcc-a8ef054d357c` reached **Needs approval** with a
+> passed independent verification and seven durable receipts. No tests, file
+> writes, external actions, or simulated action occurred. E.17 is complete;
+> the job is restored to its normal daily 07:00 schedule. A final runtime audit
+> also found Fiona's
+> profile misbound to Isla's obsolete MCP wrapper. Fiona now resolves through
+> her own wrapper to this repository's single MCP build; Hermes connected,
+> discovered all 64 tools, and read back the Gate 4 workflow successfully.
+> Exact local artifact identities and gates are recorded in
+> `docs/verification/wave-1-release.md`.
+
+**Completion execution guardrail.** From this point, the plan is only: create
+one live schedule for the existing runnable proof workflow; run the approved
+ten-line scene unchanged on three separate days; record each day's evidence;
+then mark Fable 5.1 complete. Do not rerun the automated suites, rebuild the
+artifacts, redesign a workflow or page, add another fixture, or change
+`hermes-app` unless an acceptance line fails or product code changes.
+The multi-day acceptance record blocks only the final Fable 5.1 completion
+claim. It is not a stop-work condition for later app work Adam explicitly
+directs, and it must never be used to leave the active build goal blocked.
 
 Rules for builders joining now: read `docs/stages/wave-1-spec.md` preamble
 first. It is binding. Commit on your own branch, never push, report what

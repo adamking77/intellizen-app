@@ -433,9 +433,13 @@ function HudComposer({
         >
           Cancel
         </button>
-        <div className="min-w-0 flex-1">
-          <Waveform color="var(--accent)" height={14} bars={16} levels={voice.levels} />
-        </div>
+        {voice.interim ? (
+          <span className="min-w-0 flex-1 truncate font-ui text-[13px] text-[var(--text)]">{voice.interim}</span>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <Waveform color="var(--accent)" height={14} bars={16} levels={voice.levels} />
+          </div>
+        )}
         <button
           type="button"
           onClick={() => void voice.dictate()}

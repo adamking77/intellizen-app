@@ -4,10 +4,12 @@ import {
   DOCUMENTS_DB_FIELDS,
   documentAttachmentLabel,
   documentBodyPreview,
+  documentEditableBody,
   documentDisplayTitle,
   documentFreshness,
   documentMatchesSearch,
   documentSourceLabel,
+  documentVaultRelativePath,
   quickNoteTitle,
   safeDocumentFolder,
   todaysDailyBriefs,
@@ -64,7 +66,16 @@ describe("document model", () => {
     }))).toContain("GenZen OS vault");
     expect(documentSourceLabel(record({
       [DOCUMENTS_DB_FIELDS.vaultPath]: "/Users/adam/Desktop/brief.md",
-    }))).toBe("File outside the GenZen OS vault");
+    }))).toBe("Workspace copy · external file unchanged");
+  });
+
+  it("keeps absolute external files outside vault reads and writes", () => {
+    expect(documentVaultRelativePath(record({
+      [DOCUMENTS_DB_FIELDS.vaultPath]: "documents/brief.md",
+    }))).toBe("documents/brief.md");
+    expect(documentVaultRelativePath(record({
+      [DOCUMENTS_DB_FIELDS.vaultPath]: "/Users/adam/Desktop/brief.md",
+    }))).toBeNull();
   });
 
   it("adds or replaces a stable frontmatter id without touching markdown", () => {
@@ -75,6 +86,13 @@ describe("document model", () => {
       "---\ntitle: Note\nintellizen_id: old\n---\n\nBody\n",
       "doc-2",
     )).toBe("---\ntitle: Note\nintellizen_id: doc-2\n---\n\nBody\n");
+  });
+
+  it("keeps portable metadata out of the visual editor", () => {
+    expect(documentEditableBody(
+      "---\nintellizen_id: doc-1\ntitle: Note\n---\n\n# Note\n",
+    )).toBe("# Note\n");
+    expect(documentEditableBody("# Note\n")).toBe("# Note\n");
   });
 
   it("creates a useful zero-friction quick-note title", () => {

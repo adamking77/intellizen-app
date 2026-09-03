@@ -25,12 +25,12 @@ all in one sitting.
 
 Shared, written by the overseer before the wave: `src/engine/rest.ts`.
 
-## Wave 2, after the merge
+## Post-merge batch (completed 2026-09-03)
 
-D.13 proves the generic plugin contract with a deliberate local fixture.
-D.14 occurs only when Adam asks an agent to author a widget; its work and
-approval remain ordinary database or kanban data. Then run screenshots, the
-fidelity pass against the donor, and Adam's walk.
+D.13 proved the generic plugin contract with a deliberate local fixture. The
+screenshots, fidelity pass against the donor, and Adam's walk are complete.
+D.14 is not another required wave: it occurs only when Adam asks an agent to
+author a widget; its work and approval remain ordinary database or kanban data.
 
 ## Approval still needed from Adam
 

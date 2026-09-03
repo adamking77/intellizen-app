@@ -34,7 +34,7 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "http://127.0.0.1:9119/*" }
+        { "url": "http://127.0.0.1:*/*" }
       ]
     },
     "fs:default",

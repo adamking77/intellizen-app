@@ -38,10 +38,12 @@ import { createPortableDocument } from "@/lib/document-persistence";
 import {
   documentAttachmentLabel,
   documentDisplayTitle,
+  documentEditableBody,
   documentFieldString,
   documentFreshness,
   documentMatchesSearch,
   documentSourceLabel,
+  documentVaultRelativePath,
   isAbsoluteDocumentPath,
   quickNoteTitle,
   safeDocumentFolder,
@@ -53,6 +55,7 @@ import { toast, toastError } from "@/lib/toast";
 import type {
   WorkspaceDatabaseRecord,
   WorkspaceDatabaseRecordModel,
+  WorkspaceDatabaseBundle,
 } from "@/lib/types";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
@@ -101,7 +104,7 @@ async function getVaultFileByPath(path: string) {
 }
 
 async function readDocumentContent(record: WorkspaceDatabaseRecordModel) {
-  const vaultPath = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath);
+  const vaultPath = documentVaultRelativePath(record);
   if (vaultPath) {
     try {
       const matchedFile = await getVaultFileByPath(vaultPath);
@@ -151,14 +154,20 @@ export function ReportsView() {
   });
   const [saveAttempt, setSaveAttempt] = useState(0);
   const latestContentRef = useRef("");
+  const vaultSyncStartedRef = useRef(false);
 
   const docsQuery = useQuery({
     queryKey: ["docs-workspace-bundle", entityFilter],
-    queryFn: async () => {
-      await syncVaultFilesToDocumentRecords();
-      return getDocumentsWorkspaceBundle();
-    },
+    queryFn: () => getDocumentsWorkspaceBundle(),
   });
+
+  useEffect(() => {
+    if (vaultSyncStartedRef.current) return;
+    vaultSyncStartedRef.current = true;
+    void syncVaultFilesToDocumentRecords()
+      .then(() => queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] }))
+      .catch((error) => toastError("Couldn't sync vault documents", error));
+  }, [queryClient]);
 
   const bundle = docsQuery.data ?? null;
   const allRecords = useMemo(
@@ -199,12 +208,14 @@ export function ReportsView() {
     () => allRecords.find((record) => record.id === selectedRecordId) ?? null,
     [allRecords, selectedRecordId],
   );
-  const selectedVaultPath = documentFieldString(selectedRecord, DOCUMENTS_DB_FIELDS.vaultPath);
+  const selectedVaultPath = documentVaultRelativePath(selectedRecord);
   const selectedTitle = selectedRecord ? documentDisplayTitle(selectedRecord) : "Untitled document";
 
   const vaultFileQuery = useQuery({
     queryKey: ["docs-vault-content", selectedRecordId, selectedVaultPath],
-    queryFn: () => selectedRecord ? readDocumentContent(selectedRecord) : Promise.resolve(""),
+    queryFn: async () => selectedRecord
+      ? documentEditableBody(await readDocumentContent(selectedRecord))
+      : "",
     enabled: !!selectedRecord,
     retry: false,
   });
@@ -263,10 +274,19 @@ export function ReportsView() {
           : undefined,
       });
     },
-    onSuccess: async ({ record, warning }) => {
-      await queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
+    onSuccess: ({ record, warning }) => {
+      queryClient.setQueriesData<WorkspaceDatabaseBundle>(
+        { queryKey: ["docs-workspace-bundle"] },
+        (current) => current
+          ? {
+              ...current,
+              records: [record, ...current.records.filter((item) => item.id !== record.id)],
+            }
+          : current,
+      );
       setSelectedRecordId(record.id);
       setShowCreateMenu(false);
+      void queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
       if (warning) toast.info("Document created in Supabase only", { description: warning });
       else toast.success("Document created", { description: "Its Supabase row and markdown file are linked." });
     },
@@ -467,6 +487,7 @@ export function ReportsView() {
                     type="button"
                     className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left font-ui text-[12px] text-[var(--text)] hover:bg-[var(--surface-wash)]"
                     onClick={() => createMutation.mutate(template)}
+                    disabled={createMutation.isPending}
                   >
                     <CopyPlus className="h-3.5 w-3.5 text-[var(--accent)]" />
                     <span className="truncate">{documentDisplayTitle(template)}</span>
@@ -479,6 +500,7 @@ export function ReportsView() {
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left font-ui text-[12px] text-[var(--text)] hover:bg-[var(--surface-wash)]"
                   onClick={() => createMutation.mutate(null)}
+                  disabled={createMutation.isPending}
                 >
                   <FileText className="h-3.5 w-3.5 text-[var(--subtext-0)]" />
                   Quick note
@@ -586,8 +608,9 @@ export function ReportsView() {
                   <ProposalStrip
                     docPath={selectedVaultPath || null}
                     onApplied={(text) => {
-                      setContent(text);
-                      setSaveStatus(text === persistedContent ? "idle" : "dirty");
+                      const editable = documentEditableBody(text);
+                      setContent(editable);
+                      setSaveStatus(editable === persistedContent ? "idle" : "dirty");
                     }}
                   />
                   <GraphEmbeds markdown={content} />

@@ -1,0 +1,119 @@
+{
+  "artifact": {
+    "id": "intellizen-wave-1",
+    "version": "063de67+working-tree-round-3",
+    "location": "/Users/adamking/projects/genzen-solutions/intellizen-app"
+  },
+  "review_mode": "diagnostic donor-fidelity rerun; native release evidence",
+  "page_task_shape": "native desktop workspace shell with persistent agent interaction",
+  "evidence_sufficiency": "sufficient for roadmap fidelity item 4",
+  "evidence": [
+    {
+      "id": "R3-SHELL-01",
+      "type": "native release screenshots",
+      "location": "evidence/screenshots/current-release-{home-toolbar,sidebar-collapsed,focus-mode}.png",
+      "scope": "shell controls and responsive pane modes"
+    },
+    {
+      "id": "R3-SET-01",
+      "type": "native release screenshots",
+      "location": "evidence/screenshots/current-release-settings-*.png",
+      "scope": "Appearance and Voice donor fidelity"
+    },
+    {
+      "id": "R3-AGENT-01",
+      "type": "native release screenshots",
+      "location": "evidence/screenshots/current-release-{agents,agent-menu,agent-editor,team-editor}.png",
+      "scope": "populated Agents and editing surfaces"
+    },
+    {
+      "id": "R3-HOOK-01",
+      "type": "native release interaction and screenshot",
+      "location": "evidence/screenshots/current-release-agent-open-in-chat.png",
+      "scope": "Agents row action to real panel target"
+    },
+    {
+      "id": "R3-PANEL-01",
+      "type": "native release screenshots",
+      "location": "evidence/screenshots/current-release-{panel-collapsed,panel-reopened,panel-detached,panel-redocked,hud}.png",
+      "scope": "all donor panel window modes"
+    },
+    {
+      "id": "R3-REFLOW-01",
+      "type": "browser layout probe",
+      "location": "../../../../../output/playwright/wave-1-200-percent-equivalent-reflow.png",
+      "scope": "720x900 CSS viewport, equivalent to 1440x900 at 200 percent",
+      "limitation": "supplementary only; browser has no Tauri APIs"
+    },
+    {
+      "id": "R1-DONOR",
+      "type": "native screenshots and design references",
+      "location": "../round-1/evidence/screenshots/donor-*",
+      "scope": "donor comparison set"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "D2",
+      "label": "Information architecture and interaction",
+      "subchecks": [
+        {
+          "id": "D2.1",
+          "label": "Native shell and panel actions are discoverable and reversible",
+          "verdict": "meets",
+          "evidence_ids": ["R3-SHELL-01", "R3-PANEL-01", "R1-DONOR"],
+          "return_destination": "none"
+        },
+        {
+          "id": "D2.2",
+          "label": "Agents opens the real conversation panel",
+          "verdict": "meets",
+          "evidence_ids": ["R3-HOOK-01"],
+          "return_destination": "none"
+        },
+        {
+          "id": "D2.3",
+          "label": "Shell reflows at the 200-percent equivalent viewport",
+          "verdict": "meets",
+          "evidence_ids": ["R3-REFLOW-01"],
+          "return_destination": "none"
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "label": "System craft and visual fidelity",
+      "subchecks": [
+        {
+          "id": "D3.1",
+          "label": "Settings, Agents, editor, and team sheet match donor anatomy",
+          "verdict": "meets",
+          "evidence_ids": ["R3-SET-01", "R3-AGENT-01", "R1-DONOR"],
+          "return_destination": "none"
+        },
+        {
+          "id": "D3.2",
+          "label": "Docked, collapsed, detached, and HUD modes match donor behavior",
+          "verdict": "meets",
+          "evidence_ids": ["R3-PANEL-01", "R1-DONOR"],
+          "return_destination": "none"
+        }
+      ]
+    }
+  ],
+  "blockers": [],
+  "verdict": "PASS",
+  "return_plan": [
+    {
+      "priority": 1,
+      "finding": "Fable 5.1 fidelity item 4 is evidenced in the built app.",
+      "evidence_ids": ["R3-SHELL-01", "R3-SET-01", "R3-AGENT-01", "R3-HOOK-01", "R3-PANEL-01", "R3-REFLOW-01"],
+      "action": "Run Adam's Wave 1 walk in one sitting and apply only feedback from that walk.",
+      "return_destination": "ROADMAP.md Wave 1 remaining item 5",
+      "owner_or_decision": "Adam"
+    }
+  ],
+  "stop_state": "continue_to_human_walk",
+  "best_valid_version": "063de67+working-tree-round-3",
+  "learning_candidates": []
+}

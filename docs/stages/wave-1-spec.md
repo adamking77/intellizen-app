@@ -46,6 +46,10 @@ proposals (E.16). Running on other builders: acp (B.5 Rust), agents-page
    overseer must wire, what needs Adam.
 8. A previous builder may have left untracked partial files in the path named
    in your section. Copy in what is good, rewrite what is not. You own them.
+9. Workflow design requires Adam's explicit approval before implementation.
+   Diagnose defects freely and implement flows he already approved; do not
+   invent, rearrange, or redesign a user workflow without showing him the
+   proposed interaction sequence first and receiving a yes.
 
 ## Contracts already on the base
 

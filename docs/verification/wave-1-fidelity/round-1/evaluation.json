@@ -1,0 +1,175 @@
+{
+  "artifact": {
+    "id": "intellizen-wave-1",
+    "version": "063de67+working-tree",
+    "location": "/Users/adamking/projects/genzen-solutions/intellizen-app"
+  },
+  "review_mode": "diagnostic donor-fidelity pass; no project EVAL.md exists",
+  "policy_version": "design-artifact-evaluator fallback 2026-09-03",
+  "page_task_shape": "native desktop workspace shell with persistent agent interaction",
+  "evidence_sufficiency": "partial",
+  "evidence": [
+    {
+      "id": "CUR-NATIVE-01",
+      "type": "native screenshot",
+      "location": "evidence/screenshots/current-native-shell.png",
+      "scope": "connected Home shell and installed plugin proof",
+      "limitation": "single native state"
+    },
+    {
+      "id": "CUR-SET-01",
+      "type": "browser screenshots",
+      "location": "evidence/screenshots/current-settings-*.png",
+      "scope": "all settings sections",
+      "limitation": "Tauri-backed data unavailable"
+    },
+    {
+      "id": "CUR-AGENT-01",
+      "type": "browser screenshots",
+      "location": "evidence/screenshots/current-agent*.png",
+      "scope": "Agents empty state, editor, target picker",
+      "limitation": "native profiles and teams unavailable"
+    },
+    {
+      "id": "DONOR-SET-01",
+      "type": "native screenshots",
+      "location": "evidence/screenshots/donor-settings-*.jpeg",
+      "scope": "all donor settings sections"
+    },
+    {
+      "id": "DONOR-AGENT-01",
+      "type": "native screenshots",
+      "location": "evidence/screenshots/donor-agent*.jpeg and donor-agent-row-menu.png",
+      "scope": "donor Agents, editor, team sheet, menu, panel picker"
+    },
+    {
+      "id": "DONOR-HUD-REF-01",
+      "type": "design references",
+      "location": "evidence/screenshots/donor-reference-hud-*.png",
+      "scope": "HUD states",
+      "limitation": "not a fresh executable capture"
+    },
+    {
+      "id": "SRC-01",
+      "type": "source inspection",
+      "location": "current src/components and ~/projects/hermes-app/src",
+      "scope": "anatomy, existing actions, implementation intent"
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "D1",
+      "label": "Product intent",
+      "why_not_higher": "Native end-to-end interaction evidence is incomplete.",
+      "subchecks": [
+        {
+          "id": "D1.1",
+          "label": "Fable 5.1 surface model is preserved",
+          "verdict": "meets",
+          "evidence_ids": ["CUR-NATIVE-01", "SRC-01"],
+          "deduction_reason": "No unsupported page or hard-coded Needs Me surface is present.",
+          "recommendation": "Keep the current product model unchanged.",
+          "return_destination": "none"
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "label": "Information architecture and interaction",
+      "why_not_higher": "The donor's shell-level controls are not exposed in the current title strip.",
+      "subchecks": [
+        {
+          "id": "D2.1",
+          "label": "Shell actions are discoverable",
+          "verdict": "revise",
+          "evidence_ids": ["CUR-NATIVE-01", "DONOR-AGENT-01", "SRC-01"],
+          "deduction_reason": "Sidebar/focus/panel/eject/HUD actions exist through shortcuts or panel-local controls but are missing from the main strip shown by the donor.",
+          "recommendation": "Mount a compact donor-style toolbar in the existing main chrome using the existing actions.",
+          "return_destination": "src/components/layout/app-shell.tsx"
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "label": "System craft and visual fidelity",
+      "why_not_higher": "Settings titles do not consistently match the donor, and HUD proof is incomplete.",
+      "subchecks": [
+        {
+          "id": "D3.1",
+          "label": "Settings heading anatomy matches donor",
+          "verdict": "revise",
+          "evidence_ids": ["CUR-SET-01", "DONOR-SET-01", "SRC-01"],
+          "deduction_reason": "Appearance has no page heading; Providers, Capabilities, Context, and General use a large title-case heading instead of the donor's compact tracked uppercase title.",
+          "recommendation": "Use one donor-style settings title class and add the missing Appearance title; leave Voice unchanged because it matches the donor.",
+          "return_destination": "src/components/settings"
+        },
+        {
+          "id": "D3.2",
+          "label": "Agents editor and team anatomy match donor",
+          "verdict": "meets with native recheck",
+          "evidence_ids": ["CUR-AGENT-01", "DONOR-AGENT-01", "SRC-01"],
+          "deduction_reason": "Rendered editor structure, density, and styling closely match; populated current cards and team sheet were not natively captured.",
+          "recommendation": "Re-capture populated native states after macOS is unlocked.",
+          "return_destination": "verification only"
+        },
+        {
+          "id": "D3.3",
+          "label": "HUD and ejected panel visually match donor",
+          "verdict": "not proven",
+          "evidence_ids": ["DONOR-HUD-REF-01", "SRC-01"],
+          "deduction_reason": "Current browser capture has the wrong native window geometry; live donor HUD capture was blank.",
+          "recommendation": "Capture current native ejected and HUD windows beside the donor reference after unlock.",
+          "return_destination": "verification only"
+        }
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "id": "B1",
+      "active": true,
+      "evidence_ids": ["CUR-NATIVE-01", "DONOR-HUD-REF-01"],
+      "impact": "The required screen-for-screen fidelity claim cannot yet be made for populated Agents, live messages, ejected panel, or HUD.",
+      "required_action": "Unlock macOS and run a native round-two capture of the missing states."
+    }
+  ],
+  "verdict": "REVISE",
+  "return_plan": [
+    {
+      "priority": 1,
+      "finding": "Settings heading anatomy is inconsistent with the donor.",
+      "evidence_ids": ["CUR-SET-01", "DONOR-SET-01"],
+      "action": "Add the missing Appearance title and normalize the applicable settings titles to the donor's compact tracked uppercase style.",
+      "return_destination": "src/components/settings",
+      "owner_or_decision": "Keel",
+      "next_round_evidence": "Re-capture all six settings sections."
+    },
+    {
+      "priority": 2,
+      "finding": "Main shell omits the donor's discoverable view and panel controls.",
+      "evidence_ids": ["CUR-NATIVE-01", "DONOR-AGENT-01"],
+      "action": "Add the smallest toolbar that calls existing sidebar, focus, panel collapse, eject, and HUD paths; do not create new state systems.",
+      "return_destination": "src/components/layout/app-shell.tsx and existing panel public contract",
+      "owner_or_decision": "Keel",
+      "next_round_evidence": "Native shell screenshot plus interaction smoke for each button."
+    },
+    {
+      "priority": 3,
+      "finding": "Native fidelity evidence is incomplete for data-backed and floating states.",
+      "evidence_ids": ["CUR-AGENT-01", "DONOR-HUD-REF-01"],
+      "action": "After macOS unlock, capture populated Agents, row menu, team sheet, live message bubbles, ejected panel, and HUD without mutating durable data.",
+      "return_destination": "docs/verification/wave-1-fidelity/round-2",
+      "owner_or_decision": "Keel; Adam only for the later roadmap walk",
+      "next_round_evidence": "Native side-by-side screenshots and interaction log."
+    }
+  ],
+  "stop_state": "continue",
+  "best_valid_version": "063de67+working-tree",
+  "learning_candidates": [
+    {
+      "finding_pattern": "Ports can preserve component anatomy while drifting on shared page-title treatment.",
+      "candidate_destination": "project design-system title primitive",
+      "governance_owner": "project maintainer"
+    }
+  ]
+}

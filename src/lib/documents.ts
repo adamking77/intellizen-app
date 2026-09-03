@@ -107,10 +107,15 @@ export function isAbsoluteDocumentPath(path: string) {
   return path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(path);
 }
 
+export function documentVaultRelativePath(record: WorkspaceDatabaseRecordModel | null | undefined) {
+  const path = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath).trim();
+  return path && !isAbsoluteDocumentPath(path) ? path : null;
+}
+
 export function documentSourceLabel(record: WorkspaceDatabaseRecordModel) {
   const path = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath);
   if (!path) return "Supabase Documents row";
-  if (isAbsoluteDocumentPath(path)) return "File outside the GenZen OS vault";
+  if (isAbsoluteDocumentPath(path)) return "Workspace copy · external file unchanged";
   return "Supabase Documents row + GenZen OS vault file";
 }
 
@@ -177,6 +182,12 @@ export function quickNoteTitle(date = new Date()) {
     hour12: false,
   }).format(date);
   return `Quick note — ${day}, ${time}`;
+}
+
+/** Metadata belongs in the portable file, not in the visual editor. */
+export function documentEditableBody(content: string) {
+  const normalized = content.replace(/\r\n/g, "\n");
+  return normalized.replace(/^---\n[\s\S]*?\n---\n*/, "");
 }
 
 /** Keep markdown portable while giving file/row sync a stable identity. */

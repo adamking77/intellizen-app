@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import helloJs from "../fixtures/plugins/hello/intellizen/plugin.js?raw";
 import helloYaml from "../fixtures/plugins/hello/plugin.yaml?raw";
+import brokenJs from "../fixtures/plugins/broken/intellizen/plugin.js?raw";
 import { parsePluginYaml, reconcilePlugins, startPluginLoader, type PluginFs } from "./loader";
 import { usePluginRegistry } from "./registry";
 
@@ -80,13 +81,13 @@ describe("reconcilePlugins", () => {
       ["/root/hello/intellizen/plugin.js", { text: helloJs, mtime: 1 }],
       ["/root/syntax/intellizen/plugin.js", { text: "export default {", mtime: 1 }],
       ["/root/throws/plugin.yaml", { text: "name: Throws\n", mtime: 1 }],
-      ["/root/throws/intellizen/plugin.js", { text: "export default { register() { throw new Error('boom') } }", mtime: 1 }],
+      ["/root/throws/intellizen/plugin.js", { text: brokenJs, mtime: 1 }],
       ["/root/shape/intellizen/plugin.js", { text: "export default 42", mtime: 1 }],
     ]);
     await reconcilePlugins(fakeFs(files), "/root", new Map());
     expect(plugins().hello.status).toBe("loaded");
     expect(plugins().syntax.status).toBe("error");
-    expect(plugins().throws).toMatchObject({ status: "error", name: "Throws", error: "boom" });
+    expect(plugins().throws).toMatchObject({ status: "error", name: "Throws", error: "D.13 deliberate isolated failure" });
     expect(plugins().shape.error).toMatch(/register\(ctx\)/);
     expect(plugins().throws.contributions.routes).toEqual([]);
   });

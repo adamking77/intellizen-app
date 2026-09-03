@@ -219,6 +219,17 @@ export function uniqueGroupChatName(base: string, taken: Set<string>): string {
   throw new Error("No free name for the room.");
 }
 
+/** Whether a room name is the base or one of the numeric names minted above. */
+export function hasGroupChatNameBase(name: string | undefined, base: string): boolean {
+  const normalized = String(base || "").trim().slice(0, 64) || "Room";
+  if (name === normalized) return true;
+  for (let n = 2; n < 100; n++) {
+    const suffix = ` ${n}`;
+    if (name === normalized.slice(0, 64 - suffix.length) + suffix) return true;
+  }
+  return false;
+}
+
 // --- room-turn decision helpers (#93127) — pure, unit-tested ---
 
 /** #93127: whether a finished member turn may still commit (append its reply

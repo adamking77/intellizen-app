@@ -9,6 +9,7 @@
     "icon": "tauri icon app-icon.svg",
     "analyze:bundle": "ANALYZE_BUNDLE=1 pnpm run build",
     "verify:agent-work": "node scripts/verify-agent-assignment-readback.mjs",
+    "verify:plugin-fixture": "node scripts/verify-plugin-fixture.mjs",
     "verify:gate4-safe": "vitest run src/services/workflow-runner.test.ts",
     "verify:sql-contracts": "bash scripts/verify-v2-sql-contracts.sh",
     "check:file-sizes": "node scripts/check-file-sizes.mjs",

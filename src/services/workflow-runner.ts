@@ -39,7 +39,7 @@ export type ResolvedWorkflowRole = {
   agent: string;
   agentRecordId: string;
   bindingRef: string;
-  adapterId: "hermes" | "codex-cli" | "claude-cli";
+  adapterId: "hermes" | "acp";
   resolvedModel: string | null;
   execution: "ephemeral" | "durable";
   providerAuthority: string;

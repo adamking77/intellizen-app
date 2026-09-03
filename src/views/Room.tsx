@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2, Trash2, Users } from "lucide-react";
+import { Loader2, Trash2, Users, X } from "lucide-react";
 
 import { DecisionCard } from "@/components/agent/decision-card";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
@@ -74,8 +74,17 @@ function Turn({
 
 /** The room: one log, the members beside it, the receipts of the run in
  *  flight, and a composer that addresses anyone with `@name`. */
-export function RoomView() {
-  const { id = "" } = useParams();
+export function RoomView({
+  roomId,
+  panel = false,
+  onClose,
+}: {
+  roomId?: string;
+  panel?: boolean;
+  onClose?: () => void;
+} = {}) {
+  const { id: routeId = "" } = useParams();
+  const id = roomId ?? routeId;
   const navigate = useNavigate();
   const rooms = useValue($groupChats);
   const clarify = useValue($groupClarify);
@@ -188,7 +197,7 @@ export function RoomView() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[var(--base)]">
+    <div className="flex h-full overflow-hidden bg-[var(--base)]" data-room-panel={panel || undefined}>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-3">
           <div className="min-w-0 flex-1">
@@ -209,6 +218,11 @@ export function RoomView() {
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
+          {panel && onClose ? (
+            <Button size="sm" variant="ghost" onClick={onClose} title="Close room">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </header>
 
         <div ref={logRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -249,7 +263,7 @@ export function RoomView() {
         />
       </div>
 
-      <aside className="hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)] lg:flex">
+      <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)] lg:flex", panel && "lg:hidden")}>
         <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-4 py-3">
           <Users className="h-3.5 w-3.5 text-[var(--text-muted)]" />
           <span className="font-ui text-[12px] font-medium text-[var(--text-muted)]">Members</span>
@@ -311,7 +325,7 @@ export function RoomView() {
         onCancel={() => setConfirmDisband(false)}
         onConfirm={() => {
           setConfirmDisband(false);
-          void disbandRoom(id).then(() => navigate("/room"));
+          void disbandRoom(id).then(() => onClose ? onClose() : navigate("/room"));
         }}
       />
     </div>

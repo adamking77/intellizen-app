@@ -82,6 +82,8 @@ export interface ComposerProps {
   converse?: React.ReactNode;
   /** Whatever the voice stack has to say, above the box it is about. */
   note?: string | null;
+  /** Live speech preview is visible but not editable until Stop commits it. */
+  dictating?: boolean;
   /** Enter sends when true; otherwise ⌘/Ctrl+Enter sends. */
   sendOnEnter?: boolean;
 }
@@ -104,6 +106,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     dictate,
     converse,
     note,
+    dictating = false,
     sendOnEnter = true,
   },
   ref,
@@ -133,6 +136,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         placeholder={placeholder}
         rows={2}
         disabled={!ready}
+        readOnly={dictating}
         aria-label={agent ? `Message ${agent}` : "Message"}
         className="w-full resize-none bg-transparent font-ui text-[13px] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
       />

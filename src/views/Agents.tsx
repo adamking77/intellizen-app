@@ -3,7 +3,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { Card, NewCard, Tag } from "@/components/agents/agent-card";
 import { AgentEditor } from "@/components/agents/agent-editor";
@@ -16,10 +15,11 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useEngineStore } from "@/engine/engine-store";
 import { getGatewayClient } from "@/engine/gateway";
 import { useSessionStore } from "@/engine/session-store";
-import { AGENT_PANEL_COLLAPSED_KEY } from "@/lib/agent-panel-persistence";
+import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
 import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
 import { errorMessage, toast } from "@/lib/toast";
 import { groupMemberKey } from "@/rooms/group-membership";
+import { hasGroupChatNameBase } from "@/rooms/group-chat";
 import { createRoom, ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
 import type { GroupMember } from "@/rooms/types";
 
@@ -28,21 +28,13 @@ const GRID = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(248px,1f
 const ACTION =
   "rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[12px] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
 
-/** Point the panel at a profile. The panel owns its collapsed state; its
- *  ⌘⇧A handler is the one way in from outside.
- *  ponytail: synthetic shortcut, until the panel exposes an open() (wave-1: panel wires this). */
+/** Point the real panel at this profile, reveal it, and focus its composer. */
 function talkTo(target: string) {
   useSessionStore.getState().selectProfile(target);
-  try {
-    window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "0");
-  } catch {
-    /* the shortcut still opens it */
-  }
-  window.dispatchEvent(new KeyboardEvent("keydown", { key: "a", metaKey: true, shiftKey: true, bubbles: true }));
+  requestAgentPanelOpen();
 }
 
 export function AgentsView() {
-  const navigate = useNavigate();
   const [defaultContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
   const client = getGatewayClient();
   const queryClient = useQueryClient();
@@ -134,9 +126,10 @@ export function AgentsView() {
     }));
     const keys = members.map(groupMemberKey).sort().join("|");
     const existing = listRooms().find(
-      (room) => room.name === team.name && (room.members ?? []).map(groupMemberKey).sort().join("|") === keys,
+      (room) => hasGroupChatNameBase(room.name, team.name) && (room.members ?? []).map(groupMemberKey).sort().join("|") === keys,
     );
-    navigate(`/room/${existing?.roomId ?? createRoom(team.name, members)}`);
+    useSessionStore.getState().selectRoom(existing?.roomId ?? createRoom(team.name, members));
+    requestAgentPanelOpen();
   };
 
   const offline = !engineOpen;

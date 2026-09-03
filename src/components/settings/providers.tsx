@@ -13,6 +13,8 @@ import { useEngineStore } from "@/engine/engine-store";
 import { errorMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+import { SETTINGS_TITLE } from "./settings-style";
+
 type ProviderRow = {
   engine: AcpEngine;
   command: string;
@@ -56,7 +58,7 @@ export function ProvidersSettings() {
     <div className="space-y-1">
       <header className="flex items-start gap-4 pb-3">
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl text-[var(--text)]">Providers</h1>
+          <h1 className={SETTINGS_TITLE}>Providers</h1>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">
             Hermes is the engine. Claude Code, Codex, Gemini and Qwen join as agents through ACP and start on demand.
           </p>

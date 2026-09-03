@@ -15,6 +15,8 @@ import {
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
+import { SETTINGS_TITLE } from "./settings-style";
+
 const caps = "font-ui text-[11px] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
 const card =
   "flex flex-col gap-2 rounded-xl p-2.5 text-left text-[var(--text)] motion-safe:transition-colors";
@@ -135,6 +137,7 @@ export function AppearanceSection() {
 
   return (
     <div className="flex flex-col gap-2">
+      <h1 className={SETTINGS_TITLE}>Appearance</h1>
       <p className="pb-2.5 text-[13px] leading-normal text-[var(--text-muted)]">
         Calmppuccin, seven flavors. Each carries its own fourteen accents.
       </p>

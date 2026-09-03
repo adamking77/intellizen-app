@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +8,8 @@ import {
   persistAgentPanelHistory,
   readAgentPanelChatHistory,
   readAgentPanelCollapsed,
+  requestAgentPanelOpen,
+  AGENT_PANEL_OPEN_EVENT,
 } from "@/lib/agent-panel-persistence";
 
 function memoryStorage() {
@@ -18,6 +22,15 @@ function memoryStorage() {
 }
 
 describe("agent panel persistence", () => {
+  it("exposes a real panel-open request for other pages", () => {
+    let opened = 0;
+    const onOpen = () => opened++;
+    window.addEventListener(AGENT_PANEL_OPEN_EVENT, onOpen);
+    requestAgentPanelOpen();
+    window.removeEventListener(AGENT_PANEL_OPEN_EVENT, onOpen);
+    expect(opened).toBe(1);
+  });
+
   it("distinguishes explicit collapse from the unset responsive default", () => {
     const storage = memoryStorage();
     expect(readAgentPanelCollapsed(storage)).toBeNull();

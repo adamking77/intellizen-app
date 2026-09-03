@@ -5,6 +5,8 @@ import { tildify } from "@/components/layout/workspace-tree";
 import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
 import { errorMessage } from "@/lib/toast";
 
+import { SETTINGS_TITLE } from "./settings-style";
+
 export function ContextSettings() {
   const [context, setContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
   const [busy, setBusy] = useState(false);
@@ -28,7 +30,7 @@ export function ContextSettings() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="font-display text-2xl text-[var(--text)]">Context</h1>
+        <h1 className={SETTINGS_TITLE}>Context</h1>
         <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">
           Folders granted to every new agent. An agent can override this in its editor; the first folder becomes its starting workspace.
         </p>

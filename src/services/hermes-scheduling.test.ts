@@ -96,5 +96,8 @@ describe("Hermes scheduling services", () => {
     expect(prompt).toContain('"card_id": "card-1"');
     expect(prompt).toContain('"board": "ops"');
     expect(prompt).toContain("request approval before anything external-facing or irreversible");
+    expect(prompt).toContain("Do not inspect IntelliZen source");
+    expect(prompt).toContain("do not call raw SQL or the low-level advance_workflow_step tool");
+    expect(prompt).toContain("Do not wait in process for Adam's answer");
   });
 });

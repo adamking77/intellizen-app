@@ -9,7 +9,14 @@ import {
 
 export const AGENT_PANEL_COLLAPSED_KEY = "intelizen:agent-panel-collapsed";
 export const AGENT_PANEL_WIDTH_KEY = "intelizen:agent-panel-width";
+export const AGENT_PANEL_OPEN_EVENT = "intelizen:agent-panel:open";
 export const LOCAL_CHAT_HISTORY_LIMIT = 40;
+
+/** Ask the shell to reveal the real panel. The caller selects the target
+ *  first, so an ejected panel receives the same exact conversation frame. */
+export function requestAgentPanelOpen() {
+  window.dispatchEvent(new Event(AGENT_PANEL_OPEN_EVENT));
+}
 
 export type ChatEntryStatus =
   | "submitted"

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import type { Message } from "@/engine/transcript";
+import { startBrowserDictation, type BrowserDictationSession } from "@/services/voice";
 import { micTrouble, pushLevel, record, sayable, transcribe, type Recorder } from "./dictation";
 import { useVoicePrefs } from "./voice-prefs";
 
@@ -46,13 +47,20 @@ function reason(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : typeof e === "string" ? e : fallback;
 }
 
+export function joinVoiceText(committed: string, live: string) {
+  return [committed.trimEnd(), live.trim()].filter(Boolean).join(" ");
+}
+
 export function useVoice({ profile, messages, sending, onSend, onTranscript, bars = 16 }: VoiceHost) {
   const prefs = useVoicePrefs((s) => s.voice);
   const listening = useRef<Recorder | null>(null);
+  const browserListening = useRef<BrowserDictationSession | null>(null);
+  const browserFinal = useRef("");
   const [mine, setMine] = useState(false);
   const [levels, setLevels] = useState<number[]>([]);
   const [hearing, setHearing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [interim, setInterim] = useState("");
 
   const [convo, setConvo] = useState(false);
   const [talking, setTalking] = useState<string | null>(null);
@@ -133,6 +141,9 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
     if (listening.current) {
       const rec = listening.current;
       listening.current = null;
+      const browser = browserListening.current;
+      browserListening.current = null;
+      browser?.stop();
       setMine(false);
       setLevels([]);
       setHearing(true);
@@ -149,6 +160,8 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
       } catch (e) {
         setNote(reason(e, "That recording could not be transcribed."));
       } finally {
+        setInterim("");
+        browserFinal.current = "";
         setHearing(false);
       }
       return;
@@ -167,6 +180,27 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
       );
       listening.current = rec;
       setMine(true);
+      browserFinal.current = "";
+      setInterim("");
+      let browser: BrowserDictationSession | null = null;
+      try {
+        browser = startBrowserDictation({
+          onFinal: (text) => {
+            if (browserListening.current !== browser) return;
+            browserFinal.current = joinVoiceText(browserFinal.current, text);
+            setInterim(browserFinal.current);
+          },
+          onInterim: (text) => {
+            if (browserListening.current === browser) setInterim(joinVoiceText(browserFinal.current, text));
+          },
+          onEnd: () => {
+            if (browserListening.current === browser) browserListening.current = null;
+          },
+        });
+        browserListening.current = browser;
+      } catch {
+        // Live preview is optional; the selected local model still owns the final transcript.
+      }
     } catch (e) {
       setMine(false);
       setNote(micTrouble(e));
@@ -178,9 +212,14 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
     const rec = listening.current;
     if (!rec) return;
     listening.current = null;
+    const browser = browserListening.current;
+    browserListening.current = null;
+    browser?.stop();
     rec.cancel();
     setMine(false);
     setLevels([]);
+    setInterim("");
+    browserFinal.current = "";
   }, []);
 
   // `record` captures its silence callback once; this keeps it current.
@@ -198,7 +237,10 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
       hush();
       listening.current?.cancel();
       listening.current = null;
+      browserListening.current?.stop();
+      browserListening.current = null;
       setMine(false);
+      setInterim("");
       return;
     }
     for (const m of messages) spoken.current.add(m.id);
@@ -235,6 +277,7 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
   useEffect(
     () => () => {
       listening.current?.cancel();
+      browserListening.current?.stop();
       void invoke("voice_stop").catch(() => undefined);
     },
     [],
@@ -258,6 +301,8 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
     levels,
     /** Whatever went wrong, in a sentence. */
     note,
+    /** Live browser recognition shown while the local final transcript is pending. */
+    interim,
     setNote,
     convo,
     setConvo,

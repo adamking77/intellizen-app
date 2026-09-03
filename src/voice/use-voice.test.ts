@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Message } from "@/engine/transcript";
-import { nextToSpeak } from "./use-voice";
+import { joinVoiceText, nextToSpeak } from "./use-voice";
 import { DEFAULT_VOICE, parseVoiceConfig } from "./voice-prefs";
 
 const m = (over: Partial<Message>): Message => ({ id: "1", from: "default", text: "Hello.", ...over });
@@ -15,6 +15,13 @@ describe("nextToSpeak", () => {
     expect(nextToSpeak([m({ text: "  " })], new Set())).toBeNull();
     expect(nextToSpeak([m({})], new Set(["1"]))).toBeNull();
     expect(nextToSpeak([m({ id: "0", from: "you" }), m({})], new Set())?.id).toBe("1");
+  });
+});
+
+describe("joinVoiceText", () => {
+  it("shows interim words after the existing draft without changing either source", () => {
+    expect(joinVoiceText("Existing note  ", " live words ")).toBe("Existing note live words");
+    expect(joinVoiceText("", "live words")).toBe("live words");
   });
 });
 

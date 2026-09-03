@@ -895,4 +895,50 @@ done
         assert!(err.contains("not logged in"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
+
+    #[tokio::test]
+    #[ignore = "requires a logged-in codex-acp adapter"]
+    async fn the_installed_codex_adapter_answers_one_turn() {
+        let seen: Arc<TestMutex<Vec<Value>>> = Arc::new(TestMutex::new(Vec::new()));
+        let sink_seen = Arc::clone(&seen);
+        let sink: Sink = Arc::new(move |_, envelope| sink_seen.lock().unwrap().push(envelope));
+        let spec = AcpAgentSpawn {
+            id: "live-codex".into(),
+            command: std::env::var("INTELLIZEN_LIVE_ACP_COMMAND")
+                .unwrap_or_else(|_| "codex-acp".into()),
+            args: vec![],
+            cwd: Some(env!("CARGO_MANIFEST_DIR").into()),
+        };
+        let live = connect(&spec, sink).await.expect("codex-acp handshake");
+
+        prompt(&live, "Reply with exactly: ACP OK")
+            .await
+            .expect("submit prompt");
+
+        for _ in 0..600 {
+            if seen
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|event| event["type"] == "message.complete")
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let events = seen.lock().unwrap().clone();
+        let complete = events
+            .iter()
+            .find(|event| event["type"] == "message.complete")
+            .unwrap_or_else(|| panic!("turn never completed: {events:?}"));
+        assert_eq!(complete["payload"]["status"], "complete", "{complete:?}");
+        let text = events
+            .iter()
+            .filter(|event| event["type"] == "message.delta")
+            .filter_map(|event| event["payload"]["text"].as_str())
+            .collect::<String>();
+        assert!(text.contains("ACP OK"), "missing streamed reply: {events:?}");
+        live.kill();
+    }
 }

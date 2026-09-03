@@ -9,9 +9,6 @@ mod acp_wire;
 mod engine;
 mod panel_window;
 mod proposals;
-mod runtime_auth;
-mod runtime_bindings;
-mod runtimes;
 mod supabase_proxy;
 mod voice;
 
@@ -528,14 +525,6 @@ pub fn run() {
             proposals::proposal_accept_hunk,
             proposals::proposal_reject_hunk,
             supabase_proxy::supabase_proxy_request,
-            runtime_bindings::runtime_bindings_list,
-            runtime_bindings::runtime_bindings_upsert,
-            runtime_bindings::runtime_binding_prepare_worker_profile,
-            runtimes::runtime_prepare_assignment,
-            runtimes::runtime_run,
-            runtimes::runtime_cancel,
-            runtimes::runtime_discover_codex,
-            runtimes::runtime_discover_claude,
             voice::voice_speak,
             voice::voice_stop,
             voice::voice_transcribe,

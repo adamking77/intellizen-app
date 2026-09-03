@@ -18,13 +18,21 @@ export function buildGraphEmbedBlock(spec: GraphEmbedSpec) {
   return `\`\`\`graph ${JSON.stringify(spec)}\n\`\`\``;
 }
 
+export function buildGraphDocumentBody(title: string, spec: GraphEmbedSpec) {
+  return `# ${title.trim() || "Graph snapshot"}\n\n${buildGraphEmbedBlock(spec)}\n`;
+}
+
+export function documentHasGraphEmbed(markdown: string | null, spec: GraphEmbedSpec) {
+  return parseGraphEmbedBlocks(markdown ?? "").some((item) => item.id === spec.id && item.mode === spec.mode);
+}
+
 export function parseGraphEmbedBlocks(markdown: string): GraphEmbedSpec[] {
   const found: GraphEmbedSpec[] = [];
-  for (const line of markdown.split("\n")) {
-    const match = /^\s*```\s*graph\s+(\{.*\})\s*$/.exec(line);
-    if (!match) continue;
+  const fence = /^[ \t]*```[ \t]*graph(?:[ \t]+(\{[^\n]*\}))?[ \t]*\r?\n([\s\S]*?)^[ \t]*```[ \t]*$/gm;
+  for (const match of markdown.matchAll(fence)) {
+    const encoded = match[1] ?? match[2].trim();
     try {
-      const value = JSON.parse(match[1]) as Partial<GraphEmbedSpec>;
+      const value = JSON.parse(encoded) as Partial<GraphEmbedSpec>;
       if (typeof value.id !== "string" || parseGraphId(value.id) === undefined) continue;
       found.push({ id: value.id, mode: value.mode === "construct" ? "construct" : "insight" });
     } catch {

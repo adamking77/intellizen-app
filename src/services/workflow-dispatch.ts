@@ -2,12 +2,11 @@ import {
   GENZEN_WORKSPACE_DATABASE_IDS,
   OPERATOR_ACTOR,
 } from "@/lib/data";
+import { runAcpPrompt } from "@/engine/acp-session";
 import {
-  assertClaudeWorkerIsolation,
-  codexExecArgs,
-  getRuntimeAdapter,
-  type NormalizedRuntimeEvent,
-} from "@/lib/runtime-adapters";
+  listExecutionTargets,
+  type ExecutionTarget,
+} from "@/engine/execution-targets";
 import { supabase } from "@/lib/supabase";
 import type { WorkflowRunItem } from "@/lib/types";
 import { requiredNonNegativeInteger } from "@/lib/validated-number";
@@ -17,17 +16,6 @@ import {
   type WorkflowDefinitionV1,
   type WorkflowRoleAssignStep,
 } from "@/lib/workflow-schema";
-import {
-  builtinBindingRefForRoleOccupant,
-  effectiveRuntimeBindings,
-  listRuntimeBindings,
-  type RuntimeBinding,
-} from "@/services/runtime-bindings";
-import { runtimeChatResultFromEvents } from "@/services/runtime-chat";
-import {
-  prepareRuntimeAssignment,
-  runRuntime,
-} from "@/services/runtimes";
 import { getGatewayClient } from "@/engine/gateway";
 import { runPrompt } from "@/engine/session";
 import { workflowDispatchPrompt } from "@/services/agent";
@@ -47,19 +35,6 @@ type WorkspaceRoleRecord = {
 };
 
 const productionCoordinator = new WorkflowDispatchCoordinator();
-
-const HERMES_PROFILE_HOME_PREFIX = "provider-managed:";
-
-/** The Hermes profile a binding runs on (`workerProfileHome:
- *  "provider-managed:<profile>"`), or "default" when it names none. */
-export function hermesBindingProfile(binding: Pick<RuntimeBinding, "workerProfileHome">): string {
-  const home = binding.workerProfileHome ?? "";
-  if (home.startsWith(HERMES_PROFILE_HOME_PREFIX)) {
-    const profile = home.slice(HERMES_PROFILE_HOME_PREFIX.length).trim();
-    if (profile) return profile;
-  }
-  return "default";
-}
 
 function fieldString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -124,7 +99,7 @@ export function assertProductionWorkflowArtifacts(
   }
 }
 
-async function loadRoleResolver(bindings: RuntimeBinding[]) {
+async function loadRoleResolver(targets: ExecutionTarget[]) {
   const databaseIds = [
     GENZEN_WORKSPACE_DATABASE_IDS.roles,
     GENZEN_WORKSPACE_DATABASE_IDS.agents,
@@ -170,12 +145,9 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
   const assignmentForAgent = (agentId: string) =>
     assignments.find(
       (assignment) =>
-        firstRelation(assignment.fields.role_assignment_agent) === agentId &&
-        fieldString(assignment.fields.role_assignment_binding_ref),
+        firstRelation(assignment.fields.role_assignment_agent) === agentId,
     );
-  const bindingsById = new Map(
-    bindings.map((binding) => [binding.bindingId, binding]),
-  );
+  const targetsByAgent = new Map(targets.map((target) => [target.agentKey, target]));
   const blocked = (
     reason: WorkflowRoleResolutionBlocker["reason"],
     message: string,
@@ -227,51 +199,17 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
       );
     }
 
-    const bindingRef =
-      fieldString(assignment?.fields.role_assignment_binding_ref) ??
-      builtinBindingRefForRoleOccupant(step.role, agentKey);
-    const binding = bindingRef ? bindingsById.get(bindingRef) : null;
-    if (!binding) {
+    const target = targetsByAgent.get(agentKey);
+    if (!target) {
       return blocked(
         "binding_unavailable",
-        `Agent ${agentKey} has no available runtime binding for ${step.role}.`,
+        `Agent ${agentKey} has no available Hermes profile or ACP target for ${step.role}.`,
       );
     }
-
-    if (binding.adapterId === "hermes") {
-      return {
-        role: step.role,
-        roleRecordId: role.id,
-        roleAuthorityCeiling: authority,
-        ownerGate: gate,
-        delegationPolicy: delegation,
-        verificationEligible:
-          role.fields.role_verification_eligible === true,
-        agent: agentKey,
-        agentRecordId: agent.id,
-        bindingRef: binding.bindingId,
-        adapterId: "hermes",
-        resolvedModel: null,
-        execution: "durable",
-        providerAuthority: "Fiona Hermes profile and API run controls",
-        unmanagedAuthority: "Hermes host process and current macOS user",
-      };
-    }
-
-    if (!["codex-cli", "claude-cli"].includes(binding.adapterId)) {
-      return blocked(
-        "binding_unsupported",
-        `Runtime binding ${binding.bindingId} uses unsupported adapter ${binding.adapterId}.`,
-      );
-    }
-    const resolvedModel = step.modelOverride ?? binding.modelPolicy.default;
-    if (
-      step.modelOverride &&
-      !binding.modelPolicy.allowed.includes(step.modelOverride)
-    ) {
+    if (step.modelOverride && step.modelOverride !== target.model) {
       return blocked(
         "model_not_allowed",
-        `Model ${step.modelOverride} is not allowed by runtime binding ${binding.bindingId}.`,
+        `Model ${step.modelOverride} is not the configured model for ${target.ref}.`,
       );
     }
     return {
@@ -284,15 +222,12 @@ async function loadRoleResolver(bindings: RuntimeBinding[]) {
         role.fields.role_verification_eligible === true,
       agent: agentKey,
       agentRecordId: agent.id,
-      bindingRef: binding.bindingId,
-      adapterId: binding.adapterId as "codex-cli" | "claude-cli",
-      resolvedModel,
-      execution: "ephemeral",
-      providerAuthority:
-        binding.adapterId === "codex-cli"
-          ? "Codex workspace-write sandbox and worker-only profile"
-          : "Claude safe mode, explicit worker tools, and worker-only profile",
-      unmanagedAuthority: "Current macOS user outside the provider sandbox",
+      bindingRef: target.ref,
+      adapterId: target.kind,
+      resolvedModel: target.model,
+      execution: target.execution,
+      providerAuthority: target.kind === "hermes" ? "Hermes profile and API run controls" : "ACP agent permission protocol",
+      unmanagedAuthority: target.kind === "hermes" ? "Hermes host process and current macOS user" : "ACP adapter process and current macOS user",
     };
   };
 }
@@ -314,54 +249,11 @@ function workflowPrompt(input: {
   ].join("\n");
 }
 
-function normalizedRuntimeResult(events: NormalizedRuntimeEvent[]) {
-  const runtimeError = events.find(
-    (
-      event,
-    ): event is Extract<NormalizedRuntimeEvent, { kind: "runtime_error" }> =>
-      event.kind === "runtime_error",
-  );
-  if (runtimeError) {
-    throw new WorkflowDispatchError({
-      reason: runtimeError.code,
-      message: runtimeError.message,
-      resultKnown: runtimeError.resultKnown,
-      retryable: runtimeError.retryable,
-    });
-  }
-  const result = runtimeChatResultFromEvents(events);
-  if (!result.sessionId) {
-    throw new Error("Runtime assignment did not return a provider session ID.");
-  }
-  return {
-    sessionId: result.sessionId,
-    result: parseStructuredResult(result.text),
-    usage: result.usage,
-  };
-}
-
-export function runtimeInvocationFailure(
-  error: unknown,
-  processSpawned: boolean,
-) {
-  return new WorkflowDispatchError({
-    reason: processSpawned ? "ambiguous_delivery" : "runtime_failed",
-    message:
-      error instanceof Error
-        ? error.message
-        : "The local runtime could not be invoked.",
-    resultKnown: false,
-    retryable: !processSpawned,
-  });
-}
-
 async function productionPort(
-  bindings: RuntimeBinding[],
+  targets: ExecutionTarget[],
 ): Promise<WorkflowRunnerPort> {
-  const bindingsById = new Map(
-    bindings.map((binding) => [binding.bindingId, binding]),
-  );
-  const resolveRole = await loadRoleResolver(bindings);
+  const targetsByRef = new Map(targets.map((target) => [target.ref, target]));
+  const resolveRole = await loadRoleResolver(targets);
   return {
     now: () => new Date().toISOString(),
     newId: () => crypto.randomUUID(),
@@ -434,130 +326,45 @@ async function productionPort(
     },
     resolveRole,
     dispatch: async ({ step, assignment, renderedContext, signal }) => {
-      const binding = bindingsById.get(assignment.selectedBinding);
-      if (binding?.adapterId === "hermes") {
-        try {
-          // One turn through the gateway on the binding's profile. The
-          // session id is the run's durable handle; Hermes keeps the history.
-          const turn = await runPrompt(getGatewayClient(), {
-            profile: hermesBindingProfile(binding),
-            text: workflowDispatchPrompt({
-              instructions:
-                "Execute one bounded internal IntelliZen workflow assignment. Stay inside the supplied envelope.",
-              prompt: workflowPrompt({ renderedContext, step }),
-            }),
+      const target = targetsByRef.get(assignment.selectedBinding);
+      if (!target) {
+        throw new WorkflowDispatchError({
+          reason: "runtime_failed",
+          message: "The selected Hermes or ACP target is unavailable.",
+          resultKnown: false,
+        });
+      }
+      const text = workflowDispatchPrompt({
+        instructions:
+          "Execute one bounded internal IntelliZen workflow assignment. Stay inside the supplied envelope.",
+        prompt: workflowPrompt({ renderedContext, step }),
+      });
+      try {
+        const turn = target.kind === "hermes"
+          ? await runPrompt(getGatewayClient(), {
+            profile: target.targetId,
+            text,
+            timeoutMs: step.timeoutMinutes * 60_000,
+            signal,
+          })
+          : await runAcpPrompt({
+            agentId: target.targetId,
+            text,
             timeoutMs: step.timeoutMinutes * 60_000,
             signal,
           });
-          return {
-            sessionId: turn.sessionId,
-            result: parseStructuredResult(turn.text),
-            usage: null,
-          };
-        } catch (error) {
-          throw new WorkflowDispatchError({
-            reason: "ambiguous_delivery",
-            message:
-              error instanceof Error
-                ? error.message
-                : "Hermes workflow assignment failed.",
-            resultKnown: false,
-          });
-        }
-      }
-
-      if (
-        !binding ||
-        (binding.adapterId !== "codex-cli" &&
-          binding.adapterId !== "claude-cli")
-      ) {
-        throw new WorkflowDispatchError({
-          reason: "runtime_failed",
-          message: "The resolved local runtime binding is unavailable.",
-          resultKnown: false,
-        });
-      }
-      const grantRoot = binding.workingDirGrants[0];
-      if (!grantRoot) {
-        throw new WorkflowDispatchError({
-          reason: "runtime_failed",
-          message: "The runtime binding has no working-directory grant.",
-          resultKnown: false,
-        });
-      }
-      let prepared;
-      try {
-        prepared = await prepareRuntimeAssignment(
-          grantRoot,
-          assignment.assignmentId,
-        );
+        return {
+          sessionId: turn.sessionId,
+          result: parseStructuredResult(turn.text),
+          usage: null,
+        };
       } catch (error) {
-        throw runtimeInvocationFailure(error, false);
-      }
-      const adapter = getRuntimeAdapter(binding.adapterId);
-      const stdout: string[] = [];
-      const runId = `workflow-${assignment.assignmentId}`;
-      let processSpawned = false;
-      let exit;
-      try {
-        exit = await runRuntime(
-          {
-            runId,
-            binary: binding.canonicalBinary,
-            args:
-              binding.adapterId === "codex-cli"
-                ? codexExecArgs(prepared.path)
-                : binding.argTemplates,
-            workingDirectory: prepared.path,
-            stdin: workflowPrompt({ renderedContext, step }),
-            timeoutMs: step.timeoutMinutes * 60_000,
-            environment:
-              binding.adapterId === "codex-cli"
-                ? {
-                    CODEX_HOME: binding.workerProfileHome,
-                    NO_COLOR: "1",
-                    TERM: "dumb",
-                  }
-                : {
-                    CLAUDE_CONFIG_DIR: binding.workerProfileHome,
-                    NO_COLOR: "1",
-                    TERM: "dumb",
-                  },
-          },
-          (event) => {
-            if (event.kind === "spawned") processSpawned = true;
-            if (event.kind === "stdout" && event.text) stdout.push(event.text);
-          },
-        );
-      } catch (error) {
-        throw runtimeInvocationFailure(error, processSpawned);
-      }
-      if (exit.reason === "timed_out") {
         throw new WorkflowDispatchError({
-          reason: "timed_out",
-          message: "The local runtime assignment timed out.",
+          reason: signal?.aborted ? "cancelled" : "ambiguous_delivery",
+          message: error instanceof Error ? error.message : `${target.ref} assignment failed.`,
           resultKnown: false,
         });
       }
-      if (exit.reason === "cancelled") {
-        throw new WorkflowDispatchError({
-          reason: "cancelled",
-          message: "The local runtime assignment was cancelled.",
-          resultKnown: false,
-        });
-      }
-      if (exit.reason !== "completed") {
-        throw new WorkflowDispatchError({
-          reason: "runtime_failed",
-          message: "The local runtime assignment failed.",
-          resultKnown: false,
-        });
-      }
-      const events = adapter.normalize(stdout);
-      if (binding.adapterId === "claude-cli") {
-        assertClaudeWorkerIsolation(events);
-      }
-      return normalizedRuntimeResult(events);
     },
     decideApproval: async () => null,
     performArtifact: async ({ runId, step, simulated }) => {
@@ -613,10 +420,8 @@ export async function dispatchWorkflowRun(
     !Array.isArray(context.context)
       ? (context.context as Record<string, unknown>)
       : {};
-  const bindings = effectiveRuntimeBindings(
-    (await listRuntimeBindings()).bindings,
-  );
-  const port = await productionPort(bindings);
+  const targets = await listExecutionTargets();
+  const port = await productionPort(targets);
   return productionCoordinator.start(
     {
       runId: run.id,

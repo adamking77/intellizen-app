@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
+import appPackage from "../../../package.json";
 import {
   Database,
   FileText,
@@ -41,7 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Settings", to: "/settings", key: "settings", icon: Settings },
 ];
 
-const APP_VERSION = "v0.4.0";
+const APP_VERSION = `v${appPackage.version}`;
 // Donor: hermes-app tokens.css `.tag` / `.tag.ok` — 11px, 1px 8px, pill.
 const ENGINE_TAG_CLASS: Record<EngineTag, string> = {
   connected: "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]",

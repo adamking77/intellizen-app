@@ -15,7 +15,7 @@ export function GraphExportMenu({
     <>
       <GraphOverflowItem disabled={disabled} label="Export PNG…" onClick={onPng} />
       <GraphOverflowItem disabled={disabled} label="Export SVG…" onClick={onSvg} />
-      <GraphOverflowItem disabled={disabled} label="Copy Docs embed" onClick={onEmbed} />
+      <GraphOverflowItem disabled={disabled} label="Add to document…" onClick={onEmbed} />
     </>
   );
 }

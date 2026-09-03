@@ -43,8 +43,10 @@ export interface ProfileThread {
 
 export interface SessionStoreState {
   selectedProfile: string | null;
+  selectedRoomId: string | null;
   threads: Record<string, ProfileThread>;
   selectProfile: (profile: string | null) => void;
+  selectRoom: (roomId: string | null) => void;
   /** Make sure a live session exists for the profile; returns its id. */
   ensureSession: (profile: string) => Promise<string>;
   /** Append the person's turn and submit it. Rejects when nothing was sent. */
@@ -132,9 +134,11 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
 
   return {
     selectedProfile: null,
+    selectedRoomId: null,
     threads: {},
 
-    selectProfile: (profile) => set({ selectedProfile: profile }),
+    selectProfile: (profile) => set({ selectedProfile: profile, selectedRoomId: profile ? null : get().selectedRoomId }),
+    selectRoom: (roomId) => set({ selectedRoomId: roomId }),
 
     ensureSession,
 

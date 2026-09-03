@@ -1,8 +1,4 @@
-import type { RuntimeBinding } from "@/services/runtime-bindings";
-import {
-  builtinBindingRefForRoleOccupant,
-  effectiveRuntimeBindings,
-} from "@/services/runtime-bindings";
+import type { ExecutionTarget } from "@/engine/execution-targets";
 
 export const PANEL_START_ROLE_KEY = "intelizen:agent-panel:panel_start_role";
 export const PANEL_SELECTED_ROLE_KEY = "intelizen:agent-panel:selected-role";
@@ -36,7 +32,7 @@ export interface AgentPanelRoleTarget {
   agentName: string | null;
   agentRecordId: string | null;
   bindingRef: string | null;
-  adapterId: RuntimeBinding["adapterId"] | null;
+  adapterId: ExecutionTarget["kind"] | null;
   model: string | null;
   execution: "ephemeral" | "durable" | null;
   state: "ready" | "unavailable";
@@ -54,7 +50,7 @@ export function buildAgentPanelRoleTargets(input: {
   roles: AgentPanelRoleRecord[];
   agents: AgentPanelRoleRecord[];
   assignments: AgentPanelRoleRecord[];
-  bindings: RuntimeBinding[];
+  targets: ExecutionTarget[];
 }): AgentPanelRoleTarget[] {
   const agents = new Map(input.agents.map((agent) => [agent.id, agent]));
   const assignments = new Map(
@@ -67,12 +63,7 @@ export function buildAgentPanelRoleTargets(input: {
       return roleId ? [[roleId, assignment] as const] : [];
     }),
   );
-  const bindings = new Map(
-    effectiveRuntimeBindings(input.bindings).map((binding) => [
-      binding.bindingId,
-      binding,
-    ]),
-  );
+  const targets = new Map(input.targets.map((target) => [target.agentKey, target]));
 
   return input.roles
     .filter(
@@ -87,33 +78,20 @@ export function buildAgentPanelRoleTargets(input: {
         ? firstRelation(assignment.fields.role_assignment_agent)
         : null;
       const agent = agentId ? agents.get(agentId) : null;
-      const bindingRef =
-        fieldString(assignment?.fields.role_assignment_binding_ref) ??
-        builtinBindingRefForRoleOccupant(
-          roleKey,
-          fieldString(agent?.fields.agent_key),
-        );
-      const binding = bindingRef ? bindings.get(bindingRef) : null;
-      const adapterId =
-        binding?.adapterId ?? null;
-      const execution =
-        adapterId === "hermes"
-          ? "durable"
-          : adapterId
-            ? "ephemeral"
-            : null;
+      const agentKey = fieldString(agent?.fields.agent_key);
+      const target = agentKey ? targets.get(agentKey) : null;
       return {
         roleKey,
         roleName: fieldString(role.fields.role_name) ?? roleKey,
         roleRecordId: role.id,
-        agentKey: fieldString(agent?.fields.agent_key),
+        agentKey,
         agentName: fieldString(agent?.fields.agent_display_name),
         agentRecordId: agent?.id ?? null,
-        bindingRef,
-        adapterId,
-        model: binding?.modelPolicy.default || null,
-        execution,
-        state: agent && adapterId ? "ready" : "unavailable",
+        bindingRef: target?.ref ?? null,
+        adapterId: target?.kind ?? null,
+        model: target?.model ?? null,
+        execution: target?.execution ?? null,
+        state: agent && target ? "ready" : "unavailable",
       };
     })
     .sort((left, right) => {

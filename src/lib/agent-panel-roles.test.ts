@@ -6,13 +6,10 @@ import {
   panelRoleStorageKey,
   resolveInitialPanelRole,
 } from "@/lib/agent-panel-roles";
-import type { RuntimeBinding } from "@/services/runtime-bindings";
-
-const codexBinding = {
-  bindingId: "codex-local-primary",
-  adapterId: "codex-cli",
-  modelPolicy: { default: "gpt-5.3-codex", allowed: ["gpt-5.3-codex"] },
-} as RuntimeBinding;
+const executionTargets = [
+  { ref: "hermes:fiona", agentKey: "fiona", kind: "hermes" as const, targetId: "fiona", model: null, execution: "durable" as const },
+  { ref: "acp:keel", agentKey: "keel", kind: "acp" as const, targetId: "keel", model: "gpt-5.3-codex", execution: "ephemeral" as const },
+];
 
 describe("Agent Panel role routing", () => {
   it("joins active roles to explicit occupants and local bindings", () => {
@@ -30,13 +27,13 @@ describe("Agent Panel role routing", () => {
         { id: "assignment-fiona", fields: { role_assignment_role: ["role-fiona"], role_assignment_agent: ["agent-fiona"], role_assignment_binding_ref: null, role_assignment_status: "active" } },
         { id: "assignment-keel", fields: { role_assignment_role: ["role-keel"], role_assignment_agent: ["agent-keel"], role_assignment_binding_ref: "codex-local-primary", role_assignment_status: "active" } },
       ],
-      bindings: [codexBinding],
+      targets: executionTargets,
     });
 
     expect(targets[0]).toMatchObject({
       roleKey: "operations_director",
       agentKey: "fiona",
-      bindingRef: "hermes-fiona",
+      bindingRef: "hermes:fiona",
       adapterId: "hermes",
       execution: "durable",
       state: "ready",
@@ -44,8 +41,8 @@ describe("Agent Panel role routing", () => {
     expect(targets[1]).toMatchObject({
       roleKey: "chief_engineer",
       agentKey: "keel",
-      bindingRef: "codex-local-primary",
-      adapterId: "codex-cli",
+      bindingRef: "acp:keel",
+      adapterId: "acp",
       execution: "ephemeral",
       state: "ready",
     });
@@ -96,7 +93,7 @@ describe("Agent Panel role routing", () => {
           },
         },
       ],
-      bindings: [codexBinding],
+      targets: executionTargets,
     });
 
     expect(target).toMatchObject({

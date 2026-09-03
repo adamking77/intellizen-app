@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { $groupChats } from "./group-chat";
+import { $groupChats, hasGroupChatNameBase } from "./group-chat";
 import { parseGroupChatMentions, resolveGroupResponders } from "./group-rounds";
 import { flushRoomWrites, memoryRoomStorage, setRoomStorage } from "./persist";
 import { createRoom, disbandRoom, ensureRoomsLoaded, getRoom, resetRoomsForTests } from "./rooms";
@@ -17,6 +17,12 @@ afterEach(() => {
 });
 
 describe("rooms", () => {
+  it("recognizes deduplicated names when a team reopens its room", () => {
+    expect(hasGroupChatNameBase("Build room", "Build room")).toBe(true);
+    expect(hasGroupChatNameBase("Build room 3", "Build room")).toBe(true);
+    expect(hasGroupChatNameBase("Build room later", "Build room")).toBe(false);
+  });
+
   it("creates, routes mentions, persists and disbands a mixed room", async () => {
     const storage = memoryRoomStorage();
     setRoomStorage(storage);

@@ -11,6 +11,7 @@ import {
 import { errorMessage } from "@/lib/toast";
 
 import { SettingSwitch } from "./setting-switch";
+import { SETTINGS_TITLE } from "./settings-style";
 
 export function GeneralSettings() {
   const [workspace, setWorkspace] = usePreference(DEFAULT_WORKSPACE_KEY, "");
@@ -35,7 +36,7 @@ export function GeneralSettings() {
   return (
     <div>
       <header className="pb-3">
-        <h1 className="font-display text-2xl text-[var(--text)]">General</h1>
+        <h1 className={SETTINGS_TITLE}>General</h1>
         <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Agent-panel defaults.</p>
       </header>
       <div className="max-w-2xl">

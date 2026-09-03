@@ -104,20 +104,13 @@ import {
   updateGraphNode,
   updateGraphNodePosition,
 } from "@/lib/data/graph";
-import {
-  ensureInvestigationDirectory,
-  ensureProjectDirectory,
-  writeVaultBinaryFile,
-} from "@/lib/vault";
+import { ensureInvestigationDirectory, ensureProjectDirectory, writeVaultBinaryFile } from "@/lib/vault";
 import { useAppStore } from "@/store";
 import { buildGraphExtractionPrompt } from "@/lib/shell";
-import { copyGraphEmbedReference, exportGraphSvgFile } from "@/components/graph/export-actions";
+import { exportGraphSvgFile } from "@/components/graph/export-actions";
 import { GraphExportMenu } from "@/components/graph/graph-export-menu";
-import type {
-  GraphEdgeRecord,
-  GraphEntityType,
-  GraphNodeRecord,
-} from "@/lib/types";
+import { AddGraphToDocument } from "@/components/graph/add-to-document";
+import type { GraphEdgeRecord, GraphEntityType, GraphNodeRecord } from "@/lib/types";
 
 type GraphMode = "project" | "standalone";
 type GraphInteractionMode = "insight" | "construct";
@@ -281,6 +274,7 @@ export function GraphView() {
   }, []);
   const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
   const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
+  const [addToDocumentOpen, setAddToDocumentOpen] = useState(false);
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
   const [focusMode, setFocusMode] = useState<"all" | "selection">("all");
@@ -2121,7 +2115,7 @@ export function GraphView() {
                       disabled={visualNodes.length === 0}
                       onPng={() => { setOverflowOpen(false); void handleExportPng(); }}
                       onSvg={() => { setOverflowOpen(false); void exportGraphSvgFile({ nodes, edges, mode: interactionMode }).then((path) => { if (path) setStatusMessage(`Saved: ${path}`); }).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to export SVG.")); }}
-                      onEmbed={() => { setOverflowOpen(false); void copyGraphEmbedReference(effectiveProjectId, interactionMode).then(() => setStatusMessage("Copied a Docs graph embed block.")).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to copy graph embed block.")); }}
+                      onEmbed={() => { setOverflowOpen(false); setAddToDocumentOpen(true); }}
                     />
                     <OverflowItem
                       label="Clear graph…"
@@ -3556,6 +3550,8 @@ export function GraphView() {
             </div>
         ) : null}
       </AppDialog>
+      <AddGraphToDocument open={addToDocumentOpen} projectId={effectiveProjectId} mode={interactionMode} onOpenChange={setAddToDocumentOpen}
+        onAdded={(recordId) => { setAddToDocumentOpen(false); navigate(`/docs?record=${recordId}`); }} />
     </div>
   );
 }

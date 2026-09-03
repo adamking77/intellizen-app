@@ -1,0 +1,5 @@
+name: intellizen-wave1-fixture
+version: "0.1.0"
+description: "D.13 local fixture exercising every IntelliZen contribution point."
+author: GenZen
+hooks: []

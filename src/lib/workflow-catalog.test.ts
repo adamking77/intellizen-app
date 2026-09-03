@@ -51,7 +51,7 @@ function role(
     agentName: "Keel",
     agentRecordId: "agent-keel",
     bindingRef: "codex-local-primary",
-    adapterId: "codex-cli",
+    adapterId: "acp",
     model: null,
     execution: "ephemeral",
     state: "ready",

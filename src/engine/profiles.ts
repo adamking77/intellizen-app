@@ -37,6 +37,9 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
     .map((row) => {
       const ui = row.ui_meta && typeof row.ui_meta === "object" ? row.ui_meta as Record<string, unknown> : {};
       const mine = ui.intellizen && typeof ui.intellizen === "object" ? ui.intellizen as { context?: unknown } : {};
+      const context = Array.isArray(mine.context)
+        ? mine.context.filter((path): path is string => typeof path === "string")
+        : [];
       return {
         name: row.name,
         isDefault: row.is_default === true,
@@ -45,7 +48,7 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
         gatewayRunning: true,
         description: typeof row.description === "string" ? row.description : "",
         displayName: typeof row.display_name === "string" ? row.display_name : "",
-        context: Array.isArray(mine.context) ? mine.context.filter((path): path is string => typeof path === "string") : [],
+        ...(context.length ? { context } : {}),
       };
     });
 }

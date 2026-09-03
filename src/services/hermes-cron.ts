@@ -120,10 +120,12 @@ export function scheduledWorkflowPrompt(input: {
     })),
     prompt: [
       `Run the workflow "${input.workflow.name}" once, now, step by step in definition order.`,
+      "Use the supplied definition as the task instructions. Do not inspect IntelliZen source, reconstruct dispatcher internals, calculate transition hashes, write helper files, or run tests unless the definition explicitly requires them.",
+      "Create one ordinary Workflow Run with the IntelliZen start_workflow tool. Record progress and the final receipt with update_workflow_run; do not call raw SQL or the low-level advance_workflow_step tool from a cron session.",
       input.kanban
         ? `Update each named card on board "${input.kanban.board}" as its step moves through running, done, or blocked.`
         : "Report progress in the Hermes session.",
-      "Stop at approval steps until Adam answers at the work's existing approval point.",
+      "At an approval step, record the request with request_workflow_approval, then end this cron turn. Do not wait in process for Adam's answer.",
       "Finish with a concise status and the receipt locations for every state change.",
     ].join("\n"),
   });
