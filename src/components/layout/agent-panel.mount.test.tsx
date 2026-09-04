@@ -211,6 +211,34 @@ describe("AgentPanel on the gateway", () => {
     await panel.unmount();
   });
 
+  it("removes an edited turn and later replies before asking again", async () => {
+    const turn = loadTurn("default-date-turn");
+    client.respondWith((call) => (call.method === "session.create" ? { session_id: turn.sessionId } : undefined));
+    const panel = await mountPanel();
+    await type(panel, turn.prompt);
+    await pressEnter(panel);
+    await act(async () => {
+      for (const { event } of turnEvents(turn)) client.emit(event);
+    });
+
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Edit this message and ask again"]')!.click());
+    const editor = panel.container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit this message"]')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => {
+      setter.call(editor, "What is tomorrow's date?");
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const sendEdit = Array.from(panel.container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Send")!;
+    await act(async () => sendEdit.click());
+    await settle();
+
+    expect(panel.container.textContent).toContain("What is tomorrow's date?");
+    expect(panel.container.textContent).not.toContain("The current date is");
+    expect(useSessionStore.getState().threads.default.transcript.messages.map((message) => message.text)).toEqual(["What is tomorrow's date?"]);
+    expect(client.callsTo("prompt.submit").at(-1)?.params.text).toBe("What is tomorrow's date?");
+    await panel.unmount();
+  });
+
   it("renders the approval gate with Hermes's choices and settles it into a fact line", async () => {
     const turn = loadTurn("default-approval-turn");
     client.respondWith((call) => (call.method === "session.create" ? { session_id: turn.sessionId } : undefined));

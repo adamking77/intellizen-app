@@ -121,6 +121,7 @@ export function createTranscript(agent: string): TranscriptState {
 
 export type TranscriptAction =
   | { type: "user"; text: string; at: number }
+  | { type: "dropFrom"; messageId: string }
   | { type: "decided"; requestId: string; summary: string; at: number }
   | { type: "failed"; reason: string; at: number }
   | { type: "reset" };
@@ -424,6 +425,20 @@ export function applyTranscriptAction(
         messages: [...next.messages, turn],
         turnStartedAt: action.at,
         status: null,
+      };
+    }
+    case "dropFrom": {
+      const index = state.messages.findIndex((message) => message.id === action.messageId);
+      if (index < 0) return state;
+      const messages = state.messages.slice(0, index);
+      const kept = new Set(messages.map((message) => message.id));
+      return {
+        ...state,
+        messages,
+        pending: state.pending.filter((decision) => kept.has(decision.messageId)),
+        status: null,
+        turnStartedAt: null,
+        lastTurn: null,
       };
     }
     case "decided": {

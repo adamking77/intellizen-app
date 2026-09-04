@@ -127,6 +127,7 @@ export interface PanelFrame {
 export type PanelAction =
   | { type: "select"; profile: string | null }
   | { type: "send"; profile: string; text: string }
+  | { type: "edit"; profile: string; messageId: string; text: string }
   | { type: "stop"; profile: string }
   | { type: "approve"; profile: string; decision: ApprovalDecision; choice: ApprovalChoice }
   | { type: "clarify"; profile: string; decision: ClarifyDecision; answers: Record<string, string[]> };

@@ -169,6 +169,22 @@ describe("reduceTranscript edge cases", () => {
   const base = () =>
     applyTranscriptAction(createTranscript("default"), { type: "user", text: "hi", at: 100 });
 
+  it("drops an edited turn and every later visible turn without erasing on a stale id", () => {
+    let state = base();
+    state = reduceTranscript(state, { type: "message.delta", session_id: "s", payload: { text: "first reply" } }, 200);
+    state = reduceTranscript(state, { type: "message.complete", session_id: "s", payload: { status: "complete" } }, 300);
+    state = applyTranscriptAction(state, { type: "user", text: "second", at: 400 });
+    const editedId = state.messages[2].id;
+    state = reduceTranscript(state, { type: "message.delta", session_id: "s", payload: { text: "second reply" } }, 500);
+    state = reduceTranscript(state, { type: "message.complete", session_id: "s", payload: { status: "complete" } }, 600);
+
+    expect(applyTranscriptAction(state, { type: "dropFrom", messageId: "stale" })).toBe(state);
+    const rewound = applyTranscriptAction(state, { type: "dropFrom", messageId: editedId });
+    expect(rewound.messages.map((message) => message.text)).toEqual(["hi", "first reply"]);
+    expect(rewound.lastTurn).toBeNull();
+    expect(transcriptBusy(rewound)).toBe(false);
+  });
+
   it("ignores unknown events", () => {
     const state = base();
     expect(reduceTranscript(state, { type: "something.new", session_id: "s", payload: { x: 1 } }, 200)).toBe(state);

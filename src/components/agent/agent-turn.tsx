@@ -92,7 +92,7 @@ export interface TurnActions extends Partial<ActionContext> {
   onStopReading?: () => void;
   onDocument?: (message: Message) => void;
   onAskAgain?: (prompt: string) => void;
-  onEdit?: (text: string) => void;
+  onEdit?: (message: Message, text: string) => void;
 }
 
 function contextOf(actions: TurnActions | undefined, reading: boolean): ActionContext {
@@ -169,7 +169,7 @@ export function UserTurn({
               if (e.key === "Escape") setDraft(null);
               else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                if (draft.trim()) actions?.onEdit?.(draft.trim());
+                if (draft.trim()) actions?.onEdit?.(message, draft.trim());
                 setDraft(null);
               }
             }}
@@ -188,7 +188,7 @@ export function UserTurn({
               size="sm"
               disabled={!draft.trim()}
               onClick={() => {
-                actions?.onEdit?.(draft.trim());
+                actions?.onEdit?.(message, draft.trim());
                 setDraft(null);
               }}
             >

@@ -54,6 +54,8 @@ export interface SessionStoreState {
   ensureSession: (profile: string) => Promise<string>;
   /** Append the person's turn and submit it. Rejects when nothing was sent. */
   send: (profile: string, text: string) => Promise<void>;
+  /** Remove this visible turn and everything after it, then ask the edit. */
+  editAndSend: (profile: string, messageId: string, text: string) => Promise<void>;
   /** Interrupt the running turn. */
   stop: (profile: string) => Promise<void>;
   decideApproval: (profile: string, decision: ApprovalDecision, choice: ApprovalChoice) => Promise<void>;
@@ -192,6 +194,14 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
         }));
         throw error;
       }
+    },
+
+    editAndSend: async (profile, messageId, text) => {
+      update(profile, (thread) => ({
+        ...thread,
+        transcript: applyTranscriptAction(thread.transcript, { type: "dropFrom", messageId }),
+      }));
+      await get().send(profile, text);
     },
 
     stop: async (profile) => {

@@ -150,7 +150,7 @@ export function AgentPanel({
     setProfileDirectory(profiles);
   }, [profiles, setProfileDirectory]);
 
-  const { selectedProfile, thread, selectProfile, send, stop, decideApproval, decideClarify } =
+  const { selectedProfile, thread, selectProfile, send, editAndSend, stop, decideApproval, decideClarify } =
     usePanelSession();
   const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
   const selectRoom = useSessionStore((state) => state.selectRoom);
@@ -291,7 +291,12 @@ export function AgentPanel({
       onRead: (message: Message) => void voice.readAloud(message),
       onStopReading: voice.interrupt,
       onAskAgain: (prompt: string) => submit(prompt),
-      onEdit: (text: string) => submit(text),
+      onEdit: (message: Message, text: string) => {
+        if (!selectedProfile) return;
+        setDraft("");
+        atBottom.current = true;
+        editAndSend(selectedProfile, message.id, text).catch((error) => toastError("Could not send", error));
+      },
       onDocument: (message: Message) => {
         const preview = previewAgentMessageDocument({
           text: message.text,
@@ -307,7 +312,7 @@ export function AgentPanel({
     // submit accepts explicit text for every action, so its changing draft
     // closure is intentionally excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targetReady, running, agentName, voice],
+    [targetReady, running, agentName, voice, selectedProfile, editAndSend],
   );
 
   const run: RunState = useMemo(() => {

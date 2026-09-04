@@ -139,6 +139,9 @@ function run(action: PanelAction) {
     case "send":
       s.send(action.profile, action.text).catch((error) => toastError("Could not send", error));
       return;
+    case "edit":
+      s.editAndSend(action.profile, action.messageId, action.text).catch((error) => toastError("Could not send", error));
+      return;
     case "stop":
       s.stop(action.profile).catch((error) => toastError("Could not stop the turn", error));
       return;
