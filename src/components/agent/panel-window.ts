@@ -128,6 +128,7 @@ export type PanelAction =
   | { type: "select"; profile: string | null }
   | { type: "send"; profile: string; text: string }
   | { type: "edit"; profile: string; messageId: string; text: string }
+  | { type: "openSettings" }
   | { type: "stop"; profile: string }
   | { type: "approve"; profile: string; decision: ApprovalDecision; choice: ApprovalChoice }
   | { type: "clarify"; profile: string; decision: ClarifyDecision; answers: Record<string, string[]> };
@@ -235,9 +236,8 @@ export function writePanelDetached(detached: boolean) {
   }
 }
 
-/** The main window leaves the shape the panel should open in; the panel reads
- *  it once and clears it, so a HUD ejected yesterday does not dress a panel
- *  ejected fresh today. */
+/** The main window leaves the shape the panel should open in. The ejected
+ *  window keeps it current so a webview reload restores the same shape. */
 export function leaveHudHandoff(hud: boolean) {
   try {
     if (hud) window.localStorage.setItem(PANEL_HUD_HANDOFF_KEY, "1");
@@ -249,9 +249,7 @@ export function leaveHudHandoff(hud: boolean) {
 
 export function takeHudHandoff(): boolean {
   try {
-    const found = window.localStorage.getItem(PANEL_HUD_HANDOFF_KEY) === "1";
-    window.localStorage.removeItem(PANEL_HUD_HANDOFF_KEY);
-    return found;
+    return window.localStorage.getItem(PANEL_HUD_HANDOFF_KEY) === "1";
   } catch {
     return false;
   }

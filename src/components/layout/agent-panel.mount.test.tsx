@@ -292,6 +292,17 @@ describe("AgentPanel on the gateway", () => {
     await panel.unmount();
   });
 
+  it("keeps an existing target's composer typeable while Hermes starts", async () => {
+    useEngineStore.setState({ connection: "connecting", info: null, error: null });
+    useSessionStore.setState({ selectedProfile: "default" });
+    const panel = await mountPanel();
+    expect(textarea(panel).disabled).toBe(false);
+    expect(textarea(panel).placeholder).toBe("Starting Hermes…");
+    await type(panel, "keep this draft");
+    expect(textarea(panel).value).toBe("keep this draft");
+    await panel.unmount();
+  });
+
   it("chats with an ACP agent while Hermes is offline", async () => {
     useEngineStore.setState({ connection: "error", info: null, error: "Hermes stopped" });
     acpDisk.text = JSON.stringify([{ id: "cc", name: "Claude Code", engine: "claude-code", command: "claude-agent-acp", args: [] }]);
@@ -378,6 +389,10 @@ describe("AgentPanel on the gateway", () => {
     expect(panel.container.textContent).toContain("gateway not connected");
     expect(panel.container.querySelector('[data-run-state="failed"]')).not.toBeNull();
     expect(Array.from(panel.container.querySelectorAll("button")).some((b) => b.textContent === "Ask again")).toBe(true);
+    const settings = Array.from(panel.container.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent === "Open Settings")!;
+    await act(async () => settings.click());
+    expect(window.location.pathname + window.location.search).toBe("/settings?section=providers");
+    window.history.replaceState({}, "", "/");
     await panel.unmount();
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Message } from "@/engine/transcript";
-import { agentTurnActions, errorReport, userTurnActions } from "./message-actions";
+import { agentTurnActions, errorReport, failureActions, userTurnActions } from "./message-actions";
 
 const reply = { id: "a", from: "Keel", text: "Done", prompt: "Do it", streaming: false } as Message;
 
@@ -18,5 +18,10 @@ describe("message actions", () => {
 
   it("keeps enough context when a failed turn is copied", () => {
     expect(errorReport({ reason: "Timed out", agent: "Keel", provider: "ACP", model: "codex" })).toBe("Timed out\n\nKeel · ACP · codex");
+  });
+
+  it("always offers settings on a failed turn", () => {
+    expect(failureActions(false).map((action) => action.id)).toEqual(["settings", "copy"]);
+    expect(failureActions(true).map((action) => action.id)).toEqual(["retry", "settings", "copy"]);
   });
 });

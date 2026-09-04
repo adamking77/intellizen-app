@@ -113,6 +113,8 @@ export interface HudProps {
   onOpen: (open: HudOpen) => void;
   onTarget: (name: string) => void;
   onSend: (text: string) => void;
+  draft: string;
+  onDraft: (text: string) => void;
   onStop: () => void;
   /** Back to the full ejected panel. */
   onGrow: () => void;
@@ -133,13 +135,14 @@ export function Hud({
   onOpen,
   onTarget,
   onSend,
+  draft,
+  onDraft,
   onStop,
   onGrow,
   onRedock,
   sending,
   ready,
 }: HudProps) {
-  const [draft, setDraft] = useState("");
   const log = useRef<HTMLDivElement | null>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -173,15 +176,7 @@ export function Hud({
   // ground drags it. Controls and the transcript's text do not — but the
   // transcript's empty ground does, and so does its scrollbar gutter.
   const drag = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, textarea")) return;
-    const transcript = target.closest<HTMLElement>("[data-hud-log]");
-    if (
-      transcript &&
-      (target !== transcript || e.clientX < transcript.getBoundingClientRect().right - 12)
-    ) {
-      return;
-    }
+    if (!hudGroundCanDrag(e.target as HTMLElement, e.clientX)) return;
     if (!isTauri) return;
     void getCurrentWindow().startDragging().catch(() => undefined);
   };
@@ -192,7 +187,7 @@ export function Hud({
     const text = draft.trim();
     if (!text || sending || !ready) return;
     onSend(text);
-    setDraft("");
+    onDraft("");
   };
 
   return (
@@ -336,7 +331,7 @@ export function Hud({
 
           <HudComposer
             draft={draft}
-            onDraft={setDraft}
+            onDraft={onDraft}
             onSubmit={submit}
             voice={voice}
             speaking={speaking}
@@ -406,6 +401,11 @@ export function Hud({
           )}
         </div>
         <div className="-mr-1.5 flex shrink-0 items-center gap-0.5">
+          {run.kind === "working" && open === "none" ? (
+            <button type="button" onClick={onStop} aria-label="Stop this turn" title="Stop" className={ICON}>
+              <Square className="h-[7px] w-[7px]" strokeWidth={0} fill="currentColor" aria-hidden />
+            </button>
+          ) : null}
           {speaking ? (
             <button
               type="button"
@@ -473,15 +473,17 @@ export function Hud({
           </button>
         </div>
       </div>
-      {/* `onStop` is the bar's only route to interrupting a turn it cannot
-          see; the chat's own stop lives in the composer. */}
-      {run.kind === "working" && open === "none" ? (
-        <button type="button" onClick={onStop} className="sr-only">
-          Stop this turn
-        </button>
-      ) : null}
     </div>
   );
+}
+
+/** Controls, message text and the scrollbar keep their own pointer gesture;
+ *  the transcript's empty plane and every other empty HUD surface drag. */
+export function hudGroundCanDrag(target: HTMLElement, clientX: number) {
+  if (target.closest("button, input, textarea")) return false;
+  const transcript = target.closest<HTMLElement>("[data-hud-log]");
+  if (!transcript) return true;
+  return target === transcript && clientX < transcript.getBoundingClientRect().right - 12;
 }
 
 /** What the run is doing, in the bar, in words. Colour is never alone. */

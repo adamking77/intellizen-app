@@ -34,6 +34,7 @@ import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { VoiceButton } from "@/voice/voice-button";
 import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
+import { requestAction } from "@/components/agent/panel-window";
 
 const ICON_BUTTON =
   "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
@@ -290,6 +291,12 @@ export function AgentPanel({
       canSend: targetReady && !running,
       onRead: (message: Message) => void voice.readAloud(message),
       onStopReading: voice.interrupt,
+      onOpenSettings: () => standalone
+        ? requestAction({ type: "openSettings" })
+        : (() => {
+            window.history.pushState({}, "", "/settings?section=providers");
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          })(),
       onAskAgain: (prompt: string) => submit(prompt),
       onEdit: (message: Message, text: string) => {
         if (!selectedProfile) return;
@@ -312,7 +319,7 @@ export function AgentPanel({
     // submit accepts explicit text for every action, so its changing draft
     // closure is intentionally excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targetReady, running, agentName, voice, selectedProfile, editAndSend],
+    [targetReady, running, agentName, voice, selectedProfile, editAndSend, standalone],
   );
 
   const run: RunState = useMemo(() => {

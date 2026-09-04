@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ejectReducer, panelModeReducer, sizeFor } from "./panel-window";
+// @vitest-environment happy-dom
+
+import { ejectReducer, leaveHudHandoff, panelModeReducer, sizeFor, takeHudHandoff } from "./panel-window";
 
 describe("ejected panel state", () => {
   it("returns the conversation home when opening fails or the window closes", () => {
@@ -19,5 +21,14 @@ describe("ejected panel state", () => {
     const chat = panelModeReducer(hud, { type: "open", open: "chat" });
     expect(sizeFor(chat)).toEqual({ w: 496, h: 406 });
     expect(panelModeReducer(chat, { type: "grow" })).toEqual({ hud: false, open: "none" });
+  });
+
+  it("keeps the HUD shape across a panel webview reload", () => {
+    window.localStorage.clear();
+    leaveHudHandoff(true);
+    expect(takeHudHandoff()).toBe(true);
+    expect(takeHudHandoff()).toBe(true);
+    leaveHudHandoff(false);
+    expect(takeHudHandoff()).toBe(false);
   });
 });

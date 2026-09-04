@@ -20,10 +20,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { useWindowDrag, WindowResizeHandles } from "@/components/layout/window-chrome";
 import { emptyThread, type ProfileThread } from "@/engine/session-store";
-import { useVoice } from "@/voice/use-voice";
+import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { Hud, type HudOpen } from "./hud";
 import {
   closePanelWindow,
+  leaveHudHandoff,
   onFrame,
   panelModeReducer,
   requestAction,
@@ -84,6 +85,7 @@ export function EjectedPanel() {
   // never disagree.
   useEffect(() => {
     if (!sized.current) return;
+    leaveHudHandoff(mode.hud);
     void resizePanelWindow(sizeFor(mode));
   }, [mode]);
 
@@ -91,6 +93,7 @@ export function EjectedPanel() {
     // Written here too: the main window may be minimised and miss the close
     // event, and this flag is what it reads on waking.
     writePanelDetached(false);
+    leaveHudHandoff(false);
     void closePanelWindow().catch(() => void getCurrentWindow().close());
   }, []);
 
@@ -184,6 +187,7 @@ function HudWindow({
   const messages = useMemo(() => thread?.transcript.messages ?? [], [thread]);
   const run = runStateOf(thread);
   const sending = run.kind === "working" || run.kind === "opening";
+  const [draft, setDraft] = useState("");
 
   const send = useCallback(
     (text: string) => {
@@ -193,26 +197,14 @@ function HudWindow({
     [profile],
   );
 
-  // A transcript landing in a field nobody can see vanishes, so from the
-  // collapsed bar a dictated sentence is sent rather than typed.
-  const [pendingDraft, setPendingDraft] = useState("");
   const voice = useVoice({
     profile,
     messages,
     sending,
     onSend: send,
-    onTranscript: (heard) => (open === "chat" ? setPendingDraft(heard) : send(heard)),
+    onTranscript: (heard) => setDraft((current) => joinVoiceText(current, heard)),
     bars: 12,
   });
-  // ponytail: the chat's input owns its own draft, so a dictated sentence
-  // reaches it as a send rather than as text. Lift the draft into `Hud` when
-  // dictation-into-the-HUD-composer is asked for.
-  useEffect(() => {
-    if (pendingDraft) {
-      send(pendingDraft);
-      setPendingDraft("");
-    }
-  }, [pendingDraft, send]);
 
   return (
     <Hud
@@ -226,6 +218,8 @@ function HudWindow({
       onOpen={onOpen}
       onTarget={(name) => requestAction({ type: "select", profile: name })}
       onSend={send}
+      draft={draft}
+      onDraft={setDraft}
       onStop={() => profile && requestAction({ type: "stop", profile })}
       onGrow={onGrow}
       onRedock={onRedock}

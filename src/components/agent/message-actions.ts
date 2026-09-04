@@ -104,13 +104,14 @@ export function userTurnActions(m: Message, ctx: ActionContext): MessageAction[]
 /** What a failed turn offers, always visible and word-labelled. An action you
  *  must hover to discover is not offered, and the row must survive greyscale. */
 export interface FailureAction {
-  id: "retry" | "copy";
+  id: "retry" | "settings" | "copy";
   label: string;
 }
 
 export function failureActions(canRetry: boolean): FailureAction[] {
   const out: FailureAction[] = [];
   if (canRetry) out.push({ id: "retry", label: "Ask again" });
+  out.push({ id: "settings", label: "Open Settings" });
   out.push({ id: "copy", label: "Copy error" });
   return out;
 }

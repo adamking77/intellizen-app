@@ -93,6 +93,7 @@ export interface TurnActions extends Partial<ActionContext> {
   onDocument?: (message: Message) => void;
   onAskAgain?: (prompt: string) => void;
   onEdit?: (message: Message, text: string) => void;
+  onOpenSettings?: () => void;
 }
 
 function contextOf(actions: TurnActions | undefined, reading: boolean): ActionContext {
@@ -331,6 +332,8 @@ export function AgentTurn({
                   onClick={() =>
                     action.id === "retry"
                       ? onRetry?.(message.prompt as string)
+                      : action.id === "settings"
+                        ? actions?.onOpenSettings?.()
                       : void writeTextToClipboard(
                           errorReport({
                             reason: message.failed ?? "",

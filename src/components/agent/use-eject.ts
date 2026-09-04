@@ -142,6 +142,10 @@ function run(action: PanelAction) {
     case "edit":
       s.editAndSend(action.profile, action.messageId, action.text).catch((error) => toastError("Could not send", error));
       return;
+    case "openSettings":
+      window.history.pushState({}, "", "/settings?section=providers");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      return;
     case "stop":
       s.stop(action.profile).catch((error) => toastError("Could not stop the turn", error));
       return;

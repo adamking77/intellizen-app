@@ -1,9 +1,12 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { HermesProfile } from "@/engine/profiles";
 import type { VoiceHandle } from "@/voice/use-voice";
-import { Hud, type HudOpen } from "./hud";
+import { Hud, hudGroundCanDrag, type HudOpen } from "./hud";
+import type { RunState } from "./run-state";
 
 const profile: HermesProfile = {
   name: "fiona",
@@ -39,19 +42,21 @@ function voice(talking: string | null = null): VoiceHandle {
   };
 }
 
-function render(open: HudOpen, talking: string | null = null) {
+function render(open: HudOpen, talking: string | null = null, run: RunState = { kind: "idle" }) {
   return renderToStaticMarkup(
     <Hud
       agent={profile}
       profiles={[profile]}
       target={profile.name}
       messages={[]}
-      run={{ kind: "idle" }}
+      run={run}
       voice={voice(talking)}
       open={open}
       onOpen={vi.fn()}
       onTarget={vi.fn()}
       onSend={vi.fn()}
+      draft=""
+      onDraft={vi.fn()}
       onStop={vi.fn()}
       onGrow={vi.fn()}
       onRedock={vi.fn()}
@@ -69,6 +74,7 @@ describe("HUD controls", () => {
       expect(markup).toContain("Put the panel back in the main window");
     }
     expect(render("none", "message-1")).toContain("Stop speaking");
+    expect(render("none", null, { kind: "working", label: null })).toContain("Stop this turn");
   });
 
   it("opens a selectable roster without an accent border state", () => {
@@ -78,5 +84,19 @@ describe("HUD controls", () => {
     const selectedRow = markup.match(/<button[^>]*role="option"[^>]*>/)?.[0];
     expect(selectedRow).toBeDefined();
     expect(selectedRow).not.toContain("accent-border");
+  });
+
+  it("drags empty transcript ground but keeps messages, controls and the scrollbar interactive", () => {
+    const log = document.createElement("div");
+    log.dataset.hudLog = "";
+    Object.defineProperty(log, "getBoundingClientRect", { value: () => ({ right: 100 }) });
+    const message = document.createElement("span");
+    const button = document.createElement("button");
+    log.append(message, button);
+
+    expect(hudGroundCanDrag(log, 50)).toBe(true);
+    expect(hudGroundCanDrag(log, 95)).toBe(false);
+    expect(hudGroundCanDrag(message, 50)).toBe(false);
+    expect(hudGroundCanDrag(button, 50)).toBe(false);
   });
 });
