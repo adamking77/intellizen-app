@@ -159,6 +159,41 @@ J.5 **Design record.** Port `--user-bubble`, `--hud-bg`, `--hud-shadow`,
     composer, and the ejected panel and HUD; the round-1 HUD captures are
     blank.
 
+## Design decisions from the 2026-09-04 studies (Adam approved)
+
+- **The room is one surface with a view switcher.** Brief, Table, Board,
+  Graph, Timeline, Session. The material picks the default view: cases and
+  ventures open as a Brief, records as a Table, documents as a Page,
+  workflows as Steps, sessions as a transcript. Prototype: the "IntelliZen
+  Room Views" artifact.
+- **One control kit.** 28px controls, 12px planes, 8px for every control,
+  field, card and node, pills for state words only. One hover (6% text
+  wash), one selection (the selected plane, intensity to be tuned, 450
+  weight). **No outlines, no glow, no inset borders, anywhere.** Keyboard
+  focus is the one exception and never shows on click.
+- **Eight consistencies** for the whole app (records as rows, skeletons in
+  place, teaching empty states, a mark on selection, attribution chips, one
+  decision field, receipts as mono lines, headers that carry state).
+- **Docs:** tree list with a drag rail (180 to 480px, ⌘\ hides), one page,
+  Read and Edit as one key, header cut to breadcrumb, save dot, menu.
+- **Workflows:** table of runs first; the builder is a vertical list of step
+  cards that are the definition, with Graph and Runs as views; agents build
+  through the panel with a build skill; manual editing is typing in the card.
+- **No docked HUD strip.** The HUD is the ejected panel reduced, floating
+  over the desktop when the panel is away.
+
+These add to Phase F and Phase I:
+
+F.7 **Control kit.** One control primitive in `ui/` (default, selected,
+    primary, quiet, field), radius tokens collapsed to plane, control, pill,
+    the segmented control, the drawer component. Base UI and Mantine
+    dependencies removed. Selection intensity tuned with Adam.
+F.8 **Eight consistencies** applied across Home widgets, Databases, Docs,
+    Agents, Settings and the panel.
+I.7 **The room's view switcher** **[approval given 2026-09-04]**: Brief,
+    Table, Board, Graph, Timeline, Session on the project room; defaults per
+    material; drawer for cards, sessions and decisions.
+
 ## Docs
 
 - `CLAUDE.md` is rewritten for v3: the tree, the center rule, the gateway
