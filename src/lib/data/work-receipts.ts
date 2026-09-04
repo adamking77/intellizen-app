@@ -18,6 +18,15 @@ export interface WorkEventItem {
   created_at: string;
 }
 
+export function workEventsForSession(events: WorkEventItem[], sessionId: string, profile: string) {
+  const keys = new Set([sessionId, `${profile}:${sessionId}`]);
+  return events.filter((event) => {
+    const payload = event.payload ?? {};
+    return [payload.session_id, payload.sessionId, payload.session_key, payload.sessionKey]
+      .some((value) => typeof value === "string" && keys.has(value));
+  }).sort((left, right) => left.created_at.localeCompare(right.created_at));
+}
+
 export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; since?: string; limit?: number }) {
   let query = supabase
     .schema("workspace").from("work_events")

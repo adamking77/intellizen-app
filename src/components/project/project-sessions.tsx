@@ -9,6 +9,7 @@ import { QueryState } from "@/components/ui/query-state";
 import { Receipt, ToolRow } from "@/components/ui/receipt";
 import { Pill } from "@/components/ui/status-pill";
 import { projectSessionKey } from "@/lib/project-room";
+import { listWorkEvents, workEventsForSession } from "@/lib/data/work-receipts";
 import { cn } from "@/lib/utils";
 import { runViewTransition } from "@/lib/view-transitions";
 import { getHermesSessionMessages, listHermesProjectSessions } from "@/services/hermes-project-sessions";
@@ -53,6 +54,12 @@ export function ProjectSessions({
     queryFn: () => getHermesSessionMessages(selected!.id, selected!.profile),
     enabled: selected != null,
   });
+  const events = useQuery({
+    queryKey: ["work-events", "session", selected?.profile, selected?.id],
+    queryFn: () => listWorkEvents({ limit: 500 }),
+    enabled: selected != null && transcriptOnly,
+  });
+  const receipts = selected ? workEventsForSession(events.data ?? [], selected.id, selected.profile) : [];
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -88,6 +95,19 @@ export function ProjectSessions({
           ))}
         </aside> : null}
         <div className="min-w-0 flex-1 overflow-y-auto p-5">
+          {transcriptOnly && selected ? (
+            <header className="mx-auto mb-4 flex max-w-3xl items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-3">
+              <div className="min-w-0">
+                <div className="text-label">Read-only session</div>
+                <h2 className="mt-1 truncate text-[var(--t-title)] text-[var(--text)]">{selected.title}</h2>
+                <div className="mt-2"><Identity name={selected.profile} runtime="hermes" /></div>
+              </div>
+              <div className="shrink-0 text-right font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+                <div>{selected.messageCount} messages · {selected.toolCallCount} tools</div>
+                <div className="mt-1">{formatTime(selected.lastActive)}</div>
+              </div>
+            </header>
+          ) : null}
           <QueryState
             isLoading={transcript.isLoading}
             error={transcript.error}
@@ -106,6 +126,12 @@ export function ProjectSessions({
                   )}
                 </article>
               ))}
+              {receipts.length ? (
+                <section aria-label="Session receipts" className="grid gap-2 py-4">
+                  <div className="text-label">Receipts</div>
+                  {receipts.map((event) => <Receipt key={event.id} verb={event.event_kind.replaceAll("_", " ")} object={event.summary ?? event.actor} />)}
+                </section>
+              ) : null}
             </div>
           </QueryState>
         </div>

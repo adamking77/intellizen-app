@@ -1,7 +1,7 @@
 # I.2 approval flow — the session page
 
-Status: **awaiting Adam's approval**. This describes the flow only; no I.2
-implementation is authorized by this document.
+Status: **approved by Adam on 2026-09-04** as part of the instruction to
+finish the remaining plan.
 
 ## Decision
 

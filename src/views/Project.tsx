@@ -131,13 +131,13 @@ export function ProjectView() {
     <div className="relative flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="shrink-0 px-5 py-3">
         <PageHeader
-          title={node?.name ?? "Project"}
-          breadcrumb={scoped?.path.length ? breadcrumb(scoped) : undefined}
-          state={node?.folders.length ? node.folders.map(shortenHome).join(" · ") : `${files.length} documents`}
-          views={node ? (
+          title={selectedSessionKey ? "Session" : node?.name ?? "Project"}
+          breadcrumb={selectedSessionKey ? [...(scoped?.path ?? []), node?.name ?? "Project"].join(" / ") : scoped?.path.length ? breadcrumb(scoped) : undefined}
+          state={selectedSessionKey ? "Read only" : node?.folders.length ? node.folders.map(shortenHome).join(" · ") : `${files.length} documents`}
+          views={node && !selectedSessionKey ? (
             <Segmented value={view} options={views.map((candidate) => ({ value: candidate, label: VIEW_LABELS[candidate] }))} onValueChange={chooseView} label="Project view" transitionKind="room" />
           ) : undefined}
-          action={node ? <Control variant="primary" loading={create.isPending} onClick={() => create.mutate()}>New document</Control> : undefined}
+          action={node && !selectedSessionKey ? <Control variant="primary" loading={create.isPending} onClick={() => create.mutate()}>New document</Control> : undefined}
         />
       </div>
 
