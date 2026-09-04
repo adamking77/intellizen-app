@@ -3106,6 +3106,10 @@ async function recordWorkEvent(input: WorkEventInput) {
   if (error) console.warn(`work_events insert failed (${input.eventKind}):`, error.message);
 }
 
+export function recordPluginWorkEvent(recordId: string, eventKind: string, summary: string, payload: Record<string, unknown>) {
+  return recordWorkEvent({ recordId, eventKind, actor: OPERATOR_ACTOR, decisionRole: "founder_approval_authority", summary, payload });
+}
+
 const CONSEQUENTIAL_WORK_EVENT_KINDS = new Set([
   "approval_request",
   "approval_decision",

@@ -127,7 +127,7 @@ I.3 **Intel becomes case tabs.** **Approved 2026-09-04.** Case, Evidence and Ent
     *Open it: open a client case from the tree, work the case without
     leaving the project room.*
     Approval flow: `docs/stages/approval-flows/I.3-case-tabs.md`.
-I.4 **D.14 for real.** An agent asks to install a plugin; the request is a
+I.4 **D.14 for real.** **Approved 2026-09-04 for implementation only.** An agent asks to install a plugin; the request is a
     workspace record; approving the record installs it; the plugin loads
     with attribution ("written by …"). Add enable/disable and per-plugin
     capability grants from the donor's SPEC-v9. *Open it: ask an agent for

@@ -82,7 +82,12 @@ export function PluginWidgetSurface({ pluginId, widgetId }: { pluginId: string; 
   const plugins = usePlugins();
   const widget = widgets.find((item) => item.pluginId === pluginId && item.id === widgetId);
   const plugin = plugins.find((item) => item.id === pluginId);
-  if (widget) return <PluginSlot name={widget.pluginName} render={widget.render} resetKey={plugin?.loadedAt} />;
+  if (widget) return (
+    <div className="flex h-full min-h-0 flex-col">
+      {plugin?.author ? <span className="shrink-0 px-1 pb-1 text-[var(--t-count)] text-[var(--text-muted)]">Written by {plugin.author}</span> : null}
+      <div className="min-h-0 flex-1"><PluginSlot name={widget.pluginName} render={widget.render} resetKey={plugin?.loadedAt} /></div>
+    </div>
+  );
   if (plugin?.status === "error") return <PluginErrorBox name={plugin.name} error={plugin.error ?? "unknown error"} />;
   return (
     <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">

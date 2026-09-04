@@ -10,6 +10,7 @@ import { emptyContributions, usePluginRegistry, type PluginContributionSet } fro
 
 export const PLUGIN_ENTRY = ["intellizen", "plugin.js"] as const;
 export const PLUGIN_MANIFEST = "plugin.yaml";
+export const PLUGIN_METADATA = ".intellizen.json";
 export const POLL_MS = 5_000;
 
 /** The slice of the fs plugin the loader needs, so tests can hand it a map. */
@@ -25,6 +26,8 @@ export interface PluginSource {
   dir: string;
   manifest: PluginManifest;
   source: string;
+  author?: string;
+  grants?: Record<string, boolean>;
   /** Changes whenever plugin.js or plugin.yaml changes; drives hot reload. */
   stamp: string;
 }
@@ -80,6 +83,19 @@ export async function scanPluginRoot(fs: PluginFs, root: string): Promise<Plugin
     } catch {
       /* plugin.yaml is optional on our side */
     }
+    let author: string | undefined;
+    let grants: Record<string, boolean> | undefined;
+    let metadataMtime: number | null = null;
+    try {
+      const metadataFile = joinPath(dir, PLUGIN_METADATA);
+      metadataMtime = await fs.mtime(metadataFile);
+      const metadata = JSON.parse(await fs.readTextFile(metadataFile)) as { author?: unknown; capabilities?: unknown; enabled?: unknown };
+      if (metadata.enabled === false) continue;
+      if (typeof metadata.author === "string") author = metadata.author;
+      if (metadata.capabilities && typeof metadata.capabilities === "object") grants = metadata.capabilities as Record<string, boolean>;
+    } catch {
+      /* Plugins installed before approvals have no IntelliZen metadata. */
+    }
     let source: string;
     try {
       source = await fs.readTextFile(entryFile);
@@ -91,7 +107,9 @@ export async function scanPluginRoot(fs: PluginFs, root: string): Promise<Plugin
       dir,
       manifest,
       source,
-      stamp: `${entryMtime ?? source.length}:${manifestMtime ?? ""}`,
+      author,
+      grants,
+      stamp: `${entryMtime ?? source.length}:${manifestMtime ?? ""}:${metadataMtime ?? ""}`,
     });
   }
   return found;
@@ -159,6 +177,8 @@ export async function loadPlugin(item: PluginSource): Promise<void> {
       name: plugin.name ?? item.manifest.name ?? item.id,
       description: plugin.description ?? item.manifest.description,
       version: item.manifest.version,
+      author: item.author,
+      grants: item.grants,
       dir: item.dir,
       contributions,
     });

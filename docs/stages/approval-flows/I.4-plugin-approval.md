@@ -1,7 +1,7 @@
 # I.4 approval flow — agent-authored plugin installation
 
-Status: **awaiting Adam's approval**. This describes the flow only; no I.4
-implementation or plugin installation is authorized by this document.
+Status: **approved 2026-09-04 for implementation only**. Adam approved the
+remaining Phase I plan; every real plugin installation still needs its own approval.
 
 ## Decision
 

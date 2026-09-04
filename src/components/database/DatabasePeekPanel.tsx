@@ -15,7 +15,6 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-
 import { TaskRelationsSection } from "@/components/database/primitives/TaskRelationsSection";
 import {
   RecordActivitySection,
@@ -59,7 +58,7 @@ import type {
   WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
-
+import { PluginApprovalSection } from "@/plugins/approval-section";
 let lastPanelWidth = 560;
 
 const WORKFLOW_RUN_FIELD_IDS = {
@@ -791,6 +790,7 @@ export function DatabasePeekPanel({
             })
             .map(renderRelationSection)}
 
+          {record ? <PluginApprovalSection record={record} onUpdateField={onUpdateField} /> : null}
           {record ? (
             <RecordBacklinksSection
               recordId={record.id}

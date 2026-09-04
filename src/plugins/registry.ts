@@ -26,6 +26,8 @@ export interface PluginRecord {
   name: string;
   description?: string;
   version?: string;
+  author?: string;
+  grants?: Record<string, boolean>;
   dir: string;
   status: "loaded" | "error";
   error?: string;

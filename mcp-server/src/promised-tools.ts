@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -98,6 +98,7 @@ export const promisedTools = [
         name: { type: "string" },
         description: { type: "string" },
         version: { type: "string" },
+        capabilities: { type: "array", items: { type: "string" }, description: "Capabilities the plugin requests. Each must be explicitly granted or denied before installation." },
         source: { type: "string", description: "Contents of intellizen/plugin.js." },
         actor: { type: "string" },
         durable_role: { type: "string" },
@@ -291,6 +292,7 @@ async function authorPlugin(supabase: SupabaseClient, input: WriteInput & {
   name: string;
   description?: string;
   version?: string;
+  capabilities?: string[];
   source: string;
 }, receipt: WorkEvent) {
   const pluginId = input.plugin_id.trim();
@@ -301,13 +303,20 @@ async function authorPlugin(supabase: SupabaseClient, input: WriteInput & {
   if (!/export\s+default/.test(source) || !/\bregister\s*[:(]/.test(source)) {
     throw new Error("Plugin source must default-export an object with register(ctx).");
   }
+  const version = input.version?.trim() || "0.1.0";
+  const capabilities = [...new Set((input.capabilities ?? []).map((item) => item.trim()).filter(Boolean))];
   const manifest = [
     `name: ${JSON.stringify(name)}`,
-    `version: ${JSON.stringify(input.version?.trim() || "0.1.0")}`,
+    `version: ${JSON.stringify(version)}`,
     ...(input.description?.trim() ? [`description: ${JSON.stringify(input.description.trim())}`] : []),
     "",
   ].join("\n");
-  const payload = { plugin_id: pluginId, name, staging_path: plan.root, files: ["plugin.yaml", "intellizen/plugin.js"] };
+  const hashes = {
+    "plugin.yaml": createHash("sha256").update(manifest).digest("hex"),
+    "intellizen/plugin.js": createHash("sha256").update(`${source}\n`).digest("hex"),
+  };
+  const approval = { plugin_id: pluginId, name, version, author: input.actor, capabilities, hashes };
+  const payload = { ...approval, staging_path: plan.root, files: Object.keys(hashes) };
   if (existsSync(plan.root)) throw new Error(`A staged plugin already exists at ${plan.root}; choose a new plugin_id.`);
   if (!input.confirm_write) return dryRunPreview("author_plugin", "stage this plugin and open its approval record", payload);
 
@@ -317,11 +326,12 @@ async function authorPlugin(supabase: SupabaseClient, input: WriteInput & {
   writeFileSync(plan.manifest, manifest, { encoding: "utf8", flag: "wx" });
   writeFileSync(plan.entry, `${source}\n`, { encoding: "utf8", flag: "wx" });
 
-  const body = `## Plugin installation approval\n\nStaged by: ${input.actor}\nStaging path: ${plan.root}\nFiles:\n- plugin.yaml\n- intellizen/plugin.js\n\nApproval needed: review the staged code and explicitly approve installation. Staging does not load or install it.`;
+  const destination = join(homedir(), ".hermes", "plugins", pluginId);
+  const body = `## Plugin installation approval\n\nWritten by: ${input.actor}\nStaging path: ${plan.root}\nDestination: ${destination}\nRequested capabilities: ${capabilities.length ? capabilities.join(", ") : "none"}\nFiles:\n- plugin.yaml — ${hashes["plugin.yaml"]}\n- intellizen/plugin.js — ${hashes["intellizen/plugin.js"]}\n\n### Source\n\n\`\`\`js\n${source}\n\`\`\`\n\nApproval needed: review the staged code, decide every requested capability, then explicitly Install or Reject. Staging does not load or install it.`;
   const { data, error } = await supabase.schema("workspace").from("records").insert([{
     database_id: TASKS_DATABASE_ID,
     entity: "genzen",
-    fields: { task_name: `Approve plugin: ${name}`, task_status: "In progress", task_stage: "Review", task_assignee: input.actor },
+    fields: { task_name: `Approve plugin: ${name}`, task_status: "In progress", task_stage: "Review", task_assignee: input.actor, plugin_approval: JSON.stringify(approval) },
     body,
     taxonomy: { entity: "genzen", area: "internal_ops", object_type: "plugin_install_approval", routing_rule: "tasks" },
   }]).select("id").single();

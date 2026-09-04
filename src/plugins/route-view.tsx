@@ -37,6 +37,7 @@ export function PluginRouteView() {
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="shrink-0 border-b border-[var(--border)] px-3 py-4 sm:px-6">
         <span className="t-title text-[var(--text)]">{route.title ?? plugin.name}</span>
+        {plugin.author ? <span className="ml-2 text-[var(--t-meta)] text-[var(--text-muted)]">Written by {plugin.author}</span> : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <PluginSlot name={plugin.name} render={route.render} resetKey={plugin.loadedAt} />

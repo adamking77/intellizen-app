@@ -6,12 +6,14 @@ import { CapabilitiesSettings } from "@/components/settings/capabilities";
 import { ContextSettings } from "@/components/settings/context";
 import { GeneralSettings } from "@/components/settings/general";
 import { ProvidersSettings } from "@/components/settings/providers";
+import { PluginsSettings } from "@/components/settings/plugins";
 import { VoiceSettings } from "@/components/settings/voice-settings";
 import { useEngineStore } from "@/engine/engine-store";
 
 const SECTIONS = [
   { id: "providers", label: "Providers" },
   { id: "capabilities", label: "Capabilities" },
+  { id: "plugins", label: "Plugins" },
   { id: "context", label: "Context" },
   { id: "voice", label: "Voice" },
   { id: "appearance", label: "Appearance" },
@@ -54,6 +56,7 @@ export function SettingsView() {
           <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${section}`} className="flex max-w-[880px] flex-col gap-2">
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
+          {section === "plugins" ? <PluginsSettings /> : null}
           {section === "context" ? <ContextSettings /> : null}
           {section === "voice" ? <VoiceSettings /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
