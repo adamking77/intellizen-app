@@ -187,7 +187,10 @@ These add to Phase F and Phase I:
 F.7 **Control kit.** One control primitive in `ui/` (default, selected,
     primary, quiet, field), radius tokens collapsed to plane, control, pill,
     the segmented control, the drawer component. Base UI and Mantine
-    dependencies removed. Selection intensity tuned with Adam.
+    dependencies removed. **Selection intensity is a user setting:** a
+    slider on Settings ▸ Appearance beside the accent picker, driving the
+    selected plane's strength (and how much of the accent it carries) as one
+    token every surface reads. Default tuned with Adam.
 F.8 **Eight consistencies** applied across Home widgets, Databases, Docs,
     Agents, Settings and the panel.
 I.7 **The room's view switcher** **[approval given 2026-09-04]**: Brief,
