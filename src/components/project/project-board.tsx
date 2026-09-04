@@ -9,6 +9,7 @@ import { Identity } from "@/components/ui/identity";
 import { QueryState } from "@/components/ui/query-state";
 import { Pill } from "@/components/ui/status-pill";
 import { boardsForProject } from "@/lib/project-room";
+import { runViewTransition } from "@/lib/view-transitions";
 import { listKanbanBoard, listKanbanBoards, type KanbanCard } from "@/services/hermes-kanban";
 
 const COLUMN_LABELS: Record<string, string> = {
@@ -62,7 +63,7 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                     </div>
                     <div className="space-y-2">
                       {column.cards.map((card) => (
-                        <button key={card.id} type="button" className="block w-full text-left" onClick={() => setSelected({ ...card, board: board.name })}>
+                        <button key={card.id} type="button" className="block w-full text-left" onClick={(event) => runViewTransition("drawer", () => setSelected({ ...card, board: board.name }), event.currentTarget)}>
                           <Card selected={selected?.id === card.id}>
                           <p className="font-ui text-[var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
                           {card.latestSummary ? (

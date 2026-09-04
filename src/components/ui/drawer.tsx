@@ -55,6 +55,7 @@ export function Drawer({ open, onClose, label, children, className }: DrawerProp
       role="dialog"
       aria-modal="true"
       aria-label={label}
+      style={{ viewTransitionName: "kit-drawer" }}
       className={cn("kit-drawer absolute inset-y-2 right-2 z-50 w-80 overflow-y-auto rounded-[var(--r-plane)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]", className)}
     >
       {children}

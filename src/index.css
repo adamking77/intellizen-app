@@ -5217,6 +5217,58 @@ select:not([data-select-chevron="custom"]) {
   opacity: 1;
 }
 
+/* K.12 continuity: only the changing plane participates. The root snapshot
+   is suppressed so navigation never turns into page-load choreography. */
+html[data-view-transition]::view-transition-old(root),
+html[data-view-transition]::view-transition-new(root) {
+  animation: none;
+}
+
+html[data-view-transition="room"]::view-transition-old(*),
+html[data-view-transition="room"]::view-transition-new(*) {
+  animation: none;
+}
+
+html[data-view-transition="room"]::view-transition-old(project-room-view) {
+  animation: intellizen-view-out 160ms var(--ease) both;
+}
+
+html[data-view-transition="room"]::view-transition-new(project-room-view) {
+  animation: intellizen-view-in 160ms var(--ease) both;
+}
+
+html[data-view-transition="room"]::view-transition-group(*) {
+  animation-duration: 120ms;
+  animation-timing-function: var(--ease);
+}
+
+html[data-view-transition="room"]::view-transition-group(project-room-view) {
+  animation-duration: 160ms;
+}
+
+html[data-view-transition="drawer"]::view-transition-group(kit-drawer) {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease);
+}
+
+html[data-view-transition="segment"]::view-transition-group(*) {
+  animation-duration: 120ms;
+  animation-timing-function: var(--ease);
+}
+
+html[data-view-transition="segment"]::view-transition-old(*),
+html[data-view-transition="segment"]::view-transition-new(*) {
+  animation: none;
+}
+
+@keyframes intellizen-view-out {
+  to { opacity: 0; }
+}
+
+@keyframes intellizen-view-in {
+  from { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

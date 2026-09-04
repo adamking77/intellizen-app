@@ -127,12 +127,13 @@ export function ProjectView() {
           breadcrumb={scoped?.path.length ? breadcrumb(scoped) : undefined}
           state={node?.folders.length ? node.folders.map(shortenHome).join(" · ") : `${files.length} documents`}
           views={node ? (
-            <Segmented value={view} options={views.map((candidate) => ({ value: candidate, label: VIEW_LABELS[candidate] }))} onValueChange={chooseView} label="Project view" />
+            <Segmented value={view} options={views.map((candidate) => ({ value: candidate, label: VIEW_LABELS[candidate] }))} onValueChange={chooseView} label="Project view" transitionKind="room" />
           ) : undefined}
           action={node ? <Control variant="primary" loading={create.isPending} onClick={() => create.mutate()}>New document</Control> : undefined}
         />
       </div>
 
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden" style={{ viewTransitionName: "project-room-view" }}>
       {!node ? (
         <div className="min-h-0 flex-1 p-5">
           <QueryState isLoading={isLoading} error={error ?? notFound} isEmpty={false} loadingLabel="Loading project" errorTitle="Project unavailable">{null}</QueryState>
@@ -158,6 +159,7 @@ export function ProjectView() {
       ) : (
         <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">This view will appear when the project has linked material.</p>
       )}
+      </div>
 
       <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.kind === "document" ? documentTitle(selected.record) : selected?.record.title ?? "Evidence details"}>
         {selected ? (

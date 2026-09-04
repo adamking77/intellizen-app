@@ -11,6 +11,7 @@ import { Pill } from "@/components/ui/status-pill";
 import type { Hierarchy } from "@/lib/hierarchy";
 import { groupSessionsByProject, projectSessionKey } from "@/lib/project-room";
 import { cn } from "@/lib/utils";
+import { runViewTransition } from "@/lib/view-transitions";
 import { getHermesSessionMessages, listHermesSessions } from "@/services/hermes-project-sessions";
 
 function formatTime(epoch: number) {
@@ -76,7 +77,7 @@ export function ProjectSessions({
             <button
               key={`${session.profile}:${session.id}`}
               type="button"
-              onClick={() => setDrawerKey(projectSessionKey(session))}
+              onClick={(event) => runViewTransition("drawer", () => setDrawerKey(projectSessionKey(session)), event.currentTarget)}
               className={cn(
                 "mb-1 min-h-[var(--h-row)] w-full rounded-[var(--r-ctl)] px-2 py-1.5 text-left hover:bg-[var(--hover)]",
                 selected?.id === session.id && selected.profile === session.profile && "bg-[var(--selected)]",

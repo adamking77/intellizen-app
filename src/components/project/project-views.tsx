@@ -5,6 +5,7 @@ import { Pill } from "@/components/ui/status-pill";
 import { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
 import type { ProjectLinkedRecord } from "@/lib/project-room";
 import type { Investigation, WorkspaceDatabaseRecord } from "@/lib/types";
+import { runViewTransition } from "@/lib/view-transitions";
 
 const CASE_STAGES = ["Brief", "Collect", "Analyse", "Report", "Close"];
 
@@ -113,7 +114,7 @@ export function ProjectEvidenceTable({
         {files.map((file) => {
           const author = text(file, DOCUMENTS_DB_FIELDS.author).trim();
           return (
-            <button key={file.id} type="button" role="row" onClick={() => onOpenDocument(file)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+            <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenDocument(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
               <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{title(file)}</span>
               <span role="cell">{author ? <Attribution name={author} /> : "—"}</span>
               <span role="cell"><Pill>{text(file, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill></span>
@@ -122,7 +123,7 @@ export function ProjectEvidenceTable({
           );
         })}
         {linkedRecords.map((record) => (
-          <button key={`${record.databaseId}:${record.recordId}`} type="button" role="row" onClick={() => onOpenRecord(record)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+          <button key={`${record.databaseId}:${record.recordId}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenRecord(record), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
             <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{record.title}</span>
             <span role="cell">—</span>
             <span role="cell">{record.status ? <Pill>{record.status}</Pill> : "—"}</span>
@@ -143,7 +144,7 @@ export function ProjectTimeline({ files, investigation, onOpenDocument }: { file
   return (
     <div className="mx-auto grid max-w-3xl gap-px px-5 py-4">
       {events.map((event) => event.file ? (
-        <button key={event.id} type="button" onClick={() => onOpenDocument(event.file!)} className="grid min-h-[var(--h-line)] grid-cols-[110px_1fr_auto] items-center gap-3 rounded-[var(--r-ctl)] px-3 text-left hover:bg-[var(--hover)]">
+        <button key={event.id} type="button" onClick={(click) => runViewTransition("drawer", () => onOpenDocument(event.file!), click.currentTarget)} className="grid min-h-[var(--h-line)] grid-cols-[110px_1fr_auto] items-center gap-3 rounded-[var(--r-ctl)] px-3 text-left hover:bg-[var(--hover)]">
           <span className="font-mono text-[11px] text-[var(--text-muted)]">{date(event.at)}</span>
           <span className="truncate text-[var(--t-ui)] text-[var(--text)]">{event.label}</span>
           <Pill>document</Pill>
