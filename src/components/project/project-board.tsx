@@ -1,9 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
+import { Card } from "@/components/ui/card";
+import { Control } from "@/components/ui/control";
+import { Drawer } from "@/components/ui/drawer";
+import { Identity } from "@/components/ui/identity";
 import { QueryState } from "@/components/ui/query-state";
+import { Pill } from "@/components/ui/status-pill";
 import { boardsForProject } from "@/lib/project-room";
-import { listKanbanBoard, listKanbanBoards } from "@/services/hermes-kanban";
+import { listKanbanBoard, listKanbanBoards, type KanbanCard } from "@/services/hermes-kanban";
 
 const COLUMN_LABELS: Record<string, string> = {
   triage: "Triage",
@@ -17,6 +23,7 @@ const COLUMN_LABELS: Record<string, string> = {
 };
 
 export function ProjectBoard({ folders }: { folders: string[] }) {
+  const [selected, setSelected] = useState<(KanbanCard & { board: string }) | null>(null);
   const boards = useQuery({ queryKey: ["kanban-boards", "project-room"], queryFn: listKanbanBoards });
   const scoped = boardsForProject(boards.data ?? [], folders);
   const boardData = useQuery({
@@ -51,19 +58,22 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                   <div key={column.name} className="w-56 shrink-0">
                     <div className="mb-2 flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
                       <span className="text-label">{COLUMN_LABELS[column.name] ?? column.name}</span>
-                      <span className="rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
-                        {column.cards.length}
-                      </span>
+                      <Pill>{column.cards.length} cards</Pill>
                     </div>
                     <div className="space-y-2">
                       {column.cards.map((card) => (
-                        <article key={card.id} className="rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--surface-wash)] p-3">
+                        <button key={card.id} type="button" className="block w-full text-left" onClick={() => setSelected({ ...card, board: board.name })}>
+                          <Card selected={selected?.id === card.id}>
                           <p className="font-ui text-[var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
                           {card.latestSummary ? (
-                            <p className="mt-1 line-clamp-2 font-ui text-[var(--t-section)] leading-4 text-[var(--subtext-0)]">{card.latestSummary}</p>
+                            <p className="mt-1 line-clamp-2 font-ui text-[var(--t-section)] leading-4 text-[var(--text-muted)]">{card.latestSummary}</p>
                           ) : null}
-                          {card.assignee ? <p className="mt-2 text-meta">{card.assignee}</p> : null}
-                        </article>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            {card.assignee ? <Identity name={card.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">—</span>}
+                            <Pill>{COLUMN_LABELS[card.status] ?? card.status}</Pill>
+                          </div>
+                          </Card>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -73,10 +83,29 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
           ))}
         </div>
       </QueryState>
+      <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.title ?? "Card details"}>
+        {selected ? (
+          <div className="grid gap-5 p-4">
+            <div>
+              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {selected.status}</div>
+              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.title}</h2>
+              <div className="mt-2">{selected.assignee ? <Identity name={selected.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
+            </div>
+            {selected.latestSummary ? <p className="text-[var(--t-ui)] leading-relaxed text-[var(--text)]">{selected.latestSummary}</p> : null}
+            <dl className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2 text-[var(--t-meta)]">
+              <dt className="text-[var(--text-muted)]">Board</dt><dd>{selected.board}</dd>
+              <dt className="text-[var(--text-muted)]">State</dt><dd><Pill>{selected.status}</Pill></dd>
+            </dl>
+            <div className="flex flex-wrap gap-2">
+              <Control disabled>Move to…</Control><Control disabled>Reassign</Control><Control disabled>Open in Table</Control>
+            </div>
+          </div>
+        ) : null}
+      </Drawer>
     </ProjectTabFrame>
   );
 }
 
 export function ProjectTabFrame({ children }: { children: ReactNode }) {
-  return <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>;
+  return <div className="relative min-h-0 flex-1 overflow-y-auto p-5">{children}</div>;
 }

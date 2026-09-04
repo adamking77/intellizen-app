@@ -210,7 +210,7 @@ function Row({
       draggable={node.kind === "project"}
       style={{ paddingLeft: 4 + depth * INDENT }}
       className={cn(
-        "nav-node group h-8 select-none",
+        "nav-node group h-[var(--h-row)] select-none",
         dropTarget && "ring-1 ring-[var(--accent)]",
       )}
       onClick={() => onSelect(node)}
@@ -261,6 +261,7 @@ function Row({
       </button>
       <span className="min-w-0 flex-1 truncate">{node.name}</span>
       {(node.itemCount ?? 0) > 0 ? <span className="text-meta">{node.itemCount}</span> : null}
+      {selected ? <span aria-hidden className="text-[var(--text)]">›</span> : null}
       <button
         type="button"
         tabIndex={-1}

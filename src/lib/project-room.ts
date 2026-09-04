@@ -2,7 +2,25 @@ import { getRecordTitle } from "@/lib/database-core";
 import { allProjects, under, type Hierarchy } from "@/lib/hierarchy";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseRecordModel } from "@/lib/types";
 
-export type ProjectRoomTab = "files" | "board" | "data" | "sessions" | "canvas" | "graph" | "case";
+export type ProjectRoomView = "brief" | "table" | "board" | "graph" | "timeline" | "session" | "canvas";
+
+const VIEW_PREFIX = "intelizen:view:";
+
+export function projectRoomViews(clientCase: boolean): ProjectRoomView[] {
+  return clientCase
+    ? ["brief", "table", "board", "graph", "timeline", "session"]
+    : ["brief", "table", "board", "canvas"];
+}
+
+export function loadRoomView(nodeId: string, views: ProjectRoomView[]): ProjectRoomView {
+  if (typeof window === "undefined") return views[0];
+  const stored = window.localStorage.getItem(`${VIEW_PREFIX}${nodeId}`) as ProjectRoomView | null;
+  return stored && views.includes(stored) ? stored : views[0];
+}
+
+export function saveRoomView(nodeId: string, view: ProjectRoomView) {
+  if (typeof window !== "undefined") window.localStorage.setItem(`${VIEW_PREFIX}${nodeId}`, view);
+}
 
 export interface ProjectLinkedRecord {
   databaseId: string;
@@ -26,22 +44,6 @@ export interface ProjectSessionRef {
 
 export function projectSessionKey(session: Pick<ProjectSessionRef, "id" | "profile">): string {
   return `${session.profile ?? "default"}:${session.id}`;
-}
-
-export function projectRoomTabs(input: {
-  hasCanvas: boolean;
-  hasGraph: boolean;
-  hasCase: boolean;
-}): ProjectRoomTab[] {
-  return [
-    "files",
-    "board",
-    "data",
-    "sessions",
-    ...(input.hasCanvas ? ["canvas" as const] : []),
-    ...(input.hasGraph ? ["graph" as const] : []),
-    ...(input.hasCase ? ["case" as const] : []),
-  ];
 }
 
 function statusOf(entry: WorkspaceDatabaseCatalogEntry, record: WorkspaceDatabaseRecordModel): string | null {

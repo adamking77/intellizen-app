@@ -1,78 +1,79 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FileText, Loader2, Plus } from "lucide-react";
 
 import { ProjectBoard } from "@/components/project/project-board";
-import { ProjectData } from "@/components/project/project-data";
 import { ProjectSessions } from "@/components/project/project-sessions";
+import { DrawerActions, ProjectBrief, ProjectEvidenceTable, ProjectTimeline } from "@/components/project/project-views";
 import { ProjectCanvases, ProjectGraph } from "@/components/project/project-visuals";
-import { Button } from "@/components/ui/button";
+import { Control } from "@/components/ui/control";
+import { Drawer } from "@/components/ui/drawer";
+import { Identity } from "@/components/ui/identity";
+import { PageHeader } from "@/components/ui/page-header";
 import { QueryState } from "@/components/ui/query-state";
-import { getDocumentsWorkspaceBundle, listCanvasDocuments, listInvestigations } from "@/lib/data";
+import { Segmented } from "@/components/ui/segmented";
+import { Pill } from "@/components/ui/status-pill";
+import { getDocumentsWorkspaceBundle, listCanvasDocuments, listInvestigations, listWorkspaceDatabaseCatalog } from "@/lib/data";
 import { listGraphNodes } from "@/lib/data/graph";
 import { createPortableDocument } from "@/lib/document-persistence";
 import { DOCUMENTS_DB_FIELDS, quickNoteTitle } from "@/lib/documents";
 import { locate } from "@/lib/hierarchy";
 import { breadcrumb, findProjectNode, projectDocuments, shortenHome } from "@/lib/project-center";
-import { projectRoomTabs, type ProjectRoomTab } from "@/lib/project-room";
+import { linkedWorkspaceRecords, loadRoomView, projectRoomViews, saveRoomView, type ProjectLinkedRecord, type ProjectRoomView } from "@/lib/project-room";
 import { toast, toastError } from "@/lib/toast";
+import type { WorkspaceDatabaseRecord } from "@/lib/types";
 import { useHierarchy } from "@/lib/use-hierarchy";
-import { useAppStore } from "@/store";
 import { CENTER_DOCS_QUERY_KEY } from "@/views/Unit";
 
-const InvestigationView = lazy(() => import("@/views/Investigation").then((m) => ({ default: m.InvestigationView })));
-const ProjectsView = lazy(() => import("@/views/Projects").then((m) => ({ default: m.ProjectsView })));
+type EvidenceSelection =
+  | { kind: "document"; record: WorkspaceDatabaseRecord }
+  | { kind: "record"; record: ProjectLinkedRecord };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+function value(record: WorkspaceDatabaseRecord, field: string) {
+  const result = record.fields[field];
+  return typeof result === "string" ? result : "";
 }
 
-function LazyFallback() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <Loader2 className="h-4 w-4 text-[var(--accent)]" />
-    </div>
-  );
+function documentTitle(record: WorkspaceDatabaseRecord) {
+  return value(record, DOCUMENTS_DB_FIELDS.title).trim() || "Untitled document";
 }
 
-const TAB_LABELS: Record<ProjectRoomTab, string> = {
-  files: "Files",
-  board: "Board",
-  data: "Data",
-  sessions: "Sessions",
-  canvas: "Canvas",
-  graph: "Graph",
-  case: "Case",
+const VIEW_LABELS: Record<ProjectRoomView, string> = {
+  brief: "Brief", table: "Table", board: "Board", graph: "Graph", timeline: "Timeline", session: "Session", canvas: "Canvas",
 };
 
-/** The project room defined by ROADMAP.md's center rule. */
+/** A hierarchy project rendered as one room with material-specific views. */
 export function ProjectView() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const setPendingProjectSelectionId = useAppStore((s) => s.setPendingProjectSelectionId);
   const { tree, isLoading, error } = useHierarchy();
-  const [tab, setTab] = useState<ProjectRoomTab>("files");
-  const selectedSessionKey = searchParams.get("session");
-
   const node = findProjectNode(tree, id);
   const scoped = locate(tree, { kind: "project", id });
-  const notFound = !isLoading && !error && !node ? "No project with this id is in the tree." : undefined;
   const investigationId = node?.legacy_investigation_id ?? null;
   const legacyProjectId = node?.legacy_project_id ?? null;
-  const hasCase = investigationId != null || legacyProjectId != null;
+  const clientCase = investigationId != null;
+  const views = useMemo(() => projectRoomViews(clientCase), [clientCase]);
+  const [view, setView] = useState<ProjectRoomView>(() => loadRoomView(id, projectRoomViews(false)));
+  const [selected, setSelected] = useState<EvidenceSelection | null>(null);
+  const selectedSessionKey = searchParams.get("session");
 
-  useEffect(() => setTab("files"), [id]);
+  useEffect(() => setView(loadRoomView(id, views)), [id, views]);
   useEffect(() => {
-    if (selectedSessionKey) setTab("sessions");
+    if (selectedSessionKey) setView("session");
   }, [selectedSessionKey]);
+
+  const chooseView = (next: ProjectRoomView) => {
+    setView(next);
+    saveRoomView(id, next);
+    if (selectedSessionKey) setSearchParams({}, { replace: true });
+  };
 
   const docs = useQuery({ queryKey: CENTER_DOCS_QUERY_KEY, queryFn: () => getDocumentsWorkspaceBundle() });
   const files = useMemo(() => projectDocuments(docs.data?.records ?? [], id), [docs.data?.records, id]);
+  const catalog = useQuery({ queryKey: ["workspace-database-catalog", "project-room"], queryFn: () => listWorkspaceDatabaseCatalog() });
+  const linkedRecords = useMemo(() => linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId), [catalog.data, id, legacyProjectId]);
   const canvases = useQuery({ queryKey: ["canvas-documents"], queryFn: listCanvasDocuments });
   const projectCanvases = useMemo(
     () => legacyProjectId == null ? [] : (canvases.data ?? []).filter((canvas) => canvas.project_id === legacyProjectId),
@@ -80,25 +81,16 @@ export function ProjectView() {
   );
   const graphNodes = useQuery({
     queryKey: ["graph-nodes", legacyProjectId],
-    queryFn: () => listGraphNodes(legacyProjectId),
+    queryFn: () => listGraphNodes(legacyProjectId!),
     enabled: legacyProjectId != null,
   });
-
   const investigations = useQuery({
-    queryKey: ["investigations", "center"],
+    queryKey: ["investigations", "project-room"],
     queryFn: () => listInvestigations(),
-    enabled: tab === "case" && investigationId != null,
+    enabled: investigationId != null,
   });
-  const caseId = investigations.data?.find((inv) => inv.id === investigationId)?.case_id ?? null;
-  const caseMissing = tab === "case" && investigationId != null && investigations.data && !caseId
-    ? "This project's case record is no longer in the investigations table."
-    : undefined;
-
-  useEffect(() => {
-    if (tab !== "case") return;
-    if (caseId) setSearchParams({ case: caseId }, { replace: true });
-    else if (investigationId == null && legacyProjectId != null) setPendingProjectSelectionId(legacyProjectId);
-  }, [tab, caseId, investigationId, legacyProjectId, setSearchParams, setPendingProjectSelectionId]);
+  const investigation = investigations.data?.find((candidate) => candidate.id === investigationId) ?? null;
+  const notFound = !isLoading && !error && !node ? "No project with this id is in the tree." : undefined;
 
   const create = useMutation({
     mutationFn: async () => {
@@ -121,132 +113,69 @@ export function ProjectView() {
     onError: (err) => toastError("Couldn't create document", err),
   });
 
-  const tabs = projectRoomTabs({
-    hasCanvas: projectCanvases.length > 0,
-    hasGraph: (graphNodes.data?.length ?? 0) > 0,
-    hasCase,
-  });
+  const openSelection = () => {
+    if (!selected) return;
+    if (selected.kind === "document") navigate(`/docs?record=${selected.record.id}&project=${id}`);
+    else navigate(`/databases/${selected.record.databaseId}?record=${selected.record.recordId}`);
+  };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 px-5 py-3">
-        <div className="min-w-0 flex-1">
-          {scoped && scoped.path.length > 0 ? <p className="truncate text-meta">{breadcrumb(scoped)}</p> : null}
-          <h1 className="truncate font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{node?.name ?? "Project"}</h1>
-          {node && node.folders.length > 0 ? (
-            <p className="truncate font-mono text-[var(--t-section)] text-[var(--overlay-1)]" title={node.folders.join("\n")}>
-              {node.folders.map(shortenHome).join("  ·  ")}
-            </p>
-          ) : null}
+    <div className="relative flex h-full flex-col overflow-hidden bg-[var(--base)]">
+      <div className="shrink-0 px-5 py-3">
+        <PageHeader
+          title={node?.name ?? "Project"}
+          breadcrumb={scoped?.path.length ? breadcrumb(scoped) : undefined}
+          state={node?.folders.length ? node.folders.map(shortenHome).join(" · ") : `${files.length} documents`}
+          views={node ? (
+            <Segmented value={view} options={views.map((candidate) => ({ value: candidate, label: VIEW_LABELS[candidate] }))} onValueChange={chooseView} label="Project view" />
+          ) : undefined}
+          action={node ? <Control variant="primary" loading={create.isPending} onClick={() => create.mutate()}>New document</Control> : undefined}
+        />
+      </div>
+
+      {!node ? (
+        <div className="min-h-0 flex-1 p-5">
+          <QueryState isLoading={isLoading} error={error ?? notFound} isEmpty={false} loadingLabel="Loading project" errorTitle="Project unavailable">{null}</QueryState>
         </div>
-        {node ? (
-          <div className="flex items-center gap-1.5" role="tablist">
-            {tabs.map((t) => (
-              <Button
-                key={t}
-                size="sm"
-                role="tab"
-                aria-selected={tab === t}
-                variant="ghost"
-                className={tab === t ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]" : undefined}
-                onClick={() => {
-                  setTab(t);
-                  if (selectedSessionKey) setSearchParams({}, { replace: true });
-                }}
-              >
-                {TAB_LABELS[t]}
-              </Button>
-            ))}
+      ) : view === "brief" ? (
+        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || investigations.isLoading} error={docs.error ?? catalog.error ?? investigations.error} isEmpty={false} loadingLabel="Loading brief" errorTitle="Brief unavailable" onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), investigations.refetch()])}>
+          <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.data?.length ?? 0} investigation={investigation} />
+        </QueryState>
+      ) : view === "table" ? (
+        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading} error={docs.error ?? catalog.error} isEmpty={files.length + linkedRecords.length === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Documents and database records linked to this project appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch()])}>
+          <ProjectEvidenceTable files={files} linkedRecords={linkedRecords} onOpenDocument={(record) => setSelected({ kind: "document", record })} onOpenRecord={(record) => setSelected({ kind: "record", record })} />
+        </QueryState>
+      ) : view === "board" ? (
+        <ProjectBoard folders={node.folders} />
+      ) : view === "session" ? (
+        <ProjectSessions folders={node.folders} projectId={id} selectedSessionKey={selectedSessionKey} transcriptOnly={Boolean(selectedSessionKey)} tree={tree} />
+      ) : view === "canvas" ? (
+        <ProjectCanvases canvases={projectCanvases} />
+      ) : view === "graph" && legacyProjectId != null ? (
+        <ProjectGraph projectId={legacyProjectId} nodes={graphNodes.data ?? []} />
+      ) : view === "timeline" ? (
+        <ProjectTimeline files={files} investigation={investigation} onOpenDocument={(record) => setSelected({ kind: "document", record })} />
+      ) : (
+        <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">This view will appear when the project has linked material.</p>
+      )}
+
+      <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.kind === "document" ? documentTitle(selected.record) : selected?.record.title ?? "Evidence details"}>
+        {selected ? (
+          <div className="grid gap-5 p-4">
+            <div>
+              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
+              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
+            </div>
+            {selected.kind === "document" ? (
+              <>
+                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+                <Pill>{value(selected.record, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill>
+              </>
+            ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+            <DrawerActions onOpen={openSelection} />
           </div>
         ) : null}
-      </header>
-
-      {tab === "files" || !node ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <QueryState
-            isLoading={isLoading || (Boolean(node) && docs.isLoading)}
-            error={error ?? notFound ?? docs.error}
-            isEmpty={files.length === 0}
-            loadingLabel="Loading files"
-            errorTitle="Project unavailable"
-            emptyTitle="No documents yet"
-            emptyDescription="Documents created here are linked to this project and open in Docs."
-            emptyAction={<NewDocumentButton pending={create.isPending} onClick={() => create.mutate()} />}
-            onRetry={docs.error ? () => void docs.refetch() : undefined}
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-label">{files.length} document{files.length === 1 ? "" : "s"}</span>
-              <NewDocumentButton pending={create.isPending} onClick={() => create.mutate()} />
-            </div>
-            <div className="divide-y divide-[var(--border-subtle)] rounded-[var(--r-plane)] border border-[var(--border)]">
-              {files.map((file) => {
-                const title = String(file.fields[DOCUMENTS_DB_FIELDS.title] ?? "").trim() || "Untitled document";
-                const type = String(file.fields[DOCUMENTS_DB_FIELDS.docType] ?? "");
-                const updated = formatDate(String(file.fields[DOCUMENTS_DB_FIELDS.updatedAt] ?? file.updated_at));
-                return (
-                  <button
-                    key={file.id}
-                    type="button"
-                    onClick={() => navigate(`/docs?record=${file.id}&project=${id}`)}
-                    className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-wash)]"
-                  >
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
-                    <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
-                      {title}
-                    </span>
-                    {type ? <span className="shrink-0 text-meta">{type}</span> : null}
-                    {updated ? <span className="shrink-0 font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{updated}</span> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </QueryState>
-        </div>
-      ) : tab === "board" ? (
-        <ProjectBoard folders={node.folders} />
-      ) : tab === "data" ? (
-        <ProjectData projectId={id} legacyProjectId={legacyProjectId} />
-      ) : tab === "sessions" ? (
-        <ProjectSessions
-          folders={node.folders}
-          projectId={id}
-          selectedSessionKey={selectedSessionKey}
-          transcriptOnly={Boolean(selectedSessionKey)}
-          tree={tree}
-        />
-      ) : tab === "canvas" ? (
-        <ProjectCanvases canvases={projectCanvases} />
-      ) : tab === "graph" && legacyProjectId != null ? (
-        <ProjectGraph projectId={legacyProjectId} nodes={graphNodes.data ?? []} />
-      ) : investigationId != null && !caseId ? (
-        <div className="p-5">
-          <QueryState
-            isLoading={investigations.isLoading}
-            error={investigations.error ?? caseMissing}
-            isEmpty={false}
-            loadingLabel="Loading case"
-            errorTitle="Case unavailable"
-            onRetry={() => void investigations.refetch()}
-          >
-            {null}
-          </QueryState>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <Suspense fallback={<LazyFallback />}>
-            {investigationId != null ? <InvestigationView /> : <ProjectsView />}
-          </Suspense>
-        </div>
-      )}
+      </Drawer>
     </div>
-  );
-}
-
-function NewDocumentButton({ pending, onClick }: { pending: boolean; onClick: () => void }) {
-  return (
-    <Button size="sm" className="gap-1.5" onClick={onClick} disabled={pending}>
-      {pending ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-      New document
-    </Button>
   );
 }

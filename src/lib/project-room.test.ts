@@ -1,10 +1,14 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from "vitest";
 
 import {
   boardsForProject,
   groupSessionsByProject,
   linkedWorkspaceRecords,
-  projectRoomTabs,
+  loadRoomView,
+  projectRoomViews,
+  saveRoomView,
   sessionsForProject,
 } from "@/lib/project-room";
 import type { Hierarchy } from "@/lib/hierarchy";
@@ -38,13 +42,12 @@ const catalog: WorkspaceDatabaseCatalogEntry[] = [
 ];
 
 describe("project room", () => {
-  it("always exposes the four project tabs and adds contextual tabs", () => {
-    expect(projectRoomTabs({ hasCanvas: false, hasGraph: false, hasCase: false })).toEqual([
-      "files", "board", "data", "sessions",
-    ]);
-    expect(projectRoomTabs({ hasCanvas: true, hasGraph: true, hasCase: true })).toEqual([
-      "files", "board", "data", "sessions", "canvas", "graph", "case",
-    ]);
+  it("uses the material's prescribed views and remembers a valid choice", () => {
+    expect(projectRoomViews(false)).toEqual(["brief", "table", "board", "canvas"]);
+    expect(projectRoomViews(true)).toEqual(["brief", "table", "board", "graph", "timeline", "session"]);
+    saveRoomView("case", "timeline");
+    expect(loadRoomView("case", projectRoomViews(true))).toBe("timeline");
+    expect(loadRoomView("case", projectRoomViews(false))).toBe("brief");
   });
 
   it("finds records linked through either project identity", () => {

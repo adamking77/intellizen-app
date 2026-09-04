@@ -32,12 +32,13 @@ export function ProjectSessionTree({
             aria-label={session.title}
             title={`${session.profile} · ${session.cwd ?? "No working directory"}`}
             style={{ paddingLeft: 4 + depth * 12 }}
-            className="nav-node h-8 select-none"
+            className="nav-node h-[var(--h-row)] select-none"
             onClick={() => onSelect(session)}
           >
             <span className="h-5 w-5 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1 truncate text-left">{session.title}</span>
             <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{session.profile}</span>
+            {selectedKey === key ? <span aria-hidden>›</span> : null}
           </button>
         );
       })}
