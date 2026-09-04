@@ -5,10 +5,13 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue([
-    { id: "test-model", provider: "openai", group: "openai" },
-    { id: "other-model", provider: "anthropic", group: "anthropic" },
-  ]),
+  invoke: vi.fn().mockResolvedValue({
+    models: [
+      { id: "test-model", name: "Test model", provider: "openai", group: "openai" },
+      { id: "other-model", name: "Other model", provider: "anthropic", group: "anthropic" },
+    ],
+    permissionMode: null,
+  }),
 }));
 
 import type { Agent } from "./agent-model";

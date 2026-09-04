@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod acp;
+mod acp_config;
 mod acp_discovery;
 mod acp_paths;
 mod acp_wire;

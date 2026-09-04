@@ -55,6 +55,13 @@ interface AgentModelOption {
   /** Hermes inference provider; empty for a CLI that runs as itself. */
   provider: string;
   group: string;
+  name: string;
+  description?: string | null;
+}
+
+interface AgentModelCatalog {
+  models: AgentModelOption[];
+  permissionMode: string | null;
 }
 
 function modelValue(model: Pick<AgentModelOption, "id" | "provider">): string {
@@ -102,6 +109,7 @@ export function AgentEditor({
   const [previewLevel, setPreviewLevel] = useState(0);
   const [proceduralPreview, setProceduralPreview] = useState(false);
   const [models, setModels] = useState<AgentModelOption[] | null>(null);
+  const [permissionMode, setPermissionMode] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   // The detail read lands after mount; take it once, without clobbering
@@ -120,8 +128,13 @@ export function AgentEditor({
   useEffect(() => {
     let live = true;
     setModels(null);
-    void invoke<AgentModelOption[]>("agent_models", { provider: draft.engine })
-      .then((found) => live && setModels(found))
+    setPermissionMode(null);
+    void invoke<AgentModelCatalog>("agent_models", { provider: draft.engine, agentId: draft.id })
+      .then((found) => {
+        if (!live) return;
+        setModels(found.models);
+        setPermissionMode(found.permissionMode);
+      })
       .catch(() => live && setModels([]));
     return () => {
       live = false;
@@ -142,7 +155,7 @@ export function AgentEditor({
     (model) => model.id === draft.model && (!hermes || model.provider === draft.provider),
   );
   const visibleModels = draft.model && !selectedModel
-    ? [{ id: draft.model, provider: hermes ? draft.provider : "", group: "Current" }, ...(models ?? [])]
+    ? [{ id: draft.model, provider: hermes ? draft.provider : "", group: "Current", name: draft.model }, ...(models ?? [])]
     : (models ?? []);
   const groupedModels = visibleModels.reduce<Record<string, AgentModelOption[]>>((groups, model) => {
     (groups[model.group] ??= []).push(model);
@@ -449,17 +462,23 @@ export function AgentEditor({
                           group ? (
                             <optgroup key={group} label={group}>
                               {options.map((model) => (
-                                <option key={modelValue(model)} value={modelValue(model)}>{model.id}</option>
+                                <option key={modelValue(model)} value={modelValue(model)} title={model.description ?? undefined}>{model.name}</option>
                               ))}
                             </optgroup>
                           ) : options.map((model) => (
-                            <option key={modelValue(model)} value={modelValue(model)}>{model.id}</option>
+                            <option key={modelValue(model)} value={modelValue(model)} title={model.description ?? undefined}>{model.name}</option>
                           )),
                         )}
                       </select>
                     )}
                   </div>
                 </div>
+
+                {!hermes && permissionMode ? (
+                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+                    Permissions: <span className="font-mono">{permissionMode}</span>
+                  </span>
+                ) : null}
 
                 {detailError ? (
                   <div className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">

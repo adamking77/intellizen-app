@@ -11,8 +11,6 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    fs,
-    path::{Path, PathBuf},
     process::Stdio,
     sync::{
         atomic::{AtomicI64, Ordering},
@@ -21,10 +19,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
+use crate::acp_config::{
+    adapter_options, registry_entry, registry_entry_for_engine, registry_path, session_key, session_params,
+    AcpAdapterOptions, AcpAgentSpawn, AcpCommandProbe, AcpStarted, AcpStatus,
+};
 use crate::acp_paths::{child_path, resolve_binary, resolve_cwd};
 #[cfg(test)]
 use crate::acp_paths::{expand_tilde, home_dir};
@@ -37,50 +38,12 @@ use tokio::{
 };
 
 pub const EVENT_NAME: &str = "acp:event";
-const REGISTRY_FILE: &str = "acp-agents.json";
 /// `hermes acp` measured eight seconds cold; adapters run through `npx` can
 /// take longer the first time.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 const TURN_TIMEOUT: Duration = Duration::from_secs(600);
 const STDERR_TAIL_LINES: usize = 20;
 const PROTOCOL_VERSION: u64 = 1;
-
-/// The registry fields the spawner needs. The TypeScript side owns the full
-/// shape (`src/engine/acp-registry.ts`); unknown fields pass through untouched.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpAgentSpawn {
-    pub id: String,
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub cwd: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpStarted {
-    pub agent_id: String,
-    pub session_id: String,
-    pub pid: Option<u32>,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpStatus {
-    pub agent_id: String,
-    pub session_id: String,
-    pub pid: Option<u32>,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpCommandProbe {
-    pub command: String,
-    pub available: bool,
-    pub path: Option<String>,
-}
 
 /// Where an event goes: the app emits to the webview, tests collect.
 type Sink = Arc<dyn Fn(&str, Value) + Send + Sync>;
@@ -96,6 +59,8 @@ struct Live {
     public_session_id: String,
     /// The adapter's own id is process-local and may repeat across callers.
     session_id: OnceLock<String>,
+    options: StdMutex<AcpAdapterOptions>,
+    model_config_id: StdMutex<Option<String>>,
     pid: Option<u32>,
     child: StdMutex<Option<Child>>,
     stdin: Mutex<ChildStdin>,
@@ -105,16 +70,13 @@ struct Live {
     tool_started: StdMutex<HashMap<String, Instant>>,
     turn_running: StdMutex<bool>,
     reader: StdMutex<Option<JoinHandle<()>>>,
+    stderr_tail: StderrTail,
     sink: Sink,
 }
 
 fn agents() -> &'static StdMutex<HashMap<String, Arc<Live>>> {
     static AGENTS: OnceLock<StdMutex<HashMap<String, Arc<Live>>>> = OnceLock::new();
     AGENTS.get_or_init(|| StdMutex::new(HashMap::new()))
-}
-
-fn session_key(agent_id: &str, caller: &str, cwd: &Path) -> String {
-    serde_json::to_string(&(agent_id, caller, cwd.to_string_lossy())).unwrap_or_default()
 }
 
 fn live(session_id: &str) -> Result<Arc<Live>, String> {
@@ -124,34 +86,6 @@ fn live(session_id: &str) -> Result<Arc<Live>, String> {
         .get(session_id)
         .cloned()
         .ok_or_else(|| format!("ACP session {session_id} is not running"))
-}
-
-// ── Registry file ───────────────────────────────────────────────────────
-
-fn registry_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("no app data dir: {e}"))?
-        .join(REGISTRY_FILE))
-}
-
-fn read_registry(path: &Path) -> Value {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .filter(Value::is_array)
-        .unwrap_or_else(|| Value::Array(Vec::new()))
-}
-
-fn registry_entry(path: &Path, agent_id: &str) -> Result<AcpAgentSpawn, String> {
-    read_registry(path)
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|entry| entry.get("id").and_then(Value::as_str) == Some(agent_id))
-        .find_map(|entry| serde_json::from_value::<AcpAgentSpawn>(entry.clone()).ok())
-        .ok_or_else(|| format!("no ACP agent {agent_id} in {}", path.display()))
 }
 
 // ── The live process ────────────────────────────────────────────────────
@@ -205,12 +139,7 @@ impl Live {
         Ok(rx)
     }
 
-    async fn request(
-        &self,
-        method: &str,
-        params: Value,
-        timeout: Duration,
-    ) -> Result<Value, String> {
+    async fn request(&self, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
         let rx = self.send_request(method, params).await?;
         match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(reply)) => reply,
@@ -233,11 +162,7 @@ impl Live {
         match (msg.get("id"), method) {
             (Some(id), None) => {
                 let Some(id) = id.as_i64() else { return };
-                let sender = self
-                    .pending
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&id);
+                let sender = self.pending.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
                 if let Some(tx) = sender {
                     let reply = match msg.get("error") {
                         Some(err) => {
@@ -253,9 +178,7 @@ impl Live {
                     let _ = tx.send(reply);
                 }
             }
-            (Some(id), Some(method)) => {
-                self.on_agent_request(id.clone(), method, msg.get("params"))
-            }
+            (Some(id), Some(method)) => self.on_agent_request(id.clone(), method, msg.get("params")),
             (None, Some("session/update")) => {
                 let Some(update) = msg.get("params").and_then(|p| p.get("update")) else {
                     return;
@@ -322,9 +245,7 @@ impl Live {
             .map(|p| p.keys().cloned().collect())
             .unwrap_or_default();
         for id in ids {
-            let _ = self
-                .answer_permission(&id, json!({ "outcome": "cancelled" }))
-                .await;
+            let _ = self.answer_permission(&id, json!({ "outcome": "cancelled" })).await;
         }
     }
 
@@ -335,10 +256,7 @@ impl Live {
         if let Some(mut child) = self.child.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = child.start_kill();
         }
-        self.pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        self.pending.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     fn is_running(&self) -> bool {
@@ -360,12 +278,17 @@ fn stderr_excerpt(tail: &StderrTail) -> String {
         .join("\n")
 }
 
+fn with_stderr(reason: String, tail: &StderrTail) -> String {
+    let excerpt = stderr_excerpt(tail);
+    if excerpt.is_empty() {
+        reason
+    } else {
+        format!("{reason}\n{excerpt}")
+    }
+}
+
 /// Spawn the adapter and complete the handshake.
-async fn connect(
-    agent: &AcpAgentSpawn,
-    sink: Sink,
-    public_session_id: String,
-) -> Result<Arc<Live>, String> {
+async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String) -> Result<Arc<Live>, String> {
     let binary = resolve_binary(&agent.command).ok_or_else(|| {
         format!(
             "{} is not installed (looked on PATH and in the usual bin folders)",
@@ -391,14 +314,8 @@ async fn connect(
         .map_err(|e| format!("could not start {}: {e}", binary.display()))?;
 
     let stdin = child.stdin.take().ok_or("no stdin on the agent process")?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("no stdout on the agent process")?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or("no stderr on the agent process")?;
+    let stdout = child.stdout.take().ok_or("no stdout on the agent process")?;
+    let stderr = child.stderr.take().ok_or("no stderr on the agent process")?;
     let pid = child.id();
 
     let tail: StderrTail = Arc::new(StdMutex::new(VecDeque::new()));
@@ -418,6 +335,8 @@ async fn connect(
         agent_id: agent.id.clone(),
         public_session_id,
         session_id: OnceLock::new(),
+        options: StdMutex::new(AcpAdapterOptions::default()),
+        model_config_id: StdMutex::new(None),
         pid,
         child: StdMutex::new(Some(child)),
         stdin: Mutex::new(stdin),
@@ -427,6 +346,7 @@ async fn connect(
         tool_started: StdMutex::new(HashMap::new()),
         turn_running: StdMutex::new(false),
         reader: StdMutex::new(None),
+        stderr_tail: Arc::clone(&tail),
         sink,
     });
 
@@ -468,11 +388,8 @@ async fn connect(
         )
         .await?;
         live.notify("initialized", json!({})).await?;
-        let params = json!({ "cwd": cwd.to_string_lossy(), "mcpServers": [] });
-        let session = match live
-            .request("session/new", params.clone(), HANDSHAKE_TIMEOUT)
-            .await
-        {
+        let params = session_params(agent, &cwd);
+        let session = match live.request("session/new", params.clone(), HANDSHAKE_TIMEOUT).await {
             Ok(session) => session,
             // Claude's npm ACP bridge can return one generic initialization
             // failure while its native session layer warms. A second request
@@ -480,33 +397,77 @@ async fn connect(
             // transient bridge failure look like a broken CLI connection.
             Err(reason) if reason.trim_start().starts_with("Internal error") => {
                 tokio::time::sleep(Duration::from_millis(250)).await;
-                live.request("session/new", params, HANDSHAKE_TIMEOUT)
-                    .await?
+                live.request("session/new", params, HANDSHAKE_TIMEOUT).await?
             }
             Err(reason) => return Err(reason),
         };
-        session
+        let session_id = session
             .get("sessionId")
             .and_then(Value::as_str)
             .map(str::to_string)
-            .ok_or_else(|| "the agent created no session".to_string())
+            .ok_or_else(|| "the agent created no session".to_string())?;
+        let (options, model_config_id) = adapter_options(&session);
+        Ok((session_id, options, model_config_id))
     };
 
     match handshake.await {
-        Ok(session_id) => {
+        Ok((session_id, options, model_config_id)) => {
             let _ = live.session_id.set(session_id);
+            *live.options.lock().unwrap_or_else(|e| e.into_inner()) = options;
+            *live.model_config_id.lock().unwrap_or_else(|e| e.into_inner()) = model_config_id;
+            if let Err(reason) = sync_model(&live, agent.model.as_deref()).await {
+                live.kill();
+                return Err(reason);
+            }
             Ok(live)
         }
         Err(reason) => {
             live.kill();
-            let excerpt = stderr_excerpt(&tail);
-            Err(if excerpt.is_empty() {
-                reason
-            } else {
-                format!("{reason}\n{excerpt}")
-            })
+            Err(with_stderr(reason, &tail))
         }
     }
+}
+
+async fn sync_model(live: &Arc<Live>, requested: Option<&str>) -> Result<(), String> {
+    let Some(model) = requested.filter(|value| !value.trim().is_empty()) else {
+        return Ok(());
+    };
+    let current = live
+        .options
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .current_model
+        .clone();
+    if current.as_deref() == Some(model) {
+        return Ok(());
+    }
+    let session_id = live.session_id.get().cloned().unwrap_or_default();
+    let config_id = live.model_config_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let response = if let Some(config_id) = config_id {
+        live.request(
+            "session/set_config_option",
+            json!({ "sessionId": session_id, "configId": config_id, "value": model }),
+            HANDSHAKE_TIMEOUT,
+        )
+        .await?
+    } else {
+        live.request(
+            "session/set_model",
+            json!({ "sessionId": session_id, "modelId": model }),
+            HANDSHAKE_TIMEOUT,
+        )
+        .await?
+    };
+    let (updated, _) = adapter_options(&response);
+    let mut options = live.options.lock().unwrap_or_else(|e| e.into_inner());
+    if !updated.available_models.is_empty() {
+        options.available_models = updated.available_models;
+    }
+    options.current_model = Some(model.to_string());
+    if updated.permission_mode.is_some() {
+        options.permission_mode = updated.permission_mode;
+    }
+    Ok(())
 }
 
 /// Run one turn to its end on a background task and report how it ended.
@@ -514,17 +475,16 @@ fn watch_turn(live: Arc<Live>, rx: oneshot::Receiver<Result<Value, String>>) {
     tauri::async_runtime::spawn(async move {
         let outcome = match tokio::time::timeout(TURN_TIMEOUT, rx).await {
             Ok(Ok(Ok(result))) => {
-                let stop = result
-                    .get("stopReason")
-                    .and_then(Value::as_str)
-                    .unwrap_or("end_turn");
+                let stop = result.get("stopReason").and_then(Value::as_str).unwrap_or("end_turn");
                 if stop == "cancelled" {
                     json!({ "status": "interrupted" })
                 } else {
                     json!({ "status": "complete", "stop_reason": stop })
                 }
             }
-            Ok(Ok(Err(reason))) => json!({ "status": "error", "error": reason }),
+            Ok(Ok(Err(reason))) => {
+                json!({ "status": "error", "error": with_stderr(reason, &live.stderr_tail) })
+            }
             Ok(Err(_)) => json!({ "status": "error", "error": "the agent went away" }),
             Err(_) => {
                 let _ = live
@@ -537,10 +497,7 @@ fn watch_turn(live: Arc<Live>, rx: oneshot::Receiver<Result<Value, String>>) {
             }
         };
         live.cancel_pending_permissions().await;
-        live.tool_started
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        live.tool_started.lock().unwrap_or_else(|e| e.into_inner()).clear();
         live.set_turn(false);
         live.emit("message.complete", outcome);
     });
@@ -575,15 +532,11 @@ async fn prompt(live: &Arc<Live>, text: &str) -> Result<(), String> {
 async fn cancel(live: &Arc<Live>) -> Result<(), String> {
     live.cancel_pending_permissions().await;
     let session_id = live.session_id.get().cloned().unwrap_or_default();
-    live.notify("session/cancel", json!({ "sessionId": session_id }))
-        .await
+    live.notify("session/cancel", json!({ "sessionId": session_id })).await
 }
 
 fn stop(session_id: &str) {
-    let removed = agents()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(session_id);
+    let removed = agents().lock().unwrap_or_else(|e| e.into_inner()).remove(session_id);
     if let Some(live) = removed {
         live.kill();
         if live.set_turn(false) {
@@ -608,6 +561,28 @@ fn app_sink(app: AppHandle) -> Sink {
     Arc::new(move |_event_type, envelope| {
         let _ = app.emit(EVENT_NAME, envelope);
     })
+}
+
+pub async fn agent_options(app: &AppHandle, engine: &str, agent_id: Option<&str>) -> Result<AcpAdapterOptions, String> {
+    let mut spec = registry_entry_for_engine(&registry_path(app)?, engine, agent_id)?;
+    if let Some(running) = agents()
+        .lock()
+        .map_err(|_| "the agent table is poisoned".to_string())?
+        .values()
+        .find(|live| live.agent_id == spec.id && live.is_running())
+        .cloned()
+    {
+        return Ok(running.options.lock().unwrap_or_else(|e| e.into_inner()).clone());
+    }
+
+    // A stale saved pin must not hide the adapter's live catalog; the real
+    // conversation validates and applies the chosen model when it starts.
+    spec.model = None;
+    let sink: Sink = Arc::new(|_, _| {});
+    let probe = connect(&spec, sink, format!("options:{}", spec.id)).await?;
+    let options = probe.options.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    probe.kill();
+    Ok(options)
 }
 
 // ── Tauri commands ──────────────────────────────────────────────────────
@@ -650,8 +625,11 @@ pub async fn acp_start(
 }
 
 #[tauri::command]
-pub async fn acp_prompt(session_id: String, text: String) -> Result<(), String> {
-    prompt(&live(&session_id)?, &text).await
+pub async fn acp_prompt(app: AppHandle, session_id: String, text: String) -> Result<(), String> {
+    let running = live(&session_id)?;
+    let spec = registry_entry(&registry_path(&app)?, &running.agent_id)?;
+    sync_model(&running, spec.model.as_deref()).await?;
+    prompt(&running, &text).await
 }
 
 #[tauri::command]
@@ -699,34 +677,22 @@ pub fn acp_probe(commands: Vec<String>) -> Vec<AcpCommandProbe> {
 }
 
 #[tauri::command]
-pub async fn acp_respond_permission(
-    session_id: String,
-    request_id: String,
-    option_id: String,
-) -> Result<(), String> {
+pub async fn acp_respond_permission(session_id: String, request_id: String, option_id: String) -> Result<(), String> {
     live(&session_id)?
-        .answer_permission(
-            &request_id,
-            json!({ "outcome": "selected", "optionId": option_id }),
-        )
+        .answer_permission(&request_id, json!({ "outcome": "selected", "optionId": option_id }))
         .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, sync::Mutex as TestMutex};
-
-    #[test]
-    fn live_session_key_separates_callers_and_working_directories() {
-        let panel = session_key("cc", "panel", Path::new("/work/app"));
-        assert_ne!(
-            panel,
-            session_key("cc", "room:alpha", Path::new("/work/app"))
-        );
-        assert_ne!(panel, session_key("cc", "panel", Path::new("/work/other")));
-        assert_eq!(panel, session_key("cc", "panel", Path::new("/work/app")));
-    }
+    use std::{
+        fs::{self, OpenOptions},
+        io::Write,
+        os::unix::fs::OpenOptionsExt,
+        path::{Path, PathBuf},
+        sync::Mutex as TestMutex,
+    };
 
     #[test]
     fn binaries_resolve_from_path_and_known_folders() {
@@ -739,22 +705,6 @@ mod tests {
         let probes = acp_probe(vec!["/bin/ls".into(), "/definitely/not/here".into()]);
         assert!(probes[0].available);
         assert!(!probes[1].available);
-    }
-
-    #[test]
-    fn the_registry_entry_reads_and_tolerates_absence() {
-        let dir = std::env::temp_dir().join(format!("acp-registry-{}", std::process::id()));
-        let path = dir.join("nested").join(REGISTRY_FILE);
-        assert_eq!(read_registry(&path), json!([]));
-        let agents = json!([{ "id": "cc", "name": "Claude Code", "engine": "claude-code",
-                              "command": "claude-agent-acp", "args": [], "avatar": "🤖" }]);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, serde_json::to_vec_pretty(&agents).unwrap()).unwrap();
-        assert_eq!(read_registry(&path), agents);
-        let spec = registry_entry(&path, "cc").unwrap();
-        assert_eq!(spec.command, "claude-agent-acp");
-        assert!(registry_entry(&path, "nope").is_err());
-        let _ = fs::remove_dir_all(dir);
     }
 
     fn fake_agent(dir: &Path, body: &str) -> PathBuf {
@@ -798,23 +748,58 @@ while IFS= read -r line; do
 done
 "#;
 
+    const MODEL_AGENT: &str = r#"#!/bin/bash
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*) echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
+    *'"method":"session/new"'*) echo '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"sess-model","configOptions":[{"id":"model","category":"model","currentValue":"old","options":[{"value":"old","name":"Old"},{"value":"new","name":"New"}]}]}}' ;;
+    *'"id":3'*'"session/set_config_option"'*) echo '{"jsonrpc":"2.0","id":3,"result":{"configOptions":[{"id":"model","category":"model","currentValue":"new","options":[{"value":"old","name":"Old"},{"value":"new","name":"New"}]}]}}' ;;
+    *'"id":4'*'"session/set_config_option"'*) echo '{"jsonrpc":"2.0","id":4,"result":{"configOptions":[{"id":"model","category":"model","currentValue":"old","options":[{"value":"old","name":"Old"},{"value":"new","name":"New"}]}]}}' ;;
+  esac
+done
+"#;
+
+    #[tokio::test]
+    async fn a_saved_model_is_applied_and_can_change_before_the_next_turn() {
+        let dir = std::env::temp_dir().join(format!("acp-model-{}", std::process::id()));
+        let bin = fake_agent(&dir, MODEL_AGENT);
+        let spec = AcpAgentSpawn {
+            id: "model".into(),
+            engine: "fake".into(),
+            command: bin.to_string_lossy().into_owned(),
+            args: vec![],
+            cwd: Some(dir.to_string_lossy().into_owned()),
+            model: Some("new".into()),
+            identity: None,
+            context: vec![],
+        };
+        let live = connect(&spec, Arc::new(|_, _| {}), "model-test".into()).await.unwrap();
+        assert_eq!(live.options.lock().unwrap().current_model.as_deref(), Some("new"));
+
+        sync_model(&live, Some("old")).await.unwrap();
+        assert_eq!(live.options.lock().unwrap().current_model.as_deref(), Some("old"));
+        live.kill();
+        let _ = fs::remove_dir_all(dir);
+    }
+
     #[tokio::test]
     async fn a_transient_internal_session_error_is_retried_once() {
         let dir = std::env::temp_dir().join(format!("acp-retry-{}", std::process::id()));
         let bin = fake_agent(&dir, FLAKY_SESSION_AGENT);
         let spec = AcpAgentSpawn {
             id: "flaky".into(),
+            engine: "fake".into(),
             command: bin.to_string_lossy().into_owned(),
             args: vec![],
             cwd: Some(dir.to_string_lossy().into_owned()),
+            model: None,
+            identity: None,
+            context: vec![],
         };
         let live = connect(&spec, Arc::new(|_, _| {}), "retry-test".into())
             .await
             .expect("the second session/new should connect");
-        assert_eq!(
-            live.session_id.get().map(String::as_str),
-            Some("sess-retried")
-        );
+        assert_eq!(live.session_id.get().map(String::as_str), Some("sess-retried"));
         live.kill();
         let _ = fs::remove_dir_all(dir);
     }
@@ -828,13 +813,15 @@ done
         let sink: Sink = Arc::new(move |_, envelope| sink_seen.lock().unwrap().push(envelope));
         let spec = AcpAgentSpawn {
             id: "fake".into(),
+            engine: "fake".into(),
             command: bin.to_string_lossy().into_owned(),
             args: vec![],
             cwd: Some(dir.to_string_lossy().into_owned()),
+            model: None,
+            identity: None,
+            context: vec![],
         };
-        let live = connect(&spec, sink, "turn-test".into())
-            .await
-            .expect("handshake");
+        let live = connect(&spec, sink, "turn-test".into()).await.expect("handshake");
         assert_eq!(live.session_id.get().map(String::as_str), Some("sess-1"));
 
         prompt(&live, "reply with pong").await.unwrap();
@@ -855,21 +842,15 @@ done
         wait_for("approval.request").await;
         let request_id = {
             let seen = seen.lock().unwrap();
-            let req = seen
-                .iter()
-                .find(|e| e["type"] == "approval.request")
-                .unwrap();
+            let req = seen.iter().find(|e| e["type"] == "approval.request").unwrap();
             assert_eq!(req["session_id"], "turn-test");
             assert_eq!(req["agent_id"], "fake");
             assert_eq!(req["payload"]["choices"], json!(["once", "deny"]));
             req["payload"]["request_id"].as_str().unwrap().to_string()
         };
-        live.answer_permission(
-            &request_id,
-            json!({ "outcome": "selected", "optionId": "ok" }),
-        )
-        .await
-        .unwrap();
+        live.answer_permission(&request_id, json!({ "outcome": "selected", "optionId": "ok" }))
+            .await
+            .unwrap();
         wait_for("message.complete").await;
 
         let types: Vec<String> = seen
@@ -880,12 +861,7 @@ done
             .collect();
         assert_eq!(
             types,
-            [
-                "message.start",
-                "message.delta",
-                "approval.request",
-                "message.complete"
-            ]
+            ["message.start", "message.delta", "approval.request", "message.complete"]
         );
         let done = seen.lock().unwrap().last().cloned().unwrap();
         assert_eq!(done["payload"]["status"], "complete");
@@ -900,14 +876,15 @@ done
         let sink: Sink = Arc::new(|_, _| {});
         let spec = AcpAgentSpawn {
             id: "x".into(),
+            engine: "fake".into(),
             command: "/definitely/not/here".into(),
             args: vec![],
             cwd: None,
+            model: None,
+            identity: None,
+            context: vec![],
         };
-        let err = connect(&spec, sink, "missing-test".into())
-            .await
-            .err()
-            .unwrap();
+        let err = connect(&spec, sink, "missing-test".into()).await.err().unwrap();
         assert!(err.contains("/definitely/not/here"), "{err}");
     }
 
@@ -918,14 +895,15 @@ done
         let sink: Sink = Arc::new(|_, _| {});
         let spec = AcpAgentSpawn {
             id: "silent".into(),
+            engine: "fake".into(),
             command: bin.to_string_lossy().into_owned(),
             args: vec![],
             cwd: None,
+            model: None,
+            identity: None,
+            context: vec![],
         };
-        let err = connect(&spec, sink, "silent-test".into())
-            .await
-            .err()
-            .unwrap();
+        let err = connect(&spec, sink, "silent-test".into()).await.err().unwrap();
         assert!(err.contains("not logged in"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
@@ -938,10 +916,13 @@ done
         let sink: Sink = Arc::new(move |_, envelope| sink_seen.lock().unwrap().push(envelope));
         let spec = AcpAgentSpawn {
             id: "live-codex".into(),
-            command: std::env::var("INTELLIZEN_LIVE_ACP_COMMAND")
-                .unwrap_or_else(|_| "codex-acp".into()),
+            engine: "codex".into(),
+            command: std::env::var("INTELLIZEN_LIVE_ACP_COMMAND").unwrap_or_else(|_| "codex-acp".into()),
             args: vec![],
             cwd: Some(env!("CARGO_MANIFEST_DIR").into()),
+            model: Some(std::env::var("INTELLIZEN_LIVE_ACP_MODEL").unwrap_or_else(|_| "gpt-5.5".into())),
+            identity: None,
+            context: vec![],
         };
         let live = connect(&spec, sink, "live-test".into())
             .await
@@ -974,10 +955,7 @@ done
             .filter(|event| event["type"] == "message.delta")
             .filter_map(|event| event["payload"]["text"].as_str())
             .collect::<String>();
-        assert!(
-            text.contains("ACP OK"),
-            "missing streamed reply: {events:?}"
-        );
+        assert!(text.contains("ACP OK"), "missing streamed reply: {events:?}");
         live.kill();
     }
 }

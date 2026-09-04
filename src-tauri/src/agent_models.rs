@@ -2,14 +2,16 @@
 //!
 //! Hermes already owns the authoritative broker catalog in
 //! `~/.hermes/provider_models_cache.json`; reading that cache keeps IntelliZen
-//! aligned with the models the installed Hermes will actually accept. CLI
-//! providers expose a small stable picker until their ACP adapter can supply
-//! its live config options directly.
+//! aligned with the models the installed Hermes will actually accept. ACP
+//! providers are asked directly; IntelliZen does not keep a second catalog.
 
 use std::{collections::HashSet, fs, path::PathBuf};
 
 use serde::Serialize;
 use serde_json::Value;
+use tauri::AppHandle;
+
+use crate::acp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +23,15 @@ pub struct AgentModel {
     /// Human-readable optgroup label. Custom provider URLs stay out of the UI
     /// while `provider` retains the exact value Hermes needs.
     pub group: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelCatalog {
+    pub models: Vec<AgentModel>,
+    pub permission_mode: Option<String>,
 }
 
 fn hermes_cache_path() -> Option<PathBuf> {
@@ -57,6 +68,8 @@ fn hermes_models() -> Vec<AgentModel> {
                     id: id.to_string(),
                     provider: provider.clone(),
                     group: group.clone(),
+                    name: id.to_string(),
+                    description: None,
                 });
             }
         }
@@ -65,41 +78,33 @@ fn hermes_models() -> Vec<AgentModel> {
     models
 }
 
-fn own_models(provider: &str) -> &'static [&'static str] {
-    match provider {
-        "claude-code" => &[
-            "default",
-            "opus[1m]",
-            "claude-fable-5-1[1m]",
-            "sonnet",
-            "haiku",
-        ],
-        "codex" => &[
-            "gpt-5.6-sol",
-            "gpt-5.6-terra",
-            "gpt-5.6-luna",
-            "gpt-5.5",
-            "gpt-5.4",
-        ],
-        "gemini" => &["gemini-2.5-pro", "gemini-2.5-flash"],
-        "qwen" => &["qwen3-coder-plus", "qwen3-coder-flash"],
-        _ => &[],
-    }
-}
-
 #[tauri::command]
-pub fn agent_models(provider: String) -> Vec<AgentModel> {
+pub async fn agent_models(
+    app: AppHandle,
+    provider: String,
+    agent_id: Option<String>,
+) -> Result<AgentModelCatalog, String> {
     if provider == "hermes" {
-        return hermes_models();
+        return Ok(AgentModelCatalog {
+            models: hermes_models(),
+            permission_mode: None,
+        });
     }
-    own_models(&provider)
-        .iter()
-        .map(|id| AgentModel {
-            id: (*id).to_string(),
-            provider: String::new(),
-            group: String::new(),
-        })
-        .collect()
+    let options = acp::agent_options(&app, &provider, agent_id.as_deref()).await?;
+    Ok(AgentModelCatalog {
+        models: options
+            .available_models
+            .into_iter()
+            .map(|model| AgentModel {
+                id: model.id,
+                provider: String::new(),
+                group: String::new(),
+                name: model.name,
+                description: model.description,
+            })
+            .collect(),
+        permission_mode: options.permission_mode,
+    })
 }
 
 #[cfg(test)]
@@ -107,14 +112,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cli_models_do_not_claim_a_broker() {
-        let models = agent_models("codex".to_string());
-        assert!(models.iter().any(|model| model.id.starts_with("gpt-5.6")));
-        assert!(models.iter().all(|model| model.provider.is_empty()));
-    }
-
-    #[test]
-    fn unknown_providers_have_no_invented_models() {
-        assert!(agent_models("unknown".to_string()).is_empty());
+    fn cache_models_keep_their_broker() {
+        for model in hermes_models() {
+            assert!(!model.provider.is_empty());
+            assert_eq!(model.name, model.id);
+        }
     }
 }
