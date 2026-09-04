@@ -4,7 +4,7 @@ import { Receipt } from "@/components/ui/receipt";
 import { Pill } from "@/components/ui/status-pill";
 import { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
 import type { ProjectLinkedRecord } from "@/lib/project-room";
-import type { Investigation, WorkspaceDatabaseRecord } from "@/lib/types";
+import type { IntelEntity, Investigation, InvestigationSignal, WorkspaceDatabaseRecord } from "@/lib/types";
 import { runViewTransition } from "@/lib/view-transitions";
 import type { ProjectFile } from "@/services/project-files";
 
@@ -72,6 +72,14 @@ export function ProjectBrief({
         </ol>
       ) : null}
       <dl className="grid gap-px overflow-hidden rounded-[var(--r-ctl)] bg-[var(--hair)]">
+        {clientCase ? (
+          <>
+            <BriefLine term="Subject">{investigation?.subject_definition || "—"}</BriefLine>
+            <BriefLine term="Scope">{investigation?.investigation_scope || investigation?.scope_notes || "—"}</BriefLine>
+            <BriefLine term="Hypotheses">{investigation?.known_hypotheses?.length ? investigation.known_hypotheses.join(" · ") : "—"}</BriefLine>
+            <BriefLine term="Notes">{investigation?.scope_notes || "—"}</BriefLine>
+          </>
+        ) : null}
         <BriefLine term="Held by agents">
           {author ? <Attribution name={author} /> : "—"}
         </BriefLine>
@@ -99,16 +107,20 @@ export function ProjectEvidenceTable({
   files,
   folderFiles,
   linkedRecords,
+  signals = [],
   onOpenDocument,
   onOpenFile,
   onOpenRecord,
+  onOpenSignal,
 }: {
   files: WorkspaceDatabaseRecord[];
   folderFiles?: ProjectFile[];
   linkedRecords: ProjectLinkedRecord[];
+  signals?: InvestigationSignal[];
   onOpenDocument: (record: WorkspaceDatabaseRecord) => void;
   onOpenFile?: (file: ProjectFile) => void;
   onOpenRecord: (record: ProjectLinkedRecord) => void;
+  onOpenSignal?: (signal: InvestigationSignal) => void;
 }) {
   return (
     <div className="px-5 py-4">
@@ -135,12 +147,40 @@ export function ProjectEvidenceTable({
             <span role="cell" className="text-[var(--t-meta)] text-[var(--text-muted)]">{record.databaseName}</span>
           </button>
         ))}
+        {signals.map((signal) => (
+          <button key={`signal:${signal.id}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenSignal?.(signal), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{signal.intel_signals?.title || "Untitled signal"}</span>
+            <span role="cell" className="truncate text-[var(--t-meta)] text-[var(--text-muted)]">{signal.intel_signals?.source || "—"}</span>
+            <span role="cell"><Pill>signal</Pill></span>
+            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{signal.intel_signals?.updated_at ? date(signal.intel_signals.updated_at) : "—"}</span>
+          </button>
+        ))}
         {(folderFiles ?? []).map((file) => (
           <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenFile?.(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
             <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{file.title}</span>
             <span role="cell" className="truncate font-mono text-[11px] text-[var(--text-muted)]">{file.folder.split("/").pop() || "folder"}</span>
             <span role="cell"><Pill>file</Pill></span>
             <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{file.updatedAt ? date(new Date(file.updatedAt).toISOString()) : "—"}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ProjectEntities({ entities, onOpen }: { entities: IntelEntity[]; onOpen: (entity: IntelEntity) => void }) {
+  return (
+    <div className="px-5 py-4">
+      <div role="table" aria-label="Case entities" className="overflow-hidden rounded-[var(--r-ctl)] bg-[var(--raised)]">
+        <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          <span role="columnheader">Entity</span><span role="columnheader">Type</span><span role="columnheader">Confidence</span><span role="columnheader">Updated</span>
+        </div>
+        {entities.map((entity) => (
+          <button key={entity.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpen(entity), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{entity.name}</span>
+            <span role="cell" className="capitalize text-[var(--t-meta)] text-[var(--text-muted)]">{entity.entity_type}</span>
+            <span role="cell">{entity.confidence ? <Pill>{entity.confidence}</Pill> : "—"}</span>
+            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{date(entity.updated_at)}</span>
           </button>
         ))}
       </div>

@@ -119,7 +119,7 @@ I.2 **The session page.** Selecting a session in the tree opens the large
     from tool events and `work_events`, not the project room with a side
     list. *Open it: click a session, read it, see what it touched.*
     Approval flow: `docs/stages/approval-flows/I.2-session-page.md`.
-I.3 **Intel becomes case tabs.** Case, Evidence and Entities tabs on a case
+I.3 **Intel becomes case tabs.** **Approved 2026-09-04.** Case, Evidence and Entities tabs on a case
     project, drawing on the existing `Investigation.tsx` and `Projects.tsx`
     parts. Then `/intel`, `/investigate` and `/search` stop being
     destinations: palette entries, Graph links and the Case tab hand-off

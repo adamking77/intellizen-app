@@ -2,13 +2,13 @@ import { getRecordTitle } from "@/lib/database-core";
 import { allProjects, under, type Hierarchy } from "@/lib/hierarchy";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseRecordModel } from "@/lib/types";
 
-export type ProjectRoomView = "brief" | "table" | "board" | "graph" | "timeline" | "session" | "canvas";
+export type ProjectRoomView = "brief" | "table" | "case" | "evidence" | "entities" | "board" | "graph" | "timeline" | "session" | "canvas";
 
 const VIEW_PREFIX = "intelizen:view:";
 
 export function projectRoomViews(clientCase: boolean): ProjectRoomView[] {
   return clientCase
-    ? ["brief", "table", "board", "graph", "timeline", "session"]
+    ? ["case", "evidence", "entities", "board", "graph", "timeline", "session"]
     : ["brief", "table", "board", "canvas"];
 }
 

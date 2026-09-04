@@ -872,6 +872,17 @@ export async function listInvestigationSignals(investigationId: number) {
   return (data ?? []) as unknown as InvestigationSignal[];
 }
 
+export async function investigationIdForSignal(signalId: number) {
+  const { data, error } = await supabase
+    .schema("intel").from("investigation_signals")
+    .select("investigation_id")
+    .eq("signal_id", signalId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.investigation_id ?? null;
+}
+
 export async function addSignalToInvestigation(input: {
   investigationId: number;
   signalId: number;

@@ -10,12 +10,15 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { searchWorkspace } from "@/lib/data";
+import { investigationIdForSignal, searchWorkspace } from "@/lib/data";
+import { allProjects, type Hierarchy } from "@/lib/hierarchy";
 import { LABELS } from "@/lib/labels";
 import type { InternalSearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { usePluginPaletteCommands } from "@/plugins/commands";
+import { toastError } from "@/lib/toast";
+import { useHierarchy } from "@/lib/use-hierarchy";
 
 // ============================================================
 // Context + provider
@@ -78,8 +81,9 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 
 export type ShellCommand = "focus-mode" | "toggle-sidebar";
 export const SHELL_COMMAND_EVENT = "intelizen:shell-command";
-const shell = (detail: ShellCommand) => () =>
+const shell = (detail: ShellCommand) => () => {
   window.dispatchEvent(new CustomEvent<ShellCommand>(SHELL_COMMAND_EVENT, { detail }));
+};
 
 type CommandKind = "navigation" | "action" | "workspace";
 
@@ -88,34 +92,25 @@ interface Command {
   label: string;
   hint?: string;
   kind: CommandKind;
-  run: (ctx: { navigate: (to: string) => void }) => void;
+  run: (ctx: { navigate: (to: string) => void }) => void | Promise<void>;
 }
 
 const NAV_COMMANDS: Command[] = [
   { id: "nav:home", label: "Home", kind: "navigation", run: ({ navigate }) => navigate("/home") },
-  { id: "nav:search", label: "Search", kind: "navigation", run: ({ navigate }) => navigate("/search") },
-  { id: "nav:intel", label: LABELS.researchDesk, kind: "navigation", run: ({ navigate }) => navigate("/intel") },
   { id: "nav:databases", label: "Databases", kind: "navigation", run: ({ navigate }) => navigate("/databases") },
   { id: "nav:docs", label: LABELS.docs, kind: "navigation", run: ({ navigate }) => navigate("/docs") },
   { id: "nav:graph", label: "Graph", kind: "navigation", run: ({ navigate }) => navigate("/graph") },
   { id: "nav:canvas", label: "Canvas", kind: "navigation", run: ({ navigate }) => navigate("/canvas") },
-  { id: "nav:investigate", label: LABELS.caseWorkspace, kind: "navigation", run: ({ navigate }) => navigate("/investigate") },
   { id: "nav:settings-appearance", label: "Go to Settings ▸ Appearance", kind: "navigation", run: ({ navigate }) => navigate("/settings?section=appearance") },
 ];
 
 const ACTION_COMMANDS: Command[] = [
-  { id: "act:new-investigation", label: "New case investigation", hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
-  { id: "act:new-collection", label: `New ${LABELS.collection.toLowerCase()}`, hint: "Intel", kind: "action", run: ({ navigate }) => navigate("/intel") },
   { id: "act:open-graph", label: "Open Graph", kind: "action", run: ({ navigate }) => navigate("/graph") },
-  { id: "act:search-web", label: "Search — Web", hint: "Exa web", kind: "action", run: ({ navigate }) => navigate("/search?mode=web") },
-  { id: "act:search-news", label: "Search — News", kind: "action", run: ({ navigate }) => navigate("/search?mode=news") },
-  { id: "act:search-people", label: "Search — People", kind: "action", run: ({ navigate }) => navigate("/search?mode=people") },
-  { id: "act:search-research", label: "Search — Research", kind: "action", run: ({ navigate }) => navigate("/search?mode=research") },
   { id: "act:focus-mode", label: "Focus mode", hint: "⌘⇧F", kind: "action", run: shell("focus-mode") },
   { id: "act:toggle-sidebar", label: "Toggle sidebar", hint: "⌘\\", kind: "action", run: shell("toggle-sidebar") },
 ];
 
-function commandFromWorkspaceResult(result: InternalSearchResult): Command {
+function commandFromWorkspaceResult(result: InternalSearchResult, tree: Hierarchy): Command {
   const label = result.title || "Untitled result";
   const hint = result.subtitle ?? result.source_type.replace("_", " ");
   return {
@@ -123,9 +118,15 @@ function commandFromWorkspaceResult(result: InternalSearchResult): Command {
     label,
     hint,
     kind: "workspace",
-    run: ({ navigate }) => {
-      if (result.source_type === "intel_signal" && result.url?.startsWith("http")) {
-        window.open(result.url, "_blank", "noopener,noreferrer");
+    run: async ({ navigate }) => {
+      if (result.source_type === "intel_signal") {
+        const investigationId = await investigationIdForSignal(Number(result.source_id));
+        const project = allProjects(tree).find((candidate) => candidate.legacy_investigation_id === investigationId);
+        if (project) {
+          navigate(`/project/${project.id}?tab=evidence`);
+          return;
+        }
+        if (result.url?.startsWith("http")) window.open(result.url, "_blank", "noopener,noreferrer");
         return;
       }
       if (result.source_type === "knowledge_document") {
@@ -161,6 +162,7 @@ function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const navigate = useNavigate();
   const entityFilter = useAppStore((state) => state.entityFilter);
+  const { tree } = useHierarchy();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -189,7 +191,7 @@ function CommandPalette() {
         .sort((a, b) => b.score - a.score)
         .map((r) => r.c);
 
-    const workspaceCommands = workspaceResults.map(commandFromWorkspaceResult);
+    const workspaceCommands = workspaceResults.map((result) => commandFromWorkspaceResult(result, tree));
 
     return [
       { heading: "Navigation", items: rank(NAV_COMMANDS) },
@@ -197,7 +199,7 @@ function CommandPalette() {
       { heading: "Workspace", items: workspaceCommands },
       { heading: "Plugins", items: rank(pluginCommands) },
     ].filter((g) => g.items.length > 0);
-  }, [query, workspaceResults, pluginCommands]);
+  }, [query, workspaceResults, pluginCommands, tree]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
@@ -209,7 +211,7 @@ function CommandPalette() {
 
   const execute = useCallback(
     (cmd: Command) => {
-      cmd.run({ navigate });
+      void Promise.resolve(cmd.run({ navigate })).catch((error) => toastError("Couldn't open search result", error));
       close();
     },
     [navigate, close],

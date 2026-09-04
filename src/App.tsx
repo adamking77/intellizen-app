@@ -16,17 +16,11 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 const HomeView = lazyNamed(() => import("@/views/Home"), "HomeView");
-const SearchView = lazyNamed(() => import("@/views/Search"), "SearchView");
-const ProjectsView = lazyNamed(() => import("@/views/Projects"), "ProjectsView");
 const GraphView = lazyNamed(() => import("@/views/Graph"), "GraphView");
 const CanvasView = lazyNamed(() => import("@/views/Canvas"), "CanvasView");
 const WorkflowsView = lazyNamed(() => import("@/views/Workflows"), "WorkflowsView");
 const DatabasesView = lazyNamed(() => import("@/views/Databases"), "DatabasesView");
 const DatabaseEditorView = lazyNamed(() => import("@/views/DatabaseEditor"), "DatabaseEditorView");
-const InvestigationView = lazyNamed(
-  () => import("@/views/Investigation"),
-  "InvestigationView",
-);
 const ReportsView = lazyNamed(() => import("@/views/Reports"), "ReportsView");
 const SettingsView = lazyNamed(() => import("@/views/Settings"), "SettingsView");
 const AgentsView = lazyNamed(() => import("@/views/Agents"), "AgentsView"); // wave-1 agents-page
@@ -73,23 +67,9 @@ function App() {
               </Suspense>
             }
           />
-          <Route
-            path="/search"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <SearchView />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/intel"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <ProjectsView />
-              </Suspense>
-            }
-          />
-          <Route path="/projects" element={<Navigate to="/intel" replace />} />
+          <Route path="/search" element={<Navigate to="/home" replace />} />
+          <Route path="/intel" element={<Navigate to="/home" replace />} />
+          <Route path="/projects" element={<Navigate to="/home" replace />} />
           <Route path="/agent-work" element={<Navigate to="/home" replace />} />
           <Route
             path="/workflows"
@@ -142,14 +122,7 @@ function App() {
               </Suspense>
             }
           />
-          <Route
-            path="/investigate"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <InvestigationView />
-              </Suspense>
-            }
-          />
+          <Route path="/investigate" element={<Navigate to="/home" replace />} />
           <Route
             path="/docs"
             element={

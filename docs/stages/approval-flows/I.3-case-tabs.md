@@ -1,7 +1,7 @@
 # I.3 approval flow — case tabs
 
-Status: **awaiting Adam's approval**. This describes the flow only; no I.3
-implementation is authorized by this document.
+Status: **approved 2026-09-04**. Adam approved the remaining Phase I plan and
+asked Keel to run it to completion.
 
 ## Decision
 

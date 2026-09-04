@@ -2204,7 +2204,7 @@ export function GraphView() {
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                     {caseScopeNeedsEvidencePile ? (
-                      <Button variant="primary" onClick={() => navigate("/intel")}>Open Intel</Button>
+                      <Button variant="primary" onClick={() => navigate("/home")}>Open projects</Button>
                     ) : (
                       <>
                         <Button variant="primary" onClick={startFirstNode}>Create first node</Button>
@@ -2595,7 +2595,7 @@ export function GraphView() {
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                     {caseScopeNeedsEvidencePile ? (
-                      <Button variant="primary" onClick={() => navigate("/intel")}>Open Intel</Button>
+                      <Button variant="primary" onClick={() => navigate("/home")}>Open projects</Button>
                     ) : (
                       <>
                         <Button variant="primary" onClick={startFirstNode}>Create first node</Button>

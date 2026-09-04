@@ -44,7 +44,7 @@ const catalog: WorkspaceDatabaseCatalogEntry[] = [
 describe("project room", () => {
   it("uses the material's prescribed views and remembers a valid choice", () => {
     expect(projectRoomViews(false)).toEqual(["brief", "table", "board", "canvas"]);
-    expect(projectRoomViews(true)).toEqual(["brief", "table", "board", "graph", "timeline", "session"]);
+    expect(projectRoomViews(true)).toEqual(["case", "evidence", "entities", "board", "graph", "timeline", "session"]);
     saveRoomView("case", "timeline");
     expect(loadRoomView("case", projectRoomViews(true))).toBe("timeline");
     expect(loadRoomView("case", projectRoomViews(false))).toBe("brief");
