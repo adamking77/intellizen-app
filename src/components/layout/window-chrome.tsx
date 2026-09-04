@@ -207,8 +207,8 @@ function beginWindowResize(event: React.PointerEvent, dir: ResizeDirection) {
 }
 
 /**
- * Frameless windows have no native resize borders — these invisible edge and
- * corner strips drive the manual resize.
+ * The transparent main window keeps native title-bar controls but still uses
+ * these invisible edge and corner strips for reliable pane-edge resizing.
  */
 export function WindowResizeHandles() {
   if (!isTauriRuntime) return null;

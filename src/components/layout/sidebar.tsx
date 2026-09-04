@@ -125,7 +125,9 @@ export function Sidebar() {
         collapsed ? "sidebar-collapsed" : "h-full",
       )}
     >
-      <div className="sidebar-lights shrink-0" data-tauri-drag-region />
+      {/* Empty by design: macOS owns the first 78px and paints its native
+          traffic lights here. The remainder stays draggable. */}
+      <div className="sidebar-titlebar-clearance shrink-0" data-tauri-drag-region aria-hidden />
       {/* Header */}
       <div
         onMouseDown={dragWindow}

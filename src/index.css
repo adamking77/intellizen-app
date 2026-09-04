@@ -454,12 +454,12 @@
   mask: url("/app-icon.svg") center / contain no-repeat;
 }
 
-.sidebar-lights {
+.sidebar-titlebar-clearance {
   height: 44px;
 }
 
-:root[data-panes="segmented"] .sidebar-lights,
-.browser-shell .sidebar-lights {
+:root[data-panes="segmented"] .sidebar-titlebar-clearance,
+.browser-shell .sidebar-titlebar-clearance {
   height: 8px;
 }
 

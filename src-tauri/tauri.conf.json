@@ -24,6 +24,7 @@
         "transparent": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
+        "decorations": true,
         "maximizable": true,
         "minimizable": true,
         "closable": true,
