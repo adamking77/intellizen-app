@@ -13,6 +13,7 @@ mod agent_models;
 mod engine;
 mod panel_window;
 mod proposals;
+mod project_files;
 mod supabase_proxy;
 mod voice;
 
@@ -530,6 +531,9 @@ pub fn run() {
             proposals::proposal_create,
             proposals::proposal_accept_hunk,
             proposals::proposal_reject_hunk,
+            project_files::list_project_files,
+            project_files::read_project_file,
+            project_files::read_project_image,
             supabase_proxy::supabase_proxy_request,
             voice::voice_prepare,
             voice::voice_transcribe,

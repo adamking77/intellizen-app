@@ -6,6 +6,7 @@ import { DOCUMENTS_DB_FIELDS } from "@/lib/documents";
 import type { ProjectLinkedRecord } from "@/lib/project-room";
 import type { Investigation, WorkspaceDatabaseRecord } from "@/lib/types";
 import { runViewTransition } from "@/lib/view-transitions";
+import type { ProjectFile } from "@/services/project-files";
 
 const CASE_STAGES = ["Brief", "Collect", "Analyse", "Report", "Close"];
 
@@ -96,13 +97,17 @@ function BriefLine({ term, children }: { term: string; children: React.ReactNode
 
 export function ProjectEvidenceTable({
   files,
+  folderFiles,
   linkedRecords,
   onOpenDocument,
+  onOpenFile,
   onOpenRecord,
 }: {
   files: WorkspaceDatabaseRecord[];
+  folderFiles?: ProjectFile[];
   linkedRecords: ProjectLinkedRecord[];
   onOpenDocument: (record: WorkspaceDatabaseRecord) => void;
+  onOpenFile?: (file: ProjectFile) => void;
   onOpenRecord: (record: ProjectLinkedRecord) => void;
 }) {
   return (
@@ -128,6 +133,14 @@ export function ProjectEvidenceTable({
             <span role="cell">—</span>
             <span role="cell">{record.status ? <Pill>{record.status}</Pill> : "—"}</span>
             <span role="cell" className="text-[var(--t-meta)] text-[var(--text-muted)]">{record.databaseName}</span>
+          </button>
+        ))}
+        {(folderFiles ?? []).map((file) => (
+          <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenFile?.(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{file.title}</span>
+            <span role="cell" className="truncate font-mono text-[11px] text-[var(--text-muted)]">{file.folder.split("/").pop() || "folder"}</span>
+            <span role="cell"><Pill>file</Pill></span>
+            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{file.updatedAt ? date(new Date(file.updatedAt).toISOString()) : "—"}</span>
           </button>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ProjectBoard } from "@/components/project/project-board";
+import { ProjectFileView } from "@/components/project/project-file-view";
 import { ProjectSessions } from "@/components/project/project-sessions";
 import { DrawerActions, ProjectBrief, ProjectEvidenceTable, ProjectTimeline } from "@/components/project/project-views";
 import { ProjectCanvases, ProjectGraph } from "@/components/project/project-visuals";
@@ -23,10 +24,12 @@ import { linkedWorkspaceRecords, loadRoomView, projectRoomViews, saveRoomView, t
 import { toast, toastError } from "@/lib/toast";
 import type { WorkspaceDatabaseRecord } from "@/lib/types";
 import { useHierarchy } from "@/lib/use-hierarchy";
+import { listProjectFiles, type ProjectFile } from "@/services/project-files";
 import { CENTER_DOCS_QUERY_KEY } from "@/views/Unit";
 
 type EvidenceSelection =
   | { kind: "document"; record: WorkspaceDatabaseRecord }
+  | { kind: "file"; file: ProjectFile }
   | { kind: "record"; record: ProjectLinkedRecord };
 
 function value(record: WorkspaceDatabaseRecord, field: string) {
@@ -72,6 +75,11 @@ export function ProjectView() {
 
   const docs = useQuery({ queryKey: CENTER_DOCS_QUERY_KEY, queryFn: () => getDocumentsWorkspaceBundle() });
   const files = useMemo(() => projectDocuments(docs.data?.records ?? [], id), [docs.data?.records, id]);
+  const folderFiles = useQuery({
+    queryKey: ["project-folder-files", id, node?.folders],
+    queryFn: () => listProjectFiles(node!.folders),
+    enabled: Boolean(node?.folders.length),
+  });
   const catalog = useQuery({ queryKey: ["workspace-database-catalog", "project-room"], queryFn: () => listWorkspaceDatabaseCatalog() });
   const linkedRecords = useMemo(() => linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId), [catalog.data, id, legacyProjectId]);
   const canvases = useQuery({ queryKey: ["canvas-documents"], queryFn: listCanvasDocuments });
@@ -114,7 +122,7 @@ export function ProjectView() {
   });
 
   const openSelection = () => {
-    if (!selected) return;
+    if (!selected || selected.kind === "file") return;
     if (selected.kind === "document") navigate(`/docs?record=${selected.record.id}&project=${id}`);
     else navigate(`/databases/${selected.record.databaseId}?record=${selected.record.recordId}`);
   };
@@ -143,8 +151,8 @@ export function ProjectView() {
           <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.data?.length ?? 0} investigation={investigation} />
         </QueryState>
       ) : view === "table" ? (
-        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading} error={docs.error ?? catalog.error} isEmpty={files.length + linkedRecords.length === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Documents and database records linked to this project appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch()])}>
-          <ProjectEvidenceTable files={files} linkedRecords={linkedRecords} onOpenDocument={(record) => setSelected({ kind: "document", record })} onOpenRecord={(record) => setSelected({ kind: "record", record })} />
+        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Workspace documents, linked records, and files in this project's folder appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch()])}>
+          <ProjectEvidenceTable files={files} folderFiles={folderFiles.data} linkedRecords={linkedRecords} onOpenDocument={(record) => setSelected({ kind: "document", record })} onOpenFile={(file) => setSelected({ kind: "file", file })} onOpenRecord={(record) => setSelected({ kind: "record", record })} />
         </QueryState>
       ) : view === "board" ? (
         <ProjectBoard folders={node.folders} />
@@ -161,9 +169,10 @@ export function ProjectView() {
       )}
       </div>
 
-      <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.kind === "document" ? documentTitle(selected.record) : selected?.record.title ?? "Evidence details"}>
+      <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.kind === "document" ? documentTitle(selected.record) : selected?.kind === "file" ? selected.file.title : selected?.record.title ?? "Evidence details"}>
         {selected ? (
           <div className="grid gap-5 p-4">
+            {selected.kind === "file" ? <ProjectFileView file={selected.file} folders={node?.folders ?? []} /> : <>
             <div>
               <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
               <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
@@ -175,6 +184,7 @@ export function ProjectView() {
               </>
             ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
             <DrawerActions onOpen={openSelection} />
+            </>}
           </div>
         ) : null}
       </Drawer>

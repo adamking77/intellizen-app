@@ -39,4 +39,17 @@ describe("project room views", () => {
     expect(open).toHaveBeenCalledWith(file);
     await act(async () => root.unmount());
   });
+
+  it("lists a project folder file beside workspace documents", async () => {
+    const openFile = vi.fn();
+    const folderFile = { id: "/work/main.ts", title: "main.ts", path: "/work/main.ts", folder: "/work", updatedAt: 1_788_000_000_000 };
+    const host = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(host);
+    await act(async () => root.render(<ProjectEvidenceTable files={[file]} folderFiles={[folderFile]} linkedRecords={[]} onOpenDocument={vi.fn()} onOpenFile={openFile} onOpenRecord={vi.fn()} />));
+    const row = [...host.querySelectorAll<HTMLButtonElement>('button[role="row"]')].find((candidate) => candidate.textContent?.includes("main.ts"))!;
+    expect(row.textContent).toContain("workfile");
+    await act(async () => row.click());
+    expect(openFile).toHaveBeenCalledWith(folderFile);
+    await act(async () => root.unmount());
+  });
 });
