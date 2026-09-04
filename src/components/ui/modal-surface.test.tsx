@@ -28,7 +28,7 @@ describe("Hermes modal surface", () => {
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.className).toContain("modal-surface");
     expect(dialog?.className).toContain("max-h-[86dvh]");
-    expect(document.querySelector(".modal-backdrop")?.className).toContain("modal-backdrop");
+    expect(dialog?.tagName).toBe("DIALOG");
 
     await act(async () => root.unmount());
   });
@@ -51,7 +51,7 @@ describe("Hermes modal surface", () => {
     });
 
     expect(document.querySelector('[role="alertdialog"]')?.className).toContain("modal-surface");
-    expect(document.querySelector(".modal-backdrop")?.className).toContain("modal-backdrop");
+    expect(document.querySelector('[role="alertdialog"]')?.tagName).toBe("DIALOG");
 
     await act(async () => root.unmount());
   });

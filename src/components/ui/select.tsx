@@ -5,16 +5,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const selectVariants = cva(
-  "block w-full appearance-none rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--input)] " +
+  "block h-[var(--h-ctl)] w-full appearance-none rounded-[var(--r-ctl)] border border-transparent bg-[var(--input)] " +
     "font-ui text-[var(--text)] transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)] " +
-    "focus:outline-none   " +
-    "disabled:cursor-not-allowed disabled:opacity-50",
+    "focus-visible:border-[var(--line-strong)] disabled:cursor-not-allowed disabled:opacity-[.45]",
   {
     variants: {
       controlSize: {
-        xs: "h-7 px-2.5 pr-7 text-[var(--t-meta)]",
-        sm: "h-8 px-2.5 pr-7 text-[var(--t-meta)]",
-        default: "h-9 px-3 pr-8 text-[var(--t-ui)]",
+        xs: "px-2.5 pr-7 text-[var(--t-meta)]",
+        sm: "px-2.5 pr-7 text-[var(--t-meta)]",
+        default: "px-3 pr-8 text-[var(--t-ui)]",
       },
     },
     defaultVariants: {

@@ -4907,6 +4907,49 @@ textarea:focus-visible,
   color: var(--text);
 }
 
+.control-running-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  animation: control-running 900ms ease-in-out infinite alternate;
+}
+
+dialog.app-dialog::backdrop {
+  background: color-mix(in srgb, var(--crust) 76%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+@keyframes control-running {
+  from { opacity: 0.35; transform: translateX(-1px); }
+  to { opacity: 1; transform: translateX(1px); }
+}
+
+.kit-drawer {
+  animation: drawer-enter var(--t-slow) var(--ease) both;
+}
+
+@keyframes drawer-enter {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.skeleton-line {
+  animation: skeleton-sheen 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes skeleton-sheen {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-running-dot,
+  .kit-drawer,
+  .skeleton-line { animation: none; }
+}
+
 .nav-node:hover {
   background: var(--hover);
   color: var(--text);

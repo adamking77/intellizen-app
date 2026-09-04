@@ -52,9 +52,9 @@ function audit() {
   const debt = [
     ["ring utility", /\bring-/g, 6],
     ["custom outline utility", /outline-(?!none)/g, 2],
-    ["dashed border", /border-dashed/g, 14],
-    ["Loader2", /\bLoader2\b/g, 38],
-    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, 49],
+    ["dashed border", /border-dashed/g, 12],
+    ["Loader2", /\bLoader2\b/g, 36],
+    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, 25],
   ];
   for (const [name, pattern, ceiling] of debt) {
     const count = occurrences(pattern, codeFiles);

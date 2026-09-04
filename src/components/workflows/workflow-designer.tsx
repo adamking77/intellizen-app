@@ -3,7 +3,7 @@ import { MessageSquareText, Plus, Save, ShieldCheck, X } from "lucide-react";
 
 import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Pill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
 import { publishAgentPanelRoleMessage } from "@/lib/agent-panel-roles";
@@ -256,9 +256,9 @@ export function WorkflowDesigner({
             {definition.schema} · editing v{definition.version}
           </p>
         </div>
-        <Badge variant={validation.valid ? "success" : "warning"}>
+        <Pill variant={validation.valid ? "verified" : "waiting"}>
           {validation.valid ? "Valid" : `${validation.errors.length} issues`}
-        </Badge>
+        </Pill>
         <Button size="sm" variant="ghost" onClick={runDryRun}>
           Validate / dry-run
         </Button>
@@ -598,11 +598,11 @@ export function WorkflowDesigner({
         {pendingSave ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">v{pendingSave.definition.version}</Badge>
-              <Badge variant={pendingSave.diff.authorityExpanded ? "warning" : "secondary"}>
+              <Pill variant="neutral">v{pendingSave.definition.version}</Pill>
+              <Pill variant={pendingSave.diff.authorityExpanded ? "waiting" : "neutral"}>
                 {pendingSave.diff.authorityExpanded ? "Authority expands" : "No authority expansion"}
-              </Badge>
-              {pendingSave.diff.addedApprovalGates.map((gate) => <Badge key={gate} variant="info">+ {gate}</Badge>)}
+              </Pill>
+              {pendingSave.diff.addedApprovalGates.map((gate) => <Pill key={gate} variant="runtime">+ {gate}</Pill>)}
             </div>
             <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[var(--crust)] p-3 font-mono text-[var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
               {JSON.stringify(pendingSave.definition, null, 2)}

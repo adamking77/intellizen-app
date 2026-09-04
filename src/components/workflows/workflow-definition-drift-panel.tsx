@@ -1,6 +1,6 @@
 import { AlertTriangle, CopyPlus, Route, ShieldCheck, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { Pill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import type {
   WorkflowDefinitionDrift,
@@ -35,9 +35,9 @@ export function WorkflowDefinitionDriftPanel({
             implicitly.
           </p>
         </div>
-        <Badge variant="warning">
+        <Pill variant="waiting">
           {drift.runHash.slice(0, 8)} → {drift.currentHash.slice(0, 8)}
-        </Badge>
+        </Pill>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button

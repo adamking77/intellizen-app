@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, Loader2, Play, Trash2 } from "lucide-react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Pill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import type { WorkflowTemplateItem } from "@/lib/types";
 import type { WorkflowDefinitionV1, WorkflowStep } from "@/lib/workflow-schema";
@@ -272,7 +272,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">{job.scheduleDisplay}</span>
-                      <Badge variant={job.lastStatus === "error" ? "destructive" : "secondary"}>{job.state}</Badge>
+                      <Pill variant={job.lastStatus === "error" ? "failure" : "neutral"}>{job.state}</Pill>
                     </div>
                     <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
                   </div>

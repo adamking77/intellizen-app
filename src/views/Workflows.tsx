@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
+import { Pill } from "@/components/ui/status-pill";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows } from "@/lib/data";
@@ -120,11 +120,11 @@ function workflowVerificationLabel(
 
 function catalogStateVariant(
   state: WorkflowCatalogState,
-): "success" | "secondary" | "warning" | "destructive" | "info" {
-  if (state === "runnable") return "success";
-  if (state === "blocked") return "destructive";
-  if (state === "draft" || state === "needs-review") return "warning";
-  return "info";
+): "verified" | "neutral" | "waiting" | "failure" | "runtime" {
+  if (state === "runnable") return "verified";
+  if (state === "blocked") return "failure";
+  if (state === "draft" || state === "needs-review") return "waiting";
+  return "runtime";
 }
 
 function catalogStateLabel(state: WorkflowCatalogState) {
@@ -168,14 +168,14 @@ function WorkflowCard({
           <p className="line-clamp-2 font-ui text-[var(--t-ui)] font-semibold leading-snug text-[var(--text)]">{workflow.name}</p>
           <p className="mt-1 truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{workflow.workflow_id}</p>
         </div>
-        <Badge variant={catalogStateVariant(item.state)} className="shrink-0">
+        <Pill variant={catalogStateVariant(item.state)} className="shrink-0">
           {catalogStateLabel(item.state)}
-        </Badge>
+        </Pill>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {workflow.owner_role ? <Badge variant="info">{workflow.owner_role}</Badge> : null}
-        {workflow.default_actor ? <Badge variant="outline">{workflow.default_actor}</Badge> : null}
-        {workflow.entity ? <Badge variant="neutral">{workflow.entity}</Badge> : null}
+        {workflow.owner_role ? <Pill variant="runtime">{workflow.owner_role}</Pill> : null}
+        {workflow.default_actor ? <Pill variant="neutral">{workflow.default_actor}</Pill> : null}
+        {workflow.entity ? <Pill variant="neutral">{workflow.entity}</Pill> : null}
       </div>
       {item.blockers[0] ? (
         <p className="mt-3 line-clamp-2 font-ui text-[var(--t-count)] leading-snug text-[var(--danger)]">
@@ -597,11 +597,11 @@ export function WorkflowsView() {
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-5">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge variant={catalogStateVariant(selectedItem?.state ?? "sop-only")}>
+                      <Pill variant={catalogStateVariant(selectedItem?.state ?? "sop-only")}>
                         {catalogStateLabel(selectedItem?.state ?? "sop-only")}
-                      </Badge>
-                      {selected.entity ? <Badge variant="neutral">{selected.entity}</Badge> : null}
-                      <Badge variant="outline">{formatElapsed(selected.updated_at)}</Badge>
+                      </Pill>
+                      {selected.entity ? <Pill variant="neutral">{selected.entity}</Pill> : null}
+                      <Pill variant="neutral">{formatElapsed(selected.updated_at)}</Pill>
                     </div>
                     <h1 className="t-title leading-tight text-[var(--text)]">{selected.name}</h1>
                     <p className="mt-2 font-mono text-[var(--t-section)] text-[var(--overlay-1)]">{selected.workflow_id}</p>
@@ -717,24 +717,24 @@ export function WorkflowsView() {
                   </div>
                   {selectedRun ? (
                     <div className="mb-2 flex flex-wrap gap-1.5">
-                      <Badge variant="info">
+                      <Pill variant="runtime">
                         Execution · {selectedRun.status ?? "Unknown"}
-                      </Badge>
-                      <Badge variant={selectedRun.receipt ? "success" : "secondary"}>
+                      </Pill>
+                      <Pill variant={selectedRun.receipt ? "verified" : "neutral"}>
                         {selectedRun.receipt ? "Receipt recorded" : "Receipt pending"}
-                      </Badge>
-                      <Badge variant={hasRecordedValue(selectedRun.approvals) ? "warning" : "secondary"}>
+                      </Pill>
+                      <Pill variant={hasRecordedValue(selectedRun.approvals) ? "waiting" : "neutral"}>
                         {workflowApprovalLabel(selectedRun.approvals)}
-                      </Badge>
-                      <Badge variant={hasRecordedValue(selectedRun.step_states) ? "success" : "secondary"}>
+                      </Pill>
+                      <Pill variant={hasRecordedValue(selectedRun.step_states) ? "verified" : "neutral"}>
                         {workflowVerificationLabel(
                           liveRunDefinition,
                           selectedRun.step_states,
                         )}
-                      </Badge>
-                      <Badge variant={selectedRun.completed_at ? "success" : "secondary"}>
+                      </Pill>
+                      <Pill variant={selectedRun.completed_at ? "verified" : "neutral"}>
                         {selectedRun.completed_at ? "Completion recorded" : "Not completed"}
-                      </Badge>
+                      </Pill>
                     </div>
                   ) : null}
                   <WorkflowTopology

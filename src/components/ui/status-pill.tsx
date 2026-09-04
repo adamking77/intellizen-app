@@ -1,48 +1,45 @@
 import { cn } from "@/lib/utils";
 
+export type PillVariant = "neutral" | "waiting" | "verified" | "failure" | "runtime";
 export type StatusPillVariant = "active" | "paused" | "error" | "stale" | "new";
 
-interface StatusPillProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant: StatusPillVariant;
+const pillStyles: Record<PillVariant, string> = {
+  neutral: "bg-[var(--raised)] text-[var(--text-muted)]",
+  waiting: "bg-[color-mix(in_srgb,var(--wait)_18%,transparent)] text-[var(--wait)]",
+  verified: "bg-[color-mix(in_srgb,var(--ok)_18%,transparent)] text-[var(--ok)]",
+  failure: "bg-[color-mix(in_srgb,var(--bad)_18%,transparent)] text-[var(--bad)]",
+  runtime: "bg-transparent text-[var(--runtime)]",
+};
+
+export interface PillProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: PillVariant;
 }
 
-const styles: Record<StatusPillVariant, string> = {
-  active:
-    "bg-[color-mix(in_srgb,var(--success)_15%,transparent)] text-[var(--success)]",
-  paused:
-    "bg-[var(--mantle)] text-[var(--overlay-1)]",
-  error:
-    "bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] text-[var(--danger)]",
-  stale:
-    "bg-[color-mix(in_srgb,var(--warning)_15%,transparent)] text-[var(--warning)]",
-  new:
-    "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]",
-};
-
-const labels: Record<StatusPillVariant, string> = {
-  active: "ACTIVE",
-  paused: "PAUSED",
-  error: "ERROR",
-  stale: "STALE",
-  new: "NEW",
-};
-
-export function StatusPill({
-  variant,
-  className,
-  children,
-  ...props
-}: StatusPillProps) {
+export function Pill({ variant = "neutral", className, ...props }: PillProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[var(--r-pill)] px-2 py-0.5 font-mono text-[var(--t-section)] leading-none",
-        styles[variant],
+        "inline-flex min-h-4 items-center rounded-[var(--r-pill)] px-2 py-px font-ui text-[11px] leading-4",
+        pillStyles[variant],
         className,
       )}
       {...props}
-    >
-      {children ?? labels[variant]}
-    </span>
+    />
   );
+}
+
+const legacy: Record<StatusPillVariant, { variant: PillVariant; label: string }> = {
+  active: { variant: "verified", label: "ACTIVE" },
+  paused: { variant: "neutral", label: "PAUSED" },
+  error: { variant: "failure", label: "ERROR" },
+  stale: { variant: "waiting", label: "STALE" },
+  new: { variant: "runtime", label: "NEW" },
+};
+
+interface StatusPillProps extends Omit<PillProps, "variant"> {
+  variant: StatusPillVariant;
+}
+
+export function StatusPill({ variant, children, ...props }: StatusPillProps) {
+  return <Pill variant={legacy[variant].variant} {...props}>{children ?? legacy[variant].label}</Pill>;
 }

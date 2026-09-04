@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function errorMessage(error: unknown): string {
@@ -50,12 +51,11 @@ export function QueryState({
       <div
         role="alert"
         className={cn(
-          "rounded-[var(--r-plane)] border border-[color-mix(in_srgb,var(--danger)_42%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-5 py-4",
+          "py-3 text-left text-[var(--bad)]",
           className,
         )}
       >
         <div className="flex items-start gap-3">
-          <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" />
           <div className="min-w-0 flex-1">
             <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{errorTitle}</p>
             <p className="mt-1 break-words font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
@@ -77,12 +77,12 @@ export function QueryState({
     return loadingFallback ?? (
       <div
         className={cn(
-          "flex min-h-28 items-center justify-center gap-2 rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8",
+          "min-h-28 px-5 py-8",
           className,
         )}
       >
-        <Loader2 aria-hidden className="h-4 w-4 text-[var(--accent)]" />
-        <span className="font-ui text-[var(--t-meta)] text-[var(--subtext-0)]">{loadingLabel}</span>
+        <span className="sr-only">{loadingLabel}</span>
+        <Skeleton />
       </div>
     );
   }
@@ -91,17 +91,17 @@ export function QueryState({
     return (
       <div
         className={cn(
-          "rounded-[var(--r-plane)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-5 py-8 text-center",
+          "px-5 py-8 text-left",
           className,
         )}
       >
         <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{emptyTitle}</p>
         {emptyDescription ? (
-          <p className="mx-auto mt-1 max-w-[440px] font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
+          <p className="mt-1 max-w-[440px] font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
             {emptyDescription}
           </p>
         ) : null}
-        {emptyAction ? <div className="mt-3 flex justify-center">{emptyAction}</div> : null}
+        {emptyAction ? <div className="mt-3">{emptyAction}</div> : null}
       </div>
     );
   }

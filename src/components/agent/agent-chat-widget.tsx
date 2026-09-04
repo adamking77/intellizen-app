@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { AgentChartAdapter } from "@/components/agent/agent-chart-adapter";
 import { SandboxedGenui } from "@/components/agent/sandboxed-genui";
 import { MetricCell } from "@/components/ui/metric-cell";
-import { Badge } from "@/components/ui/badge";
+import { Pill } from "@/components/ui/status-pill";
 
 import type { AgentChatWidget as AgentChatWidgetModel } from "@/lib/agent-widgets";
 import { listHomePinsFromWorkspace, saveHomePinsToWorkspace } from "@/lib/data";
@@ -112,7 +112,7 @@ function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: 
                 className="flex items-center justify-between gap-2 px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-wash)]"
               >
                 <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{link.label}</span>
-                {link.status ? <Badge variant="outline">{link.status}</Badge> : null}
+                {link.status ? <Pill variant="neutral">{link.status}</Pill> : null}
               </Link>
             </li>
           ))}

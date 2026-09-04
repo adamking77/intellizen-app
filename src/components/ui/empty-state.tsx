@@ -1,25 +1,32 @@
-import { Button } from "@/components/ui/button";
+import { Control } from "@/components/ui/control";
+import { cn } from "@/lib/utils";
 
-interface EmptyStateProps {
+interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   description?: string;
   action?: { label: string; onClick: () => void };
 }
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({ title, description, action, className, ...props }: EmptyStateProps) {
   return (
-    <div className="flex h-full items-center justify-center p-6">
-      <div className="max-w-md rounded-[var(--r-plane)] border border-dashed border-[var(--border)] bg-[var(--mantle)] px-6 py-10 text-center">
-        <div className="text-[var(--t-title)] font-semibold text-[var(--text)]">{title}</div>
-        {description ? (
-          <div className="mt-2 text-[var(--t-ui)] leading-6 text-[var(--subtext-0)]">{description}</div>
-        ) : null}
-        {action ? (
-          <div className="mt-4 flex justify-center">
-            <Button onClick={action.onClick}>{action.label}</Button>
-          </div>
-        ) : null}
-      </div>
+    <div className={cn("max-w-md py-6 text-left", className)} {...props}>
+      <div className="text-[var(--t-ui)] font-medium text-[var(--text)]">{title}</div>
+      {description ? <div className="mt-1 text-[var(--t-meta)] leading-5 text-[var(--text-muted)]">{description}</div> : null}
+      {action ? <Control className="mt-3" variant="primary" onClick={action.onClick}>{action.label}</Control> : null}
+    </div>
+  );
+}
+
+interface FailureStateProps extends React.HTMLAttributes<HTMLDivElement> {
+  message: string;
+  action?: { label: string; onClick: () => void };
+}
+
+export function FailureState({ message, action, className, ...props }: FailureStateProps) {
+  return (
+    <div role="alert" className={cn("py-3 text-left text-[var(--t-meta)] text-[var(--bad)]", className)} {...props}>
+      <span>{message}</span>
+      {action ? <Control className="ml-2" size="sm" variant="danger" onClick={action.onClick}>{action.label}</Control> : null}
     </div>
   );
 }
