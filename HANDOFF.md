@@ -1,15 +1,19 @@
 # Handoff — 2026-09-04
 
 `v3/phase-0` contains the completed, locally committed engineering work for
-Round 2 phases F, G, H, and J; approved I.7; and Design System V3 K.1–K.13.
+Round 2 phases F–J, approved I.7, and Design System V3 K.1–K.13.
+Phase I.1–I.6 were approved and implemented in separate green commits through
+`f94bbc4`.
 Nothing has been pushed, deployed, published, or migrated.
 
 ## Current proof
 
-- `pnpm test`: 501 passed, 1 skipped.
-- `pnpm smoke`: passed, including the installed plugin fixture and 53 Rust
+- `pnpm test`: 522 passed, 1 skipped.
+- `pnpm smoke`: passed with inert publish-safe environment values, including
+  the loader-ignored plugin fixture proof and 53 Rust
   tests (3 environment-gated tests ignored).
-- Gateway parity: 68 checks passed at `src/engine/HERMES_PIN`.
+- Gateway parity includes the exact hosted-room `groups.*` methods at
+  `src/engine/HERMES_PIN`.
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`:
   passed.
 - `pnpm --dir mcp-server test`: 25 passed; MCP build passed.
@@ -20,9 +24,9 @@ Nothing has been pushed, deployed, published, or migrated.
 ## Continue from here
 
 Read `ROADMAP.md`, `docs/stages/round-2.md`, and
-`docs/stages/design-system-v3.md`. Adam's native walkthrough is next. Round 2
-I.1–I.6 remain individually approval-gated and must not start without his
-explicit per-stage approval. That includes I.5's Home fixture decision and
-I.4's real agent-written plugin proof.
+`docs/stages/design-system-v3.md`. The authorized local implementation is
+complete. A future native walkthrough must use the built app deliberately; do
+not launch it automatically. A real agent-written plugin remains separately
+approval-gated at installation time.
 
 Preserve the current untracked screenshot and Playwright scratch directories.

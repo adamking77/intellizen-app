@@ -13,7 +13,8 @@ The center follows the selected material:
 
 | Selection | Center surface |
 |---|---|
-| Department or workspace | Unit page with its projects |
+| Department | Unit page with its workspaces and projects |
+| Workspace | Unit page with Projects and an always-available Dashboard |
 | Project | Project room with Brief, Table, Board, Graph, Timeline, and Session views as applicable |
 | Session | The owning project room's transcript |
 | Document | Docs page |
@@ -34,7 +35,9 @@ while their approved migration stage is pending, but they are not Places.
   WebSocket.
 - Installed CLI agents use ACP over stdio. Saved model, identity, permission,
   context, and the IntelliZen MCP server are passed when a session starts.
-- Rooms use the vendored round engine while ACP seating still requires it.
+- Hermes-only rooms use the pinned gateway's durable `groups.*` log. The
+  vendored round engine remains only for rooms that include ACP because the
+  pinned Hermes roster contract has no ACP target kind.
 - Agents mutate workspace state only through `mcp-server/`, with explicit
   confirmation for writes and `workspace.work_events` receipts.
 - Never edit Hermes profile/session files directly or scrape a dashboard token.

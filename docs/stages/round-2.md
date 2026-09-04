@@ -1,5 +1,11 @@
 # Round 2 — closing the gap between the roadmap and the build
 
+Status: **authorized implementation complete locally through `f94bbc4` on
+2026-09-04.** Final code and release verification is recorded in
+`docs/verification/round-2-completion.md`. No production app was launched for
+the final pass, per Adam's explicit instruction, so this status does not claim
+a new native acceptance walk or release artifact.
+
 Written 2026-09-04 from a six-reviewer audit of `v3/phase-0` at `52b6c8c`
 against `ROADMAP.md`, the hermes-app donor, and the Hermes source at the pin.
 Plain language. Read `ROADMAP.md` first; its rules still bind. This file
@@ -107,19 +113,19 @@ H.3 **Retire the legacy tools.** The twelve monitor and investigation
 Each stage begins with a one-page flow shown to Adam. Nothing is built
 until he approves it.
 
-I.1 **The unit page.** **Approved 2026-09-04, workspace-first.** A workspace
+I.1 **The unit page.** **Approved and implemented 2026-09-04, workspace-first.** A workspace
     always offers Projects and Dashboard. Projects shows who holds each, what
     is blocked, and what waits on you from the project's board and records.
     Dashboard remains available when blank and pins existing database views
     through Add widget, using the Home grid without sharing Home's pins.
     *Open it: click a workspace, switch to Dashboard, and add a widget.*
     Approval flow: `docs/stages/approval-flows/I.1-unit-page.md`.
-I.2 **The session page.** Selecting a session in the tree opens the large
+I.2 **The session page.** **Approved and implemented 2026-09-04.** Selecting a session in the tree opens the large
     read-only transcript with receipts (files written, cards moved) derived
     from tool events and `work_events`, not the project room with a side
     list. *Open it: click a session, read it, see what it touched.*
     Approval flow: `docs/stages/approval-flows/I.2-session-page.md`.
-I.3 **Intel becomes case tabs.** **Approved 2026-09-04.** Case, Evidence and Entities tabs on a case
+I.3 **Intel becomes case tabs.** **Approved and implemented 2026-09-04.** Case, Evidence and Entities tabs on a case
     project, drawing on the existing `Investigation.tsx` and `Projects.tsx`
     parts. Then `/intel`, `/investigate` and `/search` stop being
     destinations: palette entries, Graph links and the Case tab hand-off
@@ -127,13 +133,13 @@ I.3 **Intel becomes case tabs.** **Approved 2026-09-04.** Case, Evidence and Ent
     *Open it: open a client case from the tree, work the case without
     leaving the project room.*
     Approval flow: `docs/stages/approval-flows/I.3-case-tabs.md`.
-I.4 **D.14 for real.** **Approved 2026-09-04 for implementation only.** An agent asks to install a plugin; the request is a
+I.4 **D.14 for real.** **Approved and implemented 2026-09-04 for implementation only.** An agent asks to install a plugin; the request is a
     workspace record; approving the record installs it; the plugin loads
     with attribution ("written by …"). Add enable/disable and per-plugin
     capability grants from the donor's SPEC-v9. *Open it: ask an agent for
     a widget, approve the record, see the widget.*
     Approval flow: `docs/stages/approval-flows/I.4-plugin-approval.md`.
-I.5 **Home without fixtures.** **Choice A approved 2026-09-04.** Remove the rotation banner and the presets
+I.5 **Home without fixtures.** **Choice A approved and implemented 2026-09-04.** Remove the rotation banner and the presets
     named after retired surfaces (Daily Brief, Agent Work, Roles), or move
     the banner to a plugin. Adam decides which.
     Approval flow: `docs/stages/approval-flows/I.5-home-without-fixtures.md`.
@@ -194,8 +200,8 @@ These add to Phase F and Phase I:
 
 F.7 **Control kit.** Full brief and implementation record: `docs/stages/design-system-v3.md` §6, K.1–K.8 (K.8 records this item and F.8). One control primitive in `ui/` (default, selected,
     primary, quiet, field), radius tokens collapsed to plane, control, pill,
-    the segmented control, the drawer component. Base UI and Mantine
-    dependencies removed. **Selection intensity is a user setting:** a
+    the segmented control, the drawer component. Base UI removed; Mantine is
+    retained only as required peers of `@blocknote/mantine`. **Selection intensity is a user setting:** a
     slider on Settings ▸ Appearance beside the accent picker, driving the
     selected plane's strength (and how much of the accent it carries) as one
     token every surface reads. Default tuned with Adam.

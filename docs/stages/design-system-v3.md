@@ -536,8 +536,8 @@ K.6 **Workflows** (about one and a half days). `src/views/Workflows.tsx`,
 K.7 **Sweep** (about one day). Home widgets, Settings, Search, Graph and
     Canvas: kit adoption and the eight consistencies. Verify Databases but do
     not migrate or restyle them; their production views and record panel are
-    preserved as stated above. Rotation banner and the retired-surface presets
-    on Home stay until Adam decides I.5 in `round-2.md`.
+    preserved as stated above. I.5 removed the rotation banner and the
+    retired-surface presets after Adam chose removal; existing pins remain.
 K.8 **Record** (about two hours). Amend `DESIGN.md` in place: Shapes (two
     radii and a pill), Components (the twelve), Named Rules (selection in
     lightness, borders mean two things, the slider), Do's and Don'ts.
@@ -604,11 +604,11 @@ ends, build a two-step workflow by hand, then have an agent add a third step.
 - No change to flavors, accents, fonts, type scale or the seam.
 - No docked HUD.
 
-## 10. Waiting on Adam
+## 10. Deferred after implementation
 
-- I.5 in `round-2.md`: the rotation banner and the retired-surface widget
-  presets on Home.
+- I.5 is settled: Adam chose removal of the rotation banner and retired
+  presets; existing pins remain.
 - The three non-case Brief templates (venture, publication, relationship)
   after he has seen the client-case Brief in the built app.
-- The default slider value, after he has moved it in the built app.
-- The default light and dark flavors for Follow system, after he has used it.
+- The shipped slider and Follow-system defaults remain user-tunable; changing
+  those defaults is a later preference decision, not an implementation gap.

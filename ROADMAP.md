@@ -49,8 +49,9 @@ is amended to match, in place.
 | Selected | Center shows |
 |---|---|
 | Nothing | Home: an empty widget board that Adam and his agents fill. Nothing is hard-coded on it. |
-| Department or workspace | Its projects as rows saying who holds each, what is blocked, what waits on you; its own widget board, also empty to start. |
-| Project | The project room. Tabs: Files (the writing surface), Board (its cards), Data (records linked to it), Sessions (history), Canvas and Graph when it has them. |
+| Department | Its workspaces and projects as rows saying who holds each, what is blocked, and what waits on you. |
+| Workspace | Projects plus a Dashboard that exists even when blank and pins existing database views. |
+| Project | The project room. Brief, Table, Board, Graph, Timeline, and Session views appear as applicable; client cases also carry Case, Evidence, and Entities tabs. |
 | Session | The transcript, large and read-only, with receipts: files written, cards moved. Live talk stays in the panel or HUD. |
 | Databases, Canvas, Graph, Workflows, Agents, Settings | Their own pages, as today. |
 
@@ -99,7 +100,7 @@ Settled in the stages that needed them, 2026-09-04.
 | Decision | Stage | Decision |
 |---|---|---|
 | How an agent asks permission | B.5, F.5 | IntelliZen renders the gateway or adapter's real choices as a decision card in the conversation that raised them. There is no second terminal prompt and no global queue. |
-| Room continuity | B.7, G.3 | Gateway events drive the live room. On reconnect, `session.events.since` replays the gap from the last sequence watermark; there is no `session.resume` polling loop. |
+| Room continuity | B.7, G.3, I.6 | Hermes-only rooms rehydrate their typed durable log through `groups.log`; mixed ACP rooms keep the bounded local log and reopen member sessions as needed. Panel sessions replay reconnect gaps through `session.events.since`; there is no `session.resume` polling loop. |
 | Plugin entry format | D.12 | A Hermes plugin may add `intellizen/plugin.js` beside `plugin.yaml`. It default-exports an object with `register(ctx)` and contributes through the typed IntelliZen plugin contract. |
 
 Settled by Adam, 2026-09-01: **no hard-coded Home widgets** (Home ships empty;
@@ -139,7 +140,7 @@ what is in the wrong place. Adam does not need to name components.
 |---|---|---|
 | Agent sessions, streaming replies, tool calls, approvals, profiles, memory, skills, config | **Hermes gateway**: JSON-RPC over WebSocket at `/api/ws` from `hermes serve` | Same door Hermes Desktop uses. Typed TypeScript client is MIT; we copy `json-rpc-gateway.ts` and `websocket-url.ts` into `src/engine/`. |
 | Cron, kanban board and dispatch, plugin routes | **Hermes REST** under `/api/cron`, `/api/plugins/kanban`, `/api/plugins/<id>` | Kanban also pushes events on a WebSocket. |
-| Rooms (many agents, one log, @mentions, passes, caps, needs-you) | **Bot mode's engine**, vendored | `group-rounds.ts`, `group-membership.ts`, `group-activity.ts` and the pure half of `group-chat.ts` are plain TypeScript, MIT. Adapter is two functions: `request` and `requestProfile`. Our adapter routes a member either to the gateway or to ACP. |
+| Rooms (many agents, one log, @mentions, passes, caps, needs-you) | **Hermes `groups.*` for Hermes-only rooms; vendored engine for mixed ACP rooms** | Hermes owns the durable log when every member is a Hermes profile. Its pinned roster contract has no ACP target kind, so `group-rounds.ts` remains only for rooms that include ACP. Both doors use one room model and one UI. |
 | Installed command-line agents | **ACP over stdio**, from `hermes-app/crates/agent/src/acp.rs` | Match the official ACP registry against the user's real executable paths, cache it for offline scans, and accept local `*-acp` adapters. Verified bridges remain compatibility fallbacks, never the discovery ceiling. Permission requests become real. |
 | Agents writing into the workspace | **Our MCP server** (`mcp-server/`) | Already ~40 tools. Gains: move card, propose document edit, pin widget, author plugin. Fix the Hermes wrapper at `~/.hermes/mcp-servers/intellizen/run.sh`, which points at a folder that no longer exists. |
 | Floating panel, HUD, eject window, voice, message actions | **hermes-app donor** | `AgentPanel`, `Hud`, `EjectedPanel`, `useEject`, `useVoice`, `dictation.ts`, the Rust `speak`/`transcribe` commands. Rewritten onto IntelliZen's primitives as they move; the behaviour is what transfers. |
@@ -443,7 +444,8 @@ the overseer must wire.
 - Long specs. One page per stage. The audit found 45,000 words of spec
   against 33,000 lines of code; that ratio does not repeat.
 
-## Open question
+## Home decision
 
-Which Home widgets survive the move to the plugin contract as-is, and which
-become plugins? Decide in stage 13.
+Settled by Adam 2026-09-04: remove the core rotation banner and the retired
+Daily Brief, Agent Work, and Roles presets. Preserve existing pins. Dashboard
+and instrument widgets remain user-created or user-pinned surfaces.
