@@ -6,10 +6,10 @@ import { AppErrorBoundary } from "@/components/layout/app-error-boundary";
 import "@fontsource-variable/geist";
 import "blobatar/motion.css";
 import "@/index.css";
-import { applyTheme, loadTheme } from "@/lib/theme";
+import { applySavedTheme, startThemeSync } from "@/lib/theme";
 
-const theme = loadTheme();
-applyTheme(theme.flavor, theme.accent);
+applySavedTheme();
+startThemeSync();
 
 const queryClient = new QueryClient({
   defaultOptions: {

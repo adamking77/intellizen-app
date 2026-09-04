@@ -1,25 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   FLAVORS,
   DEFAULT_SELECTION_STRENGTH,
   MAX_SELECTION_STRENGTH,
   MIN_SELECTION_STRENGTH,
   applyPanes,
+  applySavedTheme,
   applySelectionStrength,
   applyTheme,
   flavorById,
+  isLight,
   loadPanes,
   loadSelectionStrength,
+  loadSystemThemePreferences,
   loadTheme,
+  resolveTheme,
   sameAccentIn,
+  saveSystemThemePreferences,
   saveTheme,
+  systemAppearance,
+  SYSTEM_APPEARANCE_CHANGED_EVENT,
   type Flavor,
   type Panes,
+  type SystemAppearance,
+  type SystemThemePreferences,
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
+import { SettingSwitch } from "./setting-switch";
 import { SETTINGS_TITLE } from "./settings-style";
 
 const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
@@ -151,17 +162,48 @@ function AccentPicker({
  *  Applies and persists immediately; nothing loads, so no loading, empty or
  *  error state exists for this surface. */
 export function AppearanceSection() {
-  const [theme, setTheme] = useState(loadTheme);
+  const [appearance, setAppearance] = useState(systemAppearance);
+  const [systemTheme, setSystemTheme] = useState(loadSystemThemePreferences);
+  const [theme, setTheme] = useState(() => resolveTheme(appearance));
   const [panes, setPanes] = useState(loadPanes);
   const [selectionStrength, setSelectionStrength] = useState(loadSelectionStrength);
   const [picking, setPicking] = useState(false);
   const active = flavorById(theme.flavor);
   const accentName = active.accents.find((a) => a.hex === theme.accent)?.name ?? "custom";
+  const lightFlavors = FLAVORS.filter((flavor) => isLight(flavor.id));
+  const darkFlavors = FLAVORS.filter((flavor) => !isLight(flavor.id));
+
+  useEffect(() => {
+    const onAppearance = (event: Event) => {
+      const next = (event as CustomEvent<SystemAppearance>).detail;
+      setAppearance(next);
+      setTheme(resolveTheme(next));
+    };
+    window.addEventListener(SYSTEM_APPEARANCE_CHANGED_EVENT, onAppearance);
+    return () => window.removeEventListener(SYSTEM_APPEARANCE_CHANGED_EVENT, onAppearance);
+  }, []);
 
   function commit(flavor: string, accent: string) {
     setTheme({ flavor, accent });
     applyTheme(flavor, accent);
     saveTheme(flavor, accent);
+  }
+
+  function commitSystemTheme(next: SystemThemePreferences) {
+    saveSystemThemePreferences(next);
+    setSystemTheme(next);
+    setTheme(applySavedTheme(appearance));
+  }
+
+  function commitAccent(accent: string) {
+    if (!systemTheme.followSystem) {
+      commit(theme.flavor, accent);
+      return;
+    }
+    const manual = loadTheme();
+    const manualFlavor = flavorById(manual.flavor);
+    saveTheme(manual.flavor, sameAccentIn(active, accent, manualFlavor));
+    setTheme(applySavedTheme(appearance));
   }
 
   function commitPanes(next: Panes) {
@@ -181,7 +223,42 @@ export function AppearanceSection() {
         Calmppuccin, seven flavors. Each carries its own fourteen accents.
       </p>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
+      <div className="flex items-center gap-3 rounded-[var(--r-ctl)] bg-[var(--mantle)] px-3 py-2.5">
+        <SettingSwitch
+          on={systemTheme.followSystem}
+          label="Follow system appearance"
+          onToggle={() => commitSystemTheme({ ...systemTheme, followSystem: !systemTheme.followSystem })}
+        />
+        <div>
+          <div className="text-[var(--t-ui)] text-[var(--text)]">Follow system</div>
+          <div className="text-xs text-[var(--text-muted)]">Switch light and dark flavors with macOS.</div>
+        </div>
+      </div>
+
+      {systemTheme.followSystem ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
+            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Light appearance</span>
+            <Select
+              value={systemTheme.lightFlavor}
+              containerClassName="flex"
+              onChange={(event) => commitSystemTheme({ ...systemTheme, lightFlavor: event.target.value })}
+            >
+              {lightFlavors.map((flavor) => <option key={flavor.id} value={flavor.id}>{flavor.name}</option>)}
+            </Select>
+          </label>
+          <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
+            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Dark appearance</span>
+            <Select
+              value={systemTheme.darkFlavor}
+              containerClassName="flex"
+              onChange={(event) => commitSystemTheme({ ...systemTheme, darkFlavor: event.target.value })}
+            >
+              {darkFlavors.map((flavor) => <option key={flavor.id} value={flavor.id}>{flavor.name}</option>)}
+            </Select>
+          </label>
+        </div>
+      ) : <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
         {FLAVORS.map((flavor) => {
           const on = flavor.id === theme.flavor;
           const swatch = sameAccentIn(active, theme.accent, flavor);
@@ -206,7 +283,7 @@ export function AppearanceSection() {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       <div className="flex items-center gap-3 pt-[18px]">
         <span className={cn(caps, "text-[var(--t-count)]")}>Accent</span>
@@ -288,7 +365,7 @@ export function AppearanceSection() {
         <AccentPicker
           flavor={active}
           accent={theme.accent}
-          onPick={(hex) => commit(theme.flavor, hex)}
+          onPick={commitAccent}
           onClose={() => setPicking(false)}
         />
       ) : null}

@@ -539,6 +539,8 @@ pub fn run() {
             voice::voice_of_profile
         ])
         .on_window_event(|window, event| {
+            // Tauri forwards WindowEvent::ThemeChanged to this webview as
+            // `tauri://theme-changed`; theme.ts listens to that native event.
             // macOS convention: closing the main window hides it; the app
             // stays in the Dock and Reopen brings it back. ⌘Q still quits.
             // The ejected agent-panel window really closes (that is re-dock).

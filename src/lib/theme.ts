@@ -107,6 +107,10 @@ export const ACCENT_KEY = "intelizen:accent";
 export const PANES_KEY = "intelizen:panes";
 export const SELECTION_STRENGTH_KEY = "intelizen:selection-strength";
 export const THEME_CHANGED_EVENT = "intelizen:theme-changed";
+export const SYSTEM_APPEARANCE_CHANGED_EVENT = "intelizen:system-appearance-changed";
+export const FOLLOW_SYSTEM_KEY = "intelizen:follow-system";
+export const SYSTEM_LIGHT_FLAVOR_KEY = "intelizen:system-light-flavor";
+export const SYSTEM_DARK_FLAVOR_KEY = "intelizen:system-dark-flavor";
 
 export const DEFAULT_SELECTION_STRENGTH = 0.08;
 export const MIN_SELECTION_STRENGTH = 0.04;
@@ -157,6 +161,8 @@ export function applyPanes(panes: Panes) {
 }
 
 export const DEFAULT_FLAVOR = "mocha";
+export const DEFAULT_SYSTEM_LIGHT_FLAVOR = "flat";
+export const DEFAULT_SYSTEM_DARK_FLAVOR = "mocha";
 /** Blue — IntelliZen's accent per DESIGN.md — is slot 12 of the fourteen. */
 const DEFAULT_ACCENT_INDEX = 12;
 
@@ -176,7 +182,7 @@ export function isLight(flavorId: string) {
   return LIGHT_FLAVORS.has(flavorId);
 }
 
-export function applyTheme(flavorId: string, accentHex: string) {
+export function applyTheme(flavorId: string, accentHex: string, syncNative = true) {
   document.documentElement.dataset.flavor = flavorId;
   document.documentElement.dataset.panes = loadPanes();
   setSelectionStrength(loadSelectionStrength());
@@ -188,13 +194,14 @@ export function applyTheme(flavorId: string, accentHex: string) {
   // Tell macOS which appearance the window is wearing so the native vibrancy
   // and traffic lights follow the flavor rather than the system setting.
   // Dynamically imported: this also runs in a plain browser without Tauri.
+  if (syncNative) setNativeTheme(isLight(flavorId) ? "light" : "dark");
+}
+
+function setNativeTheme(theme: "light" | "dark" | null) {
   void import("@tauri-apps/api/window")
-    .then(({ getCurrentWindow }) =>
-      getCurrentWindow().setTheme(isLight(flavorId) ? "light" : "dark"),
-    )
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(theme))
     .catch(() => {
-      // No Tauri, or a window that will not take a theme. The stylesheet has
-      // already done the part that matters.
+      // A plain browser has no native window. CSS has already applied.
     });
 }
 
@@ -217,4 +224,82 @@ export function saveTheme(flavor: string, accent: string) {
 export function sameAccentIn(from: Flavor, accentHex: string, to: Flavor): string {
   const i = from.accents.findIndex((a) => a.hex === accentHex);
   return to.accents[i >= 0 ? i : DEFAULT_ACCENT_INDEX].hex;
+}
+
+export type SystemAppearance = "light" | "dark";
+
+export interface SystemThemePreferences {
+  followSystem: boolean;
+  lightFlavor: string;
+  darkFlavor: string;
+}
+
+function validSystemFlavor(flavorId: string, appearance: SystemAppearance) {
+  const flavor = flavorById(flavorId);
+  return isLight(flavor.id) === (appearance === "light") ? flavor.id : null;
+}
+
+export function loadSystemThemePreferences(): SystemThemePreferences {
+  return {
+    followSystem: readPreference(FOLLOW_SYSTEM_KEY, "0") === "1",
+    lightFlavor: validSystemFlavor(readPreference(SYSTEM_LIGHT_FLAVOR_KEY, DEFAULT_SYSTEM_LIGHT_FLAVOR), "light") ?? DEFAULT_SYSTEM_LIGHT_FLAVOR,
+    darkFlavor: validSystemFlavor(readPreference(SYSTEM_DARK_FLAVOR_KEY, DEFAULT_SYSTEM_DARK_FLAVOR), "dark") ?? DEFAULT_SYSTEM_DARK_FLAVOR,
+  };
+}
+
+export function saveSystemThemePreferences(preferences: SystemThemePreferences) {
+  writePreference(FOLLOW_SYSTEM_KEY, preferences.followSystem ? "1" : "0");
+  writePreference(SYSTEM_LIGHT_FLAVOR_KEY, validSystemFlavor(preferences.lightFlavor, "light") ?? DEFAULT_SYSTEM_LIGHT_FLAVOR);
+  writePreference(SYSTEM_DARK_FLAVOR_KEY, validSystemFlavor(preferences.darkFlavor, "dark") ?? DEFAULT_SYSTEM_DARK_FLAVOR);
+}
+
+export function systemAppearance(): SystemAppearance {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export function resolveTheme(appearance = systemAppearance()) {
+  const manual = loadTheme();
+  const preferences = loadSystemThemePreferences();
+  if (!preferences.followSystem) return manual;
+  const target = flavorById(appearance === "light" ? preferences.lightFlavor : preferences.darkFlavor);
+  return {
+    flavor: target.id,
+    accent: sameAccentIn(flavorById(manual.flavor), manual.accent, target),
+  };
+}
+
+export function applySavedTheme(appearance = systemAppearance()) {
+  const preferences = loadSystemThemePreferences();
+  const theme = resolveTheme(appearance);
+  applyTheme(theme.flavor, theme.accent, !preferences.followSystem);
+  if (preferences.followSystem) setNativeTheme(null);
+  return theme;
+}
+
+/** Apply OS changes in Tauri and browsers. Tauri already emits the native
+ *  `tauri://theme-changed` window event, so no parallel Rust bridge is needed. */
+export function startThemeSync() {
+  const media = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  let disposed = false;
+  let unlisten: (() => void) | null = null;
+  const update = (appearance: SystemAppearance) => {
+    window.dispatchEvent(new CustomEvent(SYSTEM_APPEARANCE_CHANGED_EVENT, { detail: appearance }));
+    if (loadSystemThemePreferences().followSystem) applySavedTheme(appearance);
+  };
+  const onMediaChange = (event: MediaQueryListEvent) => update(event.matches ? "dark" : "light");
+  media?.addEventListener?.("change", onMediaChange);
+  void import("@tauri-apps/api/event")
+    .then(({ listen, TauriEvent }) => listen<SystemAppearance>(TauriEvent.WINDOW_THEME_CHANGED, (event) => update(event.payload)))
+    .then((stop) => {
+      if (disposed) stop();
+      else unlisten = stop;
+    })
+    .catch(() => {
+      // The media query remains the browser fallback.
+    });
+  return () => {
+    disposed = true;
+    media?.removeEventListener?.("change", onMediaChange);
+    unlisten?.();
+  };
 }
