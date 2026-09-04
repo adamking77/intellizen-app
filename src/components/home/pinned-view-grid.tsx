@@ -7,9 +7,9 @@ import { ExternalLink, GripVertical, Plus, RefreshCw, Settings2, X } from "lucid
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
 import { InstrumentWidget } from "@/components/home/instrument-widget";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
-import { DatabaseListView } from "@/components/database/DatabaseListView";
-import { DatabaseTableView } from "@/components/database/DatabaseTableView";
-import { DatabaseTimelineView } from "@/components/database/DatabaseTimelineView";
+import { DatabasePill } from "@/components/database/primitives/DatabasePill";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Identity } from "@/components/ui/identity";
 import {
   type HomeDatabaseViewPin,
   type HomeGenuiPin,
@@ -19,6 +19,8 @@ import {
   type HomeWidgetFilter,
 } from "@/lib/home-pins";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
+import { getFieldDisplayValue, getRecordTitle, getViewRecords } from "@/lib/database-core";
+import { resolveStatusColor } from "@/lib/database-colors";
 import { cn } from "@/lib/utils";
 import { PluginWidgetSurface } from "@/plugins/home-widgets";
 
@@ -460,50 +462,53 @@ function PinnedWidgetBody({
     );
   }
 
-  if (widget.view.type === "table") {
-    return (
-      <DatabaseTableView
-        embedded
-        database={databaseModel}
-        view={widget.view}
-        catalog={catalog}
-        activeRecordId={null}
-        onOpenRecord={onOpenRecord}
-        onUpdateField={() => {}}
-        onUpdateView={() => {}}
-        onSaveSchema={() => {}}
-        onOpenSchema={() => {}}
-        onCreateRecord={() => {}}
-        onDuplicateRecord={() => {}}
-        onDeleteRecord={() => {}}
-        onDeleteRecords={() => {}}
-        onDuplicateRecords={() => {}}
-      />
-    );
-  }
+  return (
+    <HomeRecordRows database={databaseModel} view={widget.view} catalog={catalog} onOpenRecord={onOpenRecord} />
+  );
+}
 
-  if (widget.view.type === "timeline") {
-    return (
-      <DatabaseTimelineView
-        database={databaseModel}
-        view={widget.view}
-        catalog={catalog}
-        onOpenRecord={onOpenRecord}
-      />
-    );
+export function HomeRecordRows({
+  database,
+  view,
+  catalog,
+  onOpenRecord,
+}: {
+  database: WorkspaceDatabaseModel;
+  view: WorkspaceDatabaseModel["views"][number];
+  catalog: WorkspaceDatabaseCatalogEntry[];
+  onOpenRecord: (recordId: string) => void;
+}) {
+  const records = getViewRecords(database, view, catalog);
+  const identityField = database.schema.find((field) => /assignee|owner|author|agent/i.test(field.name));
+  const statusField = database.schema.find((field) => field.type === "status")
+    ?? database.schema.find((field) => /status|state|outcome/i.test(field.name));
+  const metaField = database.schema.find((field) => field.type === "date" || field.type === "lastEditedAt" || field.type === "createdAt");
+
+  if (!records.length) {
+    return <EmptyState title="No records" description="No records match this view." className="px-4" />;
   }
 
   return (
-    <DatabaseListView
-      embedded
-      database={databaseModel}
-      view={widget.view}
-      catalog={catalog}
-      activeRecordId={null}
-      onOpenRecord={onOpenRecord}
-      onCreateRecord={() => {}}
-      onUpdateView={() => {}}
-    />
+    <div className="h-full overflow-y-auto px-3 py-2">
+      {records.map((record) => {
+        const identity = identityField ? getFieldDisplayValue(record, identityField, database, catalog) : "";
+        const status = statusField ? getFieldDisplayValue(record, statusField, database, catalog) : "";
+        const meta = metaField ? getFieldDisplayValue(record, metaField, database, catalog) : "";
+        return (
+          <button
+            key={record.id}
+            type="button"
+            onClick={() => onOpenRecord(record.id)}
+            className="nav-node grid w-full grid-cols-[minmax(0,1fr)_minmax(88px,0.7fr)_auto_auto] items-center gap-3 px-2 text-left"
+          >
+            <span className="truncate text-[var(--t-ui)] text-[var(--text)]">{getRecordTitle(record, database)}</span>
+            {identity ? <Identity name={identity} /> : <span className="text-[var(--text-muted)]">—</span>}
+            {status && statusField ? <DatabasePill color={resolveStatusColor(status, statusField)}>{status}</DatabasePill> : <span className="text-[var(--text-muted)]">—</span>}
+            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{meta || "—"}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
