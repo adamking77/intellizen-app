@@ -12,6 +12,7 @@ export const APPROVAL_CHOICE_LABEL: Record<ApprovalChoice, string> = {
   session: "Allow this session",
   always: "Always allow",
   deny: "Deny",
+  deny_always: "Always deny",
 };
 
 const APPROVAL_CHOICE_PAST: Record<ApprovalChoice, string> = {
@@ -19,6 +20,7 @@ const APPROVAL_CHOICE_PAST: Record<ApprovalChoice, string> = {
   session: "Allowed for this session",
   always: "Always allowed",
   deny: "Denied",
+  deny_always: "Always denied",
 };
 
 export function approvalChoiceLabel(choice: ApprovalChoice | string): string {

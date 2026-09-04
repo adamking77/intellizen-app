@@ -50,6 +50,7 @@ describe("approval.respond", () => {
     ]);
     expect(approvalSummary(approval, "once")).toBe("Allowed once · cd /tmp && rm -rf iz-approval-dir");
     expect(approvalSummary(approval, "deny")).toBe("Denied · cd /tmp && rm -rf iz-approval-dir");
+    expect(approvalChoiceLabel("deny_always")).toBe("Always deny");
     expect(approvalSummary({ ...approval, command: "" }, "session")).toBe("Allowed for this session · recursive delete");
   });
 });

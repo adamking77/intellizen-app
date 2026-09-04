@@ -137,7 +137,8 @@ pub fn permission_choices(options: &[Value]) -> Vec<&'static str> {
         let choice = match option.get("kind").and_then(Value::as_str) {
             Some("allow_once") => "once",
             Some("allow_always") => "always",
-            Some("reject_once") | Some("reject_always") => "deny",
+            Some("reject_once") => "deny",
+            Some("reject_always") => "deny_always",
             _ => continue,
         };
         if !choices.contains(&choice) {
@@ -270,14 +271,15 @@ mod tests {
             "options": [
                 { "optionId": "allow", "name": "Allow", "kind": "allow_once" },
                 { "optionId": "allow-always", "name": "Always", "kind": "allow_always" },
-                { "optionId": "reject", "name": "Reject", "kind": "reject_once" }
+                { "optionId": "reject", "name": "Reject", "kind": "reject_once" },
+                { "optionId": "reject-always", "name": "Always reject", "kind": "reject_always" }
             ]
         });
         let p = permission_payload("perm-4", &params);
         assert_eq!(p["request_id"], "perm-4");
         assert_eq!(p["command"], "rm -rf /tmp/x");
-        assert_eq!(p["choices"], json!(["once", "always", "deny"]));
-        assert_eq!(p["options"].as_array().unwrap().len(), 3);
+        assert_eq!(p["choices"], json!(["once", "always", "deny", "deny_always"]));
+        assert_eq!(p["options"].as_array().unwrap().len(), 4);
         assert_eq!(permission_choices(&[]), vec!["once", "deny"]);
     }
 }

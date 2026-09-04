@@ -29,7 +29,7 @@ export function DecisionCard({
         choices={decision.choices.map((choice, index) => ({
           id: choice,
           label: approvalChoiceLabel(choice),
-          recommended: choice !== "deny" && index === 0,
+          recommended: !choice.startsWith("deny") && index === 0,
           disabled: busy,
         }))}
         onChoose={(choice) => onApprove(decision, choice as ApprovalChoice)}

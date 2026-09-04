@@ -97,12 +97,16 @@ describe("acp session helpers send the Tauri command shapes", () => {
     ]);
   });
 
-  it("maps Hermes's choices onto the adapter's options", () => {
+  it("maps displayed choices only to the exact adapter option", () => {
     expect(optionIdForChoice(options, "once")).toBe("allow");
-    expect(optionIdForChoice(options, "session")).toBe("allow-always");
     expect(optionIdForChoice(options, "always")).toBe("allow-always");
     expect(optionIdForChoice(options, "deny")).toBe("reject");
-    expect(optionIdForChoice([{ optionId: "only" }], "deny")).toBe("only");
+    expect(optionIdForChoice([
+      ...options,
+      { optionId: "reject-always", name: "Always reject", kind: "reject_always" },
+    ], "deny_always")).toBe("reject-always");
+    expect(optionIdForChoice(options, "session")).toBeNull();
+    expect(optionIdForChoice([{ optionId: "only" }], "deny")).toBeNull();
     expect(optionIdForChoice([], "once")).toBeNull();
   });
 

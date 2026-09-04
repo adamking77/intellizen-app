@@ -184,23 +184,20 @@ export function acpGatewayClient(agentId: string, caller: string, cwd?: string |
   return client;
 }
 
-/** The adapter option that means what Hermes's choice means. `session` has
- *  no ACP equivalent and settles for `allow_always`. */
+/** The exact adapter option represented by a displayed choice. Choices that
+ *  ACP did not offer do not silently widen or narrow the permission. */
 export function optionIdForChoice(
   options: AcpPermissionOption[],
   choice: ApprovalChoice,
 ): string | null {
-  const wanted: string[] =
-    choice === "once"
-      ? ["allow_once", "allow_always"]
-      : choice === "deny"
-        ? ["reject_once", "reject_always"]
-        : ["allow_always", "allow_once"];
-  for (const kind of wanted) {
-    const match = options.find((o) => o.kind === kind);
-    if (match) return match.optionId;
-  }
-  return options[0]?.optionId ?? null;
+  const kinds: Partial<Record<ApprovalChoice, string>> = {
+    once: "allow_once",
+    always: "allow_always",
+    deny: "reject_once",
+    deny_always: "reject_always",
+  };
+  const kind = kinds[choice];
+  return kind ? options.find((option) => option.kind === kind)?.optionId ?? null : null;
 }
 
 export async function respondAcpApproval(input: {

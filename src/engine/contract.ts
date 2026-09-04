@@ -124,7 +124,7 @@ export interface StatusUpdatePayload {
   text?: string;
 }
 
-export type ApprovalChoice = "once" | "session" | "always" | "deny";
+export type ApprovalChoice = "once" | "session" | "always" | "deny" | "deny_always";
 
 export interface ApprovalRequestPayload {
   request_id?: string;
