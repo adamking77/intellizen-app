@@ -1,9 +1,12 @@
+import { useEffect, useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 type MdBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "list"; items: string[]; ordered: boolean }
   | { type: "code"; text: string }
+  | { type: "image"; alt: string; source: string }
   | { type: "para"; text: string };
 
 function parseMarkdownish(content: string): MdBlock[] {
@@ -59,6 +62,13 @@ function parseMarkdownish(content: string): MdBlock[] {
       blocks.push({ type: "heading", level, text: heading[2].trim() });
       continue;
     }
+    const image = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(line.trim());
+    if (image) {
+      flushPara();
+      flushList();
+      blocks.push({ type: "image", alt: image[1], source: image[2] });
+      continue;
+    }
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
     const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     if (bullet || numbered) {
@@ -86,9 +96,10 @@ function parseMarkdownish(content: string): MdBlock[] {
 interface MarkdownBodyProps {
   content: string;
   className?: string;
+  vaultPath?: string | null;
 }
 
-export function MarkdownBody({ content, className }: MarkdownBodyProps) {
+export function MarkdownBody({ content, className, vaultPath }: MarkdownBodyProps) {
   const blocks = parseMarkdownish(content);
   return (
     <div className={cn("intelizen-doc-markdown", className)}>
@@ -121,6 +132,9 @@ export function MarkdownBody({ content, className }: MarkdownBodyProps) {
             </pre>
           );
         }
+        if (block.type === "image") {
+          return <MarkdownImage key={i} alt={block.alt} source={block.source} vaultPath={vaultPath} />;
+        }
         if (block.type === "list") {
           const ListTag = block.ordered ? "ol" : "ul";
           return (
@@ -145,4 +159,44 @@ export function MarkdownBody({ content, className }: MarkdownBodyProps) {
       })}
     </div>
   );
+}
+
+function MarkdownImage({ alt, source, vaultPath }: { alt: string; source: string; vaultPath?: string | null }) {
+  const external = /^(?:data:|blob:|https?:)/.test(source);
+  const [localSource, setLocalSource] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (external) {
+      return;
+    }
+    let active = true;
+    let objectUrl: string | null = null;
+    setLocalSource(null);
+    setFailed(false);
+    void Promise.all([import("@tauri-apps/plugin-fs"), import("@tauri-apps/api/path")])
+      .then(async ([fs, path]) => {
+        const base = vaultPath ? await path.dirname(vaultPath) : "documents";
+        const absolute = source.startsWith("/") ? source : await path.join(await path.homeDir(), "vault", "intelligence", base, source);
+        const bytes = await fs.readFile(absolute);
+        if (!active) return;
+        objectUrl = URL.createObjectURL(new Blob([bytes], { type: imageMime(source) }));
+        setLocalSource(objectUrl);
+      })
+      .catch(() => active && setFailed(true));
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [external, source, vaultPath]);
+
+  if (external) return <img src={source} alt={alt} className="my-4 max-h-[70vh] max-w-full rounded-[var(--r-plane)] object-contain" />;
+  if (failed) return <p className="md-paragraph text-[var(--text-muted)]">{alt || "Image"} could not be loaded.</p>;
+  return localSource ? <img src={localSource} alt={alt} className="my-4 max-h-[70vh] max-w-full rounded-[var(--r-plane)] object-contain" /> : null;
+}
+
+function imageMime(source: string) {
+  const extension = source.split(".").pop()?.toLowerCase();
+  if (extension === "svg") return "image/svg+xml";
+  return `image/${extension === "jpg" ? "jpeg" : extension || "png"}`;
 }

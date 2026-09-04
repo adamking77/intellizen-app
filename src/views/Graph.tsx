@@ -1677,25 +1677,23 @@ export function GraphView() {
     }
   }
 
-  async function handleExportPng() {
-    let dataUrl: string | null = null;
-
+  async function captureGraphPng() {
     if (isInsightMode) {
-      dataUrl = insightGraphRef.current?.captureCanvas() ?? null;
-    } else {
-      const worldEl = worldContainerRef.current;
-      if (worldEl) {
-        try {
-          const { toPng } = await import("html-to-image");
-          const backgroundColor = getComputedStyle(document.documentElement)
-            .getPropertyValue("--base")
-            .trim();
-          dataUrl = await toPng(worldEl, { backgroundColor, pixelRatio: 2 });
-        } catch {
-          dataUrl = null;
-        }
-      }
+      return insightGraphRef.current?.captureCanvas() ?? null;
     }
+    const worldEl = worldContainerRef.current;
+    if (!worldEl) return null;
+    try {
+      const { toPng } = await import("html-to-image");
+      const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue("--base").trim();
+      return await toPng(worldEl, { backgroundColor, pixelRatio: 2 });
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleExportPng() {
+    const dataUrl = await captureGraphPng();
 
     if (!dataUrl) {
       setErrorMessage("Failed to capture graph image.");
@@ -3550,7 +3548,7 @@ export function GraphView() {
             </div>
         ) : null}
       </AppDialog>
-      <AddGraphToDocument open={addToDocumentOpen} projectId={effectiveProjectId} mode={interactionMode} onOpenChange={setAddToDocumentOpen}
+      <AddGraphToDocument open={addToDocumentOpen} projectId={effectiveProjectId} mode={interactionMode} capturePng={captureGraphPng} onOpenChange={setAddToDocumentOpen}
         onAdded={(recordId) => { setAddToDocumentOpen(false); navigate(`/docs?record=${recordId}`); }} />
     </div>
   );

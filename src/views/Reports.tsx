@@ -479,7 +479,7 @@ export function ReportsView() {
                         }}
                       />
                     </Suspense>
-                  ) : <MarkdownBody content={content} />}
+                  ) : <MarkdownBody content={content} vaultPath={selectedVaultPath || "documents/document.md"} />}
                 </QueryState>
                 </article>
               </div>

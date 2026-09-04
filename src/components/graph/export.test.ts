@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { GraphEdgeRecord, GraphNodeRecord } from "@/lib/types";
 import {
   buildGraphDocumentBody,
+  buildGraphDocumentSection,
   buildGraphEmbedBlock,
+  buildGraphSnapshotImageBlock,
+  decodePngDataUrl,
   documentHasGraphEmbed,
+  graphSnapshotPaths,
   parseGraphEmbedBlocks,
   serializeGraphSvg,
   TOKEN_GRAPH_PALETTE,
@@ -39,6 +43,20 @@ describe("graph export contract", () => {
     expect(markdown).toContain("# Relationship map");
     expect(documentHasGraphEmbed(markdown, spec)).toBe(true);
     expect(documentHasGraphEmbed(markdown, { ...spec, mode: "construct" })).toBe(false);
+  });
+
+  it("stores a PNG beside the portable document and embeds it as ordinary markdown", () => {
+    const paths = graphSnapshotPaths("documents/relationship-map.md", { id: "42", mode: "insight" }, new Date("2026-09-04T12:34:56.000Z"));
+    expect(paths).toEqual({
+      vaultPath: "documents/assets/graph-42-insight-20260904T123456000Z.png",
+      markdownPath: "assets/graph-42-insight-20260904T123456000Z.png",
+    });
+    expect(buildGraphSnapshotImageBlock(paths.markdownPath)).toBe("![Graph snapshot](assets/graph-42-insight-20260904T123456000Z.png)");
+    expect([...decodePngDataUrl("data:image/png;base64,AQID")]).toEqual([1, 2, 3]);
+    const section = buildGraphDocumentSection("Existing notes", { id: "42", mode: "insight" }, paths.markdownPath);
+    expect(section).toContain("![Graph snapshot]");
+    expect(section).toContain('```graph {"id":"42","mode":"insight"}');
+    expect(buildGraphDocumentSection(section, { id: "42", mode: "insight" }, "assets/new.png")).toBe("![Graph snapshot](assets/new.png)");
   });
 
   it("serializes a safe, self-contained construct SVG", () => {

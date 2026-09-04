@@ -22,6 +22,34 @@ export function buildGraphDocumentBody(title: string, spec: GraphEmbedSpec) {
   return `# ${title.trim() || "Graph snapshot"}\n\n${buildGraphEmbedBlock(spec)}\n`;
 }
 
+export function buildGraphSnapshotImageBlock(source: string) {
+  return `![Graph snapshot](${source})`;
+}
+
+export function buildGraphDocumentSection(markdown: string | null, spec: GraphEmbedSpec, snapshotSource: string) {
+  return [
+    buildGraphSnapshotImageBlock(snapshotSource),
+    documentHasGraphEmbed(markdown, spec) ? null : buildGraphEmbedBlock(spec),
+  ].filter(Boolean).join("\n\n");
+}
+
+export function graphSnapshotPaths(documentVaultPath: string, spec: GraphEmbedSpec, now = new Date()) {
+  const directory = documentVaultPath.includes("/")
+    ? documentVaultPath.slice(0, documentVaultPath.lastIndexOf("/"))
+    : "";
+  const stamp = now.toISOString().replace(/[-:.]/g, "");
+  const graphId = spec.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const filename = `graph-${graphId}-${spec.mode}-${stamp}.png`;
+  return { vaultPath: `${directory ? `${directory}/` : ""}assets/${filename}`, markdownPath: `assets/${filename}` };
+}
+
+export function decodePngDataUrl(dataUrl: string) {
+  const encoded = /^data:image\/png;base64,(.+)$/.exec(dataUrl)?.[1];
+  if (!encoded) throw new Error("The graph capture was not a PNG image.");
+  const binary = atob(encoded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
 export function documentHasGraphEmbed(markdown: string | null, spec: GraphEmbedSpec) {
   return parseGraphEmbedBlocks(markdown ?? "").some((item) => item.id === spec.id && item.mode === spec.mode);
 }

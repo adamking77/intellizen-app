@@ -20,12 +20,14 @@ import {
 } from "@/lib/documents";
 import type { WorkspaceDatabaseRecord, WorkspaceDatabaseRecordModel } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { writeVaultFile } from "@/lib/vault";
+import { writeVaultBinaryFile, writeVaultFile } from "@/lib/vault";
 import {
   buildGraphDocumentBody,
-  buildGraphEmbedBlock,
-  documentHasGraphEmbed,
+  buildGraphDocumentSection,
+  buildGraphSnapshotImageBlock,
+  decodePngDataUrl,
   graphIdFor,
+  graphSnapshotPaths,
   type GraphExportMode,
 } from "./export";
 
@@ -48,7 +50,7 @@ async function syncPortableBody(record: WorkspaceDatabaseRecord) {
   await writeVaultFile(path, record.body);
 }
 
-async function appendGraphEmbed(recordId: string, section: string) {
+async function appendDocumentSection(recordId: string, section: string) {
   const { data, error } = await supabase.schema("workspace").rpc("append_record_section", {
     p_record_id: recordId,
     p_section: section,
@@ -62,12 +64,14 @@ export function AddGraphToDocument({
   open,
   projectId,
   mode,
+  capturePng,
   onOpenChange,
   onAdded,
 }: {
   open: boolean;
   projectId: number | null;
   mode: GraphExportMode;
+  capturePng: () => Promise<string | null>;
   onOpenChange: (open: boolean) => void;
   onAdded: (recordId: string, warning: string | null) => void;
 }) {
@@ -80,7 +84,10 @@ export function AddGraphToDocument({
     enabled: open,
   });
   const records = useMemo(
-    () => (docs.data?.records ?? []).filter((record) => !record.taxonomy?.is_template).map(model),
+    () => (docs.data?.records ?? []).filter((record) => {
+      const path = documentFieldString(model(record), DOCUMENTS_DB_FIELDS.vaultPath).trim();
+      return !record.taxonomy?.is_template && !isAbsoluteDocumentPath(path);
+    }).map(model),
     [docs.data?.records],
   );
 
@@ -91,6 +98,9 @@ export function AddGraphToDocument({
   const add = useMutation({
     mutationFn: async () => {
       const spec = { id: graphIdFor(projectId), mode };
+      const capture = await capturePng();
+      if (!capture) throw new Error("The graph image could not be captured.");
+      const bytes = decodePngDataUrl(capture);
       if (choice === "new") {
         if (!docs.data?.database.id) throw new Error("The Documents database is not ready.");
         const name = title.trim() || "Graph snapshot";
@@ -103,15 +113,23 @@ export function AddGraphToDocument({
           docType: "note",
           fields: projectId === null ? undefined : { [DOCUMENTS_DB_FIELDS.project]: String(projectId) },
         });
-        return { recordId: result.record.id, warning: result.warning };
+        const documentPath = result.vaultPath ?? "documents/document.md";
+        const paths = graphSnapshotPaths(documentPath, spec);
+        await writeVaultBinaryFile(paths.vaultPath, bytes);
+        const updated = await appendDocumentSection(result.record.id, buildGraphSnapshotImageBlock(paths.markdownPath));
+        await syncPortableBody(updated);
+        return { recordId: updated.id, warning: result.warning };
       }
 
       if (!recordId) throw new Error("Choose a document.");
       const current = (await getDocumentsWorkspaceBundle()).records.find((record) => record.id === recordId);
       if (!current) throw new Error("That document no longer exists.");
-      const updated = documentHasGraphEmbed(current.body, spec)
-        ? current
-        : await appendGraphEmbed(recordId, buildGraphEmbedBlock(spec));
+      const documentPath = documentFieldString(model(current), DOCUMENTS_DB_FIELDS.vaultPath).trim() || "documents/document.md";
+      if (isAbsoluteDocumentPath(documentPath)) throw new Error("Choose a portable workspace document for a graph snapshot.");
+      const paths = graphSnapshotPaths(documentPath, spec);
+      await writeVaultBinaryFile(paths.vaultPath, bytes);
+      const section = buildGraphDocumentSection(current.body, spec, paths.markdownPath);
+      const updated = await appendDocumentSection(recordId, section);
       await syncPortableBody(updated);
       return { recordId: updated.id, warning: null };
     },
@@ -125,7 +143,7 @@ export function AddGraphToDocument({
     <AppDialog
       open={open}
       title="Add graph to document"
-      description="Insert a linked snapshot, then open the document."
+      description="Save a PNG snapshot, insert the live linked graph, then open the document."
       onOpenChange={onOpenChange}
       footer={(
         <>
