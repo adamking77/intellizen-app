@@ -76,7 +76,7 @@
       { "name": "Selection in Lightness", "body": "Selection shifts the raised plane by one signed OKLCH lightness step with a 0.06 floor.", "section": "colors" },
       { "name": "Borders Mean Two Things", "body": "A border marks active editing or an explicitly named failure; swatches and live tree drop targets are the operational exceptions.", "section": "shapes" },
       { "name": "Selection Strength", "body": "Settings Appearance is the only writer of --sel-step, and every selected surface reads it.", "section": "colors" },
-      { "name": "Database Preservation Rule", "body": "The approved Databases workspace keeps its Sogo-parity controls, compact row radius, neutral selection, colored property badges, and resizable full-page record panel until Adam explicitly revisits it.", "section": "components" },
+      { "name": "Database Preservation Rule", "body": "The installed production app, represented by commit 904a456, is the visual authority for Databases. Keep its Sogo-parity controls, compact row radius, accent-soft selected rows with a 2px accent rail, colored property badges, every database view, and resizable full-page record panel until Adam explicitly revisits it.", "section": "components" },
       { "name": "Closed Scale Rule", "body": "Chrome uses only 16, 14, 13, 12, 11, and 10px.", "section": "typography" },
       { "name": "No Ghost Card Rule", "body": "Do not combine a structural border, rounded container, and wide shadow on the same persistent surface.", "section": "elevation" }
     ],

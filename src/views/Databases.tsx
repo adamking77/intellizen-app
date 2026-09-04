@@ -10,7 +10,7 @@ import {
 
 import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
 import { CollapsibleRail } from "@/components/layout/collapsible-rail";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DatabaseConfirmDialog as ConfirmDialog } from "@/components/database/primitives/DatabaseConfirmDialog";
 import { ContextMenu, type ContextMenuState } from "@/components/ui/context-menu";
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { DatabaseButton as Button } from "@/components/database/primitives/DatabaseButton";
@@ -169,9 +169,9 @@ export function DatabasesView() {
   if (error) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="bg-[var(--base)] px-3 py-4 sm:px-6">
-          <span className="t-title text-[var(--text)]">Databases unavailable</span>
-          <p className="mt-2 font-ui text-[var(--t-ui)] text-[var(--danger)]">
+        <div className="border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+          <span className="text-label">Databases unavailable</span>
+          <p className="mt-2 font-ui text-[13px] text-[var(--danger)]">
             {error instanceof Error ? error.message : "The database list could not be loaded."}
           </p>
         </div>
@@ -181,8 +181,8 @@ export function DatabasesView() {
 
   return (
     <div className="db-surface flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 bg-[var(--base)] px-3 py-4 sm:px-6">
-        <span className="t-title text-[var(--text)]">Databases</span>
+      <div className="flex shrink-0 items-end justify-between gap-6 border-b border-[var(--border)] bg-[var(--base)] px-6 py-4">
+        <span className="text-label">Databases</span>
         <div className="flex items-center gap-2">
           <VentureScope />
           {canDeleteCurrentDatabase ? (
@@ -202,7 +202,7 @@ export function DatabasesView() {
             </Button>
           ) : null}
           <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
-            {isCreating ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+            {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             New database
           </Button>
         </div>
@@ -218,14 +218,14 @@ export function DatabasesView() {
         >
           <div className="min-h-0 flex-1 overflow-y-auto">
             {isLoading ? (
-              <div className="flex items-center gap-2 p-4 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
-                <Loader2 className="h-4 w-4" />
+              <div className="flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--overlay-1)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Loading databases...</span>
               </div>
             ) : safeDatabases.length === 0 ? (
               <div className="p-4">
-                <p className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">No databases yet</p>
-                <p className="mt-1 text-[var(--t-meta)] text-[var(--overlay-1)]">Create your first database to get started.</p>
+                <p className="font-ui text-[13px] font-medium text-[var(--text)]">No databases yet</p>
+                <p className="mt-1 text-[12px] text-[var(--overlay-1)]">Create your first database to get started.</p>
               </div>
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
@@ -235,11 +235,18 @@ export function DatabasesView() {
                       type="button"
                       onClick={() => selectDatabase(database.id)}
                       className={cn(
-                        "group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--hover)]",
-                        currentDatabase?.id === database.id && "bg-[var(--selected)] hover:bg-[var(--selected-hover)]",
+                        "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
+                        currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
                       )}
                     >
-                      <p className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                        )}
+                      />
+                      <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
                         {database.name}
                       </p>
                     </button>
@@ -265,11 +272,11 @@ export function DatabasesView() {
               ) : (
                 <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                   <p className="text-label">No databases yet</p>
-                  <p className="max-w-xl font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+                  <p className="max-w-xl font-ui text-[12px] text-[var(--overlay-1)]">
                     Create your first database to get started.
                   </p>
                   <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
-                    {isCreating ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                    {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                     New database
                   </Button>
                 </div>

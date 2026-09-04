@@ -32,8 +32,8 @@ import {
 } from "lucide-react";
 
 import { DatabaseButton as Button } from "@/components/database/primitives/DatabaseButton";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { AppDialog } from "@/components/ui/app-dialog";
+import { DatabaseConfirmDialog as ConfirmDialog } from "@/components/database/primitives/DatabaseConfirmDialog";
+import { DatabaseDialog as AppDialog } from "@/components/database/primitives/DatabaseDialog";
 import { DatabaseInput as Input } from "@/components/database/primitives/DatabaseInput";
 import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
 import type {
@@ -319,7 +319,7 @@ export function ViewTabBar({
         <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
           <div ref={filterRef} className="relative">
             <Button
-              variant={filterCount > 0 ? "selected" : "ghost"}
+              variant={filterCount > 0 ? "accent-soft" : "ghost"}
               size="sm"
               onClick={() => togglePanel("filter")}
               aria-expanded={filterOpen}
@@ -339,7 +339,7 @@ export function ViewTabBar({
 
           <div ref={sortRef} className="relative">
             <Button
-              variant={sortCount > 0 ? "selected" : "ghost"}
+              variant={sortCount > 0 ? "accent-soft" : "ghost"}
               size="sm"
               onClick={() => togglePanel("sort")}
               aria-expanded={sortOpen}
@@ -359,7 +359,7 @@ export function ViewTabBar({
           </div>
 
           <Button
-            variant={hasDisplaySettings ? "selected" : "ghost"}
+            variant={hasDisplaySettings ? "accent-soft" : "ghost"}
             size="sm"
             onClick={() => {
               closePanels();
@@ -617,7 +617,7 @@ function FilterPanel({
               ? (filter.op as FilterOperator)
               : operators[0];
             return (
-              <div key={`${filter.fieldId}-${index}`} className="rounded-[var(--r-plane)] bg-[var(--base)] p-3">
+              <div key={`${filter.fieldId}-${index}`} className="rounded-xl bg-[var(--base)] p-3">
                 <div className="mb-2 grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2">
                   <select
                     className="db-select"
@@ -723,17 +723,17 @@ function SortPanel({
         {sortableFields.map((field) => {
           const activeSort = activeView.sort.find((sort) => sort.fieldId === field.id);
           return (
-            <div key={field.id} className="flex items-center gap-2 rounded-[var(--r-plane)] bg-[var(--base)] px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-[var(--t-ui)] text-[var(--text)]">{field.name}</span>
+            <div key={field.id} className="flex items-center gap-2 rounded-xl bg-[var(--base)] px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">{field.name}</span>
               <Button
-                variant={activeSort?.direction === "asc" ? "selected" : "ghost"}
+                variant={activeSort?.direction === "asc" ? "accent-soft" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "asc")}
               >
                 Asc
               </Button>
               <Button
-                variant={activeSort?.direction === "desc" ? "selected" : "ghost"}
+                variant={activeSort?.direction === "desc" ? "accent-soft" : "ghost"}
                 size="sm"
                 onClick={() => onToggleSort(field.id, "desc")}
               >
@@ -860,9 +860,9 @@ function ViewSettingsModal({
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-[var(--t-ui)] font-semibold text-[var(--text)]">Layout</h4>
+                  <h4 className="text-[13px] font-semibold text-[var(--text)]">Layout</h4>
                 </div>
-                <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] bg-[var(--base)] px-2.5 py-1 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--base)] px-2.5 py-1 font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   {VIEW_ICONS[activeView.type]}
                   {VIEW_DEFAULT_NAMES[activeView.type]}
                 </span>
@@ -871,7 +871,7 @@ function ViewSettingsModal({
               <div className="grid gap-3">
                 {groupCandidates.length > 0 ? (
                   <label className="grid gap-1.5">
-                    <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                       {activeView.type === "kanban"
                         ? "Group columns by"
                         : activeView.type === "calendar"
@@ -897,7 +897,7 @@ function ViewSettingsModal({
 
                 {isGallery ? (
                   <label className="grid gap-1.5">
-                    <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                    <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                       Card cover
                     </span>
                     <select
@@ -918,7 +918,7 @@ function ViewSettingsModal({
                 {isChart ? (
                   <>
                     <div className="grid gap-2">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Chart type
                       </span>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -927,7 +927,7 @@ function ViewSettingsModal({
                           return (
                             <button
                               className={cn(
-                                "grid min-h-[76px] gap-1 rounded-[var(--db-r-row)] border p-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                                "grid min-h-[76px] gap-1 rounded-md border p-3 text-left transition-colors duration-150",
                                 selected
                                   ? "border-[var(--border)] bg-[var(--base)] text-[var(--text)]"
                                   : "border-transparent bg-transparent text-[var(--subtext-0)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -952,8 +952,8 @@ function ViewSettingsModal({
                                 });
                               }}
                             >
-                              <span className="text-[var(--t-ui)] font-semibold">{option.label}</span>
-                              <span className="text-[var(--t-section)] leading-4 text-[var(--overlay-1)]">{option.description}</span>
+                              <span className="text-[13px] font-semibold">{option.label}</span>
+                              <span className="text-[11px] leading-4 text-[var(--overlay-1)]">{option.description}</span>
                             </button>
                           );
                         })}
@@ -962,12 +962,12 @@ function ViewSettingsModal({
 
                     <div className="grid gap-3 pt-1">
                       <div>
-                        <h5 className="text-[var(--t-meta)] font-semibold text-[var(--text)]">Data</h5>
+                        <h5 className="text-[12px] font-semibold text-[var(--text)]">Data</h5>
                       </div>
 
                       {chartType === "bar" || chartType === "line" ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Series
                           </span>
                           <select
@@ -991,7 +991,7 @@ function ViewSettingsModal({
                       ) : null}
 
                       <label className="grid gap-1.5">
-                        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                           Value mode
                         </span>
                         <select
@@ -1013,10 +1013,10 @@ function ViewSettingsModal({
 
                       {chartSeriesMode === "multi" ? (
                         <div className="grid gap-2">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Numeric fields
                           </span>
-                          <div className="grid max-h-40 gap-1 overflow-y-auto rounded-[var(--db-r-row)] bg-[var(--base)] p-2">
+                          <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md bg-[var(--base)] p-2">
                             {chartValueCandidates.map((field) => {
                               const checked = selectedChartValueFields.includes(field.id);
                               return (
@@ -1042,7 +1042,7 @@ function ViewSettingsModal({
                         </div>
                       ) : chartNeedsNumericField ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Numeric field
                           </span>
                           <select
@@ -1064,7 +1064,7 @@ function ViewSettingsModal({
 
                       {chartShowsGoal ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Gauge target
                           </span>
                           <Input
@@ -1084,10 +1084,10 @@ function ViewSettingsModal({
                     </div>
 
                     <div className="grid gap-3 pt-2">
-                      <h5 className="text-[var(--t-meta)] font-semibold text-[var(--text)]">Display</h5>
+                      <h5 className="text-[12px] font-semibold text-[var(--text)]">Display</h5>
                       {chartShowsLineOptions ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Line style
                           </span>
                           <select
@@ -1114,7 +1114,7 @@ function ViewSettingsModal({
                       ) : null}
                       {chartShowsOrientation ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Bar direction
                           </span>
                           <select
@@ -1133,7 +1133,7 @@ function ViewSettingsModal({
                       ) : null}
 
                       <label className="grid gap-1.5">
-                        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                        <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                           Palette
                         </span>
                         <select
@@ -1154,7 +1154,7 @@ function ViewSettingsModal({
 
                       {chartShowsTimeRange ? (
                         <label className="grid gap-1.5">
-                          <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                          <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Time range
                           </span>
                           <select
@@ -1223,7 +1223,7 @@ function ViewSettingsModal({
                 {isTimeline ? (
                   <>
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Start date field
                       </span>
                       <select
@@ -1239,7 +1239,7 @@ function ViewSettingsModal({
                     </label>
 
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         End date field
                       </span>
                       <select
@@ -1255,7 +1255,7 @@ function ViewSettingsModal({
                     </label>
 
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Progress field (optional)
                       </span>
                       <select
@@ -1273,7 +1273,7 @@ function ViewSettingsModal({
                     </label>
 
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Bar label
                       </span>
                       <select
@@ -1291,7 +1291,7 @@ function ViewSettingsModal({
                     </label>
 
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Color by
                       </span>
                       <select
@@ -1309,7 +1309,7 @@ function ViewSettingsModal({
                     </label>
 
                     <label className="grid gap-1.5">
-                      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                      <span className="font-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                         Zoom level
                       </span>
                       <select
@@ -1335,9 +1335,9 @@ function ViewSettingsModal({
             {!isChart && !isTimeline ? (
               <section className="space-y-3 border-t border-[var(--border)] pt-4">
               <div className="flex items-center justify-between gap-3">
-                <h4 className="text-[var(--t-ui)] font-semibold text-[var(--text)]">Visible fields</h4>
+                <h4 className="text-[13px] font-semibold text-[var(--text)]">Visible fields</h4>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
+                  <span className="font-mono text-[10px] text-[var(--overlay-1)]">
                     {visibleFieldCount}/{database.schema.length}
                   </span>
                   <Button
@@ -1357,7 +1357,7 @@ function ViewSettingsModal({
                 </div>
               </div>
 
-              <div className="db-fields-list rounded-[var(--r-plane)] bg-[var(--base)] p-2">
+              <div className="db-fields-list rounded-xl bg-[var(--base)] p-2">
                 {database.schema.map((field) => (
                   <label key={field.id} className="db-fields-row">
                     <input
@@ -1375,9 +1375,9 @@ function ViewSettingsModal({
             {supportsCardFields ? (
               <section className="space-y-3 border-t border-[var(--border)] pt-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h4 className="text-[var(--t-ui)] font-semibold text-[var(--text)]">Card properties</h4>
+                  <h4 className="text-[13px] font-semibold text-[var(--text)]">Card properties</h4>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
+                    <span className="font-mono text-[10px] text-[var(--overlay-1)]">
                       {selectedFieldIds.length > 0 ? `${cardFieldCount}/3` : "auto"}
                     </span>
                     <Button
@@ -1390,7 +1390,7 @@ function ViewSettingsModal({
                   </div>
                 </div>
 
-                <div className="db-fields-list rounded-[var(--r-plane)] bg-[var(--base)] p-2">
+                <div className="db-fields-list rounded-xl bg-[var(--base)] p-2">
                   {cardCandidates.map((field) => (
                     <label key={field.id} className="db-fields-row">
                       <input

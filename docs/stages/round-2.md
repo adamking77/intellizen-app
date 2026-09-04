@@ -191,7 +191,7 @@ F.7 **Control kit.** Full brief and implementation record: `docs/stages/design-s
     slider on Settings ▸ Appearance beside the accent picker, driving the
     selected plane's strength (and how much of the accent it carries) as one
     token every surface reads. Default tuned with Adam.
-F.8 **Eight consistencies.** Full acceptance checks: `docs/stages/design-system-v3.md` §4; implementation sweep: §6 K.7; final record: §6 K.8. Applied across Home widgets, Databases, Docs, Agents, Settings and the panel.
+F.8 **Eight consistencies.** Full acceptance checks: `docs/stages/design-system-v3.md` §4; implementation sweep: §6 K.7; final record: §6 K.8. Applied across Home widgets, Docs, Agents, Settings and the panel. Databases retain the production design represented by `904a456` as a scoped exception.
 I.7 **The room's view switcher** **[approval given 2026-09-04]**: Brief,
     Table, Board, Graph, Timeline, Session on the project room; defaults per
     material; drawer for cards, sessions and decisions.

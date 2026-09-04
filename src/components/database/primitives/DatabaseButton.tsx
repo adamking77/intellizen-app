@@ -4,23 +4,36 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const databaseButtonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--r-pill)] font-medium font-ui select-none " +
-    "transition-[background-color,border-color,color,opacity] duration-[var(--t-base)] ease-[var(--ease)] " +
-    "disabled:pointer-events-none disabled:opacity-50 focus-visible:shadow-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium font-ui select-none " +
+    "transition-[background-color,border-color,color,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+    "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 " +
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-border)]",
   {
     variants: {
       variant: {
         primary: "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
-        secondary: "border border-[var(--border)] bg-[var(--mantle)] text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--base)]",
-        outline: "border border-[var(--border)] bg-transparent text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
-        ghost: "border border-transparent bg-transparent text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-        selected: "border border-transparent bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]",
+        secondary:
+          "bg-[var(--mantle)] text-[var(--text)] border border-[var(--border)] " +
+          "hover:border-[var(--border-strong)] hover:bg-[var(--base)]",
+        outline:
+          "bg-transparent text-[var(--text)] border border-[var(--border)] " +
+          "hover:bg-[var(--surface-wash)] hover:border-[var(--border-strong)]",
+        ghost:
+          "bg-transparent text-[var(--subtext-0)] border border-transparent " +
+          "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
+        selected:
+          "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
+          "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
         destructive: "bg-[var(--danger)] text-[var(--crust)] hover:opacity-90",
-        "accent-soft": "border border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
-        "accent-outline": "border border-[var(--accent-border)] bg-transparent text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]",
+        "accent-soft":
+          "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
+          "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
+        "accent-outline":
+          "bg-transparent text-[var(--accent)] border border-[var(--accent-border)] " +
+          "hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
       },
       size: {
-        default: "h-9 px-4 text-[var(--t-ui)]",
+        default: "h-9 px-4 text-[13px]",
         sm: "h-8 px-3.5 text-xs",
         lg: "h-11 px-6 text-sm",
         icon: "h-9 w-9",

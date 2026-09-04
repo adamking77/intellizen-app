@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { AppDialog } from "@/components/ui/app-dialog";
+import { DatabaseConfirmDialog as ConfirmDialog } from "@/components/database/primitives/DatabaseConfirmDialog";
+import { DatabaseDialog as AppDialog } from "@/components/database/primitives/DatabaseDialog";
 import { STATUS_OPTIONS } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,

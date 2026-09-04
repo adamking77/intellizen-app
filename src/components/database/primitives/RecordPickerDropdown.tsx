@@ -111,7 +111,7 @@ export function RecordPickerDropdown({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[80] flex flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
+      className="fixed z-[80] flex flex-col overflow-hidden rounded-xl bg-[var(--mantle)] shadow-[var(--shadow-elevated)]"
       style={{
         top: position.placeAbove ? undefined : position.top,
         bottom: position.placeAbove ? window.innerHeight - position.top : undefined,
@@ -137,14 +137,14 @@ export function RecordPickerDropdown({
               }
             }}
             placeholder={onCreate ? "Search or create…" : "Search…"}
-            className="h-6 w-full bg-transparent text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
+            className="h-6 w-full bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)]"
           />
         </div>
       ) : null}
 
       {multiple && selectedIds.length > 0 ? (
         <div className="border-b border-[var(--border-subtle)] px-3 py-2.5">
-          <div className="mb-2 text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--overlay-1)]">
             Selected
           </div>
           <div className="flex flex-wrap gap-1">
@@ -156,7 +156,7 @@ export function RecordPickerDropdown({
                 key={option.id}
                 type="button"
                 onClick={() => onToggle(option.id)}
-                className="inline-flex items-center gap-1 rounded-[var(--r-pill)] bg-[var(--base)] px-2 py-0.5 text-[var(--t-section)] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--base)] px-2 py-0.5 text-[11px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
               >
                 <span className="max-w-[140px] truncate">{option.label}</span>
                 <span className="text-[var(--overlay-1)]">×</span>
@@ -182,21 +182,21 @@ export function RecordPickerDropdown({
                   }
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-[var(--r-plane)] px-2.5 py-2 text-left transition-colors",
+                  "flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition-colors",
                   selected
-                    ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
+                    ? "bg-[color-mix(in_srgb,var(--accent)_14%,var(--mantle)_86%)] text-[var(--text)]"
                     : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}
               >
                 <div className="min-w-0">
-                  <div className="truncate text-[var(--t-ui)] font-medium">{option.label}</div>
+                  <div className="truncate text-[13px] font-medium">{option.label}</div>
                   {option.meta ? (
-                    <div className="truncate text-[var(--t-section)] text-[var(--overlay-1)]">{option.meta}</div>
+                    <div className="truncate text-[11px] text-[var(--overlay-1)]">{option.meta}</div>
                   ) : null}
                 </div>
                 <span
                   className={cn(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--db-r-row)] border",
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                     selected
                       ? "border-[var(--accent-border)] bg-[var(--accent)] text-[var(--crust)]"
                       : "border-[var(--border)] text-transparent",
@@ -208,7 +208,7 @@ export function RecordPickerDropdown({
             );
           })
         ) : !canCreate ? (
-          <div className="px-3 py-6 text-center text-[var(--t-meta)] text-[var(--overlay-1)]">
+          <div className="px-3 py-6 text-center text-[12px] text-[var(--overlay-1)]">
             No matching records
           </div>
         ) : null}
@@ -217,7 +217,7 @@ export function RecordPickerDropdown({
           <button
             type="button"
             onClick={handleCreate}
-            className="mt-1 flex w-full items-center gap-1.5 rounded-[var(--r-plane)] bg-[var(--base)] px-2.5 py-2 text-left text-[var(--t-meta)] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="mt-1 flex w-full items-center gap-1.5 rounded-xl bg-[var(--base)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             <Plus className="h-3.5 w-3.5 text-[var(--accent)]" />
             <span>Create</span>
@@ -228,7 +228,7 @@ export function RecordPickerDropdown({
 
       {multiple ? (
         <div className="flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] bg-[color-mix(in_srgb,var(--base)_38%,transparent)] px-3 py-2.5">
-          <div className="text-[var(--t-section)] text-[var(--overlay-1)]">
+          <div className="text-[11px] text-[var(--overlay-1)]">
             {selectedIds.length === 0
               ? "No records selected"
               : `${selectedIds.length} selected`}
@@ -245,14 +245,14 @@ export function RecordPickerDropdown({
                 onToggle(id);
               }
             }}
-            className="rounded-[var(--r-pill)] px-2 py-1 text-[var(--t-meta)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="rounded-full px-2 py-1 text-[12px] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             Clear
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--r-pill)] bg-[var(--accent)] px-2.5 py-1 text-[var(--t-meta)] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
+            className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
           >
             Done
           </button>

@@ -45,6 +45,15 @@ function lines(pattern, paths = files) {
 }
 
 function audit() {
+  const preservedDatabaseMarkers = [
+    ["src/views/Databases.tsx", "bg-[var(--accent-soft)]"],
+    ["src/views/Databases.tsx", "w-[2px] bg-[var(--accent)]"],
+    ["src/views/DatabaseEditor.tsx", "text-[22px]"],
+    ["src/components/database/ViewTabBar.tsx", '"accent-soft"'],
+    ["src/components/database/DatabasePeekPanel.tsx", "db-record-resize-handle"],
+    ["src/index.css", "box-shadow: inset 2px 0 0 var(--accent);"],
+    ["src/components/database/primitives/DatabaseDialog.tsx", "hidden={!open}"],
+  ];
   const closed = [
     ["retired radius token", /var\(--r-(?:row|msg)\)/g, kitFiles],
     ["bare or named Tailwind radius", /(?:["'`]\S*\s|\s)rounded(?=[\s"'`]|-(?:sm|md|lg|xl|2xl)\b)/gm, kitFiles],
@@ -59,6 +68,11 @@ function audit() {
     return matches.length ? [`${name}:\n  ${matches.join("\n  ")}`] : [];
   });
 
+  for (const [relative, marker] of preservedDatabaseMarkers) {
+    const source = readFileSync(new URL(`../${relative}`, import.meta.url), "utf8");
+    if (!source.includes(marker)) failures.push(`preserved Database design marker missing: ${relative} -> ${marker}`);
+  }
+
   const closedCode = [
     ["ring utility", /\bring-/g, kitCodeFiles],
     ["custom outline utility", /outline-(?!none)/g, kitCodeFiles],
@@ -68,7 +82,10 @@ function audit() {
   ];
   for (const [name, pattern, paths] of closedCode) {
     const count = occurrences(pattern, paths);
-    if (count) failures.push(`${name}: ${count} remaining`);
+    const preservedDatabaseCount = name === "dashed border" ? 1 : 0;
+    if (count > preservedDatabaseCount) {
+      failures.push(`${name}: ${count - preservedDatabaseCount} remaining`);
+    }
   }
 
   const legacyHeights = lines(/rounded-\[var\(--r-ctl\)\].*\bh-(?:7|8|9|10|11)\b|\bh-(?:7|8|9|10|11)\b.*rounded-\[var\(--r-ctl\)\]/, kitFiles);

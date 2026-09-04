@@ -1335,15 +1335,50 @@ textarea:focus-visible,
 
 /* ─── Root editor chrome ────────────────────────────────── */
 .db-surface {
-  --db-r-row: 4px;
   --hover: color-mix(in srgb, var(--text) 5%, transparent);
-  --selected: var(--raised);
-  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
 }
 
 :root[data-flavor="latte"] .db-surface,
 :root[data-flavor="flat"] .db-surface {
   --hover: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+dialog.db-app-dialog::backdrop {
+  background: color-mix(in srgb, var(--crust) 72%, transparent);
+}
+
+dialog.db-app-dialog[role="alertdialog"]::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+.db-taxonomy-fields label > span {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.db-taxonomy-fields select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--base);
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.db-taxonomy-fields input {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--mantle);
+  padding-inline: 12px;
+  font-size: 13px;
+}
+
+.db-taxonomy-fields input:focus,
+.db-taxonomy-fields select:focus {
+  border-color: var(--accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--accent-border) !important;
 }
 
 .db-editor-root {
@@ -1380,9 +1415,8 @@ textarea:focus-visible,
 
 /* ─── Buttons ───────────────────────────────────────────── */
 .db-btn:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--accent-border) !important;
 }
 
 .db-btn {
@@ -1422,13 +1456,9 @@ textarea:focus-visible,
 }
 
 .db-btn-active {
-  background: var(--selected);
-  border-color: transparent;
-  color: var(--text);
-}
-
-.db-btn-active:hover {
-  background: var(--selected-hover);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-1) 86%);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .db-btn-danger {
@@ -1463,8 +1493,8 @@ textarea:focus-visible,
 
 .db-input:focus,
 .db-select:focus {
-  border-color: var(--border);
-  box-shadow: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent-border) !important;
   outline: none;
 }
 
@@ -1589,8 +1619,8 @@ textarea:focus-visible,
 }
 
 .db-row-active {
-  background: var(--selected);
-  box-shadow: none;
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .db-td {
@@ -1875,7 +1905,7 @@ textarea:focus-visible,
 }
 
 .db-bulk-actions-visible {
-  animation: fade-in var(--t-base) var(--ease-out);
+  animation: fade-in 150ms ease-out;
 }
 
 .db-bulk-count {
@@ -2794,13 +2824,16 @@ textarea:focus-visible,
 }
 
 .db-workflow-run-empty {
-  padding: 8px 0;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px;
   font-size: 11px;
   color: var(--overlay-1);
+  background: color-mix(in srgb, var(--base) 58%, transparent);
 }
 
 .db-workflow-run-empty-compact {
-  padding: 4px 0;
+  padding: 6px 8px;
 }
 
 .db-record-header-fields-panel {
@@ -4284,7 +4317,8 @@ textarea:focus-visible,
   flex: 1;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
-  background: var(--base);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--base) 84%, var(--mantle) 16%) 0%, var(--base) 100%);
 }
 
 .db-timeline-notice {
@@ -4664,7 +4698,7 @@ textarea:focus-visible,
   font-size: 0.9em;
   padding: 0.15em 0.35em;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: rgba(255,255,255,0.06);
 }
 
 .peek-markdown pre {
@@ -4672,7 +4706,7 @@ textarea:focus-visible,
   padding: 0.6em 0.8em;
   border-radius: 4px;
   overflow-x: auto;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  background: rgba(255,255,255,0.06);
 }
 
 .peek-markdown pre code {
@@ -4683,7 +4717,7 @@ textarea:focus-visible,
 .peek-markdown blockquote {
   margin: 0.5em 0;
   padding: 0.25em 0.8em;
-  border-left: 3px solid color-mix(in srgb, var(--text) 15%, transparent);
+  border-left: 3px solid rgba(255,255,255,0.15);
   opacity: 0.8;
 }
 
@@ -5147,6 +5181,11 @@ dialog.app-dialog::backdrop {
 
 button:not(.pill):not(.action):not(.nav-node):not(.rail-node):not(.icon-button):not(.swatch):not(.swatch-button):not(:disabled):hover {
   box-shadow: inset 0 0 0 999px var(--hover);
+}
+
+.db-surface button:not(:disabled):hover,
+dialog.db-app-dialog button:not(:disabled):hover {
+  box-shadow: none;
 }
 
 .swatch {

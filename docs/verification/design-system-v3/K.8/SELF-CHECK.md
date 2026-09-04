@@ -4,7 +4,7 @@
 
 - **Verdict:** `AWAITING_ADAM_REVIEW`
 - **Mode:** final implementation self-check
-- **Candidate:** `v3/phase-0` at `92ad39d`
+- **Candidate:** `v3/phase-0` through the production Database restoration
 - **Authority:** advisory review
 - **Conflict disclosure:** Keel authored and reviewed this work. This is not an independent review and does not satisfy an independent approval gate.
 - **Scope:** `DESIGN.md`, `.impeccable/design.json`, the Round 2 and Design System V3 briefs, shipped K.1–K.8 behavior, and the existing verification package.
@@ -16,7 +16,7 @@
 | Tokens and selection | Ready | `--r-plane: 12px`, `--r-ctl: 8px`, `--r-pill: 999px`, `--h-ctl: 28px`, and `--sel-step: 0.08` agree across CSS, `DESIGN.md`, and `.impeccable/design.json`. |
 | Component rules | Ready | Shared controls, pills, identity, empty/failure states, skeletons, drawers, and selection states are recorded in `DESIGN.md`. |
 | Product surfaces | Ready | Existing K.1–K.7 and K.9–K.13 evidence covers all seven flavors, edge selection strengths, drawers, Docs, Workflows, settings, agent surfaces, sidebar, continuity, and Activity. |
-| Consistency sweep | Corrected | The v3 kit audit closes legacy patterns outside Databases. Adam rejected the database restyle; the existing database controls, property badges, views, and resizable/full-page record panel are restored as a scoped exception. Home database pins remain compact rows. |
+| Consistency sweep | Corrected | The v3 kit audit closes legacy patterns outside Databases. Adam rejected the database restyle; the installed production app and matching commit `904a456` now govern the database controls, accent-soft selection with 2px rail, property badges, views, and resizable/full-page record panel as a scoped exception. Home database pins remain compact rows. |
 | Brief alignment | Ready | `docs/stages/round-2.md` routes the visual-system work to `docs/stages/design-system-v3.md`; the implementation follows its dependency order. |
 
 ## Validation

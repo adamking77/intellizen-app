@@ -12,9 +12,11 @@ amended in work package K.8, after which they must agree.
 
 **Database correction, Adam 2026-09-04:** the Databases workspace and its
 table, list, board, gallery, calendar, timeline, chart, and record-panel designs
-were already approved. K.7 must not restyle them. Their Sogo-parity controls,
-compact row radius, neutral selection, and resizable/full-page record panel are
-a scoped exception to the kit migration.
+were already approved. The installed production app, represented by commit
+`904a456`, is the visual authority for those surfaces. K.7 must not restyle
+them. Their Sogo-parity controls, compact row radius, accent-soft selected rows
+with a 2px accent rail, colored property badges, and resizable/full-page record
+panel are a scoped exception to the kit migration.
 
 Prototype (the visual reference for every rule below):
 `https://claude.ai/code/artifact/d0ad8810-8d17-433b-b45b-6cf3981c98ad`.
@@ -225,7 +227,7 @@ draw that thing. Anatomy is fixed; content varies.
 | Identity | `identity.tsx` (new) | `agents/avatar.tsx` wrappers in rows, bubbles, receipts |
 | Decision field | `decision-field.tsx` (new) | `agent/decision-card.tsx` and the workflow approval banner |
 | Receipt and tool row | `receipt.tsx` (new) | tool rows in `agent-turn.tsx`, session rows in `project-sessions.tsx` |
-| Drawer | `drawer.tsx` (new) | `database/DatabasePeekPanel.tsx` chrome, the workflow `?run=` detail, card detail |
+| Drawer | `drawer.tsx` (new) | workflow `?run=` detail and project card/session detail; Databases keep their production record panel |
 | Skeleton | `skeleton.tsx` (new) | every centred `Loader2` |
 | Empty state | `empty-state.tsx` (changed) | dashed box; `query-state.tsx` error and empty branches |
 
@@ -312,9 +314,9 @@ draw that thing. Anatomy is fixed; content varies.
   Header: caps kind line, title, Identity. Body: key-value grid, optional
   Decision field, sections. Foot: Controls (Move to, Reassign, Open in
   Table, Open session).
-- Opens for: a board or table card, a session row, a decision, a database
-  record (replacing `DatabasePeekPanel`'s chrome; keep its field editors as
-  the body), a workflow run.
+- Opens for: a project board or table card, a session row, a decision, and a
+  workflow run. Database records keep the production `DatabasePeekPanel`
+  chrome and behavior.
 
 ### 3.10 Skeleton
 
@@ -487,8 +489,10 @@ K.13 one day. K.9 and K.11 touch `sidebar.tsx`; run K.11 after K.9.
 
 ### 5.4 Everything else
 
-Home widgets, Databases, Agents, Settings and the panel adopt the kit
-through the primitives; no layout change beyond what section 4 requires.
+Home widgets, Agents, Settings and the panel adopt the kit through the
+primitives; no layout change beyond what section 4 requires. Databases are a
+verification-only surface in this sweep and retain the production design from
+`904a456`.
 
 ## 6. Work packages
 
@@ -529,10 +533,11 @@ K.5 **Docs** (about one day). `src/views/Reports.tsx`,
 K.6 **Workflows** (about one and a half days). `src/views/Workflows.tsx`,
     `src/components/workflows/*`, `src/services/hermes-cron.ts` for pause
     and resume.
-K.7 **Sweep** (about one day). Home widgets, Databases (peek becomes the
-    drawer body), Settings, Search, Graph, Canvas: kit adoption and the
-    eight consistencies. Rotation banner and the retired-surface presets on
-    Home stay until Adam decides I.5 in `round-2.md`.
+K.7 **Sweep** (about one day). Home widgets, Settings, Search, Graph and
+    Canvas: kit adoption and the eight consistencies. Verify Databases but do
+    not migrate or restyle them; their production views and record panel are
+    preserved as stated above. Rotation banner and the retired-surface presets
+    on Home stay until Adam decides I.5 in `round-2.md`.
 K.8 **Record** (about two hours). Amend `DESIGN.md` in place: Shapes (two
     radii and a pill), Components (the twelve), Named Rules (selection in
     lightness, borders mean two things, the slider), Do's and Don'ts.

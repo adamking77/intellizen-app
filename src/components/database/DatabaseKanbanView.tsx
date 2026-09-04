@@ -16,7 +16,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/database/primitives/Badge";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DatabaseConfirmDialog as ConfirmDialog } from "@/components/database/primitives/DatabaseConfirmDialog";
 import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
@@ -453,7 +453,7 @@ function KanbanCard({
           transform: CSS.Translate.toString(transform),
           opacity: isDragging ? 0.4 : 1,
           boxShadow: dragging ? "0 8px 24px rgba(0, 0, 0, 0.4)" : undefined,
-          backgroundColor: active ? "var(--selected)" : undefined,
+          backgroundColor: active ? "var(--accent-soft)" : undefined,
         }}
         {...attributes}
         {...listeners}

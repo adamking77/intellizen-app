@@ -158,7 +158,7 @@ export function DatabaseCalendarView({
                   </div>
                 ))}
                 {day.records.length > 3 && (
-                  <div className="text-[var(--t-count)] opacity-40">+{day.records.length - 3} more</div>
+                  <div className="text-[10px] opacity-40">+{day.records.length - 3} more</div>
                 )}
               </>
             )}

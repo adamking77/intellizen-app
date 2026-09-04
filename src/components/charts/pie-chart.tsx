@@ -11,6 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -214,12 +215,12 @@ const PieChartCore = memo(function PieChartCore({
   }, [data, startAngle, endAngle, padAngle]);
 
   // Mark as loaded after initial render
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoaded(true);
     }, 100);
     return () => clearTimeout(timer);
-  });
+  }, []);
 
   // Separate children into categories
   const { svgChildren, centerChildren, defsChildren } = useMemo(() => {

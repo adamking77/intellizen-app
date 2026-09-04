@@ -3,11 +3,11 @@ import type { WorkspaceDatabaseField } from "@/lib/types";
 export type SemanticRole = "danger" | "warning" | "success" | "info" | "neutral";
 
 export const SEMANTIC_PALETTE: Record<SemanticRole, string> = {
-  danger: "var(--bad)",
-  warning: "var(--wait)",
-  success: "var(--ok)",
-  info: "var(--runtime)",
-  neutral: "var(--overlay-1)",
+  danger: "#f38ba8",
+  warning: "#fab387",
+  success: "#a6e3a1",
+  info: "#74c7ec",
+  neutral: "#7f849c",
 };
 
 export const SEMANTIC_MAP: Record<string, SemanticRole> = {
@@ -38,25 +38,25 @@ export const SEMANTIC_MAP: Record<string, SemanticRole> = {
 };
 
 export const HASH_PALETTE = [
-  "var(--red)",
-  "var(--peach)",
-  "var(--yellow)",
-  "var(--green)",
-  "var(--teal)",
-  "var(--sky)",
-  "var(--mauve)",
-  "var(--pink)",
+  "#f38ba8",
+  "#fab387",
+  "#f9e2af",
+  "#a6e3a1",
+  "#94e2d5",
+  "#74c7ec",
+  "#cba6f7",
+  "#f5c2e7",
 ];
 
 export const NAMED_OPTION_COLORS = [
-  { label: "Rose", value: "var(--red)" },
-  { label: "Peach", value: "var(--peach)" },
-  { label: "Gold", value: "var(--yellow)" },
-  { label: "Mint", value: "var(--green)" },
-  { label: "Teal", value: "var(--teal)" },
-  { label: "Sky", value: "var(--sky)" },
-  { label: "Iris", value: "var(--mauve)" },
-  { label: "Pink", value: "var(--pink)" },
+  { label: "Rose", value: "#f38ba8" },
+  { label: "Peach", value: "#fab387" },
+  { label: "Gold", value: "#f9e2af" },
+  { label: "Mint", value: "#a6e3a1" },
+  { label: "Teal", value: "#94e2d5" },
+  { label: "Sky", value: "#74c7ec" },
+  { label: "Iris", value: "#cba6f7" },
+  { label: "Pink", value: "#f5c2e7" },
 ] as const;
 
 export const CYCLING_PALETTE = [0, 4, 2, 6, 1, 5, 3, 7];
