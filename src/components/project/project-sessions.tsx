@@ -8,11 +8,10 @@ import { Identity } from "@/components/ui/identity";
 import { QueryState } from "@/components/ui/query-state";
 import { Receipt, ToolRow } from "@/components/ui/receipt";
 import { Pill } from "@/components/ui/status-pill";
-import type { Hierarchy } from "@/lib/hierarchy";
-import { groupSessionsByProject, projectSessionKey } from "@/lib/project-room";
+import { projectSessionKey } from "@/lib/project-room";
 import { cn } from "@/lib/utils";
 import { runViewTransition } from "@/lib/view-transitions";
-import { getHermesSessionMessages, listHermesSessions } from "@/services/hermes-project-sessions";
+import { getHermesSessionMessages, listHermesProjectSessions } from "@/services/hermes-project-sessions";
 
 function formatTime(epoch: number) {
   if (!epoch) return "";
@@ -25,19 +24,17 @@ export function ProjectSessions({
   projectId,
   selectedSessionKey,
   transcriptOnly = false,
-  tree,
 }: {
   folders: string[];
   projectId: string;
   selectedSessionKey?: string | null;
   transcriptOnly?: boolean;
-  tree: Hierarchy;
 }) {
-  const allSessions = useQuery({
-    queryKey: ["hermes-sessions", "project-room"],
-    queryFn: listHermesSessions,
+  const projectSessions = useQuery({
+    queryKey: ["hermes-project-sessions", projectId, folders],
+    queryFn: () => listHermesProjectSessions(folders),
   });
-  const sessions = groupSessionsByProject(tree, allSessions.data ?? []).get(projectId) ?? [];
+  const sessions = projectSessions.data ?? [];
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [drawerKey, setDrawerKey] = useState<string | null>(null);
   const selected = sessions.find((session) => projectSessionKey(session) === selectedKey) ?? null;
@@ -61,8 +58,8 @@ export function ProjectSessions({
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <QueryState
         className="m-5 w-full"
-        isLoading={allSessions.isLoading}
-        error={allSessions.error}
+        isLoading={projectSessions.isLoading}
+        error={projectSessions.error}
         isEmpty={sessions.length === 0}
         loadingLabel="Loading project sessions"
         errorTitle="Session history unavailable"
@@ -70,7 +67,7 @@ export function ProjectSessions({
         emptyDescription={folders.length === 0
           ? "Add a project folder so Hermes sessions can file here by working directory."
           : "Hermes sessions appear here when their working directory is inside this project."}
-        onRetry={() => void allSessions.refetch()}
+        onRetry={() => void projectSessions.refetch()}
       >
         {!transcriptOnly ? <aside className="w-64 shrink-0 overflow-y-auto border-r border-[var(--border)] p-3">
           {sessions.map((session) => (

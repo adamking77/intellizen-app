@@ -13,7 +13,7 @@ import { groupSessionsByProject, projectSessionKey } from "@/lib/project-room";
 import { toastError } from "@/lib/toast";
 import { useHierarchy } from "@/lib/use-hierarchy";
 import { cn } from "@/lib/utils";
-import { listHermesSessions } from "@/services/hermes-project-sessions";
+import { listHermesSidebarSessions } from "@/services/hermes-project-sessions";
 
 // The hierarchy in the sidebar: department → workspace → project (recursive).
 // Behaviour ported from hermes-app's Tree.tsx; rows reuse the nav's density so
@@ -289,14 +289,14 @@ export function WorkspaceTree() {
   const location = useLocation();
   const navigate = useNavigate();
   const roving = useTreeRoving();
-  const allSessions = useQuery({
-    queryKey: ["hermes-sessions", "project-room"],
-    queryFn: listHermesSessions,
+  const sidebarSessions = useQuery({
+    queryKey: ["hermes-sessions", "sidebar"],
+    queryFn: listHermesSidebarSessions,
     retry: false,
   });
   const sessionGroups = useMemo(
-    () => groupSessionsByProject(tree, allSessions.data ?? []),
-    [allSessions.data, tree],
+    () => groupSessionsByProject(tree, sidebarSessions.data ?? []),
+    [sidebarSessions.data, tree],
   );
   const selectedSessionKey = new URLSearchParams(location.search).get("session");
 

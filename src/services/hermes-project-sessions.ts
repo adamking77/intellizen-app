@@ -1,4 +1,7 @@
 import { hermesRest } from "@/engine/rest";
+import { request, type GatewayClientLike } from "@/engine/contract";
+import { getGatewayClient } from "@/engine/gateway";
+import { listProfiles } from "@/engine/profiles";
 import { sessionsForProject } from "@/lib/project-room";
 
 export interface HermesProjectSession {
@@ -32,6 +35,13 @@ interface RawSession {
   message_count?: unknown;
 }
 
+interface HermesProjectResult {
+  project?: {
+    id?: unknown;
+    repos?: Array<{ groups?: Array<{ sessions?: RawSession[] }> }>;
+  } | null;
+}
+
 function string(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -44,31 +54,7 @@ function messageText(value: unknown): string {
   return messageText(row.text ?? row.content ?? row.output ?? row.result);
 }
 
-export async function listHermesSessions(): Promise<HermesProjectSession[]> {
-  const rows: RawSession[] = [];
-  const pageSize = 500; // Hermes caps this endpoint at 500 rows per request.
-  let offset = 0;
-  let total = 0;
-  do {
-    const query = new URLSearchParams({
-      limit: String(pageSize),
-      offset: String(offset),
-      min_messages: "1",
-      archived: "exclude",
-      order: "recent",
-      profile: "all",
-      exclude_sources: "cron,kanban,tool",
-    });
-    const result = await hermesRest<{ sessions?: RawSession[]; total?: number }>(
-      `/api/profiles/sessions?${query.toString()}`,
-    );
-    const page = result.sessions ?? [];
-    rows.push(...page);
-    total = Number(result.total ?? page.length) || page.length;
-    offset += pageSize;
-    if (page.length === 0) break;
-  } while (offset < total);
-
+function normalizeSessions(rows: RawSession[]): HermesProjectSession[] {
   const seen = new Set<string>();
   const sessions = rows.flatMap((row) => {
     const id = string(row.id);
@@ -90,9 +76,41 @@ export async function listHermesSessions(): Promise<HermesProjectSession[]> {
   return sessions.sort((left, right) => right.lastActive - left.lastActive);
 }
 
-export async function listHermesProjectSessions(folders: string[]): Promise<HermesProjectSession[]> {
+export async function listHermesSidebarSessions(): Promise<HermesProjectSession[]> {
+  const query = new URLSearchParams({
+    recents_profile: "all",
+    recents_limit: "500",
+    recents_exclude: "cron,kanban,tool",
+    cron_limit: "1",
+    messaging_limit: "1",
+  });
+  const result = await hermesRest<{ recents?: { sessions?: RawSession[] } }>(
+    `/api/profiles/sessions/sidebar?${query.toString()}`,
+  );
+  return normalizeSessions(result.recents?.sessions ?? []);
+}
+
+export async function listHermesProjectSessions(
+  folders: string[],
+  client: GatewayClientLike = getGatewayClient(),
+): Promise<HermesProjectSession[]> {
   if (folders.length === 0) return [];
-  return sessionsForProject(await listHermesSessions(), folders);
+  const profiles = await listProfiles(client);
+  const rows = await Promise.all(profiles.flatMap((profile) => folders.map(async (cwd) => {
+    const resolved = await request<{ project?: { id?: unknown } | null }>(client, "projects.for_cwd", {
+      profile: profile.name,
+      cwd,
+    });
+    const projectId = string(resolved.project?.id) || cwd;
+    const result = await request<HermesProjectResult>(client, "projects.project_sessions", {
+      profile: profile.name,
+      project_id: projectId,
+    });
+    return result.project?.repos?.flatMap((repo) =>
+      repo.groups?.flatMap((group) => group.sessions ?? []) ?? []
+    ) ?? [];
+  })));
+  return sessionsForProject(normalizeSessions(rows.flat()), folders);
 }
 
 export async function getHermesSessionMessages(

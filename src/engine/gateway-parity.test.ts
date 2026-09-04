@@ -64,7 +64,10 @@ if (!present) {
   });
 
   it.each([...GATEWAY_METHODS])("registers method %s with @method(...)", (method) => {
-    expect(source.includes(`@method("${method}")`)).toBe(true);
+    expect(
+      source.includes(`@method("${method}")`) ||
+      source.includes(`@_projects_method("${method}")`),
+    ).toBe(true);
   });
 
   it.each([...GATEWAY_EVENTS])("emits event %s as a string literal", (event) => {

@@ -149,7 +149,7 @@ export function ProjectView() {
       ) : view === "board" ? (
         <ProjectBoard folders={node.folders} />
       ) : view === "session" ? (
-        <ProjectSessions folders={node.folders} projectId={id} selectedSessionKey={selectedSessionKey} transcriptOnly={Boolean(selectedSessionKey)} tree={tree} />
+        <ProjectSessions folders={node.folders} projectId={id} selectedSessionKey={selectedSessionKey} transcriptOnly={Boolean(selectedSessionKey)} />
       ) : view === "canvas" ? (
         <ProjectCanvases canvases={projectCanvases} />
       ) : view === "graph" && legacyProjectId != null ? (

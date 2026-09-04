@@ -16,6 +16,8 @@ export const GATEWAY_METHODS = [
   "prompt.submit",
   "session.interrupt",
   "profiles.list",
+  "projects.for_cwd",
+  "projects.project_sessions",
   "approval.respond",
   "clarify.respond",
   // Sent by the copied client on its own for replay after a reconnect. (Its
@@ -72,7 +74,7 @@ export const HERMES_REST_ROUTES = [
   { method: "GET", path: "/api/plugins/kanban/boards", sourcePath: "/boards" },
   { method: "GET", path: "/api/plugins/kanban/board", sourcePath: "/board" },
   { method: "POST", path: "/api/plugins/kanban/tasks", sourcePath: "/tasks" },
-  { method: "GET", path: "/api/profiles/sessions" },
+  { method: "GET", path: "/api/profiles/sessions/sidebar" },
   { method: "GET", path: "/api/sessions/{session_id}/messages" },
   { method: "GET", path: "/api/skills" },
   { method: "PUT", path: "/api/skills/toggle" },
