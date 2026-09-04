@@ -1,6 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function listHierarchy(supabase: SupabaseClient) {
+export type NodeKind = "department" | "workspace" | "project";
+
+export interface HierarchyNode {
+  id: string;
+  kind: NodeKind;
+  parent_id: string | null;
+  name: string;
+  folders: string[];
+  position: number;
+}
+
+export async function listHierarchy(supabase: SupabaseClient): Promise<HierarchyNode[]> {
   const { data, error } = await supabase
     .schema("workspace")
     .from("hierarchy_nodes")
@@ -8,5 +19,5 @@ export async function listHierarchy(supabase: SupabaseClient) {
     .order("position")
     .order("name");
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []) as HierarchyNode[];
 }

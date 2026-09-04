@@ -34,6 +34,7 @@ import {
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
 import { listHierarchy } from "./hierarchy.js";
+import { callHierarchyWriteTool, hierarchyWriteTools } from "./hierarchy-writes.js";
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
 
@@ -3149,6 +3150,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
     },
     { name: "list_hierarchy", description: "List the shared IntelliZen sidebar hierarchy, including project folders used to file Hermes sessions. Read-only.", inputSchema: { type: "object", properties: {} } },
+    ...hierarchyWriteTools,
     {
       name: "query_records",
       description:
@@ -4334,6 +4336,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "list_hierarchy") {
     return { content: [{ type: "text", text: JSON.stringify(await listHierarchy(supabase), null, 2) }] };
   }
+  const hierarchyWrite = await callHierarchyWriteTool(supabase, name, (args ?? {}) as Record<string, unknown>, recordWorkEvent);
+  if (hierarchyWrite) return { content: [{ type: "text", text: JSON.stringify(hierarchyWrite, null, 2) }] };
   // ── query_records ─────────────────────────────────────────────────────────
   if (name === "query_records") {
     const result = await queryRecords((args ?? {}) as {
