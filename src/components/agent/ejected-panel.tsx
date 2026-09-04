@@ -124,7 +124,7 @@ export function EjectedPanel() {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--hud-bg)] shadow-[var(--hud-shadow)]">
         {/* Frameless floating window: this strip is its title bar. There is
             no close button — Redock is the way home. */}
         <div

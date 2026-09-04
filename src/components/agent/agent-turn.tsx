@@ -173,7 +173,7 @@ export function UserTurn({
   if (editing) {
     return (
       <div className="max-w-[82%] self-end">
-        <div className="rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
+        <div className="rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2">
           <Textarea
             value={draft}
             autoFocus
@@ -216,7 +216,7 @@ export function UserTurn({
 
   return (
     <div className="group relative max-w-[82%] self-end">
-      <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
+      <div className="rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2">
         <span className="whitespace-pre-wrap font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
       </div>
       <TurnBar align="end">

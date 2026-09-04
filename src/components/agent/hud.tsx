@@ -50,8 +50,8 @@ const ICON =
 /** The bar's ground and the one sanctioned shadow: separation from a desktop
  *  the app does not control, not depth between two of its own planes. */
 const SURFACE: CSSProperties = {
-  background: "var(--mantle)",
-  boxShadow: "0 8px 28px rgba(0,0,0,0.44)",
+  background: "var(--hud-bg)",
+  boxShadow: "var(--hud-shadow)",
 };
 
 function startResize(dir: ResizeDirection) {
@@ -276,7 +276,7 @@ export function Hud({
               m.from === "you" ? (
                 <div
                   key={m.id}
-                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
                 >
                   {m.text}
                 </div>

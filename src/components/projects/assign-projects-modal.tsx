@@ -83,7 +83,7 @@ export function AssignProjectsModal({
       <div className="-mx-5 -my-4">
         {/* Search */}
         <div className="border-b border-[var(--border-subtle)] px-4 py-2.5">
-          <div className="flex items-center gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-1.5 focus-within:border-[var(--accent)]">
+          <div className="flex items-center gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-1.5 focus-within:border-[var(--line-strong)]">
             <Search className="h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]" />
             <input
               autoFocus
@@ -118,9 +118,9 @@ export function AssignProjectsModal({
                 <span className={cn(
                   "flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--r-ctl)] border transition-colors",
                   allChecked
-                    ? "border-[var(--accent)] bg-[var(--accent)]"
+                    ? "border-transparent bg-[var(--accent)]"
                     : someChecked
-                      ? "border-[var(--accent)] bg-[var(--accent)]/30"
+                      ? "border-transparent bg-[var(--accent)]/30"
                       : "border-[var(--overlay-0)] bg-transparent",
                 )}>
                   {(allChecked || someChecked) && (
@@ -150,7 +150,7 @@ export function AssignProjectsModal({
                     <span className={cn(
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--r-ctl)] border transition-colors",
                       isChecked
-                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        ? "border-transparent bg-[var(--accent)]"
                         : "border-[var(--overlay-0)] bg-transparent",
                     )}>
                       {isChecked && (

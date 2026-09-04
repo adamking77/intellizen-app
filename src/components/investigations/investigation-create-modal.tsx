@@ -145,7 +145,7 @@ export function InvestigationCreateModal({
                     className={cn(
                       "mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[var(--r-pill)] border-2 transition-colors",
                       useCase === uc.id
-                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        ? "border-transparent bg-[var(--accent)]"
                         : "border-[var(--overlay-0)] bg-transparent",
                     )}
                   />

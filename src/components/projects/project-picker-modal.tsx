@@ -156,7 +156,7 @@ export function ProjectPickerModal({
                     className={cn(
                       "group flex items-center justify-between gap-3 rounded-[var(--r-ctl)] border px-3 py-2.5 text-left transition-colors",
                       isSaving
-                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+                        ? "border-[var(--border)] bg-[var(--accent-soft)]"
                         : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
                       savingProjectId !== null && !isSaving && "opacity-40",
                     )}

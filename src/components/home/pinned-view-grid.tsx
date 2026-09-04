@@ -382,7 +382,7 @@ function PinnedWidgetCard({
             <button
               type="button"
               onClick={saveMetadata}
-              className="rounded-[var(--r-pill)] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent)]"
+              className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent)]"
             >
               Save
             </button>

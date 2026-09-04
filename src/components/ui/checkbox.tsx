@@ -37,10 +37,10 @@ export function Checkbox({
           "h-4 w-4 rounded-[var(--r-ctl)] border inline-flex items-center justify-center",
           "transition-[background-color,border-color] duration-[var(--t-base)] ease-[var(--ease)]",
           checked
-            ? "bg-[var(--accent)] border-[var(--accent)]"
+            ? "border-transparent bg-[var(--accent)]"
             : indeterminate
-              ? "bg-[color-mix(in_srgb,var(--accent)_22%,var(--mantle)_78%)] border-[var(--accent-border)]"
-              : "bg-[var(--mantle)] border-[var(--surface-1)] hover:border-[var(--accent)]"
+              ? "border-transparent bg-[color-mix(in_srgb,var(--accent)_22%,var(--mantle)_78%)]"
+              : "border-[var(--surface-1)] bg-[var(--mantle)] hover:border-[var(--line-strong)]"
         )}
       >
         {checked ? <Check className="h-3 w-3 text-[var(--crust)]" strokeWidth={3} /> : null}

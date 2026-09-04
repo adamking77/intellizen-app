@@ -184,15 +184,14 @@ J.5 **Design record.** Port `--user-bubble`, `--hud-bg`, `--hud-shadow`,
 
 These add to Phase F and Phase I:
 
-F.7 **Control kit.** Full brief: `docs/stages/design-system-v3.md` (work packages K.1 to K.8; this item and F.8 are executed through that file). One control primitive in `ui/` (default, selected,
+F.7 **Control kit.** Full brief and implementation record: `docs/stages/design-system-v3.md` §6, K.1–K.8 (K.8 records this item and F.8). One control primitive in `ui/` (default, selected,
     primary, quiet, field), radius tokens collapsed to plane, control, pill,
     the segmented control, the drawer component. Base UI and Mantine
     dependencies removed. **Selection intensity is a user setting:** a
     slider on Settings ▸ Appearance beside the accent picker, driving the
     selected plane's strength (and how much of the accent it carries) as one
     token every surface reads. Default tuned with Adam.
-F.8 **Eight consistencies** applied across Home widgets, Databases, Docs,
-    Agents, Settings and the panel.
+F.8 **Eight consistencies.** Full acceptance checks: `docs/stages/design-system-v3.md` §4; implementation sweep: §6 K.7; final record: §6 K.8. Applied across Home widgets, Databases, Docs, Agents, Settings and the panel.
 I.7 **The room's view switcher** **[approval given 2026-09-04]**: Brief,
     Table, Board, Graph, Timeline, Session on the project room; defaults per
     material; drawer for cards, sessions and decisions.

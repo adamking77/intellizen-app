@@ -70,10 +70,10 @@ export function SignalCard({
           className={cn(
             "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--r-ctl)] border transition-all duration-[var(--t-base)] ease-[var(--ease)]",
             isSelected
-              ? "border-[var(--accent)] bg-[var(--accent)] opacity-100"
+              ? "border-transparent bg-[var(--accent)] opacity-100"
               : selectionActive
-                ? "border-[var(--border-strong)] bg-transparent opacity-100 hover:border-[var(--accent)]"
-                : "border-[var(--border-strong)] bg-transparent opacity-0 group-hover/row:opacity-100 hover:border-[var(--accent)]",
+                ? "border-[var(--border-strong)] bg-transparent opacity-100 hover:border-[var(--line-strong)]"
+                : "border-[var(--border-strong)] bg-transparent opacity-0 group-hover/row:opacity-100 hover:border-[var(--line-strong)]",
           )}
         >
           {isSelected ? <Check className="h-2.5 w-2.5 text-[var(--base)]" strokeWidth={3} /> : null}

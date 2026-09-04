@@ -5,14 +5,14 @@ colors:
   rail: "#11111a"
   panel: "#171724"
   work: "#1d1d2c"
-  raised: "#262637"
-  text: "#cdd6f4"
+  raised: "#252539"
+  text: "#aeb6cf"
   text-muted: "#9ca4bd"
-  accent: "#89b4fa"
-  waiting: "#fab387"
-  verified: "#a6e3a1"
-  failure: "#f38ba8"
-  runtime: "#74c7ec"
+  accent: "#7fa6e6"
+  waiting: "#e2a47d"
+  verified: "#a6cfa1"
+  failure: "#d47b95"
+  runtime: "#789cd6"
 typography:
   title:
     fontFamily: "Geist, sans-serif"
@@ -41,9 +41,8 @@ typography:
     fontWeight: 400
     lineHeight: 1.35
 rounded:
-  row: "4px"
-  message: "10px"
   plane: "12px"
+  control: "8px"
   pill: "999px"
 spacing:
   hairline: "1px"
@@ -53,20 +52,51 @@ spacing:
   lg: "16px"
   xl: "24px"
 components:
-  button-primary:
+  control:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.rail}"
-    rounded: "{rounded.pill}"
-    padding: "5px 13px"
-  navigation-selected:
+    rounded: "{rounded.control}"
+    height: "28px"
+  segmented:
     backgroundColor: "{colors.raised}"
     textColor: "{colors.text}"
-    rounded: "{rounded.row}"
-    padding: "7px 10px"
-  message-agent:
+    rounded: "{rounded.control}"
+  field:
+    backgroundColor: "{colors.rail}"
     textColor: "{colors.text}"
-    rounded: "{rounded.message}"
-    padding: "8px 11px"
+    rounded: "{rounded.control}"
+  select:
+    backgroundColor: "{colors.rail}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  card:
+    backgroundColor: "{colors.raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  pill:
+    backgroundColor: "{colors.raised}"
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.pill}"
+  identity:
+    textColor: "{colors.text}"
+    rounded: "{rounded.pill}"
+  decision-field:
+    backgroundColor: "{colors.waiting}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  receipt:
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.control}"
+  drawer:
+    backgroundColor: "{colors.raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.plane}"
+  skeleton:
+    backgroundColor: "{colors.raised}"
+    rounded: "{rounded.control}"
+  empty-state:
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
 ---
 
 # Design System: IntelliZen
@@ -104,7 +134,9 @@ active.
 
 - **User accent:** primary action, user voice waveform, links, keyboard focus,
   and color swatches. Ordinary selection uses the neutral raised plane. The
-  user selects one of fourteen named accents.
+  user selects one of fourteen named accents. Blue is the deliberate default
+  for every flavor; this is IntelliZen's deviation from Catppuccin's mauve
+  default, not an accidental palette mismatch.
 
 ### Secondary
 
@@ -132,6 +164,20 @@ is red, and runtime is blue. User accent and agent identity never override them.
 **The Token Rule.** Hard-coded colors are allowed only inside the flavor token
 definitions, procedural-avatar palette resolution, platform-native traffic
 lights, or user-authored canvas content. UI components consume semantic tokens.
+
+**Selection in Lightness.** Selection shifts the raised plane by a fixed OKLCH
+lightness step—up on dark flavors and down on light flavors—with a 0.06 floor.
+Dark selections borrow a small amount of the active accent's chroma; light
+selections stay neutral.
+
+**Borders Mean Two Things.** A border marks a field actively being edited or a
+failure whose word appears beside it. The color-swatch inset ring and the tree's
+live drop target are the only operational exceptions. Accent borders are not
+selection, button, checkbox, or card decoration.
+
+**The Selection Strength Rule.** Settings ▸ Appearance is the only place that
+writes `--sel-step`. Its 0.04–0.14 slider defaults to 0.08, and every selected
+surface reads the same token.
 
 ## Typography
 
@@ -197,9 +243,8 @@ container, and wide shadow on the same persistent surface.
 Shape communicates role rather than decoration:
 
 - Major planes: 12px.
-- Rows, fields, disclosures, and state fills: 4px.
-- Messages: 10px.
-- Tags, compact actions, and mode controls: full pill.
+- Controls, rows, fields, cards, messages, disclosures, and nodes: 8px.
+- Pills: 999px, reserved for non-clickable state words and circular identity.
 
 Selection is a raised fill, never a colored side stripe or focus ring. Borders
 mean editable input or failure. A hairline may separate adjacent content without
@@ -207,28 +252,27 @@ enclosing it.
 
 ## Components
 
-### Buttons
+The kit has twelve components. These are the only shared shapes for their roles;
+page-specific content composes them rather than creating new variants.
 
-Compact text actions use pill geometry. Icon-only actions are circles and carry
-a programmatic name. Primary action uses the user accent; destructive action uses
-failure only after consequence is clear. Hover and focus are distinct states.
+| Component | Shipped contract |
+|---|---|
+| Control | 28px high, 8px radius; default, selected, primary, quiet, danger; loading is a 6px running dot. |
+| Segmented | 28px track, 2px inset and gap; roving keys; the selected child uses the selected plane. |
+| Field | Input-plane ground, no border at rest, line-strong while editing; text entry relies on the caret. |
+| Select | Field contract with native appearance removed and one dim chevron. |
+| Card | Raised plane, 8px radius, 9px × 11px padding; hover wash; selected plane when selected. |
+| Pill | Non-clickable state word, 999px radius; neutral, waiting, verified, failure, runtime. |
+| Identity | 16px identity mark, name, then runtime; Hermes, ACP, or you. |
+| Decision field | One waiting-tint question with compact choices; the recommended choice is primary. |
+| Receipt | Mono 11px tool or work line with explicit settled, running, or failed state. |
+| Drawer | 320px transient work-plane detail, 12px radius, 200ms motion, Escape and focus return. |
+| Skeleton | In-place raised bars; 1.4s sheen stops under Reduce Motion. |
+| Empty state | Left-aligned teaching sentence and at most one Control; no box. |
 
-### Cards / Containers
-
-Cards exist only for movable or independently actionable objects. Basic groups
-use spacing and dividers. Empty states do not nest a second card inside a card.
-
-### Inputs / Fields
-
-Fields use the row radius, the input plane, and a functional edge. Keyboard
-focus uses one quiet accent outline; text editors and the composer use the
-caret alone. Focus never becomes a persistent glow. Errors name the problem and
-recovery beside the field.
-
-### Navigation
-
-Navigation selection raises the entire row. Hover uses a quieter fill. Connected
-and segmented modes preserve the same information architecture and focus order.
+All non-text-entry controls use one 1px accent `:focus-visible` outline at a 2px
+offset. There is no focus shadow. Fields and textareas use the caret plus their
+line-strong editing edge.
 
 ### Procedural Avatar
 
@@ -259,6 +303,12 @@ The detached HUD is a fixed-height pill. Stacked agent avatars are its status
 display: full strength is running, dimmed is idle. Longer content opens above the
 bar. The bar never grows and uses the sole sanctioned persistent shadow.
 
+### Page Header Pattern
+
+A page header carries the caps title, breadcrumb, one state line, what waits on
+you, an optional view switcher, and at most one primary Control. Search and
+filters belong to the list or table they affect.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -268,6 +318,8 @@ bar. The bar never grows and uses the sole sanctioned persistent shadow.
 - **Do** keep all controls keyboard reachable and restore focus after overlays.
 - **Do** announce consequential asynchronous state changes through scoped live regions.
 - **Do** preserve user reading position while streaming agent output.
+- **Do** use the same selection-strength token for rows, cards, and segments.
+- **Do** use borders only for active editing or an explicitly named failure.
 - **Do** verify every primary surface at desktop, 390px, and 200% zoom.
 
 ### Don't:
@@ -275,6 +327,8 @@ bar. The bar never grows and uses the sole sanctioned persistent shadow.
 - **Don't** use generic card grids as page scaffolding or nest cards inside cards.
 - **Don't** add pane borders where the shell gap already provides separation.
 - **Don't** use arbitrary radii, font sizes, shadows, or palette utilities.
+- **Don't** use accent borders to decorate buttons, checkboxes, cards, or selection.
+- **Don't** create a thirteenth kit component when composition of the twelve works.
 - **Don't** use gradients as chrome; procedural avatars and analytical canvas
   rendering are the intentional exceptions.
 - **Don't** pulse, spin, or shimmer to communicate waiting. State is explicit text.

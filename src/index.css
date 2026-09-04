@@ -240,6 +240,7 @@
   --accent-hover: color-mix(in srgb, var(--accent) 85%, var(--text));
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
+  --user-bubble: color-mix(in srgb, var(--accent) 15%, var(--raised));
 
   /* Hover: one wash everywhere something is clickable. Mixed against --text
      so it lightens on dark and darkens on light. */
@@ -289,6 +290,8 @@
 
   /* Elevation — single flat shadow only, reserved for popovers/modals */
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --hud-bg: var(--mantle);
+  --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.44);
 
   /* Motion */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -301,6 +304,7 @@
   --r-plane: 12px;
   --r-ctl: 8px;
   --r-pill: 999px;
+  --r-sm: var(--r-ctl);
   --h-ctl: 28px;
   --h-row: 26px;
   --h-line: 32px;
@@ -380,6 +384,9 @@
   --go-bg: var(--accent);
   --go-fg: #fff;
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.14);
+  --user-bubble: color-mix(in srgb, var(--accent) 9%, #fff);
+  --hud-bg: var(--base);
+  --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
 }
 
 /* Panes: the window ground is the seam. Connected is the default and uses a

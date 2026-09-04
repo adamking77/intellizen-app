@@ -198,7 +198,7 @@ export function RecordPickerDropdown({
                   className={cn(
                     "flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--r-ctl)] border",
                     selected
-                      ? "border-[var(--accent-border)] bg-[var(--accent)] text-[var(--crust)]"
+                      ? "border-transparent bg-[var(--accent)] text-[var(--crust)]"
                       : "border-[var(--border)] text-transparent",
                   )}
                 >

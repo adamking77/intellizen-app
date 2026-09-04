@@ -134,7 +134,7 @@ export function GraphSettingToggle({
         className={cn(
           "relative h-5 w-9 rounded-[var(--r-pill)] border transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
           checked
-            ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
+            ? "border-transparent bg-[var(--accent-soft)]"
             : "border-[var(--border)] bg-[var(--base)]",
         )}
       >
