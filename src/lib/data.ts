@@ -6,6 +6,7 @@ import {
 import {
   isDatabaseViewHomePin,
   isGenuiHomePin,
+  isPluginHomePin,
   parseHomePin,
   type HomePin,
   type HomeWidgetFilter,
@@ -1597,7 +1598,7 @@ function buildDocumentsWorkspaceSchema(): WorkspaceDatabaseField[] {
 function buildHomePinsWorkspaceSchema(): WorkspaceDatabaseField[] {
   return [
     { id: HOME_PIN_DB_FIELDS.pinId, name: "Pin ID", type: "text" },
-    { id: HOME_PIN_DB_FIELDS.kind, name: "Widget kind", type: "select", options: ["database-view", "genui"] },
+    { id: HOME_PIN_DB_FIELDS.kind, name: "Widget kind", type: "select", options: ["database-view", "genui", "plugin"] },
     { id: HOME_PIN_DB_FIELDS.databaseId, name: "Database ID", type: "text" },
     { id: HOME_PIN_DB_FIELDS.viewId, name: "View ID", type: "text" },
     { id: HOME_PIN_DB_FIELDS.title, name: "Title", type: "text" },
@@ -2167,7 +2168,7 @@ function homePinFromWorkspaceRecord(record: WorkspaceDatabaseRecord): HomePin | 
 function workspaceFieldsFromHomePin(pin: HomePin): Record<string, WorkspaceDatabaseFieldValue> {
   return {
     [HOME_PIN_DB_FIELDS.pinId]: pin.id,
-    [HOME_PIN_DB_FIELDS.kind]: isGenuiHomePin(pin) ? "genui" : "database-view",
+    [HOME_PIN_DB_FIELDS.kind]: isGenuiHomePin(pin) ? "genui" : isPluginHomePin(pin) ? "plugin" : "database-view",
     [HOME_PIN_DB_FIELDS.databaseId]: isDatabaseViewHomePin(pin) ? pin.databaseId : null,
     [HOME_PIN_DB_FIELDS.viewId]: isDatabaseViewHomePin(pin) ? pin.viewId : null,
     [HOME_PIN_DB_FIELDS.title]: pin.title ?? null,
@@ -2176,8 +2177,10 @@ function workspaceFieldsFromHomePin(pin: HomePin): Record<string, WorkspaceDatab
     // Generated HTML is durable code by design. It is validated by the
     // AgentChatWidget parser and rendered only through SandboxedGenui's
     // isolated iframe/CSP boundary; never inject this field into the app DOM.
-    [HOME_PIN_DB_FIELDS.widget]: isGenuiHomePin(pin) ? JSON.stringify(pin.widget) : null,
-    [HOME_PIN_DB_FIELDS.pinnedAt]: isGenuiHomePin(pin) ? pin.pinnedAt : null,
+    [HOME_PIN_DB_FIELDS.widget]: isGenuiHomePin(pin)
+      ? JSON.stringify(pin.widget)
+      : isPluginHomePin(pin) ? JSON.stringify({ pluginId: pin.pluginId, widgetId: pin.widgetId }) : null,
+    [HOME_PIN_DB_FIELDS.pinnedAt]: isGenuiHomePin(pin) || isPluginHomePin(pin) ? pin.pinnedAt : null,
     [HOME_PIN_DB_FIELDS.x]: pin.x,
     [HOME_PIN_DB_FIELDS.y]: pin.y,
     [HOME_PIN_DB_FIELDS.w]: pin.w,

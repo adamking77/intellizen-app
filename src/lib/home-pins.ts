@@ -1,7 +1,7 @@
 import { parseAgentChatWidget, type AgentChatWidget } from "@/lib/agent-widgets";
 import type { WorkspaceDatabaseModel } from "@/lib/types";
 
-export type HomeWidgetKind = "database-view" | "genui";
+export type HomeWidgetKind = "database-view" | "genui" | "plugin";
 
 export interface HomePinBase {
   id: string;
@@ -33,7 +33,14 @@ export interface HomeGenuiPin extends HomePinBase {
   pinnedAt: string;
 }
 
-export type HomePin = HomeDatabaseViewPin | HomeGenuiPin;
+export interface HomePluginPin extends HomePinBase {
+  kind: "plugin";
+  pluginId: string;
+  widgetId: string;
+  pinnedAt: string;
+}
+
+export type HomePin = HomeDatabaseViewPin | HomeGenuiPin | HomePluginPin;
 export type HomePinPlacement = Pick<HomePin, "id" | "x" | "y" | "w" | "h">;
 
 const GRID_COLS = 12;
@@ -67,11 +74,15 @@ export function supportsPinnedHomeView(type: WorkspaceDatabaseModel["views"][num
 }
 
 export function isDatabaseViewHomePin(pin: HomePin): pin is HomeDatabaseViewPin {
-  return pin.kind !== "genui";
+  return pin.kind !== "genui" && pin.kind !== "plugin";
 }
 
 export function isGenuiHomePin(pin: HomePin): pin is HomeGenuiPin {
   return pin.kind === "genui";
+}
+
+export function isPluginHomePin(pin: HomePin): pin is HomePluginPin {
+  return pin.kind === "plugin";
 }
 
 export function findHomePin(
@@ -191,6 +202,23 @@ export function createGenuiHomePin(widget: AgentChatWidget, pins: HomePin[]): Ho
   };
 }
 
+export function createPluginHomePin(
+  pins: HomePin[],
+  input: Pick<HomePluginPin, "pluginId" | "widgetId" | "title">,
+): HomePluginPin {
+  return {
+    id: crypto.randomUUID(),
+    kind: "plugin",
+    pluginId: input.pluginId,
+    widgetId: input.widgetId,
+    title: input.title,
+    pinnedAt: new Date().toISOString(),
+    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    w: DEFAULT_PIN_W,
+    h: DEFAULT_PIN_H,
+  };
+}
+
 export function createDatabaseHomePin(
   pins: HomePin[],
   input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId"> &
@@ -248,7 +276,7 @@ export function parseHomePin(value: unknown): HomePin | null {
   ) {
     return null;
   }
-  if (candidate.kind !== undefined && candidate.kind !== "database-view" && candidate.kind !== "genui") {
+  if (candidate.kind !== undefined && candidate.kind !== "database-view" && candidate.kind !== "genui" && candidate.kind !== "plugin") {
     return null;
   }
 
@@ -270,6 +298,18 @@ export function parseHomePin(value: unknown): HomePin | null {
       ...common,
       kind: "genui",
       widget,
+      pinnedAt: typeof candidate.pinnedAt === "string" ? candidate.pinnedAt : new Date().toISOString(),
+    };
+  }
+
+  if (candidate.kind === "plugin") {
+    const widget = isPlainRecord(candidate.widget) ? candidate.widget : candidate;
+    if (typeof widget?.pluginId !== "string" || typeof widget.widgetId !== "string") return null;
+    return {
+      ...common,
+      kind: "plugin",
+      pluginId: widget.pluginId,
+      widgetId: widget.widgetId,
       pinnedAt: typeof candidate.pinnedAt === "string" ? candidate.pinnedAt : new Date().toISOString(),
     };
   }

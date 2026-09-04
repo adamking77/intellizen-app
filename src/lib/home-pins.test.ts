@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   createGenuiHomePin,
+  createPluginHomePin,
   isDatabaseViewHomePin,
   isGenuiHomePin,
+  isPluginHomePin,
   parseHomePin,
   parseHomeWidgetConfigJson,
   parseHomeWidgetFilterJson,
@@ -59,6 +61,20 @@ describe("Home pin mutations", () => {
     expect(parsed && isGenuiHomePin(parsed)).toBe(true);
     expect(parsed?.title).toBe("Live tracker");
     expect(parsed?.config).toEqual({ refreshMode: "mount" });
+  });
+
+  it("parses durable plugin widgets from their shared Home Pin payload", () => {
+    const pin = createPluginHomePin([first], { pluginId: "weather", widgetId: "forecast", title: "Forecast" });
+    expect(parseHomePin(pin)).toEqual(pin);
+    const parsed = parseHomePin({
+      ...pin,
+      pluginId: undefined,
+      widgetId: undefined,
+      widget: { pluginId: pin.pluginId, widgetId: pin.widgetId },
+    });
+
+    expect(parsed && isPluginHomePin(parsed)).toBe(true);
+    expect(parsed).toMatchObject({ kind: "plugin", pluginId: "weather", widgetId: "forecast", title: "Forecast" });
   });
 
   it("validates filter and config metadata before persistence", () => {

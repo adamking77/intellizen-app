@@ -12,7 +12,7 @@ vi.mock("@/lib/toast", () => ({
 vi.mock("@tauri-apps/api/path", () => ({ homeDir: async () => "/h", join: async (...p: string[]) => p.join("/") }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ readDir: vi.fn(), readTextFile: vi.fn(), stat: vi.fn() }));
 
-import { PluginWidgetBoard } from "./home-widgets";
+import { PluginWidgetSurface } from "./home-widgets";
 import { emptyContributions, usePluginRegistry } from "./registry";
 import { PluginSidebarEntries } from "./sidebar-entries";
 
@@ -55,11 +55,12 @@ describe("plugin surfaces", () => {
         },
       ],
     });
-    localStorage.setItem("intelizen:plugin-widgets", JSON.stringify(["good:w", "bad:w"]));
-    await act(async () => root.render(createElement(PluginWidgetBoard)));
+    await act(async () => root.render(createElement("div", null,
+      createElement(PluginWidgetSurface, { pluginId: "good", widgetId: "w" }),
+      createElement(PluginWidgetSurface, { pluginId: "bad", widgetId: "w" }),
+    )));
     expect(container.textContent).toContain("fine");
     expect(container.textContent).toContain("kaboom");
-    expect(container.querySelectorAll("section")).toHaveLength(2);
   });
 
   it("sidebar lists entries and marks a broken plugin", async () => {

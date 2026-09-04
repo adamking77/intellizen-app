@@ -13,10 +13,12 @@ import {
   type HomeDatabaseViewPin,
   type HomeGenuiPin,
   type HomePinBase,
+  type HomePluginPin,
   type HomeWidgetFilter,
 } from "@/lib/home-pins";
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { PluginWidgetSurface } from "@/plugins/home-widgets";
 
 const GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 28;
@@ -44,7 +46,12 @@ export interface PinnedGenuiWidgetModel {
   pin: HomeGenuiPin;
 }
 
-export type PinnedHomeWidgetModel = PinnedDatabaseWidgetModel | PinnedGenuiWidgetModel;
+export interface PinnedPluginWidgetModel {
+  kind: "plugin";
+  pin: HomePluginPin;
+}
+
+export type PinnedHomeWidgetModel = PinnedDatabaseWidgetModel | PinnedGenuiWidgetModel | PinnedPluginWidgetModel;
 
 export function PinnedViewGrid({
   widgets,
@@ -161,8 +168,10 @@ function PinnedWidgetCard({
     () => widget.kind === "database-view" ? applyPinMetadataToView(widget) : null,
     [widget],
   );
-  const title = widget.pin.title || (widget.kind === "database-view" ? widget.view.name : widget.pin.widget.title || "Generated view");
-  const sourceLabel = widget.kind === "database-view" ? widget.database.name : "Agent widget";
+  const title = widget.pin.title || (widget.kind === "database-view"
+    ? widget.view.name
+    : widget.kind === "genui" ? widget.pin.widget.title || "Generated view" : widget.pin.widgetId);
+  const sourceLabel = widget.kind === "database-view" ? widget.database.name : widget.kind === "genui" ? "Agent widget" : "Plugin widget";
 
   function beginEditing() {
     setTitleDraft(title);
@@ -196,7 +205,7 @@ function PinnedWidgetCard({
         widthClass,
         heightClass,
       )}
-      data-view-type={widget.kind === "database-view" ? widget.view.type : "genui"}
+      data-view-type={widget.kind === "database-view" ? widget.view.type : widget.kind}
     >
       <div className="relative flex items-start gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
         <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
@@ -386,6 +395,10 @@ function PinnedWidgetCard({
         ) : widget.kind === "genui" ? (
           <div className="h-full overflow-auto px-3 py-2">
             <AgentChatWidget key={refreshKey} widget={{ ...widget.pin.widget, title: undefined }} />
+          </div>
+        ) : widget.kind === "plugin" ? (
+          <div className="h-full overflow-auto px-3 py-2">
+            <PluginWidgetSurface pluginId={widget.pin.pluginId} widgetId={widget.pin.widgetId} />
           </div>
         ) : null}
       </div>

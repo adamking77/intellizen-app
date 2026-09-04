@@ -35,6 +35,7 @@ import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from ".
 import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
 import { listHierarchy } from "./hierarchy.js";
 import { callHierarchyWriteTool, hierarchyWriteTools } from "./hierarchy-writes.js";
+import { callPromisedTool, HOME_PIN_FIELDS, promisedTools } from "./promised-tools.js";
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
 
@@ -1003,15 +1004,6 @@ const CHART_TYPES = new Set(["bar", "line", "donut", "pie", "gauge"]);
 const CHART_AGGREGATIONS = new Set(["count", "sum", "avg", "min", "max"]);
 
 const HOME_PINS_DATABASE_ICON = "intel-system:home-pins";
-const HOME_PIN_FIELDS = {
-  pinId: "home_pin_id",
-  databaseId: "home_pin_database_id",
-  viewId: "home_pin_view_id",
-  x: "home_pin_x",
-  y: "home_pin_y",
-  w: "home_pin_w",
-  h: "home_pin_h",
-} as const;
 const HOME_PIN_DEFAULT_W = 4;
 const HOME_PIN_DEFAULT_H = 11;
 const HOME_PIN_GRID_COLS = 12;
@@ -1278,8 +1270,14 @@ async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
   // Mirrors ensureHomePinsWorkspaceDatabase() in src/lib/data.ts — keep in sync.
   const schema = [
     { id: HOME_PIN_FIELDS.pinId, name: "Pin ID", type: "text" },
+    { id: HOME_PIN_FIELDS.kind, name: "Kind", type: "select", options: ["database-view", "genui", "plugin"] },
     { id: HOME_PIN_FIELDS.databaseId, name: "Database ID", type: "text" },
     { id: HOME_PIN_FIELDS.viewId, name: "View ID", type: "text" },
+    { id: HOME_PIN_FIELDS.title, name: "Title", type: "text" },
+    { id: HOME_PIN_FIELDS.filter, name: "Filter", type: "text" },
+    { id: HOME_PIN_FIELDS.config, name: "Config", type: "text" },
+    { id: HOME_PIN_FIELDS.widget, name: "Widget", type: "text" },
+    { id: HOME_PIN_FIELDS.pinnedAt, name: "Pinned at", type: "date" },
     { id: HOME_PIN_FIELDS.x, name: "X", type: "number" },
     { id: HOME_PIN_FIELDS.y, name: "Y", type: "number" },
     { id: HOME_PIN_FIELDS.w, name: "Width", type: "number" },
@@ -3151,6 +3149,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     },
     { name: "list_hierarchy", description: "List the shared IntelliZen sidebar hierarchy, including project folders used to file Hermes sessions. Read-only.", inputSchema: { type: "object", properties: {} } },
     ...hierarchyWriteTools,
+    ...promisedTools,
     {
       name: "query_records",
       description:
@@ -4338,6 +4337,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
   const hierarchyWrite = await callHierarchyWriteTool(supabase, name, (args ?? {}) as Record<string, unknown>, recordWorkEvent);
   if (hierarchyWrite) return { content: [{ type: "text", text: JSON.stringify(hierarchyWrite, null, 2) }] };
+  const promised = await callPromisedTool(supabase, name, (args ?? {}) as Record<string, unknown>, { findHomePinsDatabase, ensureHomePinsDatabase, listHomePinRecords, recordWorkEvent });
+  if (promised) return { content: [{ type: "text", text: JSON.stringify(promised, null, 2) }] };
   // ── query_records ─────────────────────────────────────────────────────────
   if (name === "query_records") {
     const result = await queryRecords((args ?? {}) as {

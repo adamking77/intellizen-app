@@ -1,4 +1,4 @@
-import { isDatabaseViewHomePin, type HomePin } from "@/lib/home-pins";
+import { isDatabaseViewHomePin, isPluginHomePin, type HomePin } from "@/lib/home-pins";
 
 /**
  * Catalog refreshes are only needed when pin identity changes. Placement-only
@@ -9,7 +9,9 @@ export function homePinIdentitySignature(pins: HomePin[]) {
   return pins
     .map((pin) => isDatabaseViewHomePin(pin)
       ? `${pin.id}:database-view:${pin.databaseId}:${pin.viewId}`
-      : `${pin.id}:genui:${pin.widget.kind}`)
+      : isPluginHomePin(pin)
+        ? `${pin.id}:plugin:${pin.pluginId}:${pin.widgetId}`
+        : `${pin.id}:genui:${pin.widget.kind}`)
     .sort()
     .join("|");
 }

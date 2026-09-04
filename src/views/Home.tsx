@@ -12,8 +12,10 @@ import {
 import {
   loadHomePins,
   createDatabaseHomePin,
+  createPluginHomePin,
   isDatabaseViewHomePin,
   isGenuiHomePin,
+  isPluginHomePin,
   patchHomePinPlacements,
   patchHomePinMetadata,
   removeHomePinById,
@@ -41,7 +43,12 @@ import {
 import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
 import { toast } from "@/lib/toast";
-import { PluginWidgetBoard, PluginWidgetMenuItems } from "@/plugins/home-widgets";
+import {
+  clearLegacyPluginWidgetKeys,
+  parseWidgetKey,
+  PluginWidgetMenuItems,
+  readLegacyPluginWidgetKeys,
+} from "@/plugins/home-widgets";
 
 const ROTATION_ACCENTS: Record<RotationWeek, string> = {
   Build: "var(--teal)",
@@ -59,6 +66,7 @@ export function HomeView() {
   const [widgetPickerOpen, setWidgetPickerOpen] = useState(false);
   const pinMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const legacyGenuiMigrationStartedRef = useRef(false);
+  const legacyPluginMigrationStartedRef = useRef(false);
   const rotation = currentRotation();
   const {
     data: catalog = [],
@@ -98,6 +106,7 @@ export function HomeView() {
     return pins
       .map((pin): PinnedHomeWidgetModel | null => {
         if (isGenuiHomePin(pin)) return { kind: "genui", pin };
+        if (isPluginHomePin(pin)) return { kind: "plugin", pin };
         const database = catalogById.get(pin.databaseId);
         const view = database?.views.find((candidate) => candidate.id === pin.viewId);
         if (!database || !view || !supportsPinnedHomeView(view.type)) return null;
@@ -172,6 +181,22 @@ export function HomeView() {
       });
     });
   }, [queryClient, workspacePins]);
+
+  useEffect(() => {
+    const legacyKeys = readLegacyPluginWidgetKeys();
+    if (!workspacePins || legacyPluginMigrationStartedRef.current || legacyKeys.length === 0) return;
+    legacyPluginMigrationStartedRef.current = true;
+    void enqueuePinMutation((current) => legacyKeys.reduce((next, key) => {
+      const widget = parseWidgetKey(key);
+      if (!widget || next.some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return next;
+      return [...next, createPluginHomePin(next, { ...widget, title: widget.widgetId })];
+    }, current)).then(clearLegacyPluginWidgetKeys).catch((migrationError) => {
+      legacyPluginMigrationStartedRef.current = false;
+      toast.error("Plugin widgets could not be moved to shared Home Pins", {
+        description: errorDescription(migrationError),
+      });
+    });
+  }, [workspacePins]);
 
   function enqueuePinMutation(transform: (current: HomePin[]) => HomePin[]) {
     let authoritative: HomePin[] = [];
@@ -295,6 +320,17 @@ export function HomeView() {
     });
   }
 
+  function handleAddPluginWidget(widget: { pluginId: string; widgetId: string; title: string }) {
+    setWidgetPickerOpen(false);
+    void enqueuePinMutation((current) => {
+      if (current.some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return current;
+      return [...current, createPluginHomePin(current, widget)];
+    }).then(() => toast.success(`${widget.title} added to Home`)).catch((err) => {
+      void restoreRemotePinsAfterFailure();
+      toast.error(`${widget.title} was not added`, { description: errorDescription(err) });
+    });
+  }
+
   if (error || pinsError) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
@@ -376,11 +412,10 @@ export function HomeView() {
                   );
                 })}
                 {/* wave-1 plugins: widgets contributed by ~/.hermes/plugins */}
-                <PluginWidgetMenuItems onAdded={() => setWidgetPickerOpen(false)} />
+                <PluginWidgetMenuItems pins={pins} onAdd={handleAddPluginWidget} />
               </div>
             ) : null}
           </div>
-          <PluginWidgetBoard />
           {isLoading || isLoadingPins ? (
             <div role="status" className="flex items-center gap-2 px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
               <Loader2 className="h-4 w-4" />
