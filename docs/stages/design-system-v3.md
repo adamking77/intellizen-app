@@ -422,6 +422,63 @@ with a "Make runnable" action. "Draft with an agent" opens the panel scoped
 to the workflow; the agent writes the definition through the MCP tools
 `get_workflow_definition` and `validate_workflow`; Save stays with the user.
 
+### 5.5 Layout moves approved 2026-09-04
+
+K.9 **The tree is the sidebar.** `src/components/layout/sidebar.tsx`,
+    `workspace-tree.tsx`. The hierarchy takes the whole rail. The eight page
+    links (Home, Databases, Docs, Graph, Canvas, Workflows, Agents,
+    Settings) move into one "Places" group at the foot of the rail, text
+    only, 26px rows, with `⌘1` to `⌘8` in tree order and the shortcut shown
+    in dim at the right of each row. The footer engine line stays beneath.
+    The collapsed rail keeps its icon column for Places (the one place icons
+    are allowed, per Adam's 2026-09-02 rule). *Open it: the tree fills the
+    rail; `⌘3` opens Docs.*
+K.10 **Follow macOS appearance.** `src/lib/theme.ts`,
+    `src/components/settings/appearance.tsx`, `src-tauri/src/lib.rs` for the
+    theme-changed event. Appearance gains "Follow system": when on, the user
+    picks one light flavor and one dark flavor (defaults Flat White and
+    Mocha) and the app switches with the OS. Accent and selection strength
+    are shared. When off, behaviour is as today. Listen to Tauri's window
+    theme change event and `prefers-color-scheme`; apply without a reload.
+    *Open it: change the Mac's appearance, the app follows.*
+K.11 **Real traffic lights.** `src-tauri/tauri.conf.json`,
+    `src/components/layout/window-chrome.tsx`, `sidebar.tsx`. Switch the
+    main window from drawn buttons to macOS's own: `titleBarStyle:
+    "Overlay"` with `hiddenTitle: true`, `decorations: true`. Remove the
+    drawn lights and their handlers; keep custom drag regions and the eight
+    resize edges. The rail's top strip leaves the first 78px clear. The
+    ejected panel window keeps its current chrome. Verify the lights
+    behave: hover glyphs, double-click title zoom, fullscreen. *Open it:
+    the lights are Apple's.*
+K.12 **Continuity motion.** `src/index.css`, `src/lib/view-transitions.ts`
+    (new), `drawer.tsx`, `segmented.tsx`, the room view switcher. Use the
+    View Transitions API (`document.startViewTransition`) for: view
+    switches in the room (crossfade 160ms), the drawer opening from a row or
+    card (the row's plane grows into the drawer, 200ms), and the segmented
+    control's selected plane sliding between children (120ms). Transforms
+    and opacity only; `--ease`; all off under `prefers-reduced-motion` and
+    when the API is missing (feature-detect, never polyfill). No page-load
+    choreography. *Open it: click a row, it becomes the drawer.*
+K.13 **Activity page and instrument widgets.** `src/views/Settings.tsx`
+    (new section), `src/components/settings/activity.tsx` (new),
+    `src/components/home/instrument-widget.tsx` (new), the MCP
+    `pin_view_to_home` contract. Settings gains an Activity page that reads,
+    never records: per agent (sessions today and this week, tokens and cost
+    from `session.usage`, average turn time, tool calls, failures); per
+    engine (Hermes connected time, ACP agents reachable, last restart);
+    work (cards moved, documents written, proposals accepted or rejected,
+    decisions answered and their wait time, workflow runs and outcomes,
+    from `workspace.work_events` and Hermes cron runs); attention (what
+    waits on you now and for how long). Every row has a Pin control that
+    writes an ordinary view into the Home Pins database, so a pinned stat
+    is draggable, unpinnable and visible to agents like any pinned view.
+    The instrument widget is one tabular figure, its word, a sparkline, and
+    colour on the value only when it carries meaning. **Nothing is pinned
+    by default.** *Open it: pin "waits on you" to Home, see it update.*
+
+Estimates: K.9 half a day, K.10 half a day, K.11 half a day, K.12 one day,
+K.13 one day. K.9 and K.11 touch `sidebar.tsx`; run K.11 after K.9.
+
 ### 5.4 Everything else
 
 Home widgets, Databases, Agents, Settings and the panel adopt the kit
@@ -429,8 +486,9 @@ through the primitives; no layout change beyond what section 4 requires.
 
 ## 6. Work packages
 
-Disjoint file ownership. K.1 first; K.2 to K.6 in parallel after it; K.7 and
-K.8 last. Each package ends green on `pnpm check`, `pnpm test`, and the
+Disjoint file ownership. K.1 first; K.2 to K.6 and K.10 to K.13 in parallel
+after it; K.9 then K.11 after K.4 (they share `sidebar.tsx` and
+`workspace-tree.tsx`); K.7 and K.8 last. Each package ends green on `pnpm check`, `pnpm test`, and the
 audit script in section 8, with screenshots in all seven flavors of the
 surfaces it touched, saved under `docs/verification/design-system-v3/`.
 
@@ -520,7 +578,8 @@ value, plus Mocha and Flat White at 0.04 and 0.14, under
 `docs/verification/design-system-v3/<package>/`. The overseer reads them
 before Adam's walk.
 
-Adam's walk, one sitting, after K.8: switch flavor and accent, move the
+Adam's walk, one sitting, after K.8: switch flavor and accent, turn on Follow system and change the Mac's
+appearance, move the
 slider, select a row, a card and a segment in each flavor, open the drawer
 from a card and a session, use Docs read and edit with the rail at both
 ends, build a two-step workflow by hand, then have an agent add a third step.
@@ -529,7 +588,8 @@ ends, build a two-step workflow by hand, then have an agent add a third step.
 
 - No new layouts beyond section 5. No glass, no gradient, no glow.
 - No Home widget changes beyond rows and skeletons.
-- No new routes or sidebar items.
+- No new routes. The Activity page is a Settings section, not a route or a
+  sidebar item.
 - No change to flavors, accents, fonts, type scale or the seam.
 - No docked HUD.
 
@@ -540,3 +600,4 @@ ends, build a two-step workflow by hand, then have an agent add a third step.
 - The three non-case Brief templates (venture, publication, relationship)
   after he has seen the client-case Brief in the built app.
 - The default slider value, after he has moved it in the built app.
+- The default light and dark flavors for Follow system, after he has used it.
