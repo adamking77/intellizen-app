@@ -7,17 +7,21 @@ import { Control } from "@/components/ui/control";
 import { Drawer } from "@/components/ui/drawer";
 import { Identity } from "@/components/ui/identity";
 import { QueryState } from "@/components/ui/query-state";
+import { Receipt } from "@/components/ui/receipt";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Pill } from "@/components/ui/status-pill";
 import { boardsForProject } from "@/lib/project-room";
 import { errorMessage, toast } from "@/lib/toast";
 import { runViewTransition } from "@/lib/view-transitions";
 import {
   getKanbanBoard,
+  getKanbanCardDetail,
   listKanbanBoards,
   moveKanbanCard,
   subscribeKanbanEvents,
   type KanbanCard,
+  type KanbanCardDetail,
 } from "@/services/hermes-kanban";
 
 const COLUMN_LABELS: Record<string, string> = {
@@ -41,6 +45,12 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
     queryFn: async () => Promise.all(scoped.map(async (board) => ({ board, snapshot: await getKanbanBoard(board.slug) }))),
     enabled: scoped.length > 0,
   });
+  const cardDetail = useQuery({
+    queryKey: ["kanban-card", selected?.boardSlug, selected?.id],
+    queryFn: () => getKanbanCardDetail(selected!.boardSlug, selected!.id),
+    enabled: selected != null,
+  });
+  const openCard = selected ? { ...selected, ...(cardDetail.data ?? {}) } : null;
 
   useEffect(() => {
     const close = (boardData.data ?? []).map(({ board, snapshot }) =>
@@ -55,7 +65,7 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
     try {
       const updated = await moveKanbanCard(selected.boardSlug, selected.id, status);
       setSelected({ ...selected, ...updated });
-      await boardData.refetch();
+      await Promise.all([boardData.refetch(), cardDetail.refetch()]);
       toast.success(`Moved to ${COLUMN_LABELS[updated.status] ?? updated.status}`);
     } catch (error) {
       toast.error("Couldn't move card", { description: errorMessage(error) });
@@ -115,21 +125,26 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
           ))}
         </div>
       </QueryState>
-      <Drawer open={selected != null} onClose={() => setSelected(null)} label={selected?.title ?? "Card details"}>
-        {selected ? (
+      <Drawer open={openCard != null} onClose={() => setSelected(null)} label={openCard?.title ?? "Card details"}>
+        {openCard ? (
           <div className="grid gap-5 p-4">
             <div>
-              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {selected.status}</div>
-              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.title}</h2>
-              <div className="mt-2">{selected.assignee ? <Identity name={selected.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
+              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {openCard.status}</div>
+              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{openCard.title}</h2>
+              <div className="mt-2">{openCard.assignee ? <Identity name={openCard.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
             </div>
-            {selected.latestSummary ? <p className="text-[var(--t-ui)] leading-relaxed text-[var(--text)]">{selected.latestSummary}</p> : null}
+            {cardDetail.isLoading ? <Skeleton lines={4} /> : cardDetail.error ? (
+              <div role="alert" className="text-[var(--t-meta)] text-[var(--bad)]">
+                Full card details could not be read. <button type="button" className="underline" onClick={() => void cardDetail.refetch()}>Retry</button>
+              </div>
+            ) : cardDetail.data ? <CardDetailSections card={cardDetail.data} /> : null}
+            {!cardDetail.data && openCard.latestSummary ? <p className="text-[var(--t-ui)] leading-relaxed text-[var(--text)]">{openCard.latestSummary}</p> : null}
             <dl className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2 text-[var(--t-meta)]">
-              <dt className="text-[var(--text-muted)]">Board</dt><dd>{selected.board}</dd>
-              <dt className="text-[var(--text-muted)]">State</dt><dd><Pill>{selected.status}</Pill></dd>
+              <dt className="text-[var(--text-muted)]">Board</dt><dd>{openCard.board}</dd>
+              <dt className="text-[var(--text-muted)]">State</dt><dd><Pill>{openCard.status}</Pill></dd>
             </dl>
             <div className="flex flex-wrap gap-2">
-              <Select aria-label="Move card" disabled={moving} value={selected.status} onChange={(event) => void move(event.target.value)}>
+              <Select aria-label="Move card" disabled={moving} value={openCard.status} onChange={(event) => void move(event.target.value)}>
                 {Object.entries(COLUMN_LABELS).filter(([status]) => status !== "running").map(([status, label]) => <option key={status} value={status}>{label}</option>)}
               </Select>
               <Control disabled>Reassign</Control><Control disabled>Open in Table</Control>
@@ -139,6 +154,41 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
       </Drawer>
     </ProjectTabFrame>
   );
+}
+
+function CardDetailSections({ card }: { card: KanbanCardDetail }) {
+  const result = card.result || card.latestSummary;
+  return (
+    <div className="grid gap-4">
+      {card.createdAt ? <Receipt className="ml-0" verb="created" object={formatCardTime(card.createdAt)} /> : null}
+      {card.body ? <DrawerSection label="Task"><p className="whitespace-pre-wrap">{card.body}</p></DrawerSection> : null}
+      {card.failure ? <DrawerSection label="Last failure"><p className="whitespace-pre-wrap text-[var(--bad)]">{card.failure}</p></DrawerSection> : null}
+      {result ? <DrawerSection label="Result"><p className="whitespace-pre-wrap">{result}</p></DrawerSection> : null}
+      {card.workspacePath || card.branchName ? (
+        <DrawerSection label="Runs in"><Receipt className="ml-0" verb={card.branchName ? "branch" : "workspace"} object={[card.workspacePath, card.branchName].filter(Boolean).join(" · ")} /></DrawerSection>
+      ) : null}
+      {card.runs.length ? (
+        <DrawerSection label={`Runs · ${card.runs.length}`}>
+          {card.runs.map((run) => <Receipt key={run.id} className="ml-0" verb={run.outcome ?? run.status} object={run.summary ?? run.error ?? run.profile ?? `run ${run.id}`} />)}
+        </DrawerSection>
+      ) : null}
+      {card.comments.length ? (
+        <DrawerSection label={`Activity · ${card.comments.length}`}>
+          <div className="grid gap-3">
+            {card.comments.map((comment) => <article key={comment.id}><Identity name={comment.author || "Unknown"} runtime="hermes" /><p className="mt-1 whitespace-pre-wrap">{comment.body}</p>{comment.createdAt ? <Receipt className="ml-0" verb="at" object={formatCardTime(comment.createdAt)} /> : null}</article>)}
+          </div>
+        </DrawerSection>
+      ) : null}
+    </div>
+  );
+}
+
+function formatCardTime(epoch: number) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(epoch * 1000));
+}
+
+function DrawerSection({ label, children }: { label: string; children: ReactNode }) {
+  return <section className="grid gap-1 text-[var(--t-meta)] leading-relaxed text-[var(--text)]"><span className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</span>{children}</section>;
 }
 
 export function ProjectTabFrame({ children }: { children: ReactNode }) {

@@ -18,6 +18,7 @@ import {
 import {
   createKanbanCard,
   getKanbanBoard,
+  getKanbanCardDetail,
   kanbanEventsUrl,
   listKanbanBoard,
   listKanbanBoards,
@@ -152,6 +153,28 @@ describe("Hermes scheduling services", () => {
     expect(kanbanEventsUrl({ port: 56083, token: "a b&c" }, "app build", 42)).toBe(
       "ws://127.0.0.1:56083/api/plugins/kanban/events?token=a+b%26c&board=app+build&since=42",
     );
+  });
+
+  it("reads full card detail for the Board peek", async () => {
+    hermesRest.mockResolvedValueOnce({
+      task: {
+        id: "card-1", title: "Build", status: "review", assignee: "keel", body: "Ship it",
+        result: "Ready", last_failure_error: "", workspace_path: "/work/app", branch_name: "v3", created_at: 42,
+      },
+      comments: [{ id: 3, author: "fiona", body: "Checked", created_at: 44 }],
+      runs: [{ id: 8, profile: "keel", status: "done", outcome: "completed", summary: "Ready", error: null }],
+    });
+
+    await expect(getKanbanCardDetail("app build", "card/1")).resolves.toMatchObject({
+      id: "card-1",
+      body: "Ship it",
+      result: "Ready",
+      workspacePath: "/work/app",
+      branchName: "v3",
+      comments: [{ id: 3, author: "fiona", body: "Checked", createdAt: 44 }],
+      runs: [{ id: 8, profile: "keel", status: "done", outcome: "completed", summary: "Ready" }],
+    });
+    expect(hermesRest).toHaveBeenCalledWith("/api/plugins/kanban/tasks/card%2F1?board=app%20build");
   });
 
   it("puts the workflow definition and progress-card identities into the cron prompt", () => {

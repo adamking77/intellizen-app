@@ -21,6 +21,17 @@ export interface KanbanCard {
   latestSummary?: string | null;
 }
 
+export interface KanbanCardDetail extends KanbanCard {
+  body: string;
+  result: string;
+  failure: string;
+  workspacePath: string | null;
+  branchName: string | null;
+  createdAt: number;
+  comments: Array<{ id: number; author: string; body: string; createdAt: number }>;
+  runs: Array<{ id: number; profile: string | null; status: string; outcome: string | null; summary: string | null; error: string | null }>;
+}
+
 export interface KanbanColumn {
   name: string;
   cards: KanbanCard[];
@@ -93,6 +104,39 @@ export async function getKanbanBoard(board: string): Promise<KanbanBoardSnapshot
 
 export async function listKanbanBoard(board: string): Promise<KanbanColumn[]> {
   return (await getKanbanBoard(board)).columns;
+}
+
+export async function getKanbanCardDetail(board: string, cardId: string): Promise<KanbanCardDetail> {
+  const result = await hermesRest<{
+    task?: Record<string, unknown> | null;
+    comments?: Record<string, unknown>[];
+    runs?: Record<string, unknown>[];
+  }>(`${BASE}/tasks/${encodeURIComponent(cardId)}?board=${encodeURIComponent(board)}`);
+  if (!result.task) throw new Error("Kanban returned no card");
+  const card = toKanbanCard(result.task);
+  return {
+    ...card,
+    body: text(result.task.body),
+    result: text(result.task.result),
+    failure: text(result.task.last_failure_error),
+    workspacePath: typeof result.task.workspace_path === "string" && result.task.workspace_path ? result.task.workspace_path : null,
+    branchName: typeof result.task.branch_name === "string" && result.task.branch_name ? result.task.branch_name : null,
+    createdAt: Number(result.task.created_at ?? 0) || 0,
+    comments: (result.comments ?? []).map((comment) => ({
+      id: Number(comment.id ?? 0) || 0,
+      author: text(comment.author),
+      body: text(comment.body),
+      createdAt: Number(comment.created_at ?? 0) || 0,
+    })),
+    runs: (result.runs ?? []).map((run) => ({
+      id: Number(run.id ?? 0) || 0,
+      profile: typeof run.profile === "string" && run.profile ? run.profile : null,
+      status: text(run.status),
+      outcome: typeof run.outcome === "string" && run.outcome ? run.outcome : null,
+      summary: typeof run.summary === "string" && run.summary ? run.summary : null,
+      error: typeof run.error === "string" && run.error ? run.error : null,
+    })),
+  };
 }
 
 export async function createKanbanCard(board: string, card: KanbanCardCreate): Promise<KanbanCard> {
