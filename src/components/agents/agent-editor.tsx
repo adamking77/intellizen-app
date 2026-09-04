@@ -37,12 +37,12 @@ function voiceLabel(service: VoiceService | undefined): string {
 
 const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
 const FIELD =
-  "h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-transparent bg-[var(--input)] px-[9px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--text-muted)] focus-visible:border-[var(--line-strong)]";
-const PILL = "inline-flex h-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] bg-[var(--raised)] px-2.5 font-ui text-[12.5px] text-[var(--text)] hover:shadow-[inset_0_0_0_999px_var(--hover)] disabled:opacity-[.45]";
-const COMPACT_PILL = PILL;
+  "w-full rounded-[var(--r-ctl)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
+const PILL = "pill";
+const COMPACT_PILL = "pill pill-compact";
 const COMPACT_GROUP =
-  "inline-flex items-center gap-0.5 rounded-[var(--r-ctl)] bg-[var(--crust)] p-0.5";
+  "inline-flex items-center gap-0.5 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-0.5";
 
 export interface AgentProviderOption {
   id: AgentEngine;
@@ -220,6 +220,7 @@ export function AgentEditor({
       onOpenChange={(open) => !open && onClose()}
       className="w-[min(588px,calc(100vw-24px))]"
       bodyClassName="p-0"
+      headerClassName="sr-only"
     >
             <div className="flex flex-col items-start gap-[18px] px-4 pt-5 sm:flex-row sm:px-[22px]">
               {/* Identity column: things the agent is. */}
@@ -401,6 +402,7 @@ export function AgentEditor({
               {/* Operative fields. */}
               <div className="flex min-w-0 grow flex-col gap-[13px]">
                 <div className="flex items-center">
+                  <h2 className={CAPS}>{creating ? "New agent" : "Edit agent"}</h2>
                   <div className="grow" />
                   <button type="button" className={PILL} style={{ padding: "2px 8px" }} onClick={onClose} aria-label="Close">
                     <X size={16} strokeWidth={1.8} aria-hidden />

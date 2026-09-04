@@ -11,6 +11,7 @@ interface AppDialogProps {
   onOpenChange: (open: boolean) => void;
   className?: string;
   bodyClassName?: string;
+  headerClassName?: string;
   role?: "dialog" | "alertdialog";
 }
 
@@ -24,6 +25,7 @@ export function AppDialog({
   onOpenChange,
   className,
   bodyClassName,
+  headerClassName,
   role = "dialog",
 }: AppDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -52,7 +54,7 @@ export function AppDialog({
       }}
     >
       <div className="flex max-h-[86dvh] flex-col">
-        <header className="shrink-0 px-[19px] pb-2 pt-[17px]">
+        <header className={cn("shrink-0 px-[19px] pb-2 pt-[17px]", headerClassName)}>
           <h2 className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{title}</h2>
           {description ? (
             <p className="mt-1 font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>

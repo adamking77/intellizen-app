@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "re
 
 import type { HermesProfile } from "@/engine/profiles";
 import { nextIndex } from "@/components/layout/use-roving";
-import { Identity } from "@/components/ui/identity";
+import { Avatar } from "@/components/agents/avatar";
 import { Pill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 
@@ -117,7 +117,23 @@ export function TargetPicker({
               !on && "text-[var(--text-muted)]",
             )}
           >
-            <Identity className="min-w-0 flex-1" name={p.displayName || p.name} hue={p.avatarColor} runtime={p.provider || undefined} model={p.model || undefined} />
+            <span data-agent-avatar className="shrink-0">
+              <Avatar
+                agent={{
+                  displayName: p.displayName || p.name,
+                  avatarStyle: p.avatarStyle,
+                  avatarKind: p.avatarKind,
+                  avatarColor: p.avatarColor,
+                }}
+                size={20}
+                image={p.avatarImage}
+                animate={false}
+              />
+            </span>
+            <span className="min-w-0 flex-1 truncate">{p.displayName || p.name}</span>
+            {p.model ? (
+              <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">{p.model}</span>
+            ) : null}
             {!on ? <Pill>offline</Pill> : null}
             {p.isDefault ? (
               <Pill>default</Pill>

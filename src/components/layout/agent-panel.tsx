@@ -8,8 +8,8 @@ import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
 import { AgentTurn, UserTurn, type TurnActions } from "@/components/agent/agent-turn";
 import { DecisionCard } from "@/components/agent/decision-card";
 import { TargetPicker } from "@/components/agent/target-picker";
+import { Avatar } from "@/components/agents/avatar";
 import { Control } from "@/components/ui/control";
-import { Identity } from "@/components/ui/identity";
 import { Receipt } from "@/components/ui/receipt";
 import { usePanelSession } from "@/components/agent/use-panel-session";
 import {
@@ -418,14 +418,29 @@ export function AgentPanel({
             title="Who to talk to"
             className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-ctl)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           >
-            <Identity
-              name={agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
-              hue={profile?.avatarColor}
-              runtime={profile?.provider || undefined}
-              model={profile?.model || undefined}
-            />
+            {profile ? (
+              <span data-agent-avatar className="shrink-0">
+                <Avatar
+                  agent={{
+                    displayName: agentName ?? profile.name,
+                    avatarStyle: profile.avatarStyle,
+                    avatarKind: profile.avatarKind,
+                    avatarColor: profile.avatarColor,
+                  }}
+                  size={20}
+                  image={profile.avatarImage}
+                  animate="always"
+                />
+              </span>
+            ) : null}
+            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+              {agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
+            </span>
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
+          {profile?.model ? (
+            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
+          ) : null}
           <div className="flex-1" />
           {!standalone ? (
             <Control

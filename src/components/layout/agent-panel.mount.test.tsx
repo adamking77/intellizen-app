@@ -160,18 +160,22 @@ describe("AgentPanel on the gateway", () => {
     const panel = await mountPanel();
     const trigger = panel.container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
     expect(trigger.textContent).toContain("default");
+    expect(trigger.querySelector("[data-agent-avatar]")).not.toBeNull();
     expect(panel.container.querySelector('[data-panel-state="empty"]')?.textContent).toContain("Ready — default can answer.");
+    expect(textarea(panel).className).toContain("bg-transparent");
+    expect(textarea(panel).className).toContain("border-0");
     await act(async () => trigger.click());
     const options = Array.from(panel.container.querySelectorAll<HTMLButtonElement>('[role="option"]'));
     expect(options.map((o) => o.textContent)).toEqual([
-      "Ddefaultdeepseekdefault›",
-      "Ffionaopenai-codex",
-      "Hhr-agentdeepseek",
-      "Iislaminimax",
-      "Kkeelopenai-codex",
-      "Nnashopenai-codex",
-      "Rrookopenai-codex",
+      "defaultdeepseek-v4-flashdefault›",
+      "fionagpt-5.6-sol",
+      "hr-agentdeepseek-v4-flash-vision-exp",
+      "islaMiniMax-M3",
+      "keelgpt-5.6-sol",
+      "nashgpt-5.6-sol",
+      "rookgpt-5.6-sol",
     ]);
+    expect(options.every((option) => option.querySelector("[data-agent-avatar]"))).toBe(true);
     expect(options[0].getAttribute("aria-selected")).toBe("true");
     await act(async () => options[1].click());
     await settle();

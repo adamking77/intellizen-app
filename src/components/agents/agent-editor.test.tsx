@@ -38,7 +38,7 @@ const agent: Agent = {
 };
 
 describe("AgentEditor avatar controls", () => {
-  it("uses the shared control geometry without wrapping picture actions", async () => {
+  it("keeps the refined two-column editor and compact avatar controls", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -64,13 +64,16 @@ describe("AgentEditor avatar controls", () => {
       Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label);
 
     for (const label of ["Sphere", "Blob", "Replace picture", "Remove"]) {
-      expect(button(label)?.className).toContain("h-[var(--h-ctl)]");
-      expect(button(label)?.className).toContain("rounded-[var(--r-ctl)]");
+      expect(button(label)?.className).toContain("pill");
     }
+    expect(button("Sphere")?.className).toContain("pill-compact");
     expect(button("Sphere")?.getAttribute("aria-selected")).toBe("true");
     expect(button("Blob")?.getAttribute("aria-selected")).toBe("false");
-    expect(document.querySelector('[role="dialog"]')?.className).toContain("modal-surface");
-    expect(document.querySelector('[role="dialog"]')?.className).toContain("max-h-[86dvh]");
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.className).toContain("modal-surface");
+    expect(dialog?.className).toContain("max-h-[86dvh]");
+    expect(dialog?.querySelector("header")?.className).toContain("sr-only");
+    expect(Array.from(dialog?.querySelectorAll("h2") ?? []).some((heading) => heading.closest("header") === null && heading.textContent === "Edit agent")).toBe(true);
     expect(document.querySelector('select[title*="keeps its provider"]')).not.toBeNull();
     expect(document.querySelector('select[aria-label="Model"]')).not.toBeNull();
 

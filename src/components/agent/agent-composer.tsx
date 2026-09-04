@@ -4,7 +4,6 @@ import { ArrowUp, Check, Paperclip, PictureInPicture2, Square, X } from "lucide-
 import { doneIn } from "@/components/agent/turn-time";
 import { Control } from "@/components/ui/control";
 import { Pill } from "@/components/ui/status-pill";
-import { Textarea } from "@/components/ui/textarea";
 import type { SessionAttachment } from "@/engine/session";
 import type { TurnOutcome } from "@/engine/transcript";
 
@@ -129,7 +128,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && (draft.trim().length > 0 || attachments.length > 0);
   return (
-    <div className="flex shrink-0 flex-col gap-2 bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
         <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
@@ -147,7 +146,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           ))}
         </div>
       ) : null}
-      <Textarea
+      <textarea
         ref={ref}
         value={draft}
         onChange={(e) => onDraft(e.target.value)}
@@ -157,7 +156,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         disabled={!agent}
         readOnly={dictating}
         aria-label={agent ? `Message ${agent}` : "Message"}
-        className="w-full resize-none font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] placeholder:text-[var(--text-muted)]"
+        className="w-full resize-none border-0 bg-transparent p-0 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
       />
       <div className="flex items-center gap-2">
         {onEject ? (
