@@ -1,14 +1,10 @@
 import { useState } from "react";
 
+import { Control } from "@/components/ui/control";
 import { cn } from "@/lib/utils";
 
 import { hunkStat, proposalStat, type Hunk, type Proposal } from "./types";
 import { useProposals } from "./use-proposals";
-
-const PILL =
-  "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-meta)] leading-normal transition-colors disabled:opacity-50";
-const PILL_PLAIN = "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]";
-const PILL_PRIMARY = "bg-[var(--accent)] text-[var(--crust)] hover:brightness-110";
 
 /** Every proposal waiting on the open document, above the editor.
  *
@@ -80,21 +76,21 @@ export function ProposalCard({
         <span className="font-ui text-[var(--t-section)] text-[var(--subtext-0)]">proposes</span>
         <Counts stat={stat} />
         <div className="flex-1" />
-        <button
-          type="button"
-          className={cn(PILL, PILL_PLAIN)}
+        <Control
+          variant="quiet"
+          size="sm"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           title={open ? "Hide the changes" : "Review the changes"}
         >
           {open ? "Hide" : "Review"}
-        </button>
-        <button type="button" className={cn(PILL, PILL_PLAIN)} onClick={onReject} disabled={busy} title="Discard this entirely">
+        </Control>
+        <Control variant="quiet" size="sm" onClick={onReject} disabled={busy} title="Discard this entirely">
           Discard
-        </button>
-        <button
-          type="button"
-          className={cn(PILL, PILL_PRIMARY)}
+        </Control>
+        <Control
+          variant="primary"
+          size="sm"
           onClick={() => onAccept(taking, dropping)}
           disabled={busy}
           title={
@@ -108,7 +104,7 @@ export function ProposalCard({
             : taking.length === proposal.hunks.length
               ? "Accept"
               : `Accept ${taking.length}`}
-        </button>
+        </Control>
       </div>
 
       {proposal.note ? <div className="mt-1.5 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">{proposal.note}</div> : null}

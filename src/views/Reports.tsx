@@ -1,31 +1,19 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft,
-  ChevronDown,
-  CopyPlus,
-  FileText,
-  Loader2,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
 
-import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
-import { CollapsibleRail } from "@/components/layout/collapsible-rail";
-import { Button } from "@/components/ui/button";
+import { DocsRail } from "@/components/docs/docs-rail";
+import { DocumentHeader, type DocumentMode, type DocumentSaveStatus } from "@/components/docs/document-header";
+import { GraphEmbeds } from "@/components/docs/graph-embed";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
+import { MarkdownBody } from "@/components/ui/markdown-body";
 import { QueryState } from "@/components/ui/query-state";
-import { Select } from "@/components/ui/select";
-import { VentureScope } from "@/components/ui/venture-scope";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   createRecordFromTemplate,
   deleteVaultFile,
   deleteWorkspaceRecord,
   DOCUMENTS_DB_FIELDS,
-  DOCUMENT_TYPE_OPTIONS,
   getDocumentsWorkspaceBundle,
   getVaultFile,
   listAllVaultFiles,
@@ -40,9 +28,6 @@ import {
   documentDisplayTitle,
   documentEditableBody,
   documentFieldString,
-  documentFreshness,
-  documentMatchesSearch,
-  documentSourceLabel,
   documentVaultRelativePath,
   isAbsoluteDocumentPath,
   quickNoteTitle,
@@ -50,7 +35,7 @@ import {
   slugForDocumentTitle,
   upsertDocumentFrontmatterId,
 } from "@/lib/documents";
-import { taxonomyEntityLabel } from "@/lib/taxonomy";
+import { allProjects } from "@/lib/hierarchy";
 import { toast, toastError } from "@/lib/toast";
 import type {
   WorkspaceDatabaseRecord,
@@ -59,18 +44,18 @@ import type {
 } from "@/lib/types";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
+import { useHierarchy } from "@/lib/use-hierarchy";
 import { readVaultFile, removeVaultFile, writeVaultFile } from "@/lib/vault";
-import { useAppStore } from "@/store";
 import { ProposalStrip } from "@/proposals/proposal-strip";
-import { GraphEmbeds } from "@/components/docs/graph-embed";
+import { useProposalCounts } from "@/proposals/use-proposals";
+import { useAppStore } from "@/store";
 
 const InlineMarkdownEditor = lazy(async () => {
   const module = await import("@/components/reports/inline-markdown-editor");
   return { default: module.InlineMarkdownEditor };
 });
 
-type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
-const DOCS_RAIL_STORAGE_KEY = "intelizen:docs-rail-collapsed";
+const DOCS_RAIL_STORAGE_KEY = "intelizen:docs-rail";
 
 function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabaseRecordModel {
   return {
@@ -84,11 +69,7 @@ function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabas
 }
 
 function EditorFallback() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--surface-wash)]">
-      <Loader2 className="h-4 w-4 text-[var(--accent)]" />
-    </div>
-  );
+  return <Skeleton lines={5} className="py-4" />;
 }
 
 function formatDocumentDate(value: string) {
@@ -129,27 +110,24 @@ function creationTitle(template?: WorkspaceDatabaseRecordModel | null) {
 export function ReportsView() {
   const queryClient = useQueryClient();
   const { isCramped } = useWindowSize();
+  const { tree } = useHierarchy();
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState(() => {
-    const requested = searchParams.get("type");
-    return requested && DOCUMENT_TYPE_OPTIONS.includes(requested as (typeof DOCUMENT_TYPE_OPTIONS)[number])
-      ? requested
-      : "all";
-  });
   const projectParam = searchParams.get("project");
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => searchParams.get("record"));
   const [pendingDelete, setPendingDelete] = useState<WorkspaceDatabaseRecordModel | null>(null);
   const [content, setContent] = useState("");
   const [persistedContent, setPersistedContent] = useState("");
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [railCollapsed, setRailCollapsed] = useState(() => {
+  const [saveStatus, setSaveStatus] = useState<DocumentSaveStatus>("idle");
+  const [mode, setMode] = useState<DocumentMode>("read");
+  const [railHidden, setRailHidden] = useState(false);
+  const [railWidth, setRailWidth] = useState(() => {
     try {
-      return window.localStorage.getItem(DOCS_RAIL_STORAGE_KEY) === "1";
+      const stored = Number(window.localStorage.getItem(DOCS_RAIL_STORAGE_KEY));
+      return Number.isFinite(stored) && stored >= 180 && stored <= 480 ? stored : 300;
     } catch {
-      return false;
+      return 300;
     }
   });
   const [saveAttempt, setSaveAttempt] = useState(0);
@@ -186,23 +164,18 @@ export function ReportsView() {
         ),
     [bundle?.records, entityFilter, projectParam],
   );
-  const records = useMemo(
-    () => allRecords.filter((record) =>
-      documentMatchesSearch(record, searchQuery) &&
-      (typeFilter === "all" || documentFieldString(record, DOCUMENTS_DB_FIELDS.docType) === typeFilter)
-    ),
-    [allRecords, searchQuery, typeFilter],
-  );
-  const templates = useMemo(() => allRecords.filter((record) => record._isTemplate), [allRecords]);
+  const projects = useMemo(() => allProjects(tree).map(({ id, name }) => ({ id, name })), [tree]);
+  const proposalPaths = useMemo(() => allRecords.map(documentVaultRelativePath).filter((path): path is string => Boolean(path)), [allRecords]);
+  const proposalCounts = useProposalCounts(proposalPaths);
 
   useEffect(() => {
-    if (selectedRecordId && records.some((record) => record.id === selectedRecordId)) return;
+    if (selectedRecordId && allRecords.some((record) => record.id === selectedRecordId)) return;
     if (isCramped) {
       if (selectedRecordId) setSelectedRecordId(null);
       return;
     }
-    setSelectedRecordId(records[0]?.id ?? null);
-  }, [records, selectedRecordId, isCramped]);
+    setSelectedRecordId(allRecords.find((record) => !record._isTemplate)?.id ?? allRecords[0]?.id ?? null);
+  }, [allRecords, selectedRecordId, isCramped]);
 
   const selectedRecord = useMemo(
     () => allRecords.find((record) => record.id === selectedRecordId) ?? null,
@@ -210,6 +183,7 @@ export function ReportsView() {
   );
   const selectedVaultPath = documentVaultRelativePath(selectedRecord);
   const selectedTitle = selectedRecord ? documentDisplayTitle(selectedRecord) : "Untitled document";
+  const selectedProject = projects.find((project) => project.id === documentFieldString(selectedRecord, DOCUMENTS_DB_FIELDS.project));
 
   const vaultFileQuery = useQuery({
     queryKey: ["docs-vault-content", selectedRecordId, selectedVaultPath],
@@ -230,16 +204,37 @@ export function ReportsView() {
   }, [selectedRecordId, vaultFileQuery.data]);
 
   useEffect(() => {
+    if (!selectedRecord) return;
+    const author = documentFieldString(selectedRecord, DOCUMENTS_DB_FIELDS.author);
+    setMode(/^(adam|you)$/i.test(author.trim()) ? "edit" : "read");
+  }, [selectedRecord]);
+
+  useEffect(() => {
     latestContentRef.current = content;
   }, [content]);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(DOCS_RAIL_STORAGE_KEY, railCollapsed ? "1" : "0");
+      window.localStorage.setItem(DOCS_RAIL_STORAGE_KEY, String(railWidth));
     } catch {
       /* keep the mounted preference */
     }
-  }, [railCollapsed]);
+  }, [railWidth]);
+
+  useEffect(() => {
+    const shortcuts = (event: KeyboardEvent) => {
+      if (event.metaKey && event.key === "\\") {
+        event.preventDefault();
+        setRailHidden((hidden) => !hidden);
+      }
+      if (event.metaKey && event.key.toLowerCase() === "e" && selectedRecord) {
+        event.preventDefault();
+        setMode((current) => current === "edit" ? "read" : "edit");
+      }
+    };
+    window.addEventListener("keydown", shortcuts);
+    return () => window.removeEventListener("keydown", shortcuts);
+  }, [selectedRecord]);
 
   const createMutation = useMutation({
     mutationFn: async (template?: WorkspaceDatabaseRecordModel | null) => {
@@ -285,7 +280,7 @@ export function ReportsView() {
           : current,
       );
       setSelectedRecordId(record.id);
-      setShowCreateMenu(false);
+      setMode("edit");
       void queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
       if (warning) toast.info("Document created in Supabase only", { description: warning });
       else toast.success("Document created", { description: "Its Supabase row and markdown file are linked." });
@@ -377,8 +372,7 @@ export function ReportsView() {
           fieldId: DOCUMENTS_DB_FIELDS.updatedAt,
           value: new Date().toISOString(),
         });
-        setContent(nextContent);
-        setPersistedContent(nextContent);
+        setPersistedContent(content);
         setSaveStatus(latestContentRef.current !== content ? "dirty" : "saved");
         await queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
       } catch (error) {
@@ -415,187 +409,47 @@ export function ReportsView() {
     );
   }
 
-  const realDocumentCount = allRecords.filter((record) => !record._isTemplate).length;
-
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
-      <header className={cn(
-        "shrink-0",
-        isCramped ? "flex flex-col items-stretch gap-3 px-4 py-3" : "flex h-14 items-center justify-between px-5",
-      )}>
-        <div className="flex min-w-0 items-center gap-3">
-          <FileText className="h-4 w-4 text-[var(--accent)]" />
-          <div className="min-w-0">
-            <span className="t-title text-[var(--text)]">Docs</span>
-            <p className="truncate text-meta">
-              {realDocumentCount} document{realDocumentCount === 1 ? "" : "s"} · {projectParam ? "one project" : "Supabase rows linked to portable markdown"}
-            </p>
-          </div>
-        </div>
-        <div className={cn("flex items-center gap-2", isCramped ? "w-full" : undefined)}>
-          <VentureScope className={isCramped ? "hidden sm:inline-flex" : undefined} />
-          <div className={cn("relative", isCramped ? "min-w-0 flex-1" : "w-64")}>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--overlay-1)]" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search documents"
-              aria-label="Search documents"
-              className="h-8 pl-8"
-            />
-          </div>
-          <Select
-            value={typeFilter}
-            onChange={(event) => {
-              const nextType = event.target.value;
-              setTypeFilter(nextType);
-              setSearchParams((current) => {
-                const next = new URLSearchParams(current);
-                if (nextType === "all") next.delete("type");
-                else next.set("type", nextType);
-                next.delete("record");
-                return next;
-              }, { replace: true });
-            }}
-            controlSize="sm"
-            aria-label="Filter documents by type"
-            containerClassName="w-36 shrink-0"
-          >
-            <option value="all">All types</option>
-            {DOCUMENT_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>{DOC_TYPE_LABELS[type] ?? type}</option>
-            ))}
-          </Select>
-          <div className="relative">
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setShowCreateMenu((open) => !open)}
-              disabled={createMutation.isPending}
-              aria-expanded={showCreateMenu}
-            >
-              <Plus className="h-3 w-3" />
-              New
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-            {showCreateMenu ? (
-              <div className="absolute right-0 top-10 z-40 w-72 rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-2 shadow-[var(--shadow-elevated)]">
-                <p className="px-2 pb-1 pt-1 text-label">From a template</p>
-                {templates.length > 0 ? templates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-[var(--r-plane)] px-2 py-2 text-left font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--surface-wash)]"
-                    onClick={() => createMutation.mutate(template)}
-                    disabled={createMutation.isPending}
-                  >
-                    <CopyPlus className="h-3.5 w-3.5 text-[var(--accent)]" />
-                    <span className="truncate">{documentDisplayTitle(template)}</span>
-                  </button>
-                )) : (
-                  <p className="px-2 py-2 text-meta">No document templates yet.</p>
-                )}
-                <div className="my-1 border-t border-[var(--border-subtle)]" />
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-[var(--r-plane)] px-2 py-2 text-left font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--surface-wash)]"
-                  onClick={() => createMutation.mutate(null)}
-                  disabled={createMutation.isPending}
-                >
-                  <FileText className="h-3.5 w-3.5 text-[var(--subtext-0)]" />
-                  Quick note
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <CollapsibleRail
-          title="Documents"
-          width={isCramped ? "100%" : 420}
-          collapsed={!isCramped && railCollapsed}
-          onCollapse={() => setRailCollapsed(true)}
-          collapseLabel="Collapse document list"
-          showCollapseButton={!isCramped}
-          className={cn(isCramped && selectedRecordId && "hidden")}
-        >
-          <DocsTable records={records} selectedRecordId={selectedRecordId} onSelect={setSelectedRecordId} searchQuery={searchQuery} />
-        </CollapsibleRail>
-
+    <div className="flex h-full min-h-0 overflow-hidden bg-[var(--base)]">
+      {(!railHidden || isCramped) ? (
+        <DocsRail
+          records={allRecords}
+          projects={projects}
+          proposalCounts={proposalCounts}
+          selectedRecordId={selectedRecordId}
+          searchQuery={searchQuery}
+          width={isCramped ? "100%" : railWidth}
+          creating={createMutation.isPending}
+          onSearch={setSearchQuery}
+          onSelect={setSelectedRecordId}
+          onCreate={(template) => createMutation.mutate(template)}
+          onResize={setRailWidth}
+        />
+      ) : null}
         <section className={cn(
-          "relative min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-[var(--t-slow)] ease-[var(--ease)]",
+          "relative min-w-0 flex-1 flex-col overflow-hidden",
           isCramped && !selectedRecordId ? "hidden" : "flex",
-          !isCramped && railCollapsed && "pl-14",
         )}>
-          <CollapsedRailTrigger
-            visible={!isCramped && railCollapsed}
-            onExpand={() => setRailCollapsed(false)}
-            label="Expand document list"
-          />
           {selectedRecord ? (
             <>
-              <div className="shrink-0 border-b border-[var(--border)] px-5 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  {isCramped ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRecordId(null)}
-                      aria-label="Back to document list"
-                      className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--r-pill)] border border-[var(--border)] text-[var(--subtext-0)] transition-colors hover:text-[var(--text)]"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h1 className="truncate font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{selectedTitle}</h1>
-                      {selectedRecord._isTemplate ? <span className="shrink-0 text-label">Template</span> : null}
-                    </div>
-                    <DocumentProvenance record={selectedRecord} />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {saveStatus === "error" ? (
-                      <Button size="sm" variant="secondary" onClick={() => {
-                        setSaveStatus("dirty");
-                        setSaveAttempt((attempt) => attempt + 1);
-                      }}>
-                        Retry save
-                      </Button>
-                    ) : (
-                      <span className={cn(
-                        "px-2 font-mono text-[var(--t-count)]",
-                        saveStatus === "saved" ? "text-[var(--success)]" : "text-[var(--overlay-1)]",
-                      )}>
-                        {saveStatus === "dirty" ? "Editing…" : saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : ""}
-                      </span>
-                    )}
-                    {!selectedRecord._isTemplate ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => templateMutation.mutate(selectedRecord)}
-                        disabled={templateMutation.isPending}
-                        title="Save this document as a reusable template"
-                      >
-                        <CopyPlus className="h-3.5 w-3.5" />
-                        {!isCramped ? "Save template" : null}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setPendingDelete(selectedRecord)}
-                      aria-label="Delete document"
-                      title="Delete document"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <DocumentHeader
+                breadcrumb={selectedProject ? `Docs / ${selectedProject.name}` : "Docs / Unfiled"}
+                mode={mode}
+                saveStatus={saveStatus}
+                inVault={Boolean(selectedVaultPath)}
+                isTemplate={Boolean(selectedRecord._isTemplate)}
+                isCramped={isCramped}
+                savingTemplate={templateMutation.isPending}
+                onBack={() => setSelectedRecordId(null)}
+                onModeChange={setMode}
+                onRetry={() => { setSaveStatus("dirty"); setSaveAttempt((attempt) => attempt + 1); }}
+                onSaveTemplate={() => templateMutation.mutate(selectedRecord)}
+                onDelete={() => setPendingDelete(selectedRecord)}
+              />
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8">
+                <article className="mx-auto max-w-[65ch]">
+                  <h1 className="font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{selectedTitle}</h1>
+                  <DocumentProvenance record={selectedRecord} />
                 <QueryState
                   isLoading={vaultFileQuery.isLoading}
                   error={vaultFileQuery.error}
@@ -614,22 +468,25 @@ export function ReportsView() {
                     }}
                   />
                   <GraphEmbeds markdown={content} />
-                  <Suspense fallback={<EditorFallback />}>
-                    <InlineMarkdownEditor
-                      key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}
-                      initialValue={content}
-                      onChange={(value) => {
-                        setContent(value);
-                        setSaveStatus(value === persistedContent ? "idle" : "dirty");
-                      }}
-                    />
-                  </Suspense>
+                  {mode === "edit" ? (
+                    <Suspense fallback={<EditorFallback />}>
+                      <InlineMarkdownEditor
+                        key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}
+                        initialValue={content}
+                        onChange={(value) => {
+                          setContent(value);
+                          setSaveStatus(value === persistedContent ? "idle" : "dirty");
+                        }}
+                      />
+                    </Suspense>
+                  ) : <MarkdownBody content={content} />}
                 </QueryState>
+                </article>
               </div>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
-              <p className="text-label">{records.length === 0 ? "No documents" : "Select a document"}</p>
+              <p className="text-label">{allRecords.length === 0 ? "No documents" : "Select a document"}</p>
               <p className="max-w-[440px] text-ui text-[var(--subtext-0)]">
                 This is the writing room for every markdown document tracked by the Supabase Documents database.
                 Choose a document, create one from a template, or capture a quick note.
@@ -637,8 +494,6 @@ export function ReportsView() {
             </div>
           )}
         </section>
-      </div>
-
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="Delete document"
@@ -656,127 +511,14 @@ export function ReportsView() {
 
 function DocumentProvenance({ record }: { record: WorkspaceDatabaseRecordModel }) {
   const author = documentFieldString(record, DOCUMENTS_DB_FIELDS.author);
-  const entity = documentFieldString(record, DOCUMENTS_DB_FIELDS.entity);
   const attachment = documentAttachmentLabel(record);
   const updated = formatDocumentDate(
     documentFieldString(record, DOCUMENTS_DB_FIELDS.updatedAt) || String(record._updatedAt ?? ""),
   );
   const parts = [
-    taxonomyEntityLabel({ entity }),
-    documentSourceLabel(record),
-    author ? `By ${author}` : "",
+    author ? (/^(adam|you)$/i.test(author) ? "You wrote it" : `${author} wrote it`) : "",
     updated ? `Updated ${updated}` : "",
-    attachment ? `Attached to ${attachment}` : "",
+    attachment ? `linked to ${attachment}` : "",
   ].filter(Boolean);
-  return <p className="mt-1 truncate text-meta" title={parts.join(" · ")}>{parts.join(" · ")}</p>;
-}
-
-const DOC_TYPE_ORDER = ["daily-brief", "report", "brief", "contract", "invoice", "one-pager", "note"] as const;
-const DOC_TYPE_LABELS: Record<string, string> = {
-  "daily-brief": "Daily briefs",
-  report: "Reports",
-  brief: "Briefs",
-  contract: "Contracts",
-  invoice: "Invoices",
-  "one-pager": "One-pagers",
-  note: "Notes",
-};
-
-function DocsTable({
-  records,
-  selectedRecordId,
-  onSelect,
-  searchQuery,
-}: {
-  records: WorkspaceDatabaseRecordModel[];
-  selectedRecordId: string | null;
-  onSelect: (recordId: string) => void;
-  searchQuery: string;
-}) {
-  const groups = [
-    {
-      type: "template",
-      label: "Templates",
-      items: records.filter((record) => record._isTemplate),
-    },
-    ...DOC_TYPE_ORDER.map((type) => ({
-      type,
-      label: DOC_TYPE_LABELS[type],
-      items: records.filter((record) =>
-        !record._isTemplate && (documentFieldString(record, DOCUMENTS_DB_FIELDS.docType) || "note") === type
-      ),
-    })),
-  ].filter((group) => group.items.length > 0);
-
-  if (groups.length === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="text-label">{searchQuery ? "No matching documents" : "No documents yet"}</p>
-        <p className="mt-1 text-meta">{searchQuery ? "Try a title, author, venture, case, or filename." : "Use New to capture a note."}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-y-auto">
-      {groups.map((group) => (
-        <section key={group.type}>
-          <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--base)] px-4 py-2">
-            <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</span>
-            <span className="rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{group.items.length}</span>
-          </header>
-          {group.items.map((record) => (
-            <DocumentRow key={record.id} record={record} selected={selectedRecordId === record.id} onSelect={onSelect} />
-          ))}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function DocumentRow({
-  record,
-  selected,
-  onSelect,
-}: {
-  record: WorkspaceDatabaseRecordModel;
-  selected: boolean;
-  onSelect: (recordId: string) => void;
-}) {
-  const freshness = documentFreshness(record);
-  const stage = documentFieldString(record, DOCUMENTS_DB_FIELDS.stage) || "Draft";
-  const author = documentFieldString(record, DOCUMENTS_DB_FIELDS.author);
-  const entity = documentFieldString(record, DOCUMENTS_DB_FIELDS.entity);
-  const attachment = documentAttachmentLabel(record);
-  const updated = formatDocumentDate(
-    documentFieldString(record, DOCUMENTS_DB_FIELDS.updatedAt) || String(record._updatedAt ?? ""),
-  );
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(record.id)}
-      className={cn(
-        "grid w-full grid-cols-[1fr_auto] gap-3 border-b border-[var(--border-subtle)] px-4 py-3 text-left transition-colors",
-        selected ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : "hover:bg-[var(--surface-wash)]",
-      )}
-    >
-      <span className="min-w-0">
-        <span className="block truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{documentDisplayTitle(record)}</span>
-        <span className="mt-1 block truncate text-meta">
-          {author ? `${author} · ` : ""}{attachment || taxonomyEntityLabel({ entity })}{updated ? ` · ${updated}` : ""}
-        </span>
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5 self-center">
-        {freshness ? (
-          <span className={cn(
-            "rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)] font-medium",
-            freshness === "new" ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "bg-[var(--surface-wash)] text-[var(--subtext-0)]",
-          )}>
-            {freshness === "new" ? "New" : "Changed"}
-          </span>
-        ) : null}
-        {stage !== "Draft" ? <span className="text-label">{stage}</span> : null}
-      </span>
-    </button>
-  );
+  return <p className="mb-7 mt-1 text-[var(--t-meta)] text-[var(--text-muted)]" title={parts.join(" · ")}>{parts.join(" · ")}</p>;
 }

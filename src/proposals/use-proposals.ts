@@ -85,3 +85,37 @@ export function useProposals(docPath: string | null) {
 
   return { proposals, accept, reject, busy, error, reload };
 }
+
+/** Counts waiting hunks so the document rail can lift them above folders. */
+export function useProposalCounts(paths: string[]) {
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const key = paths.join("\n");
+
+  useEffect(() => {
+    if (!key) {
+      setCounts({});
+      return;
+    }
+    const currentPaths = key.split("\n");
+    let live = true;
+    const reload = async () => {
+      const rows = await Promise.all(currentPaths.map(async (docPath) => {
+        try {
+          const proposals = await invoke<Proposal[]>("proposals_list", { docPath });
+          return [docPath, proposals.reduce((sum, proposal) => sum + proposal.hunks.length, 0)] as const;
+        } catch {
+          return [docPath, 0] as const;
+        }
+      }));
+      if (live) setCounts(Object.fromEntries(rows));
+    };
+    void reload();
+    const timer = window.setInterval(() => void reload(), 5000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [key]);
+
+  return counts;
+}
