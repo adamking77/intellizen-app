@@ -9,6 +9,7 @@ import { DecisionCard } from "@/components/agent/decision-card";
 import { TargetPicker } from "@/components/agent/target-picker";
 import { Control } from "@/components/ui/control";
 import { Identity } from "@/components/ui/identity";
+import { Receipt } from "@/components/ui/receipt";
 import { usePanelSession } from "@/components/agent/use-panel-session";
 import {
   AGENT_PANEL_MAX_WIDTH,
@@ -16,6 +17,7 @@ import {
   useAgentPanelResize,
 } from "@/components/agent/use-agent-panel-resize";
 import { useEngineStore } from "@/engine/engine-store";
+import type { SessionUsage } from "@/engine/contract";
 import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { defaultProfile, listProfiles, loadProfileAvatar, type HermesProfile } from "@/engine/profiles";
@@ -151,7 +153,7 @@ export function AgentPanel({
     setProfileDirectory(profiles);
   }, [profiles, setProfileDirectory]);
 
-  const { selectedProfile, thread, selectProfile, send, editAndSend, stop, decideApproval, decideClarify } =
+  const { selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } =
     usePanelSession();
   const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
   const selectRoom = useSessionStore((state) => state.selectRoom);
@@ -171,6 +173,11 @@ export function AgentPanel({
   const isAcp = selectedProfile?.startsWith("acp:") ?? false;
   const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || (engineOpen && p.gatewayRunning), [engineOpen]);
   const targetReady = Boolean(profile && usable(profile));
+
+  useEffect(() => {
+    if (!engineOpen || !selectedProfile || selectedProfile.startsWith("acp:")) return;
+    void restore(selectedProfile).catch(() => undefined);
+  }, [engineOpen, selectedProfile, restore]);
 
   const [picking, setPicking] = useState(false);
   const closePicker = useCallback(() => setPicking(false), []);
@@ -495,6 +502,18 @@ export function AgentPanel({
 
         <RunStatus run={run} agent={agentName ?? "The agent"} />
 
+        {transcript?.notice ? (
+          <Receipt className="ml-0 px-0.5 pb-1.5" verb="notice" object={transcript.notice.text} />
+        ) : null}
+        {transcript?.todos.length ? (
+          <Receipt
+            className="ml-0 px-0.5 pb-1.5"
+            verb="tasks"
+            object={`${transcript.todos.filter((todo) => todo.status === "completed").length}/${transcript.todos.length} complete`}
+          />
+        ) : null}
+        {transcript?.usage ? <UsageReceipt usage={transcript.usage} /> : null}
+
         <Composer
           ref={composerRef}
           draft={joinVoiceText(draft, voice.interim)}
@@ -516,6 +535,18 @@ export function AgentPanel({
       </div>
     </AgentPanelShell>
   );
+}
+
+function UsageReceipt({ usage }: { usage: SessionUsage }) {
+  const total = typeof usage.total === "number" ? usage.total : null;
+  const parts = [
+    total === null ? null : `${total.toLocaleString()} tokens`,
+    typeof usage.input === "number" ? `${usage.input.toLocaleString()} in` : null,
+    typeof usage.output === "number" ? `${usage.output.toLocaleString()} out` : null,
+    typeof usage.context_percent === "number" ? `${Math.round(usage.context_percent)}% context` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return <Receipt className="ml-0 px-0.5 pb-1.5" verb="used" object={parts.join(" · ")} />;
 }
 
 /** The panel's resting state, at the foot of the log next to the composer

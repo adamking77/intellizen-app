@@ -190,6 +190,43 @@ describe("reduceTranscript edge cases", () => {
     expect(reduceTranscript(state, { type: "something.new", session_id: "s", payload: { x: 1 } }, 200)).toBe(state);
   });
 
+  it("handles interim, fallback reasoning, tool risk, todos, and notice clearing", () => {
+    let state = base();
+    state = reduceTranscript(state, { type: "message.delta", session_id: "s", payload: { text: "Checking." } }, 200);
+    state = reduceTranscript(state, { type: "message.interim", session_id: "s", payload: { text: "Checking." } }, 210);
+    expect(state.messages[1]).toMatchObject({ text: "Checking.", streaming: false });
+
+    state = reduceTranscript(state, { type: "reasoning.available", session_id: "s", payload: { text: "fallback thought" } }, 220);
+    state = reduceTranscript(state, { type: "tool.generating", session_id: "s", payload: { name: "terminal" } }, 230);
+    state = reduceTranscript(state, { type: "tool.start", session_id: "s", payload: { tool_id: "tool-1", name: "terminal", context: "pwd" } }, 240);
+    state = reduceTranscript(state, {
+      type: "tool.output_risk",
+      session_id: "s",
+      payload: { tool_id: "tool-1", risk: "high", findings: ["credential-like text"], redacted: true },
+    }, 250);
+    state = reduceTranscript(state, {
+      type: "todo.updated",
+      session_id: "s",
+      payload: { revision: 2, todos: [{ id: "a", content: "Verify", status: "completed" }] },
+    }, 260);
+    state = reduceTranscript(state, { type: "notification.show", session_id: "s", payload: { key: "credits", text: "Credits low" } }, 270);
+
+    expect(state.messages[2].thought).toBe("fallback thought");
+    expect(state.status).toBe("Preparing terminal…");
+    expect(state.messages[2].tools?.[0]).toMatchObject({
+      risk: "high",
+      findings: ["credential-like text"],
+      redacted: true,
+    });
+    expect(state.todos).toEqual([{ id: "a", content: "Verify", status: "completed" }]);
+    expect(state.notice?.text).toBe("Credits low");
+
+    state = reduceTranscript(state, { type: "notification.clear", session_id: "s", payload: { key: "other" } }, 280);
+    expect(state.notice?.text).toBe("Credits low");
+    state = reduceTranscript(state, { type: "notification.clear", session_id: "s", payload: { key: "credits" } }, 290);
+    expect(state.notice).toBeNull();
+  });
+
   it("marks a turn failed on message.complete with status error", () => {
     let state = base();
     state = reduceTranscript(state, { type: "message.start", session_id: "s" }, 200);

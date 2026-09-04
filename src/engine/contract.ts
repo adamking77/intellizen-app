@@ -11,6 +11,8 @@ import type {
 
 export const GATEWAY_METHODS = [
   "session.create",
+  "session.resume",
+  "session.history",
   "prompt.submit",
   "session.interrupt",
   "profiles.list",
@@ -40,7 +42,14 @@ export const GATEWAY_EVENTS = [
   "reasoning.delta",
   "tool.start",
   "tool.complete",
+  "tool.generating",
+  "tool.output_risk",
   "status.update",
+  "reasoning.available",
+  "message.interim",
+  "todo.updated",
+  "notification.show",
+  "notification.clear",
   "approval.request",
   "clarify.request",
   "session.usage",
@@ -112,6 +121,32 @@ export function request<T>(
 export interface SessionCreateResult {
   session_id: string;
   stored_session_id?: string;
+  messages?: SessionHistoryMessage[];
+  info?: SessionInfoPayload;
+  todo_state?: TodoSnapshot;
+}
+
+export interface SessionHistoryMessage {
+  role?: "user" | "assistant" | "tool" | "system" | string;
+  text?: string;
+  name?: string;
+  context?: string;
+  args?: Record<string, unknown>;
+  timestamp?: number;
+  reasoning?: unknown;
+  reasoning_content?: unknown;
+}
+
+export interface SessionHistoryResult {
+  count?: number;
+  messages?: SessionHistoryMessage[];
+}
+
+export interface SessionEventsResult {
+  events?: GatewayEvent[];
+  latest_seq?: number;
+  truncated?: boolean;
+  epoch?: string;
 }
 
 export interface MessageDeltaPayload {
@@ -146,6 +181,14 @@ export interface ToolCompletePayload {
   summary?: string;
   result_text?: string;
   inline_diff?: string;
+}
+
+export interface ToolOutputRiskPayload {
+  tool_id?: string;
+  name?: string;
+  risk?: string;
+  findings?: string[];
+  redacted?: boolean;
 }
 
 export interface StatusUpdatePayload {
@@ -198,5 +241,17 @@ export interface SessionInfoPayload {
   provider?: string;
   approval_mode?: "manual" | "smart" | "off" | string;
   yolo?: boolean;
+  usage?: SessionUsage;
   [key: string]: unknown;
+}
+
+export interface TodoItem {
+  id?: string;
+  content?: string;
+  status?: "pending" | "in_progress" | "completed" | string;
+}
+
+export interface TodoSnapshot {
+  todos?: TodoItem[];
+  revision?: number;
 }

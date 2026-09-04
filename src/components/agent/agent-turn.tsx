@@ -128,6 +128,19 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
           state={tool.ok === undefined ? "running" : tool.ok ? "verified" : "failure"}
         />
       </button>
+      {tool.risk ? (
+        <Receipt
+          className="ml-[9px]"
+          verb={`${tool.risk} risk`}
+          object={
+            tool.findings?.length
+              ? tool.findings.join(" · ")
+              : tool.redacted
+                ? "sensitive output redacted"
+                : "output checked"
+          }
+        />
+      ) : null}
       {open && tool.resultText ? (
         <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[var(--t-section)] leading-relaxed text-[var(--text-muted)]">
           {tool.resultText}
@@ -261,9 +274,10 @@ export function AgentTurn({
             <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               Thought
             </summary>
-            <p className="mt-1 whitespace-pre-wrap font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]">
-              {message.thought.replace(/^\s+/, "")}
-            </p>
+            <ReplyMarkdown
+              content={message.thought.replace(/^\s+/, "")}
+              className="mt-1 font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]"
+            />
           </details>
         ) : null}
 

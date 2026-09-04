@@ -17,6 +17,7 @@ export interface PanelSession {
   selectedProfile: string | null;
   thread: ProfileThread | null;
   selectProfile: (profile: string | null) => void;
+  restore: (profile: string) => Promise<void>;
   send: (profile: string, text: string) => Promise<void>;
   editAndSend: (profile: string, messageId: string, text: string) => Promise<void>;
   stop: (profile: string) => Promise<void>;
@@ -58,6 +59,7 @@ export function usePanelSession(): PanelSession {
   const storeThreads = useSessionStore((s) => s.threads);
   const storeSelect = useSessionStore((s) => s.selectProfile);
   const storeSend = useSessionStore((s) => s.send);
+  const storeRestore = useSessionStore((s) => s.restore);
   const storeEditAndSend = useSessionStore((s) => s.editAndSend);
   const storeStop = useSessionStore((s) => s.stop);
   const storeApproval = useSessionStore((s) => s.decideApproval);
@@ -87,6 +89,13 @@ export function usePanelSession(): PanelSession {
       else await storeSend(profile, text);
     },
     [remote, storeSend],
+  );
+
+  const restore = useCallback(
+    async (profile: string) => {
+      if (!remote) await storeRestore(profile);
+    },
+    [remote, storeRestore],
   );
 
   const editAndSend = useCallback(
@@ -121,7 +130,7 @@ export function usePanelSession(): PanelSession {
     [remote, storeClarify],
   );
 
-  return { selectedProfile, thread, selectProfile, send, editAndSend, stop, decideApproval, decideClarify };
+  return { selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
 }
 
 const EMPTY: Record<string, ProfileThread> = {};

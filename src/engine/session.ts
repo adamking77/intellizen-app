@@ -6,6 +6,8 @@ import {
   type GatewayClientLike,
   type MessageCompletePayload,
   type SessionCreateResult,
+  type SessionEventsResult,
+  type SessionHistoryResult,
 } from "./contract";
 import { JsonRpcGatewayError, type GatewayEvent } from "./json-rpc-gateway";
 
@@ -20,6 +22,13 @@ export async function createSession(
   client: GatewayClientLike,
   input: { profile: string; cwd?: string | null },
 ): Promise<string> {
+  return (await createSessionHandle(client, input)).session_id;
+}
+
+export async function createSessionHandle(
+  client: GatewayClientLike,
+  input: { profile: string; cwd?: string | null },
+): Promise<SessionCreateResult> {
   const params: Record<string, unknown> = {
     cols: 96,
     source: "desktop",
@@ -30,7 +39,39 @@ export async function createSession(
   if (!result || typeof result.session_id !== "string" || !result.session_id) {
     throw new Error("session.create returned no session id");
   }
-  return result.session_id;
+  return result;
+}
+
+export async function resumeSession(
+  client: GatewayClientLike,
+  input: { profile: string; storedSessionId: string },
+): Promise<SessionCreateResult> {
+  const result = await request<SessionCreateResult>(client, "session.resume", {
+    session_id: input.storedSessionId,
+    profile: input.profile,
+  });
+  if (!result || typeof result.session_id !== "string" || !result.session_id) {
+    throw new Error("session.resume returned no session id");
+  }
+  return result;
+}
+
+export function sessionHistory(
+  client: GatewayClientLike,
+  sessionId: string,
+): Promise<SessionHistoryResult> {
+  return request(client, "session.history", { session_id: sessionId });
+}
+
+export function sessionEventsSince(
+  client: GatewayClientLike,
+  sessionId: string,
+  lastSeen: number,
+): Promise<SessionEventsResult> {
+  return request(client, "session.events.since", {
+    session_id: sessionId,
+    last_seen: lastSeen,
+  });
 }
 
 export function submitPrompt(

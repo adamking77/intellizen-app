@@ -12,7 +12,9 @@ import type {
   SessionUsage,
   SessionUsagePayload,
   StatusUpdatePayload,
+  TodoItem,
   ToolCompletePayload,
+  ToolOutputRiskPayload,
   ToolStartPayload,
 } from "./contract";
 import type { GatewayEvent } from "./json-rpc-gateway";
@@ -26,6 +28,9 @@ export interface ToolRow {
   ok?: boolean;
   resultText?: string;
   durationMs?: number;
+  risk?: string;
+  findings?: string[];
+  redacted?: boolean;
 }
 
 /** A decision the person made, kept on the turn as a fact line. */
@@ -98,6 +103,8 @@ export interface TranscriptState {
   /** How the most recent turn ended; null before the first turn. */
   lastTurn: TurnOutcome | null;
   usage: SessionUsage | null;
+  todos: TodoItem[];
+  notice: { key: string; text: string } | null;
   /** How this session asks before dangerous commands, from `session.info`:
    *  "manual" asks first, "smart" asks when unsure, "off" never asks. */
   approvalMode: "manual" | "smart" | "off" | null;
@@ -114,6 +121,8 @@ export function createTranscript(agent: string): TranscriptState {
     turnStartedAt: null,
     lastTurn: null,
     usage: null,
+    todos: [],
+    notice: null,
     approvalMode: null,
     seq: 0,
   };
@@ -241,6 +250,18 @@ export function reduceTranscript(
       return replaceMessage(next, turn.id, (m) => ({ ...m, text: m.text + delta }));
     }
 
+    case "message.interim": {
+      const payload = (event.payload ?? {}) as MessageDeltaPayload;
+      const value = text(payload.text);
+      if (!value) return state;
+      const [next, turn] = withOpenTurn(state, now);
+      return replaceMessage(next, turn.id, (message) => ({
+        ...message,
+        text: value || message.text,
+        streaming: false,
+      }));
+    }
+
     case "reasoning.delta": {
       const delta = text((event.payload as MessageDeltaPayload | undefined)?.text);
       if (!delta) return state;
@@ -249,6 +270,14 @@ export function reduceTranscript(
         ...m,
         thought: (m.thought ?? "") + delta,
       }));
+    }
+
+    case "reasoning.available": {
+      const value = text((event.payload as MessageDeltaPayload | undefined)?.text);
+      if (!value) return state;
+      const [next, turn] = withOpenTurn(state, now);
+      if (turn.thought) return next;
+      return replaceMessage(next, turn.id, (message) => ({ ...message, thought: value }));
     }
 
     case "thinking.delta": {
@@ -275,6 +304,34 @@ export function reduceTranscript(
         ...m,
         tools: [...(m.tools ?? []), row],
       }));
+    }
+
+    case "tool.generating": {
+      const name = text((event.payload as { name?: unknown } | undefined)?.name).trim();
+      return { ...state, status: name ? `Preparing ${name}…` : "Preparing a tool…" };
+    }
+
+    case "tool.output_risk": {
+      const payload = (event.payload ?? {}) as ToolOutputRiskPayload;
+      const toolId = text(payload.tool_id);
+      if (!toolId) return state;
+      let changed = false;
+      const messages = state.messages.map((message) => {
+        let toolChanged = false;
+        const tools = message.tools?.map((tool) => {
+          if (tool.id !== toolId) return tool;
+          changed = true;
+          toolChanged = true;
+          return {
+            ...tool,
+            risk: text(payload.risk) || "low",
+            findings: Array.isArray(payload.findings) ? payload.findings.map(text).filter(Boolean) : [],
+            redacted: payload.redacted === true,
+          };
+        });
+        return toolChanged && tools ? { ...message, tools } : message;
+      });
+      return changed ? { ...state, messages } : state;
     }
 
     case "tool.complete": {
@@ -395,6 +452,31 @@ export function reduceTranscript(
           ? info.approval_mode
           : null;
       return mode === state.approvalMode ? state : { ...state, approvalMode: mode };
+    }
+
+    case "todo.updated": {
+      const rows = (event.payload as { todos?: unknown } | undefined)?.todos;
+      if (!Array.isArray(rows)) return state;
+      const todos = rows
+        .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
+        .map((row) => ({
+          ...(typeof row.id === "string" ? { id: row.id } : {}),
+          ...(typeof row.content === "string" ? { content: row.content } : {}),
+          ...(typeof row.status === "string" ? { status: row.status } : {}),
+        }));
+      return { ...state, todos };
+    }
+
+    case "notification.show": {
+      const payload = (event.payload ?? {}) as { key?: unknown; text?: unknown };
+      const key = text(payload.key);
+      const notice = text(payload.text);
+      return key && notice ? { ...state, notice: { key, text: notice } } : state;
+    }
+
+    case "notification.clear": {
+      const key = text((event.payload as { key?: unknown } | undefined)?.key);
+      return state.notice && key === state.notice.key ? { ...state, notice: null } : state;
     }
 
     default: {

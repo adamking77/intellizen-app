@@ -26,7 +26,8 @@ import { AgentPanel } from "@/components/layout/agent-panel";
 import { resetAcpSubscription, setAcpBridge, type AcpEnvelope } from "@/engine/acp-session";
 import { useEngineStore } from "@/engine/engine-store";
 import { setGatewayClient } from "@/engine/gateway";
-import type { JsonRpcGatewayClient } from "@/engine/json-rpc-gateway";
+import { JsonRpcGatewayError, type JsonRpcGatewayClient } from "@/engine/json-rpc-gateway";
+import { writeSessionPointer } from "@/engine/session-continuity";
 import { resetSessionStoreSubscription, useSessionStore } from "@/engine/session-store";
 import { FakeGatewayClient, loadProfilesList, loadTurn, turnEvents } from "@/engine/test-support";
 import { AGENT_PANEL_COLLAPSED_KEY } from "@/lib/agent-panel-persistence";
@@ -170,6 +171,75 @@ describe("AgentPanel on the gateway", () => {
     await act(async () => options[1].click());
     expect(panel.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toContain("fiona");
+    await panel.unmount();
+  });
+
+  it("rehydrates the last panel thread and its usage receipt after relaunch", async () => {
+    writeSessionPointer("default", {
+      runtimeSessionId: "runtime-old",
+      storedSessionId: "stored-old",
+      usage: { total: 321, input: 200, output: 121 },
+      approvalMode: "manual",
+    });
+    client.respondWith((call) =>
+      call.method === "session.history"
+        ? {
+            count: 2,
+            messages: [
+              { role: "user", text: "Keep this thread", timestamp: 1 },
+              { role: "assistant", text: "Still here", timestamp: 2 },
+            ],
+          }
+        : call.method === "session.events.since"
+          ? { events: [], latest_seq: 12, truncated: false }
+          : undefined,
+    );
+
+    const panel = await mountPanel();
+    await settle();
+    expect(panel.container.textContent).toContain("Keep this thread");
+    expect(panel.container.textContent).toContain("Still here");
+    expect(panel.container.textContent).toContain("321 tokens · 200 in · 121 out");
+    expect(client.callsTo("session.history")[0]?.params).toEqual({ session_id: "runtime-old" });
+    expect(client.callsTo("session.events.since")[0]?.params).toEqual({
+      session_id: "runtime-old",
+      last_seen: 0,
+    });
+    await panel.unmount();
+  });
+
+  it("resumes durable panel history when the Hermes process restarted", async () => {
+    writeSessionPointer("default", {
+      runtimeSessionId: "runtime-dead",
+      storedSessionId: "stored-alive",
+      usage: null,
+      approvalMode: null,
+    });
+    client.respondWith((call) => {
+      if (call.method === "session.history") {
+        throw new JsonRpcGatewayError("session not found", { code: 4001 });
+      }
+      if (call.method === "session.resume") {
+        return {
+          session_id: "runtime-new",
+          stored_session_id: "stored-alive",
+          messages: [{ role: "assistant", text: "Recovered after restart" }],
+          info: { usage: { total: 88 } },
+        };
+      }
+      if (call.method === "session.events.since") return { events: [], latest_seq: 0 };
+      return undefined;
+    });
+
+    const panel = await mountPanel();
+    await settle();
+    expect(panel.container.textContent).toContain("Recovered after restart");
+    expect(panel.container.textContent).toContain("88 tokens");
+    expect(client.callsTo("session.resume")[0]?.params).toEqual({
+      session_id: "stored-alive",
+      profile: "default",
+    });
+    expect(useSessionStore.getState().threads.default.sessionId).toBe("runtime-new");
     await panel.unmount();
   });
 

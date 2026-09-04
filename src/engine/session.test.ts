@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { JsonRpcGatewayError } from "./json-rpc-gateway";
-import { createSession, interruptSession, isSessionNotFound, runPrompt, submitPrompt, TurnError } from "./session";
+import {
+  createSession,
+  interruptSession,
+  isSessionNotFound,
+  resumeSession,
+  runPrompt,
+  sessionEventsSince,
+  sessionHistory,
+  submitPrompt,
+  TurnError,
+} from "./session";
 import { FakeGatewayClient, loadTurn, turnEvents } from "./test-support";
 
 describe("session helpers send the pinned parameter shapes", () => {
@@ -25,6 +35,33 @@ describe("session helpers send the pinned parameter shapes", () => {
     expect(client.calls).toEqual([
       { method: "prompt.submit", params: { session_id: "abc", text: "hello" }, timeoutMs: undefined },
       { method: "session.interrupt", params: { session_id: "abc" }, timeoutMs: undefined },
+    ]);
+  });
+
+  it("history, replay, and resume use Hermes's durable session shapes", async () => {
+    const client = new FakeGatewayClient();
+    client.respondWith((call) =>
+      call.method === "session.resume"
+        ? { session_id: "runtime-2", stored_session_id: "stored-1" }
+        : undefined,
+    );
+    await sessionHistory(client, "runtime-1");
+    await sessionEventsSince(client, "runtime-1", 17);
+    await expect(
+      resumeSession(client, { profile: "fiona", storedSessionId: "stored-1" }),
+    ).resolves.toMatchObject({ session_id: "runtime-2" });
+    expect(client.calls).toEqual([
+      { method: "session.history", params: { session_id: "runtime-1" }, timeoutMs: undefined },
+      {
+        method: "session.events.since",
+        params: { session_id: "runtime-1", last_seen: 17 },
+        timeoutMs: undefined,
+      },
+      {
+        method: "session.resume",
+        params: { session_id: "stored-1", profile: "fiona" },
+        timeoutMs: undefined,
+      },
     ]);
   });
 
