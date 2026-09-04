@@ -1,27 +1,43 @@
 # InteliZen — Build Context
 
-macOS-only Tauri v2 desktop intelligence platform for GenZen. Original V1 spec in `intellizen-tauri-spec.md`; the current build has promoted several V2 capabilities into the app. Read the rest of this file before the spec.
+macOS-only Tauri v2 desktop intelligence platform for GenZen. This file is
+the current v3 build contract; older product specs are historical context.
 
-## Current scope (actual build, not frozen spec)
+## Current v3 contract
 
-Primary sidebar routes:
+The sidebar is the shared hierarchy tree: department → workspace → project →
+session. Its Places group contains Home, Databases, Docs, Graph, Canvas,
+Workflows, Agents, and Settings. Those are the only permanent app places.
 
-| Surface | Routes |
+The center follows the selected material:
+
+| Selection | Center surface |
 |---|---|
-| Home | `/home` |
-| Search | `/search` |
-| Intel | `/intel` |
-| Databases | `/databases`, `/databases/:id` |
-| Docs | `/docs` |
-| Graph | `/graph` |
-| Canvas | `/canvas` |
-| Workflows | `/workflows` |
-| Team | `/team` |
-| Settings | `/settings` |
+| Department or workspace | Unit page with its projects |
+| Project | Project room with Brief, Table, Board, Graph, Timeline, and Session views as applicable |
+| Session | The owning project room's transcript |
+| Document | Docs page |
+| Database | Database editor |
+| Workflow | Workflows page |
 
-`/investigate` remains mounted as a flow-entered deep link from Intel, and `/agent-panel` is the standalone Tauri panel surface. Retired standalone pages redirect to their surviving operating surface: `/inbox`, `/monitors`, `/agent-work`, and `/roles` → Home. Legacy redirects stay in place: `/projects` → Intel and `/reports` → Docs.
+`/agent-panel` is the standalone Tauri panel surface. Retired standalone pages
+redirect to their surviving place. Compatibility routes may remain mounted
+while their approved migration stage is pending, but they are not Places.
+`ROADMAP.md` is the product contract; `docs/stages/round-2.md` and
+`docs/stages/design-system-v3.md` extend it.
 
-Investigation (3-phase flow: Brief → Collect → Analyse), Docs, the Home morning operating loop, durable Home pins, Databases, Canvas, Workflows, Team, and Settings were promoted beyond the V1 freeze. Inbox and Monitors are retired in favor of Fiona's daily brief; Agent Work and legacy Roles are represented by database-backed Home widgets instead of standalone pages. Historical specs now live in `docs/archive/`; this file is the current implementation contract.
+## Execution doors
+
+- Hermes sessions, profiles, tools, approvals, memory, skills, and config use
+  the pinned JSON-RPC gateway in `src/engine/`.
+- Cron, kanban, and plugin routes use Hermes REST; kanban events use its
+  WebSocket.
+- Installed CLI agents use ACP over stdio. Saved model, identity, permission,
+  context, and the IntelliZen MCP server are passed when a session starts.
+- Rooms use the vendored round engine while ACP seating still requires it.
+- Agents mutate workspace state only through `mcp-server/`, with explicit
+  confirmation for writes and `workspace.work_events` receipts.
+- Never edit Hermes profile/session files directly or scrape a dashboard token.
 
 ## Build commands
 
@@ -90,12 +106,15 @@ The shared GenZen Brain Supabase project has grown far beyond this app's origina
 
 RLS is enabled on the app schemas. The desktop app uses anon-key access plus the local access header for the 22 app tables; direct service-role access is reserved for scripts, MCP, and maintenance. `workspace.record_revisions`, `workspace.work_events`, and `intel.claims` are append-only from the app side, and public memory bridge views are read-only to anon.
 
-## Investigation + Docs integration
+## Project rooms and Docs
 
-- **Hermes execution**: [src/services/agent.ts](src/services/agent.ts) dispatches workflow runs through the connected Agent Gateway. Dispatch failures remain visible on the durable Workflow Run for retry; there is no second execution path. [src/lib/shell.ts](src/lib/shell.ts) contains workflow prompt builders, not a shell runner.
-- **Vault I/O**: [src/lib/vault.ts](src/lib/vault.ts) wraps the Tauri fs plugin. Reads/writes under `$HOME/vault/intelligence/investigations/<case-id>/`.
-- **Artifact tracking**: workflow outputs and vault files are tracked in Supabase, with investigation artifacts keyed to `case_id` and agent receipts written to `workspace.records` / `workspace.work_events`.
-- **Docs workspace**: `/docs` is backed by the workspace `Documents` database and vault markdown bodies. `knowledge.documents` remains the embedded corpus, not the editing surface.
+- Project rooms combine linked workspace records, project files, Hermes
+  sessions, board state, graph data, and timeline events behind one view
+  switcher. Cards and sessions open in the shared drawer.
+- `src/lib/vault.ts` is the Tauri filesystem boundary for allowed vault files.
+- Workflow outputs and file actions leave durable workspace receipts.
+- Docs is backed by the workspace Documents database and vault markdown bodies;
+  `knowledge.documents` remains the embedded corpus, not the editing surface.
 
 ## Graph implementation
 
@@ -187,7 +206,7 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 - Intel schema names are not UI labels: `anchors.operations`, `anchors.projects`, `intel.*`, MCP tool names, and TypeScript `Operation`/`Project` names remain stable. The UI presents operations as work items and projects as evidence piles. New work items use one of four types (`client_case`, `venture_research`, `publication_research`, `relationship_research`); only client cases expose a case stage, and legacy operations may remain unclassified.
 - Workspace databases own the business vocabulary. Business "Operations" and "Projects" belong in workspace databases, not as renames of the intel schema bridge.
-- Keep Exa access behind `src/lib/exa.ts`. Keep Tauri shell/fs behind `src/lib/shell.ts` and `src/lib/vault.ts`.
+- Keep Exa access behind `src/lib/exa.ts` and vault filesystem access behind `src/lib/vault.ts`.
 - Preserve `raw_payload` on signals so Exa response evolution doesn't force schema churn.
 - Build for resilience around partial data, null publish dates, sparse Deep Research output.
 - TanStack Query for server state; Zustand only for UI state that doesn't belong in query cache.

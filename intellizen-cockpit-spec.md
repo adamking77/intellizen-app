@@ -1,5 +1,9 @@
 # IntelliZen Cockpit Spec — 2026-07-15
 
+> **Superseded 2026-09-04.** Kept as historical context only. The current
+> contract is `ROADMAP.md`, extended by `docs/stages/round-2.md` and
+> `docs/stages/design-system-v3.md`.
+
 Product direction locked in the grill-me discovery session (Adam + Claude, 2026-07-15), following the full UI/UX audit. This supersedes Part 2 of the audit report as the remediation contract. Audit Part 1 findings (bugs, trust gaps) still stand. Implementation design happens per-workstream, against this document.
 
 Written in plain language on purpose. Keep it that way when updating.

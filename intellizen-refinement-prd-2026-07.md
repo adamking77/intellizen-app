@@ -1,5 +1,9 @@
 # IntelliZen Refinement PRD — GenZen OS Daily Driver
 
+> **Superseded 2026-09-04.** Kept as historical context only. The current
+> contract is `ROADMAP.md`, extended by `docs/stages/round-2.md` and
+> `docs/stages/design-system-v3.md`.
+
 **Date:** 2026-07-07
 **Status:** Approved for build (two default-pending decisions below)
 **Source:** Grill-me planning session (Adam + Claude), building on `intellizen-business-audit-2026-07-06.md`, `audit-findings-2026-07-07.md`, `osint-workflow-analysis.md` (canonical OSINT spec), and the sogo-app shell refinement as the UI model.
