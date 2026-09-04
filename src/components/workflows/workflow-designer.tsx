@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { MessageSquareText, Plus, Save, ShieldCheck, X } from "lucide-react";
 
-import { WorkflowTopology } from "@/components/workflows/workflow-topology";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Card } from "@/components/ui/card";
+import { Control } from "@/components/ui/control";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Pill } from "@/components/ui/status-pill";
-import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
 import { publishAgentPanelRoleMessage } from "@/lib/agent-panel-roles";
 import { saveWorkflowDefinition } from "@/lib/data";
 import type { WorkflowTemplateItem } from "@/lib/types";
 import {
   addWorkflowDesignerStep,
-  connectWorkflowDesignerEdge,
   createWorkflowDesignerDraft,
   updateWorkflowDesignerStep,
   workflowAuthorityDiff,
@@ -25,7 +27,6 @@ import {
   type WorkflowRoleAssignStep,
   type WorkflowStep,
 } from "@/lib/workflow-schema";
-import { buildWorkflowTopology } from "@/lib/workflow-topology";
 import { cn } from "@/lib/utils";
 
 const STEP_KINDS: Array<{ id: DesignerStepKind; label: string }> = [
@@ -48,12 +49,14 @@ export function WorkflowDesigner({
   initialDefinition = null,
   onClose,
   onSaved,
+  onDraftWithAgent,
 }: {
   workflow: WorkflowTemplateItem;
   roleTargets: AgentPanelRoleTarget[];
   initialDefinition?: WorkflowDefinitionV1 | null;
   onClose: () => void;
   onSaved: () => void;
+  onDraftWithAgent: () => void;
 }) {
   const existingDefinition = useMemo(() => {
     const validation = validateWorkflowDefinition(workflow.definition);
@@ -85,7 +88,6 @@ export function WorkflowDesigner({
     initialDraft,
   );
   const [selectedStepId, setSelectedStepId] = useState(definition.steps[0]?.id ?? "");
-  const [addKind, setAddKind] = useState<DesignerStepKind>("role-assign");
   const [dryRun, setDryRun] = useState<ReturnType<typeof dryRunWorkflowDefinition> | null>(null);
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const [saving, setSaving] = useState(false);
@@ -114,17 +116,6 @@ export function WorkflowDesigner({
     "blocked",
     "escalate",
   ];
-  const topology = useMemo(
-    () =>
-      buildWorkflowTopology({
-        definition,
-        roleTargets,
-        mode: dryRun ? "dry-run" : "definition",
-        dryRun,
-      }),
-    [definition, dryRun, roleTargets],
-  );
-
   function commit(next: WorkflowDefinitionV1) {
     setDefinition(next);
     setDryRun(null);
@@ -134,24 +125,10 @@ export function WorkflowDesigner({
     commit(updateWorkflowDesignerStep(definition, step));
   }
 
-  function addStep() {
-    const next = addWorkflowDesignerStep(definition, addKind);
+  function addStep(kind: DesignerStepKind) {
+    const next = addWorkflowDesignerStep(definition, kind);
     commit(next);
     setSelectedStepId(next.steps[next.steps.length - 1].id);
-  }
-
-  function connectEdge(
-    sourceStepId: string,
-    target: string,
-    handle: "next" | "then" | "else",
-  ) {
-    commit(
-      connectWorkflowDesignerEdge(definition, {
-        sourceStepId,
-        target,
-        handle,
-      }),
-    );
   }
 
   function askRole(roleKey: string) {
@@ -259,73 +236,39 @@ export function WorkflowDesigner({
         <Pill variant={validation.valid ? "verified" : "waiting"}>
           {validation.valid ? "Valid" : `${validation.errors.length} issues`}
         </Pill>
-        <Button size="sm" variant="ghost" onClick={runDryRun}>
+        <Control size="sm" variant="quiet" onClick={onDraftWithAgent}>Draft with an agent</Control>
+        <Control size="sm" variant="quiet" onClick={runDryRun}>
           Validate / dry-run
-        </Button>
-        <Button
+        </Control>
+        <Control
           size="sm"
-          variant="outline"
           onClick={() => void beginSave(false)}
           disabled={!validation.valid}
         >
           <Save className="h-3.5 w-3.5" />
           Save draft
-        </Button>
-        <Button
+        </Control>
+        <Control
           size="sm"
+          variant="primary"
           onClick={() => void beginSave(true)}
           disabled={!validation.valid}
         >
           <ShieldCheck className="h-3.5 w-3.5" />
           Activate
-        </Button>
-        <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close designer">
+        </Control>
+        <Control size="icon" variant="quiet" onClick={onClose} aria-label="Close designer">
           <X className="h-4 w-4" />
-        </Button>
+        </Control>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[220px_minmax(520px,1fr)_340px]">
-        <aside className="min-h-0 overflow-y-auto border-b border-[var(--border)] bg-[var(--mantle)] p-3 xl:border-b-0 xl:border-r">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[190px_minmax(420px,1fr)_340px]">
+        <aside className="min-h-0 overflow-y-auto bg-[var(--base)] p-3">
           <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
-            Workflow outline
+            Add a step
           </p>
-          <div className="mt-3 space-y-1.5">
-            {definition.steps.map((step, index) => (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => setSelectedStepId(step.id)}
-                className={cn(
-                  "w-full rounded-[var(--r-ctl)] border px-2.5 py-2 text-left transition-colors",
-                  selectedStep?.id === step.id
-                    ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
-                    : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
-                )}
-              >
-                <span className="block font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
-                  {index + 1} · {step.kind}
-                </span>
-                <span className="mt-1 block font-ui text-[var(--t-section)] font-semibold leading-snug text-[var(--text)]">
-                  {step.title}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 border-t border-[var(--border)] pt-3">
-            <select
-              value={addKind}
-              onChange={(event) => setAddKind(event.target.value as DesignerStepKind)}
-              aria-label="Step kind"
-              className="h-8 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-section)] text-[var(--text)]"
-            >
-              {STEP_KINDS.map((kind) => (
-                <option key={kind.id} value={kind.id}>{kind.label}</option>
-              ))}
-            </select>
-            <Button className="mt-2 w-full" size="sm" variant="outline" onClick={addStep}>
-              <Plus className="h-3.5 w-3.5" />
-              Add step
-            </Button>
+          <div className="mt-3 grid gap-1">
+            {STEP_KINDS.map((kind) => <Control key={kind.id} variant="quiet" className="justify-start" onClick={() => addStep(kind.id)}>{kind.label}</Control>)}
           </div>
           <div className="mt-4 border-t border-[var(--border)] pt-3">
             <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
@@ -337,14 +280,21 @@ export function WorkflowDesigner({
           </div>
         </aside>
 
-        <main className="relative min-h-[440px] overflow-hidden border-b border-[var(--border)] xl:border-b-0 xl:border-r">
-          <WorkflowTopology
-            topology={topology}
-            selectedStepId={selectedStepId}
-            editable={!dryRun}
-            onSelectStep={setSelectedStepId}
-            onConnectEdge={connectEdge}
-          />
+        <main className="min-h-[440px] overflow-y-auto px-4 py-5">
+          <div className="mx-auto max-w-xl">
+            {definition.steps.map((step, index) => (
+              <div key={step.id}>
+                <button type="button" className="w-full text-left" onClick={() => setSelectedStepId(step.id)}>
+                  <Card selected={selectedStep?.id === step.id}>
+                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">{index + 1}</span><span className="font-ui text-[var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]">{step.kind}</span></div>
+                    <p className="mt-1 font-ui text-[var(--t-ui)] font-medium">{step.title}</p>
+                    {step.kind === "condition" ? <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px] text-[var(--text-muted)]"><span>yes → {step.then}</span><span>no → {step.else}</span></div> : null}
+                  </Card>
+                </button>
+                {index < definition.steps.length - 1 ? <div className="flex h-10 items-center justify-center"><Control size="icon" variant="quiet" onClick={() => addStep("role-assign")} aria-label="Add role assignment"><Plus className="h-3.5 w-3.5" /></Control></div> : null}
+              </div>
+            ))}
+          </div>
 
           {dryRun ? (
             <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-[var(--r-ctl)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
@@ -376,9 +326,9 @@ export function WorkflowDesigner({
                   ))}
                 </ul>
               ) : null}
-              <Button className="mt-2" size="sm" variant="ghost" onClick={() => setDryRun(null)}>
+              <Control className="mt-2" size="sm" variant="quiet" onClick={() => setDryRun(null)}>
                 Return to design
-              </Button>
+              </Control>
             </section>
           ) : null}
         </main>
@@ -393,11 +343,11 @@ export function WorkflowDesigner({
                 >
                   Title
                 </label>
-                <input
+                <Input
                   id="workflow-step-title"
                   value={selectedStep.title}
                   onChange={(event) => updateSelected({ ...selectedStep, title: event.target.value })}
-                  className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
+                  className="mt-1"
                 />
               </div>
 
@@ -410,7 +360,7 @@ export function WorkflowDesigner({
                     >
                       Role
                     </label>
-                    <select
+                    <Select
                       id="workflow-step-role"
                       value={selectedStep.role}
                       onChange={(event) => {
@@ -421,23 +371,23 @@ export function WorkflowDesigner({
                           execution: target?.execution ?? selectedStep.execution,
                         } as WorkflowRoleAssignStep);
                       }}
-                      className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
+                      containerClassName="mt-1 flex"
                     >
                       {roleTargets.map((role) => (
                         <option key={role.roleKey} value={role.roleKey}>{role.roleName} · {role.state}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
-                  <Button
+                  <Control
                     type="button"
                     size="sm"
-                    variant="ghost"
+                    variant="quiet"
                     className="w-full"
                     onClick={() => askRole(selectedStep.role)}
                   >
                     <MessageSquareText className="h-3.5 w-3.5" />
                     Ask this role
-                  </Button>
+                  </Control>
                   <div>
                     <label
                       htmlFor="workflow-step-instructions"
@@ -445,40 +395,41 @@ export function WorkflowDesigner({
                     >
                       Instructions
                     </label>
-                    <textarea
+                    <Textarea
                       id="workflow-step-instructions"
                       value={selectedStep.instructions}
                       onChange={(event) => updateSelected({ ...selectedStep, instructions: event.target.value })}
                       rows={5}
-                      className="mt-1 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--text)]"
+                      className="mt-1 leading-relaxed"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                       Execution
-                      <select
+                      <Select
                         value={selectedStep.execution}
                         onChange={(event) => updateSelected({ ...selectedStep, execution: event.target.value as "ephemeral" | "durable" })}
-                        className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] normal-case text-[var(--text)]"
+                        containerClassName="mt-1 flex"
+                        controlSize="sm"
                       >
                         <option value="ephemeral">ephemeral</option>
                         <option value="durable">durable</option>
-                      </select>
+                      </Select>
                     </label>
                     <label className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                       Timeout
-                      <input
+                      <Input
                         type="number"
                         min={1}
                         max={240}
                         value={selectedStep.timeoutMinutes}
                         onChange={(event) => updateSelected({ ...selectedStep, timeoutMinutes: Number(event.target.value) })}
-                        className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] normal-case text-[var(--text)]"
+                        className="mt-1 font-mono"
                       />
                     </label>
                   </div>
                   <label className="flex items-center gap-2 font-ui text-[var(--t-section)] text-[var(--subtext-0)]">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={selectedStep.verification.required}
                       onChange={(event) => updateSelected({
@@ -500,7 +451,7 @@ export function WorkflowDesigner({
                         verification: { required: true, method: event.target.value },
                       })}
                       placeholder="verifier-step:step_3"
-                      className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
+                      className="font-mono"
                     />
                   ) : null}
                 </>
@@ -508,24 +459,26 @@ export function WorkflowDesigner({
 
               {selectedStep.kind === "condition" ? (
                 <>
-                  <textarea
+                  <Textarea
                     value={selectedStep.expr}
                     onChange={(event) => updateSelected({ ...selectedStep, expr: event.target.value })}
                     rows={3}
                     aria-label="Condition expression"
-                    className="w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
+                    className="font-mono"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     {(["then", "else"] as const).map((field) => (
                       <label key={field} className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                         {field}
-                        <select
+                        <Select
                           value={selectedStep[field]}
                           onChange={(event) => updateSelected({ ...selectedStep, [field]: event.target.value })}
-                          className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
+                          containerClassName="mt-1 flex"
+                          className="font-mono"
+                          controlSize="sm"
                         >
                           {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
-                        </select>
+                        </Select>
                       </label>
                     ))}
                   </div>
@@ -534,38 +487,40 @@ export function WorkflowDesigner({
 
               {selectedStep.kind === "approval" ? (
                 <>
-                  <input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
-                  <input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  <Input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="font-mono" />
+                  <Input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="font-mono" />
                 </>
               ) : null}
 
               {selectedStep.kind === "artifact" ? (
                 <>
-                  <select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-section)] text-[var(--text)]">
+                  <Select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" containerClassName="flex">
                     <option value="create-doc">Create document</option>
                     <option value="revise-doc">Revise document</option>
                     <option value="create-record">Create record</option>
                     <option value="simulate-consequential-action">Simulate consequential action</option>
-                  </select>
-                  <input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  </Select>
+                  <Input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="font-mono" />
                 </>
               ) : null}
 
               {selectedStep.kind === "decision" ? (
-                <textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} className="w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]" />
+                <Textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} />
               ) : null}
 
               {selectedStep.kind !== "condition" ? (
                 <label className="block font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">
                   Next
-                  <select
+                  <Select
                     value={selectedStep.next ?? ""}
                     onChange={(event) => updateSelected({ ...selectedStep, next: event.target.value || null })}
-                    className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
+                    containerClassName="mt-1 flex"
+                    className="font-mono"
+                    controlSize="sm"
                   >
                     <option value="">terminal</option>
                     {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
-                  </select>
+                  </Select>
                 </label>
               ) : null}
             </div>
@@ -588,10 +543,10 @@ export function WorkflowDesigner({
         description="The Registry record and every future run use this exact schema snapshot."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPendingSave(null)} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void confirmSave()} disabled={saving}>
+            <Control variant="quiet" onClick={() => setPendingSave(null)} disabled={saving}>Cancel</Control>
+            <Control variant="primary" onClick={() => void confirmSave()} disabled={saving}>
               {saving ? "Saving…" : "Confirm write"}
-            </Button>
+            </Control>
           </>
         }
       >

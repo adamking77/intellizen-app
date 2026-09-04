@@ -25,6 +25,13 @@ export interface CronJobCreate {
   workdir?: string;
 }
 
+export interface CronJobRun {
+  id: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  isActive: boolean;
+}
+
 export const CRON_PRESETS = [
   { label: "Hourly", expression: "0 * * * *" },
   { label: "Daily 07:00", expression: "0 7 * * *" },
@@ -80,6 +87,34 @@ export async function runCronJobNow(profile: string, jobId: string) {
     { method: "POST" },
   );
   return toCronJob({ profile, ...row });
+}
+
+export async function pauseCronJob(profile: string, jobId: string) {
+  const row = await hermesRest<Record<string, unknown>>(
+    `/api/cron/jobs/${encodeURIComponent(jobId)}/pause${profileQuery(profile)}`,
+    { method: "POST" },
+  );
+  return toCronJob({ profile, ...row });
+}
+
+export async function resumeCronJob(profile: string, jobId: string) {
+  const row = await hermesRest<Record<string, unknown>>(
+    `/api/cron/jobs/${encodeURIComponent(jobId)}/resume${profileQuery(profile)}`,
+    { method: "POST" },
+  );
+  return toCronJob({ profile, ...row });
+}
+
+export async function listCronJobRuns(profile: string, jobId: string, limit = 5) {
+  const result = await hermesRest<{ runs?: Array<Record<string, unknown>> }>(
+    `/api/cron/jobs/${encodeURIComponent(jobId)}/runs${profileQuery(profile)}&limit=${limit}`,
+  );
+  return (result.runs ?? []).map((run): CronJobRun => ({
+    id: text(run.id),
+    startedAt: optionalText(run.started_at),
+    endedAt: optionalText(run.ended_at),
+    isActive: run.is_active === true,
+  }));
 }
 
 export async function deleteCronJob(profile: string, jobId: string) {

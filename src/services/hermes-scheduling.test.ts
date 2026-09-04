@@ -6,7 +6,10 @@ vi.mock("@/engine/rest", () => ({ hermesRest }));
 import {
   createCronJob,
   deleteCronJob,
+  listCronJobRuns,
   listCronJobs,
+  pauseCronJob,
+  resumeCronJob,
   runCronJobNow,
   scheduledWorkflowPrompt,
 } from "./hermes-cron";
@@ -34,6 +37,28 @@ describe("Hermes scheduling services", () => {
       }],
       ["/api/cron/jobs/daily/trigger?profile=fiona", { method: "POST" }],
       ["/api/cron/jobs/daily?profile=fiona", { method: "DELETE" }],
+    ]);
+  });
+
+  it("uses Hermes pause, resume, and run-history routes", async () => {
+    hermesRest
+      .mockResolvedValueOnce({ id: "daily", enabled: false })
+      .mockResolvedValueOnce({ id: "daily", enabled: true })
+      .mockResolvedValueOnce({ runs: [{ id: "run-1", started_at: "2026-09-04T07:00:00Z", ended_at: null, is_active: true }] });
+
+    await pauseCronJob("fiona", "daily");
+    await resumeCronJob("fiona", "daily");
+    await expect(listCronJobRuns("fiona", "daily", 3)).resolves.toEqual([{
+      id: "run-1",
+      startedAt: "2026-09-04T07:00:00Z",
+      endedAt: null,
+      isActive: true,
+    }]);
+
+    expect(hermesRest.mock.calls).toEqual([
+      ["/api/cron/jobs/daily/pause?profile=fiona", { method: "POST" }],
+      ["/api/cron/jobs/daily/resume?profile=fiona", { method: "POST" }],
+      ["/api/cron/jobs/daily/runs?profile=fiona&limit=3"],
     ]);
   });
 

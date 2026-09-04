@@ -11,7 +11,10 @@ const services = vi.hoisted(() => ({
   deleteCronJob: vi.fn(),
   fetchHermesProfiles: vi.fn(),
   listCronJobs: vi.fn(),
+  listCronJobRuns: vi.fn(),
   listKanbanBoards: vi.fn(),
+  pauseCronJob: vi.fn(),
+  resumeCronJob: vi.fn(),
   runCronJobNow: vi.fn(),
 }));
 
@@ -24,6 +27,9 @@ vi.mock("@/services/hermes-cron", async (importOriginal) => ({
   createCronJob: services.createCronJob,
   deleteCronJob: services.deleteCronJob,
   listCronJobs: services.listCronJobs,
+  listCronJobRuns: services.listCronJobRuns,
+  pauseCronJob: services.pauseCronJob,
+  resumeCronJob: services.resumeCronJob,
   runCronJobNow: services.runCronJobNow,
 }));
 vi.mock("@/services/hermes-kanban", () => ({
@@ -99,10 +105,13 @@ beforeEach(() => {
   services.fetchHermesProfiles.mockResolvedValue([{ name: "fiona", displayName: "Fiona", isDefault: true }]);
   services.listKanbanBoards.mockResolvedValue([{ slug: "ops", name: "Operations", total: 3 }]);
   services.listCronJobs.mockResolvedValue([]);
+  services.listCronJobRuns.mockResolvedValue([]);
   services.createKanbanCard.mockResolvedValue({ id: "card-1", title: "Collect", status: "todo", assignee: "fiona" });
   services.createCronJob.mockResolvedValue({ id: "cron-1" });
   services.deleteCronJob.mockResolvedValue(undefined);
   services.runCronJobNow.mockResolvedValue({ id: "cron-1" });
+  services.pauseCronJob.mockResolvedValue({ id: "cron-1", enabled: false });
+  services.resumeCronJob.mockResolvedValue({ id: "cron-1", enabled: true });
 });
 
 afterEach(async () => {
@@ -138,7 +147,7 @@ describe("ScheduleSheet", () => {
   });
 
   it("requires a second click before deleting a schedule", async () => {
-    services.listCronJobs.mockResolvedValue([{ id: "cron-1", name: "IntelliZen · Weekly review", scheduleDisplay: "Weekdays", profile: "fiona", state: "scheduled", lastStatus: null, nextRunAt: null, prompt: "" }]);
+    services.listCronJobs.mockResolvedValue([{ id: "cron-1", name: "IntelliZen · Weekly review", scheduleDisplay: "Weekdays", profile: "fiona", state: "scheduled", enabled: true, lastStatus: null, nextRunAt: null, prompt: "" }]);
     const body = await mount();
     const first = body.querySelector<HTMLButtonElement>('button[aria-label="Delete Weekdays"]')!;
     await act(async () => first.click());
@@ -148,5 +157,23 @@ describe("ScheduleSheet", () => {
     await act(async () => confirm.click());
     await settle();
     expect(services.deleteCronJob).toHaveBeenCalledWith("fiona", "cron-1");
+  });
+
+  it("pauses and resumes an existing schedule", async () => {
+    services.listCronJobs.mockResolvedValue([{ id: "cron-1", name: "IntelliZen · Weekly review", scheduleDisplay: "Weekdays", profile: "fiona", state: "scheduled", enabled: true, lastStatus: null, nextRunAt: null, prompt: "" }]);
+    const body = await mount();
+    const pause = body.querySelector<HTMLButtonElement>('button[aria-label="Pause Weekdays"]')!;
+    await act(async () => pause.click());
+    await settle();
+    expect(services.pauseCronJob).toHaveBeenCalledWith("fiona", "cron-1");
+  });
+
+  it("resumes a paused schedule", async () => {
+    services.listCronJobs.mockResolvedValue([{ id: "cron-1", name: "IntelliZen · Weekly review", scheduleDisplay: "Weekdays", profile: "fiona", state: "paused", enabled: false, lastStatus: null, nextRunAt: null, prompt: "" }]);
+    const body = await mount();
+    const resume = body.querySelector<HTMLButtonElement>('button[aria-label="Resume Weekdays"]')!;
+    await act(async () => resume.click());
+    await settle();
+    expect(services.resumeCronJob).toHaveBeenCalledWith("fiona", "cron-1");
   });
 });

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Loader2, Play, Trash2 } from "lucide-react";
+import { CalendarClock, Pause, Play, Trash2 } from "lucide-react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Pill } from "@/components/ui/status-pill";
-import { Button } from "@/components/ui/button";
 import type { WorkflowTemplateItem } from "@/lib/types";
 import type { WorkflowDefinitionV1, WorkflowStep } from "@/lib/workflow-schema";
 import { errorMessage, toast } from "@/lib/toast";
@@ -13,7 +16,10 @@ import {
   CRON_PRESETS,
   createCronJob,
   deleteCronJob,
+  listCronJobRuns,
   listCronJobs,
+  pauseCronJob,
+  resumeCronJob,
   runCronJobNow,
   scheduledWorkflowPrompt,
   workflowCronName,
@@ -90,6 +96,12 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     ),
     [jobsQuery.data, workflow],
   );
+  const runsQuery = useQuery({
+    queryKey: ["workflow-schedule", "runs", jobs.map((job) => job.id).join("\n")],
+    queryFn: async () => Object.fromEntries(await Promise.all(jobs.map(async (job) => [job.id, await listCronJobRuns(job.profile, job.id)] as const))),
+    enabled: open && jobs.length > 0,
+    refetchInterval: open ? 15_000 : false,
+  });
   const validSchedule = schedule.trim().split(/\s+/).length === 5;
   const canCreate = Boolean(profile && validSchedule && !saving);
 
@@ -153,6 +165,20 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     }
   }
 
+  async function toggle(jobId: string, jobProfile: string, enabled: boolean) {
+    setActionId(jobId);
+    setFailure(null);
+    try {
+      if (enabled) await pauseCronJob(jobProfile, jobId);
+      else await resumeCronJob(jobProfile, jobId);
+      await jobsQuery.refetch();
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setActionId(null);
+    }
+  }
+
   async function remove(jobId: string, jobProfile: string) {
     if (confirmDelete !== jobId) {
       setConfirmDelete(jobId);
@@ -183,11 +209,11 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
       title={`Schedule ${workflow.name}`}
       footer={
         <>
-          <Button disabled={saving} onClick={() => onOpenChange(false)} variant="ghost">Close</Button>
-          <Button disabled={!canCreate} onClick={() => void save()}>
-            {saving ? <Loader2 className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />}
+          <Control disabled={saving} onClick={() => onOpenChange(false)} variant="quiet">Close</Control>
+          <Control disabled={!canCreate} loading={saving} onClick={() => void save()} variant="primary">
+            {!saving ? <CalendarClock className="h-3.5 w-3.5" /> : null}
             {saving ? "Creating…" : "Create schedule"}
-          </Button>
+          </Control>
         </>
       }
     >
@@ -196,25 +222,21 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           <div className="mb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">When</div>
           <div className="flex flex-wrap gap-1.5">
             {CRON_PRESETS.map((preset) => (
-              <button
-                className={`rounded-[var(--r-pill)] border px-2.5 py-1 font-ui text-[var(--t-count)] transition-colors ${
-                  schedule === preset.expression
-                    ? "border-transparent bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
-                    : "border-[var(--border)] text-[var(--overlay-1)] hover:text-[var(--text)]"
-                }`}
+              <Control
+                size="sm"
+                variant={schedule === preset.expression ? "selected" : "quiet"}
                 key={preset.expression}
                 onClick={() => setSchedule(preset.expression)}
-                type="button"
               >
                 {preset.label}
-              </button>
+              </Control>
             ))}
           </div>
           <label className="mt-3 block">
             <span className="sr-only">Cron expression</span>
-            <input
+            <Input
               aria-invalid={!validSchedule}
-              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 font-mono text-[var(--t-meta)] text-[var(--text)] outline-none "
+              className="font-mono"
               onChange={(event) => setSchedule(event.target.value)}
               value={schedule}
             />
@@ -225,27 +247,25 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
         <section className="grid gap-3 sm:grid-cols-2">
           <label>
             <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Hermes profile</span>
-            <select
-              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none "
+            <Select
               disabled={profilesQuery.isLoading}
               onChange={(event) => setProfile(event.target.value)}
               value={profile}
             >
               <option value="">Choose profile</option>
               {(profilesQuery.data ?? []).map((item) => <option key={item.name} value={item.name}>{item.displayName || item.name}</option>)}
-            </select>
+            </Select>
           </label>
           <label>
             <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Progress board</span>
-            <select
-              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none "
+            <Select
               disabled={boardsQuery.isLoading}
               onChange={(event) => setBoard(event.target.value)}
               value={board}
             >
               <option value="">Hermes session only</option>
               {(boardsQuery.data ?? []).map((item) => <option key={item.slug} value={item.slug}>{item.name} · {item.total}</option>)}
-            </select>
+            </Select>
           </label>
         </section>
 
@@ -263,7 +283,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
         <section>
           <div className="mb-2 flex items-center justify-between">
             <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Existing schedules</span>
-            {jobsQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 text-[var(--overlay-1)]" /> : null}
+            {jobsQuery.isFetching ? <span className="control-running-dot" aria-label="Refreshing schedules" /> : null}
           </div>
           {jobs.length ? (
             <div className="space-y-2">
@@ -275,25 +295,29 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
                       <Pill variant={job.lastStatus === "error" ? "failure" : "neutral"}>{job.state}</Pill>
                     </div>
                     <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
+                    {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].isActive ? "Running" : runsQuery.data[job.id][0].endedAt ? "Finished" : "Interrupted"}</p> : null}
                   </div>
-                  <Button aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="ghost">
+                  <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
+                    {job.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                  </Control>
+                  <Control aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="quiet">
                     <Play className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
+                  </Control>
+                  <Control
                     aria-label={confirmDelete === job.id ? `Confirm delete ${job.scheduleDisplay}` : `Delete ${job.scheduleDisplay}`}
                     disabled={actionId === job.id}
                     onClick={() => void remove(job.id, job.profile)}
                     size={confirmDelete === job.id ? "sm" : "icon"}
-                    variant={confirmDelete === job.id ? "destructive" : "ghost"}
+                    variant={confirmDelete === job.id ? "danger" : "quiet"}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {confirmDelete === job.id ? "Delete?" : null}
-                  </Button>
+                  </Control>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No schedules for this workflow.</div>
+            <p className="px-3 py-4 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">Schedules you create will appear here.</p>
           )}
         </section>
       </div>
