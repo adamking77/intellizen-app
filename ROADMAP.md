@@ -170,6 +170,14 @@ what is in the wrong place. Adam does not need to name components.
 - The "Fiona is the only counterpart" rule in `intellizen-cockpit-spec.md`.
   No default counterpart. Agents are Hermes profiles and discovered CLIs.
 
+## Round 2
+
+A 2026-09-04 audit of the built app against this file found the gaps
+listed in `docs/stages/round-2.md`. That file is the plan for the next
+round: repairs, the engine seam second pass, MCP tree writes, the center
+rule finished, and the donor pieces this file never listed. Its
+**[approval]** stages wait on Adam's flow approval.
+
 ## Stages
 
 About four weeks in all. Each stage is two to four hours and ends with something Adam opens and uses.
