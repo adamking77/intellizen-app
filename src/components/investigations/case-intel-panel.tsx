@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fingerprint, Play, RefreshCw } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { OPERATOR_ACTOR } from "@/lib/data";
 import {
   listIntelClaims,
@@ -85,9 +86,11 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                   ))}
                 </div>
               ) : (
-                <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-                  No canonical entities resolved for this case yet. Collation (Phase 3) populates them.
-                </p>
+                <EmptyState
+                  title="No canonical entities resolved for this case yet."
+                  description="Collation (Phase 3) populates them."
+                  className="py-2"
+                />
               )}
 
               {claims.length > 0 ? (

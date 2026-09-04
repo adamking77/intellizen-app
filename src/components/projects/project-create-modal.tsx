@@ -130,7 +130,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 Type
               </span>
               <select
-                className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                 value={type}
                 onChange={(event) => setType(event.target.value as ProjectType)}
               >
@@ -146,7 +146,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 Watch domain
               </span>
               <select
-                className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                 value={watchDomain}
                 onChange={(event) => setWatchDomain(event.target.value)}
               >
@@ -169,7 +169,7 @@ export function ProjectCreateModal({ open, onClose, onCreated, initialOperationI
                 </span>
               </span>
               <select
-                className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                 value={operationId ?? ""}
                 onChange={(e) => setOperationId(e.target.value ? Number(e.target.value) : null)}
               >

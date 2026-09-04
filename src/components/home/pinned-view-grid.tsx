@@ -215,7 +215,7 @@ function PinnedWidgetCard({
       data-view-type={widget.kind === "database-view" ? widget.view.type : widget.kind}
     >
       <div className="relative flex items-start gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
-        <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
+        <div className="db-dashboard-widget-grip mt-0.5 inline-flex h-[var(--h-ctl)] w-7 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]">
           <GripVertical className="h-3.5 w-3.5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -284,7 +284,7 @@ function PinnedWidgetCard({
             <input
               value={titleDraft}
               onChange={(event) => setTitleDraft(event.target.value)}
-              className="mt-1 h-8 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
+              className="mt-1 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
             />
           </label>
           {widget.kind === "database-view" ? (
@@ -294,7 +294,7 @@ function PinnedWidgetCard({
                 <select
                   value={groupByDraft}
                   onChange={(event) => setGroupByDraft(event.target.value)}
-                  className="mt-1 h-8 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
+                  className="mt-1 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
                 >
                   <option value="">No grouping</option>
                   {widget.database.schema.map((field) => (
@@ -334,7 +334,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, fieldId: event.target.value } : item
                               ))}
-                              className="h-8 min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
+                              className="h-[var(--h-ctl)] min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
                             >
                               {widget.database.schema.map((field) => (
                                 <option key={field.id} value={field.id}>{field.name}</option>
@@ -346,7 +346,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, op: event.target.value } : item
                               ))}
-                              className="h-8 min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
+                              className="h-[var(--h-ctl)] min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
                             >
                               {FILTER_OPERATORS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select>
@@ -367,7 +367,7 @@ function PinnedWidgetCard({
                                 itemIndex === index ? { ...item, value: event.target.value } : item
                               ))}
                               placeholder={filter.op === "within_last_days" ? "Number of days" : "Value"}
-                              className="mt-1.5 h-8 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)] "
+                              className="mt-1.5 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-1)] "
                             />
                           ) : null}
                         </div>

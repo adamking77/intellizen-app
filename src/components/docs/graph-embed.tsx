@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
@@ -11,6 +11,7 @@ import {
   type GraphEmbedSpec,
 } from "@/components/graph/export";
 import { listGraphEdges, listGraphNodes } from "@/lib/data/graph";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
   const projectId = parseGraphId(spec.id);
@@ -40,7 +41,7 @@ function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
       </figcaption>
       <div className="flex min-h-[180px] items-center justify-center p-3">
         {query.isLoading ? (
-          <Loader2 aria-label="Loading graph" className="h-4 w-4 text-[var(--accent)]" />
+          <Skeleton lines={3} className="w-full" />
         ) : query.error ? (
           <p className="font-ui text-[var(--t-section)] text-[var(--danger)]">Graph snapshot could not be loaded.</p>
         ) : query.data?.nodes.length ? (

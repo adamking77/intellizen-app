@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Loader2, Trash2 } from "lucide-react";
+import { FilePlus2, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { createEmptyCanvasDocument, serializeCanvasDocument } from "@/components/canvas/CanvasSerializer";
 import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
 import { CollapsibleRail } from "@/components/layout/collapsible-rail";
+import { Control } from "@/components/ui/control";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   createCanvasDocument,
   deleteCanvasDocument,
@@ -364,27 +366,22 @@ export function CanvasView() {
         collapseLabel="Collapse canvas sidebar"
         bodyClassName="w-[284px]"
         actions={(
-          <button
+          <Control
             type="button"
             onClick={handleCreateCanvas}
-            disabled={isCreating}
-            className={cn(
-              "inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors",
-              "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-              isCreating && "opacity-60",
-            )}
+            loading={isCreating}
+            variant="quiet"
+            size="icon"
             title="New canvas"
             aria-label="New canvas"
           >
-            {isCreating ? <Loader2 className="h-3.5 w-3.5" /> : <FilePlus2 className="h-3.5 w-3.5" />}
-          </button>
+            {!isCreating ? <FilePlus2 className="h-3.5 w-3.5" /> : null}
+          </Control>
         )}
       >
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loadingCanvases ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-4 w-4 text-[var(--accent)]" />
-              </div>
+              <Skeleton lines={4} className="p-2" />
             ) : canvases.length === 0 ? (
               <p className="px-2 py-2 text-[var(--t-section)] text-[var(--overlay-1)]">No canvases yet.</p>
             ) : (
@@ -460,7 +457,7 @@ export function CanvasView() {
             ) : null}
           </div>
           {loadingCanvas ? (
-            <Loader2 className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
+            <Skeleton lines={1} className="w-20" />
           ) : currentSummary ? (
             <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}

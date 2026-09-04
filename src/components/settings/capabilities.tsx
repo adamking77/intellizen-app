@@ -89,7 +89,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
       </div>
 
       {capabilities.isPending && engineOpen ? (
-        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />)}</div>
+        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-[var(--h-row)] rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />)}</div>
       ) : null}
 
       {GROUPS.map((group) => {

@@ -175,7 +175,7 @@ export function InvestigationCreateModal({
               </span>
             </span>
             <select
-              className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+              className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >

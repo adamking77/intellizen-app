@@ -6,6 +6,7 @@ import { Line, LineChart as BklitLineChart } from "@/components/charts/line-char
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 import { XAxis } from "@/components/charts/x-axis";
 import { YAxis } from "@/components/charts/y-axis";
+import { EmptyState, FailureState } from "@/components/ui/empty-state";
 import type { AgentDataChartSeries, AgentDataChartWidget } from "@/lib/agent-widgets";
 
 const COMPACT_SERIES_COLORS = [
@@ -113,18 +114,9 @@ function prepareAgentChart(chart: AgentDataChartWidget): PreparedAgentChart {
 }
 
 function ChartState({ tone, message }: { tone: "empty" | "error"; message: string }) {
-  return (
-    <div
-      className={
-        tone === "error"
-          ? "m-2 rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--danger)]"
-          : "m-2 rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]"
-      }
-      role={tone === "error" ? "alert" : "status"}
-    >
-      {message}
-    </div>
-  );
+  return tone === "error"
+    ? <FailureState message={message} className="m-2" />
+    : <EmptyState title={message} className="m-2 py-2" />;
 }
 
 function SeriesLegend({ series }: { series: PreparedSeries[] }) {

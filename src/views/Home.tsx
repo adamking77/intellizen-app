@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Layout } from "react-grid-layout";
-import { Loader2, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
   PinnedViewGrid,
@@ -419,10 +420,7 @@ export function HomeView() {
             ) : null}
           </div>
           {isLoading || isLoadingPins ? (
-            <div role="status" className="flex items-center gap-2 px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
-              <Loader2 className="h-4 w-4" />
-              <span>Loading pinned views...</span>
-            </div>
+            <Skeleton lines={3} className="px-4 py-3" />
           ) : pinnedWidgets.length > 0 ? (
             <PinnedViewGrid
               widgets={pinnedWidgets}

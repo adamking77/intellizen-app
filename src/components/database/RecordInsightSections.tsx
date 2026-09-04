@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Link2, ListTree, RotateCcw } from "lucide-react";
 
+import { EmptyState, FailureState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   listDeletedRecords,
   listRecordRevisions,
@@ -39,15 +42,11 @@ export function RecordActivitySection({ recordId, isWorkflowRun }: { recordId: s
         <span className="db-record-section-count">{events.length}</span>
       </div>
       {eventsQuery.isLoading ? (
-        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading activity…</p>
+        <Skeleton lines={3} />
       ) : eventsQuery.error ? (
-        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
-          Activity could not be loaded.
-        </p>
+        <FailureState message="Activity could not be loaded." />
       ) : events.length === 0 ? (
-        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-          No structured activity recorded yet.
-        </p>
+        <EmptyState title="No structured activity recorded yet." className="py-2" />
       ) : (
         <ul className="space-y-1.5">
           {events.map((event) => (
@@ -109,15 +108,11 @@ export function RecordHistorySection({ recordId }: { recordId: string }) {
         <span className="db-record-section-count">{revisions.length}</span>
       </div>
       {revisionsQuery.isLoading ? (
-        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading history…</p>
+        <Skeleton lines={3} />
       ) : revisionsQuery.error ? (
-        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
-          History could not be loaded.
-        </p>
+        <FailureState message="History could not be loaded." />
       ) : revisions.length === 0 ? (
-        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-          No prior versions captured yet. Edits from here on are versioned automatically.
-        </p>
+        <EmptyState title="No prior versions captured yet." description="Edits from here on are versioned automatically." className="py-2" />
       ) : (
         <ul className="space-y-1">
           {revisions.map((revision) => (
@@ -196,15 +191,11 @@ export function DatabaseTrashPanel({
         </button>
       </div>
       {trashQuery.isLoading ? (
-        <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading trash…</p>
+        <Skeleton lines={3} />
       ) : trashQuery.error ? (
-        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
-          Trash could not be loaded.
-        </p>
+        <FailureState message="Trash could not be loaded." />
       ) : deleted.length === 0 ? (
-        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-          No deleted records. Deletions from here on land in the trash automatically.
-        </p>
+        <EmptyState title="No deleted records." description="Deletions from here on land in the trash automatically." className="py-2" />
       ) : (
         <ul className="space-y-1">
           {deleted.map((revision) => (

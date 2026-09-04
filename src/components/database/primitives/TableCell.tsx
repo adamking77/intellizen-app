@@ -1,7 +1,7 @@
 import type { WorkspaceDatabaseCatalogEntry, WorkspaceDatabaseField, WorkspaceDatabaseModel } from "@/lib/types";
 import { getFieldDisplayValue, getFieldValue } from "@/lib/database-core";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
-import { Badge } from "./Badge";
+import { DatabasePill } from "./DatabasePill";
 
 interface TableCellProps {
   record: WorkspaceDatabaseModel["records"][number];
@@ -43,13 +43,13 @@ export function TableCell({ record, field, database, catalog, onToggleCheckbox }
       );
     case "status":
       return displayValue ? (
-        <Badge color={resolveStatusColor(displayValue, field)}>{displayValue}</Badge>
+        <DatabasePill color={resolveStatusColor(displayValue, field)}>{displayValue}</DatabasePill>
       ) : (
         <span style={{ opacity: 0.25 }}>&mdash;</span>
       );
     case "select":
       return displayValue ? (
-        <Badge color={resolveFieldOptionColor(field, displayValue)}>{displayValue}</Badge>
+        <DatabasePill color={resolveFieldOptionColor(field, displayValue)}>{displayValue}</DatabasePill>
       ) : (
         <span style={{ opacity: 0.25 }}>&mdash;</span>
       );
@@ -58,7 +58,7 @@ export function TableCell({ record, field, database, catalog, onToggleCheckbox }
       return (
         <div className="flex gap-1 flex-wrap">
           {values.map((v) => (
-            <Badge key={v} color={resolveFieldOptionColor(field, v)}>{v}</Badge>
+            <DatabasePill key={v} color={resolveFieldOptionColor(field, v)}>{v}</DatabasePill>
           ))}
           {values.length === 0 && <span style={{ opacity: 0.25 }}>&mdash;</span>}
         </div>
@@ -70,7 +70,7 @@ export function TableCell({ record, field, database, catalog, onToggleCheckbox }
         <div className="flex gap-1 flex-wrap">
           {ids.map((id) => {
             const label = resolveRelationLabel(field, id, catalog);
-            return <Badge key={id} color={resolveRelationColor(label)}>{label}</Badge>;
+            return <DatabasePill key={id} color={resolveRelationColor(label)}>{label}</DatabasePill>;
           })}
           {ids.length === 0 && <span style={{ opacity: 0.25 }}>&mdash;</span>}
         </div>

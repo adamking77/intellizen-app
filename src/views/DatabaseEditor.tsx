@@ -1414,7 +1414,7 @@ export function DatabaseEditorView({
   const databaseBreadcrumb = taxonomyBreadcrumb(bundle.database.taxonomy);
 
   return (
-    <div className="flex h-full flex-col bg-[var(--base)]">
+    <div className="relative flex h-full flex-col bg-[var(--base)]">
       {/* Hidden CSV input */}
       <input
         ref={csvInputRef}

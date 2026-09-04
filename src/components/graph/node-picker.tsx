@@ -71,7 +71,7 @@ export function NodePicker({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-8 w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
+          "flex h-[var(--h-ctl)] w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
           "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none",
         )}
       >

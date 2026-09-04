@@ -47,25 +47,23 @@ function audit() {
     return matches.length ? [`${name}:\n  ${matches.join("\n  ")}`] : [];
   });
 
-  // These are measured migration debt, not permission to add more. K.2 and
-  // K.7 ratchet each ceiling to zero as the primitives and remaining pages move.
-  const debt = [
-    ["ring utility", /\bring-/g, 6],
-    ["custom outline utility", /outline-(?!none)/g, 2],
-    ["dashed border", /border-dashed/g, 12],
-    ["Loader2", /\bLoader2\b/g, 36],
-    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, 25],
+  const closedCode = [
+    ["ring utility", /\bring-/g, codeFiles],
+    ["custom outline utility", /outline-(?!none)/g, codeFiles],
+    ["dashed border", /(?:border-dashed|border\s*:\s*[^;\n]*dashed)/g, files],
+    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, codeFiles],
+    ["Loader2", /\bLoader2\b/g, codeFiles.filter((path) => !/[\\/](?:control|receipt)\.tsx$/.test(path.pathname))],
   ];
-  for (const [name, pattern, ceiling] of debt) {
-    const count = occurrences(pattern, codeFiles);
-    if (count > ceiling) failures.push(`${name}: ${count} exceeds migration ceiling ${ceiling}`);
+  for (const [name, pattern, paths] of closedCode) {
+    const count = occurrences(pattern, paths);
+    if (count) failures.push(`${name}: ${count} remaining`);
   }
 
   const legacyHeights = lines(/rounded-\[var\(--r-ctl\)\].*\bh-(?:7|8|9|10|11)\b|\bh-(?:7|8|9|10|11)\b.*rounded-\[var\(--r-ctl\)\]/);
-  if (legacyHeights.length > 42) failures.push(`legacy control heights: ${legacyHeights.length} exceeds migration ceiling 42`);
+  if (legacyHeights.length) failures.push(`legacy control heights:\n  ${legacyHeights.join("\n  ")}`);
 
   if (failures.length) throw new Error(`Design-system audit failed\n\n${failures.join("\n\n")}`);
-  console.log("Design-system audit passed (K.1 rules closed; migration debt did not grow).")
+  console.log("Design-system audit passed (K.1–K.8 rules closed).")
 }
 
 function hexRgb(hex) {

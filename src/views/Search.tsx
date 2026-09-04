@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Loader2, Search as SearchIcon, Target, X } from "lucide-react";
+import { ArrowDown, Search as SearchIcon, Target, X } from "lucide-react";
 
 import { ProjectPickerModal } from "@/components/projects/project-picker-modal";
 import { SignalCard } from "@/components/signals/signal-card";
@@ -605,12 +605,7 @@ function SearchComposer({
 }) {
   const activeMode = SEARCH_MODES.find((m) => m.value === mode)!;
   const isDeep = mode === "deep_research";
-  const runContent = isPending ? (
-    <>
-      <Loader2 className="h-3.5 w-3.5" />
-      {isDeep ? "Researching…" : "Searching…"}
-    </>
-  ) : isDeep ? (
+  const runContent = isPending ? (isDeep ? "Researching…" : "Searching…") : isDeep ? (
     "Start research →"
   ) : (
     "Run"
@@ -643,6 +638,7 @@ function SearchComposer({
           <Button
             type="submit"
             disabled={!canRun}
+            loading={isPending}
             className={cn("min-w-[148px] self-end gap-1.5 px-5", compact ? "h-9" : "h-10")}
           >
             {runContent}
@@ -669,6 +665,7 @@ function SearchComposer({
             <Button
               type="submit"
               disabled={!canRun}
+              loading={isPending}
               className={cn(
                 "absolute right-1 min-w-[96px] shrink-0 gap-1.5 px-4",
                 compact ? "h-7" : "h-10",
@@ -770,7 +767,7 @@ function DeepProgressStrip() {
   return (
     <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-5">
       <div className="flex items-center gap-2">
-        <Loader2 className="h-4 w-4 text-[var(--accent)]" />
+        <span aria-hidden className="control-running-dot" />
         <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">
           Running Deep Research
         </span>

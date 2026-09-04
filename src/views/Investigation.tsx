@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronUp,
   FolderOpen,
-  Loader2,
   Lock,
   Network,
   Play,
@@ -1115,14 +1114,12 @@ export function InvestigationView() {
                             size="sm"
                             variant="primary"
                             onClick={() => void handleRunCollection()}
-                            disabled={isCollecting}
+                            loading={isCollecting}
                             className="gap-1.5 shrink-0"
                           >
-                            {isCollecting ? (
-                              <Loader2 className="h-3 w-3" />
-                            ) : (
+                            {!isCollecting ? (
                               <Zap className="h-3 w-3" />
-                            )}
+                            ) : null}
                             {isCollecting ? "Collecting…" : "Run Exa collection"}
                           </Button>
                         </div>
@@ -1286,7 +1283,7 @@ export function InvestigationView() {
                 >
                   <span className="flex items-center gap-2">
                     <span>Analysis output</span>
-                    {isRunningAnalysis && <Loader2 className="h-3 w-3 text-[var(--accent)]" />}
+                    {isRunningAnalysis && <span aria-hidden className="control-running-dot" />}
                     {analysisOutput && !isRunningAnalysis && <span className="h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--success)]" />}
                   </span>
                   {outputOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -1415,8 +1412,8 @@ function PhaseActionFoot({
         {disabled && !running && <AlertCircle className="h-3.5 w-3.5" />}
         {hint}
       </span>
-      <Button onClick={onRun} disabled={disabled} className="gap-1.5">
-        {running ? <Loader2 className="h-3.5 w-3.5" /> : runIcon}
+      <Button onClick={onRun} disabled={disabled} loading={running} className="gap-1.5">
+        {!running ? runIcon : null}
         {running ? "Running…" : runLabel}
       </Button>
     </div>

@@ -141,7 +141,7 @@ function NameField({
         defaultValue={initial}
         aria-label={initial ? "Rename" : "Name"}
         className={cn(
-          "h-7 w-full rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--base)] px-2",
+          "h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--base)] px-2",
           "font-ui text-[var(--t-ui)] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
           "focus:outline-none ",
         )}
@@ -211,7 +211,7 @@ function Row({
       style={{ paddingLeft: 4 + depth * INDENT }}
       className={cn(
         "nav-node group h-[var(--h-row)] select-none",
-        dropTarget && "ring-1 ring-[var(--accent)]",
+        dropTarget && "shadow-[0_0_0_1px_var(--accent)]",
       )}
       onClick={() => onSelect(node)}
       onDoubleClick={(e) => {

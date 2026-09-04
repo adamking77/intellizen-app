@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Badge } from "./Badge";
+import { DatabasePill } from "./DatabasePill";
 import { PickerDropdown } from "./PickerDropdown";
 
 import { resolveFieldOptionColor, resolveStatusColor } from "@/lib/database-colors";
@@ -263,7 +263,7 @@ function InlinePillPicker({
     <>
       <div ref={setAnchor} className="flex items-center min-h-[24px]">
         {value ? (
-          <Badge color={getColor(value)}>{value}</Badge>
+          <DatabasePill color={getColor(value)}>{value}</DatabasePill>
         ) : (
           <span style={{ opacity: 0.25 }}>&mdash;</span>
         )}
@@ -306,7 +306,7 @@ function InlineMultiPillPicker({
     <>
       <div ref={setAnchor} className="flex flex-wrap gap-1 items-center min-h-[24px]">
         {current.length > 0 ? (
-          current.map((opt) => <Badge key={opt} color={getColor(opt)}>{opt}</Badge>)
+          current.map((opt) => <DatabasePill key={opt} color={getColor(opt)}>{opt}</DatabasePill>)
         ) : (
           <span style={{ opacity: 0.25 }}>&mdash;</span>
         )}

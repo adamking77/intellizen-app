@@ -1,6 +1,7 @@
 // `/plugin/:id/*` — the one route App.tsx mounts for every plugin page.
 import { useParams } from "react-router-dom";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { PluginErrorBox, PluginSlot } from "./boundary";
 import { usePlugins } from "./registry";
 import "./boot";
@@ -14,9 +15,7 @@ export function PluginRouteView() {
   if (!plugin) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <p className="rounded-[var(--r-plane)] border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
-          No plugin named “{id}” is loaded.
-        </p>
+        <EmptyState title={`No plugin named “${id}” is loaded.`} />
       </div>
     );
   }
@@ -30,9 +29,7 @@ export function PluginRouteView() {
   if (!route) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <p className="rounded-[var(--r-plane)] border border-dashed border-[var(--border)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
-          “{plugin.name}” has no page at /{sub}.
-        </p>
+        <EmptyState title={`“${plugin.name}” has no page at /${sub}.`} />
       </div>
     );
   }

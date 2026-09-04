@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
-  Loader2,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -15,6 +14,7 @@ import { ContextMenu, type ContextMenuState } from "@/components/ui/context-menu
 import { DatabaseEditorView } from "@/views/DatabaseEditor";
 import { Button } from "@/components/ui/button";
 import { VentureScope } from "@/components/ui/venture-scope";
+import { Skeleton } from "@/components/ui/skeleton";
 import { loadCurrentDatabaseId, saveCurrentDatabaseId } from "@/lib/current-database";
 import { loadHomePins, removeHomePinsForDatabase, saveHomePins } from "@/lib/home-pins";
 import {
@@ -201,8 +201,8 @@ export function DatabasesView() {
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           ) : null}
-          <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
-            {isCreating ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+          <Button size="sm" onClick={handleCreateDatabase} loading={isCreating} className="gap-1.5">
+            {!isCreating ? <Plus className="h-3 w-3" /> : null}
             New database
           </Button>
         </div>
@@ -218,10 +218,7 @@ export function DatabasesView() {
         >
           <div className="min-h-0 flex-1 overflow-y-auto">
             {isLoading ? (
-              <div className="flex items-center gap-2 p-4 font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
-                <Loader2 className="h-4 w-4" />
-                <span>Loading databases...</span>
-              </div>
+              <Skeleton lines={4} className="p-4" />
             ) : safeDatabases.length === 0 ? (
               <div className="p-4">
                 <p className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">No databases yet</p>
@@ -268,8 +265,8 @@ export function DatabasesView() {
                   <p className="max-w-xl font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                     Create your first database to get started.
                   </p>
-                  <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
-                    {isCreating ? <Loader2 className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                  <Button size="sm" onClick={handleCreateDatabase} loading={isCreating} className="gap-1.5">
+                    {!isCreating ? <Plus className="h-3 w-3" /> : null}
                     New database
                   </Button>
                 </div>

@@ -91,7 +91,7 @@ export function SignalCard({
           }}
           aria-label={`Open ${title}`}
           className={cn(
-            "min-w-0 text-left font-ui text-[var(--t-ui)] leading-snug line-clamp-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]",
+            "min-w-0 text-left font-ui text-[var(--t-ui)] leading-snug line-clamp-2",
             isSelected || isActive
               ? "text-[var(--text)] font-medium"
               : "text-[var(--subtext-1)] group-hover/row:text-[var(--text)]",

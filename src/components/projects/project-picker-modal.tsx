@@ -1,10 +1,10 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 
 import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { createProject, listOperations, listProjects } from "@/lib/data";
 import { buildTaxonomyMetadata } from "@/lib/taxonomy";
@@ -112,7 +112,7 @@ export function ProjectPickerModal({
     >
         {savingProjectId !== null ? (
           <p className="mb-3 flex items-center gap-1.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--accent)]">
-            <Loader2 className="h-3 w-3" />
+            <span aria-hidden className="control-running-dot" />
             Saving evidence…
           </p>
         ) : null}
@@ -132,9 +132,11 @@ export function ProjectPickerModal({
           </div>
 
           {existing.length === 0 ? (
-            <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-              No evidence piles yet — create a standalone one below, then assign it to a work item in Intel.
-            </p>
+            <EmptyState
+              title="No evidence piles yet."
+              description="Create a standalone one below, then assign it to a work item in Intel."
+              className="py-2"
+            />
           ) : (
             <div className="grid gap-1.5">
               {existing.map((project) => {
@@ -172,7 +174,7 @@ export function ProjectPickerModal({
                     </span>
                     <span className="shrink-0 flex items-center gap-1.5">
                       {isSaving ? (
-                        <Loader2 className="h-3.5 w-3.5 text-[var(--accent)]" />
+                        <span aria-hidden className="control-running-dot" />
                       ) : (
                         <span className="font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)] group-hover:text-[var(--subtext-0)]">
                           {project.type.replace("_", " ")}
@@ -208,7 +210,7 @@ export function ProjectPickerModal({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <select
-                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                     value={type}
                     onChange={(event) => setType(event.target.value as ProjectType)}
                   >
@@ -218,7 +220,7 @@ export function ProjectPickerModal({
                     <option value="client_case">Client Case</option>
                   </select>
                   <select
-                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                     value={watchDomain}
                     onChange={(event) => setWatchDomain(event.target.value)}
                   >
@@ -240,17 +242,14 @@ export function ProjectPickerModal({
                 </Button>
               </div>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => setCreating(true)}
-                className={cn(
-                  "w-full rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2.5",
-                  "font-ui text-[var(--t-meta)] font-medium text-[var(--subtext-0)]",
-                  "transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
-                )}
+                className="w-full"
               >
                 + New standalone evidence pile
-              </button>
+              </Button>
             )}
           </div>
     </AppDialog>

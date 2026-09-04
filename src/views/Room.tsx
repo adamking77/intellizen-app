@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2, Trash2, Users, X } from "lucide-react";
+import { Trash2, Users, X } from "lucide-react";
 
 import { DecisionCard } from "@/components/agent/decision-card";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
@@ -9,6 +9,7 @@ import { Avatar, identityColor } from "@/components/agents/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ApprovalChoice } from "@/engine/contract";
 import { answerClarify } from "@/engine/decisions";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
@@ -182,8 +183,8 @@ export function RoomView({
 
   if (!ready) {
     return (
-      <div className="flex h-full items-center justify-center bg-[var(--base)]">
-        <Loader2 className="h-4 w-4 text-[var(--accent)]" />
+      <div className="h-full bg-[var(--base)] p-6">
+        <Skeleton lines={5} className="mx-auto max-w-2xl" />
       </div>
     );
   }

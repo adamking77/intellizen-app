@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, FileSearch, FolderSearch, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { InvestigationCreateModal } from "@/components/investigations/investigation-create-modal";
@@ -14,6 +14,7 @@ import { ProjectCreateModal } from "@/components/projects/project-create-modal";
 import { SignalCard } from "@/components/signals/signal-card";
 import { Button } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { IndicatorStrip, type IndicatorItem } from "@/components/ui/indicator-strip";
 import { NarrativeEditor } from "@/components/ui/narrative-editor";
 import { PropertyField } from "@/components/ui/property-field";
@@ -21,6 +22,7 @@ import { QueryState } from "@/components/ui/query-state";
 import type { SaveStateValue } from "@/components/ui/save-state";
 import { Select } from "@/components/ui/select";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Skeleton } from "@/components/ui/skeleton";
 import { VentureScope } from "@/components/ui/venture-scope";
 import { domainColor } from "@/lib/domains";
 import {
@@ -646,10 +648,7 @@ export function ProjectsView() {
         >
           <div className="flex-1 overflow-y-auto">
             {loadingOperationalData ? (
-              <div className="flex flex-col items-center gap-2 p-10 text-center">
-                <Loader2 className="h-4 w-4 text-[var(--accent)]" />
-                <p className="text-label">Loading intel</p>
-              </div>
+              <Skeleton lines={6} className="p-4" />
             ) : operationGroups.length === 0 && unassigned.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-10 text-center">
                 <p className="text-label">No work items</p>
@@ -1363,9 +1362,11 @@ function OperationDetailPane({
             </div>
           )}
           {operationProjects.length === 0 ? (
-            <div className="mb-5 rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
-              No evidence piles yet. Add one to collect signals, files, and graph material inside this work item.
-            </div>
+            <EmptyState
+              title="No evidence piles yet."
+              description="Add one to collect signals, files, and graph material inside this work item."
+              className="mb-5 py-2"
+            />
           ) : (
             <div className="mb-5 flex flex-col gap-1">
               {operationProjects.map((p) => {

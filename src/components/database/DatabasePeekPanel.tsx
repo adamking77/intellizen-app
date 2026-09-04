@@ -1,13 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeftRight,
   Copy,
   FileText,
   GitBranch,
-  Maximize2,
-  Minimize2,
   Play,
   RefreshCw,
   Route,
@@ -24,8 +21,9 @@ import {
 } from "@/components/database/RecordInsightSections";
 import { TableCell } from "@/components/database/primitives/TableCell";
 import { InlineEditor } from "@/components/database/primitives/InlineEditor";
-import { Badge } from "@/components/database/primitives/Badge";
+import { DatabasePill } from "@/components/database/primitives/DatabasePill";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Drawer } from "@/components/ui/drawer";
 import { MarkdownBody } from "@/components/ui/markdown-body";
 import { NarrativeEditor } from "@/components/ui/narrative-editor";
 import {
@@ -59,8 +57,6 @@ import type {
   WorkspaceDatabaseViewConfig,
 } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
-
-let lastPanelWidth = 560;
 
 const WORKFLOW_RUN_FIELD_IDS = {
   name: "run_name",
@@ -135,11 +131,8 @@ export function DatabasePeekPanel({
   onSaveHeaderFields,
 }: DatabasePeekPanelProps) {
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const [visible, setVisible] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
-  const [panelWidth, setPanelWidth] = useState(lastPanelWidth);
-  const [fullPage, setFullPage] = useState(false);
   const [notesDraft, setNotesDraft] = useState(String(record?._body ?? ""));
   const [notesStatus, setNotesStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [showHeaderPicker, setShowHeaderPicker] = useState(false);
@@ -197,10 +190,6 @@ export function DatabasePeekPanel({
   const propertyRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
-  }, []);
-
-  useEffect(() => {
     setNotesDraft(String(record?._body ?? ""));
     lastSavedNotesRef.current = String(record?._body ?? "");
     setNotesStatus("idle");
@@ -233,19 +222,6 @@ export function DatabasePeekPanel({
     return () => window.clearTimeout(handle);
   }, [notesStatus]);
 
-  const animateClose = useCallback(() => {
-    setVisible(false);
-    setTimeout(onClose, 200);
-  }, [onClose]);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") animateClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [animateClose]);
-
   useEffect(() => {
     if (!showHeaderPicker) return;
     const onMouseDown = (e: MouseEvent) => {
@@ -266,7 +242,7 @@ export function DatabasePeekPanel({
   function handleDelete() {
     if (!record) return;
     void onDelete(database.id, record.id);
-    animateClose();
+    onClose();
   }
 
   const titleField = database.schema.find((field) => field.type === "text");
@@ -327,35 +303,6 @@ export function DatabasePeekPanel({
       ...bodyFields.map((field) => field.id).filter((fieldId) => !configured.includes(fieldId)),
     ]);
   }, [database.headerFieldIds, bodyFields]);
-
-  function handlePanelResizeStart(event: React.MouseEvent<HTMLDivElement>) {
-    if (fullPage) return;
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = panelWidth;
-    const min = 380;
-    const max = Math.max(min, Math.floor(window.innerWidth * 0.92));
-    const onMove = (moveEvent: MouseEvent) => {
-      const next = Math.max(min, Math.min(max, startWidth + (startX - moveEvent.clientX)));
-      lastPanelWidth = next;
-      setPanelWidth(next);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
-  function togglePanelWidth() {
-    if (fullPage) return;
-    const compactWidth = 440;
-    const expandedWidth = Math.min(Math.floor(window.innerWidth * 0.72), 1040);
-    const nextWidth = panelWidth < ((compactWidth + expandedWidth) / 2) ? expandedWidth : compactWidth;
-    lastPanelWidth = nextWidth;
-    setPanelWidth(nextWidth);
-  }
 
   function updateNotes(nextNotes: string) {
     setNotesDraft(nextNotes);
@@ -438,32 +385,7 @@ export function DatabasePeekPanel({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40"
-        style={{
-          backgroundColor: visible ? "rgba(0,0,0,0.08)" : "rgba(0,0,0,0)",
-          transition: "background-color 200ms ease-out",
-        }}
-        onClick={animateClose}
-      />
-
-      <div
-        className={`db-record-panel fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-200 ease-out ${fullPage ? "db-record-panel--fullpage" : ""}`}
-        style={{
-          width: fullPage ? "100vw" : `${panelWidth}px`,
-          minWidth: fullPage ? undefined : "360px",
-          transform: visible ? "translateX(0)" : "translateX(100%)",
-          boxShadow: visible ? undefined : "none",
-        }}
-      >
-        {!fullPage && (
-          <div
-            className="db-record-resize-handle"
-            onMouseDown={handlePanelResizeStart}
-            title="Resize panel"
-          />
-        )}
-
+      <Drawer open onClose={onClose} label={titleValue || "Database record"} className="flex flex-col overflow-hidden">
         <div className="db-record-header flex-shrink-0">
           <div className="db-record-title-wrap">
             <input
@@ -489,17 +411,6 @@ export function DatabasePeekPanel({
             />
           </div>
           <div className="db-record-header-actions">
-            <button type="button" className="db-icon-btn-plain" onClick={togglePanelWidth} title="Resize panel">
-              <ArrowLeftRight className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="db-icon-btn-plain"
-              onClick={() => setFullPage((v) => !v)}
-              title={fullPage ? "Exit full page" : "Open as page"}
-            >
-              {fullPage ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </button>
             <button
               type="button"
               className="db-icon-btn-plain"
@@ -516,7 +427,7 @@ export function DatabasePeekPanel({
             >
               <Trash2 className="h-4 w-4" />
             </button>
-            <button type="button" className="db-icon-btn-plain" onClick={animateClose} title="Close (Esc)">
+            <button type="button" className="db-icon-btn-plain" onClick={onClose} title="Close (Esc)">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -839,7 +750,7 @@ export function DatabasePeekPanel({
             {record?._isTemplate ? "Template record" : "Changes save automatically"}
           </span>
         </div>
-      </div>
+      </Drawer>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -869,15 +780,15 @@ function SummaryFieldValue({
   const displayValue = getFieldDisplayValue(record, field, database, catalog);
 
   if (field.type === "status" && typeof value === "string" && value) {
-    return <Badge color={resolveStatusColor(value, field)}>{value}</Badge>;
+    return <DatabasePill color={resolveStatusColor(value, field)}>{value}</DatabasePill>;
   }
   if (field.type === "select" && typeof value === "string" && value) {
-    return <Badge color={resolveFieldOptionColor(field, value)}>{value}</Badge>;
+    return <DatabasePill color={resolveFieldOptionColor(field, value)}>{value}</DatabasePill>;
   }
   if (field.type === "multiselect" && Array.isArray(value) && value.length > 0) {
     return (
       <div className="flex flex-wrap gap-1">
-        {value.map((v) => <Badge key={v} color={resolveFieldOptionColor(field, v)}>{v}</Badge>)}
+        {value.map((v) => <DatabasePill key={v} color={resolveFieldOptionColor(field, v)}>{v}</DatabasePill>)}
       </div>
     );
   }
@@ -886,7 +797,7 @@ function SummaryFieldValue({
       <div className="flex flex-wrap gap-1">
         {value.map((id) => {
           const label = resolveRelationLabel(field, String(id), catalog);
-          return <Badge key={id} color={resolveRelationColor(label)}>{label}</Badge>;
+          return <DatabasePill key={id} color={resolveRelationColor(label)}>{label}</DatabasePill>;
         })}
       </div>
     );

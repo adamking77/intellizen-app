@@ -1967,7 +1967,7 @@ export function GraphView() {
                 setConnectSourceId(null);
                 hasAutoFitRef.current = null;
               }}
-              className="h-7 min-w-0 max-w-[180px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
+              className="h-[var(--h-ctl)] min-w-0 max-w-[180px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
             >
               <option value="standalone">Standalone</option>
               {graphMode === "project" && graphProjectId === null ? (
@@ -2022,7 +2022,7 @@ export function GraphView() {
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
                   placeholder="Search ( / )"
-                  className="h-7 w-[160px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
+                  className="h-[var(--h-ctl)] w-[160px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
                 />
               </div>
             )}
@@ -2514,7 +2514,7 @@ export function GraphView() {
                       }}
                     >
                       <div
-                        className="pointer-events-none flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--r-ctl)]"
+                        className="pointer-events-none flex h-[var(--h-ctl)] w-9 shrink-0 items-center justify-center rounded-[var(--r-ctl)]"
                         style={{ background: style.chip, color: style.accent }}
                       >
                         {(() => {
@@ -3483,7 +3483,7 @@ export function GraphView() {
                     value={exportFilename}
                     onChange={(e) => setExportFilename(e.target.value)}
                     autoFocus
-                    className="h-9 flex-1 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] flex-1 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   />
                   <span className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">.png</span>
                 </div>
@@ -3522,7 +3522,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(Number(e.target.value))}
-                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   >
                     {(projects ?? []).map((p) => (
                       <option key={p.id} value={p.id}>
@@ -3534,7 +3534,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(e.target.value)}
-                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   >
                     {(investigations ?? []).map((inv) => (
                       <option key={inv.case_id} value={inv.case_id}>

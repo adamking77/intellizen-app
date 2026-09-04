@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { FileText, Plus } from "lucide-react";
 
-import { Badge } from "@/components/database/primitives/Badge";
+import { DatabasePill } from "@/components/database/primitives/DatabasePill";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -136,7 +136,7 @@ export function DatabaseGalleryView({
                     <div key={field.id} className="db-gallery-field">
                       <span className="db-gallery-field-name">{field.name}</span>
                       <div className="db-gallery-field-value">
-                        <Badge color={resolveStatusColor(rawValue, field)}>{rawValue}</Badge>
+                        <DatabasePill color={resolveStatusColor(rawValue, field)}>{rawValue}</DatabasePill>
                       </div>
                     </div>
                   );
@@ -147,7 +147,7 @@ export function DatabaseGalleryView({
                     <div key={field.id} className="db-gallery-field">
                       <span className="db-gallery-field-name">{field.name}</span>
                       <div className="db-gallery-field-value">
-                        <Badge color={resolveFieldOptionColor(field, rawValue)}>{rawValue}</Badge>
+                        <DatabasePill color={resolveFieldOptionColor(field, rawValue)}>{rawValue}</DatabasePill>
                       </div>
                     </div>
                   );
@@ -159,9 +159,9 @@ export function DatabaseGalleryView({
                       <span className="db-gallery-field-name">{field.name}</span>
                       <div className="db-gallery-field-badges">
                         {rawValue.map((value) => (
-                          <Badge key={value} color={resolveFieldOptionColor(field, value)}>
+                          <DatabasePill key={value} color={resolveFieldOptionColor(field, value)}>
                             {value}
-                          </Badge>
+                          </DatabasePill>
                         ))}
                       </div>
                     </div>
@@ -176,9 +176,9 @@ export function DatabaseGalleryView({
                         {rawValue.map((relationId) => {
                           const label = resolveRelationLabel(field, String(relationId), catalog);
                           return (
-                            <Badge key={String(relationId)} color={resolveRelationColor(label)}>
+                            <DatabasePill key={String(relationId)} color={resolveRelationColor(label)}>
                               {label}
-                            </Badge>
+                            </DatabasePill>
                           );
                         })}
                       </div>

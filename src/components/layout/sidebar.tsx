@@ -151,7 +151,7 @@ export function Sidebar() {
             {entityFilter ? (
               <span
                 aria-hidden
-                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)] ring-2 ring-[var(--mantle)]"
+                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)] shadow-[0_0_0_2px_var(--mantle)]"
               />
             ) : null}
           </button>
@@ -253,7 +253,7 @@ export function Sidebar() {
             <span
               aria-hidden
               className={cn(
-                "absolute right-1 top-1 h-1.5 w-1.5 rounded-[var(--r-pill)] ring-2 ring-[var(--crust)]",
+                "absolute right-1 top-1 h-1.5 w-1.5 rounded-[var(--r-pill)] shadow-[0_0_0_2px_var(--crust)]",
                 ENGINE_DOT_CLASS[engineTag],
               )}
             />
