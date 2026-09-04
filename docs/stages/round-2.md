@@ -111,10 +111,12 @@ I.1 **The unit page.** Department or workspace shows its projects as rows:
     who holds each, what is blocked, what waits on you, from the project's
     board and records. Its own empty widget board, pinnable like Home.
     *Open it: click a workspace, see the rows and pin a widget to it.*
+    Approval flow: `docs/stages/approval-flows/I.1-unit-page.md`.
 I.2 **The session page.** Selecting a session in the tree opens the large
     read-only transcript with receipts (files written, cards moved) derived
     from tool events and `work_events`, not the project room with a side
     list. *Open it: click a session, read it, see what it touched.*
+    Approval flow: `docs/stages/approval-flows/I.2-session-page.md`.
 I.3 **Intel becomes case tabs.** Case, Evidence and Entities tabs on a case
     project, drawing on the existing `Investigation.tsx` and `Projects.tsx`
     parts. Then `/intel`, `/investigate` and `/search` stop being
@@ -122,20 +124,24 @@ I.3 **Intel becomes case tabs.** Case, Evidence and Entities tabs on a case
     all point at the project. Search stays reachable from the palette.
     *Open it: open a client case from the tree, work the case without
     leaving the project room.*
+    Approval flow: `docs/stages/approval-flows/I.3-case-tabs.md`.
 I.4 **D.14 for real.** An agent asks to install a plugin; the request is a
     workspace record; approving the record installs it; the plugin loads
     with attribution ("written by …"). Add enable/disable and per-plugin
     capability grants from the donor's SPEC-v9. *Open it: ask an agent for
     a widget, approve the record, see the widget.*
+    Approval flow: `docs/stages/approval-flows/I.4-plugin-approval.md`.
 I.5 **Home without fixtures.** Remove the rotation banner and the presets
     named after retired surfaces (Daily Brief, Agent Work, Roles), or move
     the banner to a plugin. Adam decides which.
+    Approval flow: `docs/stages/approval-flows/I.5-home-without-fixtures.md`.
 I.6 **Rooms on Hermes.** Hermes-only rooms ride the gateway's `groups.*`
     with durable logs; the vendored engine stays only for rooms that seat
     ACP members. Rooms and teams appear in the tree and the target picker.
     Decide with the code open whether `groups.*` can seat ACP members; if
     it can, the vendored engine goes. *Open it: a room of two Hermes
     profiles answers one question and its log survives a relaunch.*
+    Approval flow: `docs/stages/approval-flows/I.6-hermes-rooms.md`.
 
 ## Phase J — donor pieces the plan never listed (about 2 days)
 
