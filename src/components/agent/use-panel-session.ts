@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ApprovalChoice } from "@/engine/contract";
+import type { SessionAttachment } from "@/engine/session";
 import { emptyThread, useSessionStore, type ProfileThread } from "@/engine/session-store";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
 import { isPanelWindow, onFrame, requestAction, requestFrame, type PanelFrame } from "./panel-window";
@@ -18,7 +19,7 @@ export interface PanelSession {
   thread: ProfileThread | null;
   selectProfile: (profile: string | null) => void;
   restore: (profile: string) => Promise<void>;
-  send: (profile: string, text: string) => Promise<void>;
+  send: (profile: string, text: string, attachments?: SessionAttachment[]) => Promise<void>;
   editAndSend: (profile: string, messageId: string, text: string) => Promise<void>;
   stop: (profile: string) => Promise<void>;
   decideApproval: (
@@ -84,9 +85,9 @@ export function usePanelSession(): PanelSession {
   );
 
   const send = useCallback(
-    async (profile: string, text: string) => {
-      if (remote) requestAction({ type: "send", profile, text });
-      else await storeSend(profile, text);
+    async (profile: string, text: string, attachments: SessionAttachment[] = []) => {
+      if (remote) requestAction({ type: "send", profile, text, attachments });
+      else await storeSend(profile, text, attachments);
     },
     [remote, storeSend],
   );

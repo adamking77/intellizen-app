@@ -253,6 +253,7 @@ export function AgentTurn({
   children?: React.ReactNode;
 }) {
   const [runOpen, setRunOpen] = useState(false);
+  const [thoughtOpen, setThoughtOpen] = useState(Boolean(message.streaming));
   const runAction = (id: MessageActionId) => {
     if (id === "copy") void writeTextToClipboard(turnText(message));
     else if (id === "read") actions?.onRead?.(message);
@@ -270,9 +271,13 @@ export function AgentTurn({
         <Identity name={name} hue={agentColor} runtime={profile?.provider || undefined} model={profile?.model || undefined} />
 
         {showReasoning && message.thought ? (
-          <details className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]">
+          <details
+            open={thoughtOpen}
+            onToggle={(event) => setThoughtOpen(event.currentTarget.open)}
+            className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]"
+          >
             <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
-              Thought
+              {message.streaming ? "Thinking…" : "Thought"}
             </summary>
             <ReplyMarkdown
               content={message.thought.replace(/^\s+/, "")}

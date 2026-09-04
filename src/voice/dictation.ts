@@ -163,8 +163,8 @@ export async function record(
 }
 
 /** Recorded audio to text, through the local engine chosen in Settings. */
-export function transcribe(bytes: Uint8Array, model: string): Promise<string> {
-  return invoke<string>("voice_transcribe", { bytes: Array.from(bytes), model });
+export function transcribe(bytes: Uint8Array, model: string, language: string): Promise<string> {
+  return invoke<string>("voice_transcribe", { bytes: Array.from(bytes), model, language });
 }
 
 /** As much of a reply as is worth reading out, ending on a sentence. A long

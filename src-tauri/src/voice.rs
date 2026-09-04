@@ -223,18 +223,24 @@ fn voice_from(config: &str) -> (String, String) {
 /// `whisper:base`, `parakeet:<dir>` — so a second local engine needs no second
 /// service; a bare size from before ids carried their engine means Whisper.
 #[tauri::command]
-pub async fn voice_transcribe(bytes: Vec<u8>, model: String) -> Result<String, String> {
+pub async fn voice_transcribe(bytes: Vec<u8>, model: String, language: String) -> Result<String, String> {
     if bytes.is_empty() {
         return Err("nothing was recorded".into());
     }
     let path = std::env::temp_dir().join(format!("intellizen-dictation-{}.webm", std::process::id()));
     std::fs::write(&path, bytes).map_err(|e| format!("could not save the recording: {e}"))?;
     let path = path.to_string_lossy().into_owned();
+    let language = if language.trim().is_empty() {
+        "en".to_string()
+    } else {
+        language.trim().to_string()
+    };
     match model.split_once(':') {
-        Some(("whisper", size)) => transcribe_whisper(path, size.to_string()).await,
-        Some(("parakeet", dir)) => transcribe_parakeet(path, dir.to_string()).await,
+        Some(("whisper", size)) => transcribe_whisper(path, size.to_string(), language).await,
+        Some(("parakeet", dir)) if language == "en" => transcribe_parakeet(path, dir.to_string()).await,
+        Some(("parakeet", _)) => Err("Parakeet supports English only; choose a Whisper model for this language".into()),
         Some((other, _)) => Err(format!("{other} is not a dictation engine this app has yet")),
-        None => transcribe_whisper(path, model).await,
+        None => transcribe_whisper(path, model, language).await,
     }
 }
 
@@ -301,7 +307,7 @@ const WHISPER_PY: &str = concat!(
     "import sys\n",
     "from faster_whisper import WhisperModel\n",
     "m = WhisperModel(sys.argv[1], device='cpu', compute_type='int8')\n",
-    "segs, _ = m.transcribe(sys.argv[2], language='en')\n",
+    "segs, _ = m.transcribe(sys.argv[2], language=sys.argv[3])\n",
     "print(' '.join(s.text.strip() for s in segs))\n",
 );
 
@@ -364,7 +370,7 @@ fn last_line_of(stderr: &[u8]) -> String {
 /// Whisper through Hermes's own venv: the model, runtime and weights are
 /// already on this machine and agree with each other. Measured by the donor
 /// at ~2s for two seconds of audio on CPU.
-async fn transcribe_whisper(path: String, model: String) -> Result<String, String> {
+async fn transcribe_whisper(path: String, model: String, language: String) -> Result<String, String> {
     let python = hermes_python()?;
     let model = if model.is_empty() { "base".to_string() } else { model };
     tauri::async_runtime::spawn_blocking(move || {
@@ -373,6 +379,7 @@ async fn transcribe_whisper(path: String, model: String) -> Result<String, Strin
             .arg(WHISPER_PY)
             .arg(&model)
             .arg(&path)
+            .arg(&language)
             .output()
             .map_err(|e| format!("could not run local dictation: {e}"))?;
         if !out.status.success() {

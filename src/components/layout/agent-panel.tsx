@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { open as pickFiles } from "@tauri-apps/plugin-dialog";
 import { ChevronsUpDown, PanelRightClose } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
@@ -20,6 +21,7 @@ import { useEngineStore } from "@/engine/engine-store";
 import type { SessionUsage } from "@/engine/contract";
 import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
+import type { SessionAttachment } from "@/engine/session";
 import { defaultProfile, listProfiles, loadProfileAvatar, type HermesProfile } from "@/engine/profiles";
 import { transcriptBusy, type Decision, type Message } from "@/engine/transcript";
 import {
@@ -180,8 +182,13 @@ export function AgentPanel({
   }, [engineOpen, selectedProfile, restore]);
 
   const [picking, setPicking] = useState(false);
-  const closePicker = useCallback(() => setPicking(false), []);
+  const targetButton = useRef<HTMLButtonElement | null>(null);
+  const closePicker = useCallback(() => {
+    setPicking(false);
+    window.requestAnimationFrame(() => targetButton.current?.focus());
+  }, []);
   const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const focusComposerWhenOpen = useRef(false);
   const log = useRef<HTMLDivElement | null>(null);
@@ -272,12 +279,25 @@ export function AgentPanel({
     toggleCollapsed();
   }, [toggleCollapsed, toggleRequest]);
 
-  const submit = (text = draft) => {
-    const trimmed = text.trim();
-    if (!trimmed || !selectedProfile || !targetReady || running) return;
+  const submit = (text?: string) => {
+    const usingDraft = text === undefined;
+    const trimmed = (text ?? draft).trim();
+    const picked = usingDraft ? attachments : [];
+    if ((!trimmed && picked.length === 0) || !selectedProfile || !targetReady || running) return;
     setDraft("");
+    if (usingDraft) setAttachments([]);
     atBottom.current = true;
-    send(selectedProfile, trimmed).catch((error) => toastError("Could not send", error));
+    send(selectedProfile, trimmed, picked).catch((error) => toastError("Could not send", error));
+  };
+
+  const attach = async () => {
+    const chosen = await pickFiles({ multiple: true, directory: false });
+    const paths = typeof chosen === "string" ? [chosen] : (chosen ?? []);
+    setAttachments((current) => {
+      const known = new Set(current.map((attachment) => attachment.path));
+      return [...current, ...paths.filter((path) => !known.has(path)).map((path) => ({ path, name: path.split(/[\\/]/).pop() || path }))];
+    });
+    composerRef.current?.focus();
   };
 
   const onStop = () => {
@@ -390,6 +410,7 @@ export function AgentPanel({
             is also the way to change it. */}
         <div className="relative flex h-[34px] shrink-0 items-center gap-2">
           <button
+            ref={targetButton}
             type="button"
             onClick={() => setPicking((v) => !v)}
             aria-haspopup="listbox"
@@ -521,6 +542,9 @@ export function AgentPanel({
           onSend={() => submit()}
           onStop={onStop}
           onEject={onEject}
+          attachments={attachments}
+          onAttach={() => void attach().catch((error) => toastError("Could not attach files", error))}
+          onRemoveAttachment={(path) => setAttachments((current) => current.filter((attachment) => attachment.path !== path))}
           placeholder={placeholder}
           ready={targetReady}
           running={running}

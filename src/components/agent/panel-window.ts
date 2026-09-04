@@ -11,6 +11,7 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { ApprovalChoice } from "@/engine/contract";
 import type { ProfileThread } from "@/engine/session-store";
+import type { SessionAttachment } from "@/engine/session";
 import type { HermesProfile } from "@/engine/profiles";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
 
@@ -126,7 +127,7 @@ export interface PanelFrame {
  *  vocabulary so the two windows cannot hold two contracts. */
 export type PanelAction =
   | { type: "select"; profile: string | null }
-  | { type: "send"; profile: string; text: string }
+  | { type: "send"; profile: string; text: string; attachments?: SessionAttachment[] }
   | { type: "edit"; profile: string; messageId: string; text: string }
   | { type: "openSettings" }
   | { type: "stop"; profile: string }

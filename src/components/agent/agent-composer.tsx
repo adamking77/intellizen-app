@@ -1,10 +1,11 @@
 import { forwardRef, type KeyboardEvent } from "react";
-import { ArrowUp, Check, PictureInPicture2, Square } from "lucide-react";
+import { ArrowUp, Check, Paperclip, PictureInPicture2, Square, X } from "lucide-react";
 
 import { doneIn } from "@/components/agent/turn-time";
 import { Control } from "@/components/ui/control";
 import { Pill } from "@/components/ui/status-pill";
 import { Textarea } from "@/components/ui/textarea";
+import type { SessionAttachment } from "@/engine/session";
 import type { TurnOutcome } from "@/engine/transcript";
 
 export type RunState =
@@ -69,6 +70,9 @@ export interface ComposerProps {
   onSend: () => void;
   onStop: () => void;
   onEject?: () => void;
+  attachments?: SessionAttachment[];
+  onAttach?: () => void;
+  onRemoveAttachment?: (path: string) => void;
   placeholder: string;
   /** The gateway can take a prompt right now. */
   ready: boolean;
@@ -98,6 +102,9 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     onSend,
     onStop,
     onEject,
+    attachments = [],
+    onAttach,
+    onRemoveAttachment,
     placeholder,
     ready,
     running,
@@ -120,13 +127,25 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
       onSend();
     }
   };
-  const canSend = ready && !running && draft.trim().length > 0;
+  const canSend = ready && !running && (draft.trim().length > 0 || attachments.length > 0);
   return (
     <div className="flex shrink-0 flex-col gap-2 bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
         <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
         </p>
+      ) : null}
+      {attachments.length ? (
+        <div className="flex flex-wrap gap-1.5" aria-label="Attachments">
+          {attachments.map((attachment) => (
+            <span key={attachment.path} className="flex max-w-full items-center gap-1 rounded-[var(--r-pill)] bg-[var(--raised)] px-2 py-1 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+              <span className="truncate">{attachment.name}</span>
+              <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment?.(attachment.path)} className="rounded-[var(--r-pill)] hover:text-[var(--text)] focus-visible:text-[var(--text)]">
+                <X className="h-3 w-3" strokeWidth={1.8} aria-hidden />
+              </button>
+            </span>
+          ))}
+        </div>
       ) : null}
       <Textarea
         ref={ref}
@@ -150,6 +169,11 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
             size="icon"
           >
             <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+          </Control>
+        ) : null}
+        {onAttach ? (
+          <Control onClick={onAttach} disabled={!agent || running} aria-label="Attach files" title="Attach files" variant="quiet" size="icon">
+            <Paperclip className="h-3.5 w-3.5" strokeWidth={1.6} aria-hidden />
           </Control>
         ) : null}
         {dictate}

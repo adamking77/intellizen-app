@@ -201,7 +201,7 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
       try {
         const bytes = await rec.stop();
         if (bytes.length === 0) return;
-        const heard = (await transcribe(bytes, prefs.dictation.model)).trim();
+        const heard = (await transcribe(bytes, prefs.dictation.model, prefs.dictation.language)).trim();
         if (!heard) {
           setNote("Nothing was heard in that recording.");
           return;

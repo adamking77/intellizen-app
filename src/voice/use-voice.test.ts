@@ -32,7 +32,11 @@ describe("parseVoiceConfig", () => {
   });
   it("reads a saved config and drops unknown shapes", () => {
     const got = parseVoiceConfig(JSON.stringify({ dictation: { enabled: true, service: "local", model: "whisper:base" }, speaking: 4 }));
-    expect(got.dictation).toEqual({ enabled: true, service: "local", model: "whisper:base", apiKey: "" });
+    expect(got.dictation).toEqual({ enabled: true, service: "local", model: "whisper:base", apiKey: "", language: "en" });
     expect(got.speaking.enabled).toBe(false);
+  });
+  it("preserves the dictation language from voice settings", () => {
+    const got = parseVoiceConfig(JSON.stringify({ dictation: { language: "es" } }));
+    expect(got.dictation.language).toBe("es");
   });
 });

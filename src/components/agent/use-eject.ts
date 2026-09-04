@@ -137,7 +137,7 @@ function run(action: PanelAction) {
       s.selectProfile(action.profile);
       return;
     case "send":
-      s.send(action.profile, action.text).catch((error) => toastError("Could not send", error));
+      s.send(action.profile, action.text, action.attachments).catch((error) => toastError("Could not send", error));
       return;
     case "edit":
       s.editAndSend(action.profile, action.messageId, action.text).catch((error) => toastError("Could not send", error));

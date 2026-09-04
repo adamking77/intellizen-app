@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { JsonRpcGatewayError } from "./json-rpc-gateway";
 import {
+  acpAttachmentPrompt,
+  attachmentPrompt,
   createSession,
   interruptSession,
   isSessionNotFound,
@@ -36,6 +38,27 @@ describe("session helpers send the pinned parameter shapes", () => {
       { method: "prompt.submit", params: { session_id: "abc", text: "hello" }, timeoutMs: undefined },
       { method: "session.interrupt", params: { session_id: "abc" }, timeoutMs: undefined },
     ]);
+  });
+
+  it("stages image, PDF and file attachments through their pinned methods", async () => {
+    const client = new FakeGatewayClient();
+    client.respondWith((call) => {
+      if (call.method === "image.attach") return { attached: true, text: "[User attached image: shot.png]" };
+      if (call.method === "pdf.attach") return { attached: true, text: "[User attached PDF: brief.pdf (2 pages)]" };
+      if (call.method === "file.attach") return { attached: true, ref_text: "@file:notes.txt" };
+      return undefined;
+    });
+    await expect(attachmentPrompt(client, "s1", "Review these", [
+      { path: "/tmp/shot.png", name: "shot.png" },
+      { path: "/tmp/brief.pdf", name: "brief.pdf" },
+      { path: "/tmp/notes.txt", name: "notes.txt" },
+    ])).resolves.toBe("Review these\n[User attached image: shot.png]\n[User attached PDF: brief.pdf (2 pages)]\n@file:notes.txt");
+    expect(client.calls.map((call) => call.method)).toEqual(["image.attach", "pdf.attach", "file.attach"]);
+    expect(client.calls[2].params).toEqual({ session_id: "s1", path: "/tmp/notes.txt", name: "notes.txt" });
+  });
+
+  it("turns ACP attachments into explicit local file refs", () => {
+    expect(acpAttachmentPrompt("Look", [{ path: "/tmp/My file.txt", name: "My file.txt" }])).toBe("Look\n@file:`/tmp/My file.txt`");
   });
 
   it("history, replay, and resume use Hermes's durable session shapes", async () => {

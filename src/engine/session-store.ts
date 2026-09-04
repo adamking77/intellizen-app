@@ -21,6 +21,8 @@ import { getGatewayClient } from "./gateway";
 import { JsonRpcGatewayError, type GatewayEvent } from "./json-rpc-gateway";
 import type { HermesProfile } from "./profiles";
 import {
+  acpAttachmentPrompt,
+  attachmentPrompt,
   createSessionHandle,
   interruptSession,
   isSessionNotFound,
@@ -29,6 +31,7 @@ import {
   sessionHistory,
   SESSION_NOT_FOUND,
   submitPrompt,
+  type SessionAttachment,
 } from "./session";
 import {
   clearSessionPointer,
@@ -73,7 +76,7 @@ export interface SessionStoreState {
   /** Reopen the last Hermes-owned session for a profile, if one exists. */
   restore: (profile: string) => Promise<void>;
   /** Append the person's turn and submit it. Rejects when nothing was sent. */
-  send: (profile: string, text: string) => Promise<void>;
+  send: (profile: string, text: string, attachments?: SessionAttachment[]) => Promise<void>;
   /** Remove this visible turn and everything after it, then ask the edit. */
   editAndSend: (profile: string, messageId: string, text: string) => Promise<void>;
   /** Interrupt the running turn. */
@@ -300,36 +303,37 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
     ensureSession,
     restore,
 
-    send: async (profile, text) => {
+    send: async (profile, text, attachments = []) => {
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("Nothing to send.");
+      if (!trimmed && attachments.length === 0) throw new Error("Nothing to send.");
       await restore(profile);
       const current = get().threads[profile];
       if (current && transcriptBusy(current.transcript)) {
         throw new Error("A turn is already running.");
       }
       const now = Date.now();
+      const visible = [trimmed, ...attachments.map((attachment) => `[Attached: ${attachment.name}]`)].filter(Boolean).join("\n");
       update(profile, (t) => ({
         ...t,
         error: null,
-        transcript: applyTranscriptAction(t.transcript, { type: "user", text: trimmed, at: now }),
+        transcript: applyTranscriptAction(t.transcript, { type: "user", text: visible, at: now }),
       }));
       const client = getGatewayClient();
       try {
         let sessionId = await ensureSession(profile);
         const agentId = acpId(profile);
         if (agentId) {
-          await submitAcpPrompt(sessionId, trimmed);
+          await submitAcpPrompt(sessionId, acpAttachmentPrompt(trimmed, attachments));
           return;
         }
         try {
-          await submitPrompt(client, sessionId, trimmed);
+          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, trimmed, attachments));
         } catch (error) {
           if (!isSessionNotFound(error)) throw error;
           // The gateway restarted under us: resume the durable session once.
           update(profile, (t) => ({ ...t, sessionId: null, restored: false }));
           sessionId = await ensureSession(profile);
-          await submitPrompt(client, sessionId, trimmed);
+          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, trimmed, attachments));
         }
       } catch (error) {
         const reason = errorText(error);

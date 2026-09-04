@@ -85,6 +85,63 @@ export function submitPrompt(
   });
 }
 
+export interface SessionAttachment {
+  path: string;
+  name: string;
+}
+
+function extension(name: string): string {
+  return name.slice(name.lastIndexOf(".")).toLowerCase();
+}
+
+function fileReference(path: string): string {
+  return /[\s()[\]{}<>"'`]/.test(path) && !path.includes("`") ? `@file:\`${path}\`` : `@file:${path}`;
+}
+
+/** Stage files on Hermes before the prompt that consumes them. Images and
+ * PDFs use the gateway's vision path; everything else gets an `@file:` ref. */
+export async function attachmentPrompt(
+  client: GatewayClientLike,
+  sessionId: string,
+  text: string,
+  attachments: SessionAttachment[],
+): Promise<string> {
+  const refs: string[] = [];
+  for (const attachment of attachments) {
+    const ext = extension(attachment.name);
+    if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"].includes(ext)) {
+      const result = await request<{ attached?: boolean; text?: string }>(client, "image.attach", {
+        session_id: sessionId,
+        path: attachment.path,
+      });
+      if (!result.attached) throw new Error(`Hermes could not attach ${attachment.name}.`);
+      refs.push(result.text || `[User attached image: ${attachment.name}]`);
+    } else if (ext === ".pdf") {
+      const result = await request<{ attached?: boolean; text?: string }>(client, "pdf.attach", {
+        session_id: sessionId,
+        path: attachment.path,
+      });
+      if (!result.attached) throw new Error(`Hermes could not attach ${attachment.name}.`);
+      refs.push(result.text || `[User attached PDF: ${attachment.name}]`);
+    } else {
+      const result = await request<{ attached?: boolean; ref_text?: string }>(client, "file.attach", {
+        session_id: sessionId,
+        path: attachment.path,
+        name: attachment.name,
+      });
+      if (!result.attached || !result.ref_text) throw new Error(`Hermes could not attach ${attachment.name}.`);
+      refs.push(result.ref_text);
+    }
+  }
+  return [text.trim(), ...refs].filter(Boolean).join("\n");
+}
+
+/** ACP sessions cannot use Hermes staging, but local ACP agents can consume
+ * the same picked files through explicit absolute `@file:` refs. */
+export function acpAttachmentPrompt(text: string, attachments: SessionAttachment[]): string {
+  return [text.trim(), ...attachments.map((attachment) => fileReference(attachment.path))].filter(Boolean).join("\n");
+}
+
 export function interruptSession(
   client: GatewayClientLike,
   sessionId: string,

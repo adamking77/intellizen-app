@@ -16,6 +16,8 @@ export interface SpeechService {
   model: string;
   /** Recorded, not yet used: credentials come from the environment. */
   apiKey: string;
+  /** ISO 639 language code for dictation. Ignored by speaking. */
+  language: string;
 }
 
 export interface VoiceConfig {
@@ -25,7 +27,7 @@ export interface VoiceConfig {
 
 export const VOICE_PREFS_KEY = "intelizen:voice";
 
-const OFF: SpeechService = { enabled: false, service: "", model: "", apiKey: "" };
+const OFF: SpeechService = { enabled: false, service: "", model: "", apiKey: "", language: "en" };
 export const DEFAULT_VOICE: VoiceConfig = { dictation: OFF, speaking: OFF };
 
 function half(raw: unknown): SpeechService {
@@ -35,6 +37,7 @@ function half(raw: unknown): SpeechService {
     service: typeof r.service === "string" ? r.service : "",
     model: typeof r.model === "string" ? r.model : "",
     apiKey: typeof r.apiKey === "string" ? r.apiKey : "",
+    language: typeof r.language === "string" && r.language.trim() ? r.language.trim() : "en",
   };
 }
 

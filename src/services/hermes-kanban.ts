@@ -19,6 +19,7 @@ export interface KanbanCard {
   assignee: string | null;
   projectId?: string | null;
   latestSummary?: string | null;
+  blockKind?: string;
 }
 
 export interface KanbanCardDetail extends KanbanCard {
@@ -76,6 +77,7 @@ export async function listKanbanBoards(): Promise<KanbanBoard[]> {
 }
 
 function toKanbanCard(task: Record<string, unknown>, fallbackStatus = "todo"): KanbanCard {
+  const blockKind = text(task.block_kind);
   return {
     id: text(task.id),
     title: text(task.title) || "Untitled card",
@@ -83,6 +85,7 @@ function toKanbanCard(task: Record<string, unknown>, fallbackStatus = "todo"): K
     assignee: typeof task.assignee === "string" && task.assignee ? task.assignee : null,
     projectId: typeof task.project_id === "string" && task.project_id ? task.project_id : null,
     latestSummary: typeof task.latest_summary === "string" && task.latest_summary ? task.latest_summary : null,
+    ...(blockKind ? { blockKind } : {}),
   };
 }
 

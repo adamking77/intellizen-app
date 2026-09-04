@@ -16,6 +16,10 @@ vi.mock("@/lib/clipboard", () => ({
 }));
 
 const acpDisk = vi.hoisted(() => ({ text: "" }));
+const pickedFiles = vi.hoisted(() => ({ value: null as string | string[] | null }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(async () => pickedFiles.value),
+}));
 vi.mock("@tauri-apps/plugin-fs", () => ({
   BaseDirectory: { AppData: 1 },
   exists: async (path: string) => path === "acp-agents.json" && acpDisk.text.length > 0,
@@ -115,6 +119,7 @@ describe("AgentPanel on the gateway", () => {
     useSessionStore.setState({ selectedProfile: null, selectedRoomId: null, threads: {} });
     useEngineStore.setState({ connection: "open", info: null, error: null });
     acpDisk.text = "";
+    pickedFiles.value = null;
   });
 
   afterEach(() => {
@@ -169,8 +174,50 @@ describe("AgentPanel on the gateway", () => {
     ]);
     expect(options[0].getAttribute("aria-selected")).toBe("true");
     await act(async () => options[1].click());
+    await settle();
     expect(panel.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toContain("fiona");
+    expect(document.activeElement).toBe(trigger);
+    await panel.unmount();
+  });
+
+  it("attaches a picked file before submitting its reference", async () => {
+    pickedFiles.value = ["/tmp/My notes.txt"];
+    client.respondWith((call) => {
+      if (call.method === "session.create") return { session_id: "attach-session" };
+      if (call.method === "file.attach") return { attached: true, ref_text: "@file:`/tmp/My notes.txt`" };
+      return undefined;
+    });
+    const panel = await mountPanel();
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Attach files"]')!.click());
+    await settle();
+    expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("My notes.txt");
+    await type(panel, "Read this");
+    await pressEnter(panel);
+    expect(client.callsTo("file.attach")[0].params).toEqual({
+      session_id: "attach-session",
+      path: "/tmp/My notes.txt",
+      name: "My notes.txt",
+    });
+    expect(client.callsTo("prompt.submit")[0].params).toEqual({
+      session_id: "attach-session",
+      text: "Read this\n@file:`/tmp/My notes.txt`",
+    });
+    expect(panel.container.querySelector('[aria-label="Attachments"]')).toBeNull();
+    await panel.unmount();
+  });
+
+  it("shows streamed reasoning while the turn is still live", async () => {
+    client.respondWith((call) => (call.method === "session.create" ? { session_id: "thinking-session" } : undefined));
+    const panel = await mountPanel();
+    await type(panel, "Think first");
+    await pressEnter(panel);
+    await act(async () => {
+      client.emit({ type: "reasoning.delta", session_id: "thinking-session", payload: { text: "Working it through" } });
+    });
+    const thought = Array.from(panel.container.querySelectorAll("details")).find((node) => node.textContent?.includes("Working it through"));
+    expect(thought?.open).toBe(true);
+    expect(thought?.textContent).toContain("Thinking…");
     await panel.unmount();
   });
 

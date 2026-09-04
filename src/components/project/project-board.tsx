@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pill } from "@/components/ui/status-pill";
 import { boardsForProject } from "@/lib/project-room";
+import { blockReason } from "@/lib/block-kind";
 import { errorMessage, toast } from "@/lib/toast";
 import { runViewTransition } from "@/lib/view-transitions";
 import {
@@ -30,7 +31,7 @@ const COLUMN_LABELS: Record<string, string> = {
   scheduled: "Scheduled",
   ready: "Ready",
   running: "Running",
-  blocked: "Blocked",
+  blocked: "Waiting",
   review: "Review",
   done: "Done",
 };
@@ -103,10 +104,13 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                       <Pill>{column.cards.length} cards</Pill>
                     </div>
                     <div className="space-y-2">
-                      {column.cards.map((card) => (
+                      {column.cards.map((card) => {
+                        const reason = blockReason(card.blockKind ?? "");
+                        return (
                         <button key={card.id} type="button" className="block w-full text-left" onClick={(event) => runViewTransition("drawer", () => setSelected({ ...card, board: board.name, boardSlug: board.slug }), event.currentTarget)}>
-                          <Card selected={selected?.id === card.id}>
+                          <Card selected={selected?.id === card.id} waiting={reason?.needsYou}>
                           <p className="font-ui text-[var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
+                          {reason ? <p className="mt-1 font-ui text-[var(--t-section)] text-[var(--text-muted)]">{reason.word}</p> : null}
                           {card.latestSummary ? (
                             <p className="mt-1 line-clamp-2 font-ui text-[var(--t-section)] leading-4 text-[var(--text-muted)]">{card.latestSummary}</p>
                           ) : null}
@@ -116,7 +120,8 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                           </div>
                           </Card>
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -132,6 +137,7 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
               <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {openCard.status}</div>
               <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{openCard.title}</h2>
               <div className="mt-2">{openCard.assignee ? <Identity name={openCard.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
+              {blockReason(openCard.blockKind ?? "") ? <p className="mt-2 text-[var(--t-meta)] text-[var(--text-muted)]">{blockReason(openCard.blockKind ?? "")!.word}</p> : null}
             </div>
             {cardDetail.isLoading ? <Skeleton lines={4} /> : cardDetail.error ? (
               <div role="alert" className="text-[var(--t-meta)] text-[var(--bad)]">

@@ -55,6 +55,7 @@ function Half({
   value,
   catalog,
   found,
+  language = false,
   onChange,
 }: {
   title: string;
@@ -63,6 +64,7 @@ function Half({
   catalog: Catalog[];
   /** Models discovered on this machine, when the chosen service has any. */
   found?: { id: string; label: string }[];
+  language?: boolean;
   onChange: (next: SpeechService) => void;
 }) {
   const chosen = catalog.find((p) => p.id === value.service);
@@ -128,6 +130,19 @@ function Half({
             </label>
           ) : null}
 
+          {language ? (
+            <label className="flex flex-col gap-1">
+              <span className={caps}>Language</span>
+              <Input
+                className="h-8 text-[var(--t-meta)]"
+                value={value.language}
+                placeholder="en"
+                onChange={(e) => onChange({ ...value, language: e.target.value })}
+              />
+              <span className={meta}>ISO language code, such as en, es, fr or de. Parakeet supports English only.</span>
+            </label>
+          ) : null}
+
           {needsKey ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>API key</span>
@@ -169,6 +184,7 @@ export function VoiceSettings() {
         value={voice.dictation}
         catalog={DICTATION_SERVICES}
         found={found}
+        language
         onChange={(dictation) => setVoice({ ...voice, dictation })}
       />
 
