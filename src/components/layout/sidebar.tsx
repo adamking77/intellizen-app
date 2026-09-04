@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import appPackage from "../../../package.json";
 import {
   Database,
@@ -9,7 +8,6 @@ import {
   House,
   LayoutGrid,
   Network,
-  Search,
   Settings,
   UsersRound,
   Workflow,
@@ -19,27 +17,30 @@ import {
 import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
 import { WorkspaceTree } from "@/components/layout/workspace-tree";
 import { describeEngine, deriveEngineTag, useEngineStore, type EngineTag } from "@/engine/engine-store";
-import { listWorkspaceDatabases } from "@/lib/data";
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import { PluginSidebarEntries } from "@/plugins/sidebar-entries";
 
-type NavItem = { label: string; to: string; key: string; icon: LucideIcon };
+type PlaceItem = { label: string; to: string; icon: LucideIcon; shortcut: string };
 
 // Observational and orchestration surfaces belong on Home as widgets. Inbox
 // and Monitors are retired in favor of Fiona's daily brief; Agent Work,
 // Agent Work and Roles are represented by database-backed Home views.
-const NAV_ITEMS: NavItem[] = [
-  { label: "Home", to: "/home", key: "home", icon: House },
-  { label: "Search", to: "/search", key: "search", icon: Search },
-  { label: "Workflows", to: "/workflows", key: "workflows", icon: Workflow },
-  { label: "Agents", to: "/agents", key: "agents", icon: UsersRound }, // wave-1 agents-page: Agents replaces Team
-  { label: "Databases", to: "/databases", key: "databases", icon: Database },
-  { label: "Docs", to: "/docs", key: "docs", icon: FileText },
-  { label: "Graph", to: "/graph", key: "graph", icon: Network },
-  { label: "Canvas", to: "/canvas", key: "canvas", icon: LayoutGrid },
+export const PLACE_ITEMS: PlaceItem[] = [
+  { label: "Home", to: "/home", icon: House, shortcut: "⌘1" },
+  { label: "Databases", to: "/databases", icon: Database, shortcut: "⌘2" },
+  { label: "Docs", to: "/docs", icon: FileText, shortcut: "⌘3" },
+  { label: "Graph", to: "/graph", icon: Network, shortcut: "⌘4" },
+  { label: "Canvas", to: "/canvas", icon: LayoutGrid, shortcut: "⌘5" },
+  { label: "Workflows", to: "/workflows", icon: Workflow, shortcut: "⌘6" },
+  { label: "Agents", to: "/agents", icon: UsersRound, shortcut: "⌘7" },
+  { label: "Settings", to: "/settings", icon: Settings, shortcut: "⌘8" },
 ];
+
+export function placeRouteForShortcut(key: string) {
+  return PLACE_ITEMS[Number(key) - 1]?.to;
+}
 
 const APP_VERSION = `v${appPackage.version}`;
 // Donor: hermes-app tokens.css `.tag` / `.tag.ok` — 11px, 1px 8px, pill.
@@ -75,13 +76,9 @@ function readCollapsed(): boolean | null {
 }
 
 export function Sidebar() {
+  const navigate = useNavigate();
   const dragWindow = useWindowDrag();
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const { data: databases = [] } = useQuery({
-    queryKey: ["workspace-databases", entityFilter],
-    queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
-    staleTime: 30_000,
-  });
   const { isCramped } = useWindowSize();
 
   const [userCollapsed, setUserCollapsed] = useState<boolean | null>(() => readCollapsed());
@@ -101,6 +98,19 @@ export function Sidebar() {
       /* ignore */
     }
   }, [userCollapsed]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      if (event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest("input, textarea, select"))) return;
+      const route = placeRouteForShortcut(event.key);
+      if (!route) return;
+      event.preventDefault();
+      navigate(route);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   const toggle = () => setUserCollapsed(!collapsed);
   return (
@@ -166,29 +176,34 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Nav */}
+      {/* The hierarchy owns the rail; destinations stay together at its foot. */}
       <nav
         className={cn(
-          "flex flex-1 flex-col gap-0.5 overflow-y-auto pb-4 pt-3",
+          "flex min-h-0 flex-1 flex-col overflow-hidden pb-2 pt-3",
           collapsed ? "px-2" : "px-3",
         )}
       >
         {collapsed ? (
-          <NavLink
-            to="/home"
-            aria-label="Workspace"
-            title="Workspace"
-            className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
-          >
-            <FolderTree aria-hidden strokeWidth={1.5} className="h-[18px] w-[18px]" />
-          </NavLink>
+          <div>
+            <NavLink
+              to="/home"
+              aria-label="Workspace"
+              title="Workspace"
+              className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--subtext-1)]"
+            >
+              <FolderTree aria-hidden strokeWidth={1.5} className="h-[18px] w-[18px]" />
+            </NavLink>
+            <PluginSidebarEntries collapsed />
+          </div>
         ) : (
-          <div className="mb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <WorkspaceTree />
+            <PluginSidebarEntries collapsed={false} />
           </div>
         )}
-        {NAV_ITEMS.map((item) => {
-          const showCount = item.key === "databases" ? databases.length : 0;
+        <div className={cn("shrink-0", collapsed ? "mt-auto grid gap-0.5" : "mt-3 border-t border-[var(--border-subtle)] pt-2")}>
+          {!collapsed ? <div className="flex h-[26px] items-center px-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">Places</div> : null}
+        {PLACE_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -196,7 +211,7 @@ export function Sidebar() {
               to={item.to}
               title={collapsed ? item.label : undefined}
               className={cn(
-                collapsed ? "rail-node mx-auto" : "nav-node",
+                collapsed ? "rail-node mx-auto" : "nav-node h-[26px]",
               )}
             >
               {collapsed ? (
@@ -204,24 +219,13 @@ export function Sidebar() {
               ) : (
                 <>
                   <span>{item.label}</span>
-                  {showCount ? (
-                    <span className="ml-auto font-mono text-[var(--t-count)] text-[var(--accent)]">
-                      {showCount}
-                    </span>
-                  ) : null}
+                  <span className="ml-auto font-mono text-[11px] text-[var(--overlay-0)]">{item.shortcut}</span>
                 </>
               )}
-              {collapsed && showCount ? (
-                <span
-                  aria-hidden
-                  className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--accent)]"
-                />
-              ) : null}
             </NavLink>
           );
         })}
-        {/* wave-1 plugins: rows contributed by ~/.hermes/plugins */}
-        <PluginSidebarEntries collapsed={collapsed} />
+        </div>
       </nav>
 
       {/* Footer */}
