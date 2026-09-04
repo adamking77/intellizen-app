@@ -14,8 +14,12 @@ import {
 } from "@/components/agent/message-actions";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
 import type { HermesProfile } from "@/engine/profiles";
-import { Avatar, identityColor } from "@/components/agents/avatar";
-import type { Message, ToolRow } from "@/engine/transcript";
+import { identityColor } from "@/components/agents/avatar";
+import { Control } from "@/components/ui/control";
+import { Identity } from "@/components/ui/identity";
+import { Receipt, ToolRow as KitToolRow } from "@/components/ui/receipt";
+import { Textarea } from "@/components/ui/textarea";
+import type { Message, ToolRow as ToolRowModel } from "@/engine/transcript";
 import { writeTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
@@ -100,7 +104,7 @@ function contextOf(actions: TurnActions | undefined, reading: boolean): ActionCo
   };
 }
 
-function ToolRowView({ tool }: { tool: ToolRow }) {
+function ToolRowView({ tool }: { tool: ToolRowModel }) {
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(tool.resultText);
   return (
@@ -115,28 +119,13 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
         )}
         title={tool.name === tool.title ? tool.name : `${tool.name}: ${tool.title}`}
       >
-        <span className="min-w-0 flex-1 truncate font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tool.title}</span>
-        {tool.ok === undefined ? (
-          <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">running</span>
-        ) : (
-          <>
-            {tool.durationMs !== undefined ? (
-              <span className="font-mono text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
-                {tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
-              </span>
-            ) : null}
-            <span
-              className={cn(
-                "rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] whitespace-nowrap",
-                tool.ok
-                  ? "bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] text-[var(--ok)]"
-                  : "bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] text-[var(--bad)]",
-              )}
-            >
-              {tool.ok ? "ok" : "failed"}
-            </span>
-          </>
-        )}
+        <KitToolRow
+          className="min-w-0 flex-1"
+          tool={tool.name}
+          detail={tool.title === tool.name ? undefined : tool.title}
+          duration={tool.durationMs === undefined ? undefined : tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
+          state={tool.ok === undefined ? "running" : tool.ok ? "verified" : "failure"}
+        />
       </button>
       {open && tool.resultText ? (
         <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[var(--t-section)] leading-relaxed text-[var(--text-muted)]">
@@ -171,7 +160,7 @@ export function UserTurn({
     return (
       <div className="max-w-[82%] self-end">
         <div className="rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
-          <textarea
+          <Textarea
             value={draft}
             autoFocus
             rows={Math.min(14, draft.split("\n").length + 1)}
@@ -185,27 +174,26 @@ export function UserTurn({
               }
             }}
             aria-label="Edit this message"
-            className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none"
+            className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
-            <button
-              type="button"
+            <Control
               onClick={() => setDraft(null)}
-              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]"
+              size="sm"
             >
               Cancel
-            </button>
-            <button
-              type="button"
+            </Control>
+            <Control
+              variant="primary"
+              size="sm"
               disabled={!draft.trim()}
               onClick={() => {
                 actions?.onEdit?.(draft.trim());
                 setDraft(null);
               }}
-              className="rounded-[var(--r-pill)] bg-[var(--go-bg)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--go-fg)] transition-[filter] hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
             >
               Send
-            </button>
+            </Control>
           </div>
         </div>
       </div>
@@ -264,28 +252,8 @@ export function AgentTurn({
   const collapsed = tools.length > 2 && !runOpen;
   return (
     <div className="group flex gap-[9px]">
-      <div className="mt-0.5 shrink-0">
-        <Avatar
-          agent={{
-            displayName: name,
-            avatarStyle: profile?.avatarStyle ?? "sphere",
-            avatarKind: profile?.avatarKind,
-            avatarColor: profile?.avatarColor,
-          }}
-          size={24}
-          image={profile?.avatarImage}
-          speaking={reading}
-        />
-      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-[7px]">
-          <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{name}</span>
-          {profile?.provider || profile?.model ? (
-            <span className="truncate rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--runtime)_14%,transparent)] px-2 py-px font-mono text-[var(--t-count)] text-[var(--runtime)] whitespace-nowrap">
-              {[profile.provider, profile.model].filter(Boolean).join(" · ")}
-            </span>
-          ) : null}
-        </div>
+        <Identity name={name} hue={agentColor} runtime={profile?.provider || undefined} model={profile?.model || undefined} />
 
         {showReasoning && message.thought ? (
           <details className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]">
@@ -334,9 +302,7 @@ export function AgentTurn({
         ) : null}
 
         {(message.facts ?? []).map((fact) => (
-          <div key={fact.id} className="flex min-w-0 items-center gap-1.5">
-            <TurnFact text={fact.text} title={`${fact.text} · ${new Date(fact.at).toLocaleString()}`} truncate />
-          </div>
+          <Receipt key={fact.id} verb="recorded" object={fact.text} title={`${fact.text} · ${new Date(fact.at).toLocaleString()}`} />
         ))}
 
         {!message.streaming && message.text ? (
@@ -375,7 +341,7 @@ export function AgentTurn({
                         )
                   }
                   className={cn(
-                    "rounded-[var(--r-pill)] px-3 py-0.5 font-ui text-[var(--t-meta)] transition-colors",
+                    "h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 font-ui text-[12.5px] transition-colors",
                     action.id === "retry"
                       ? "bg-[var(--go-bg)] text-[var(--go-fg)] hover:brightness-110"
                       : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",

@@ -3,13 +3,14 @@
 // right (name, role, model), then Identity (SOUL.md) and Context. Runtime
 // routing stays with the agent configuration rather than leaking into this UI.
 
-import { Dialog } from "@base-ui/react/dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { tildify } from "@/components/layout/workspace-tree";
+import { AppDialog } from "@/components/ui/app-dialog";
+import { Pill } from "@/components/ui/status-pill";
 import { errorMessage } from "@/lib/toast";
 import { flavorById, loadTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -36,12 +37,12 @@ function voiceLabel(service: VoiceService | undefined): string {
 
 const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
 const FIELD =
-  "w-full rounded-[var(--r-ctl)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none ";
-const PILL = "pill";
-const COMPACT_PILL = "pill pill-compact";
+  "h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-transparent bg-[var(--input)] px-[9px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "placeholder:text-[var(--text-muted)] focus-visible:border-[var(--line-strong)]";
+const PILL = "inline-flex h-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] bg-[var(--raised)] px-2.5 font-ui text-[12.5px] text-[var(--text)] hover:shadow-[inset_0_0_0_999px_var(--hover)] disabled:opacity-[.45]";
+const COMPACT_PILL = PILL;
 const COMPACT_GROUP =
-  "inline-flex items-center gap-0.5 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] p-0.5";
+  "inline-flex items-center gap-0.5 rounded-[var(--r-ctl)] bg-[var(--crust)] p-0.5";
 
 export interface AgentProviderOption {
   id: AgentEngine;
@@ -200,14 +201,13 @@ export function AgentEditor({
   };
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
-        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
-          <Dialog.Popup
-            aria-label={creating ? "New agent" : "Edit agent"}
-            className="modal-surface flex max-h-[86dvh] w-[min(588px,calc(100vw-24px))] flex-col overflow-y-auto"
-          >
+    <AppDialog
+      open
+      title={creating ? "New agent" : "Edit agent"}
+      onOpenChange={(open) => !open && onClose()}
+      className="w-[min(588px,calc(100vw-24px))]"
+      bodyClassName="p-0"
+    >
             <div className="flex flex-col items-start gap-[18px] px-4 pt-5 sm:flex-row sm:px-[22px]">
               {/* Identity column: things the agent is. */}
               <div className="flex w-full shrink-0 flex-col items-center gap-2.5 sm:w-[168px]">
@@ -388,7 +388,6 @@ export function AgentEditor({
               {/* Operative fields. */}
               <div className="flex min-w-0 grow flex-col gap-[13px]">
                 <div className="flex items-center">
-                  <Dialog.Title className={CAPS}>{creating ? "New agent" : "Edit agent"}</Dialog.Title>
                   <div className="grow" />
                   <button type="button" className={PILL} style={{ padding: "2px 8px" }} onClick={onClose} aria-label="Close">
                     <X size={16} strokeWidth={1.8} aria-hidden />
@@ -479,7 +478,7 @@ export function AgentEditor({
                   <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">SOUL.md</span>
                 </div>
                 <textarea
-                  className={cn(FIELD, "min-h-0 resize-y px-[11px] py-2.5 leading-[1.55]")}
+                  className={cn(FIELD, "h-auto min-h-0 resize-y px-[11px] py-2.5 leading-[1.55]")}
                   rows={5}
                   value={draft.identity}
                   disabled={loadingDetail}
@@ -511,7 +510,7 @@ export function AgentEditor({
                   {context.map((path) => (
                     <div key={path} className="flex items-center gap-[9px] rounded-[var(--r-ctl)] bg-[var(--input)] px-[10px] py-2">
                       <span className="grow truncate font-mono text-[var(--t-meta)] text-[var(--text)]">{path}</span>
-                      <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--subtext-0)]">read</span>
+                      <Pill>read</Pill>
                       <button type="button" className={PILL} style={{ padding: "2px 7px" }} title={`Remove ${path}`} onClick={() => set({ context: context.filter((p) => p !== path) })}>
                         <X size={12} strokeWidth={1.9} aria-hidden />
                       </button>
@@ -549,7 +548,7 @@ export function AgentEditor({
               {!creating ? (
                 <button
                   type="button"
-                  className="rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--bad)] hover:bg-[color-mix(in_srgb,var(--bad)_12%,transparent)]"
+                  className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_18%,transparent)] px-2.5 font-ui text-[12.5px] text-[var(--bad)]"
                   disabled={busy}
                   onClick={() => onDelete(draft)}
                 >
@@ -565,17 +564,14 @@ export function AgentEditor({
                 type="button"
                 disabled={!nameOk || !dirty || busy || loadingDetail}
                 className={cn(
-                  "rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] transition-colors disabled:opacity-45",
-                  dirty ? "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]" : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-[var(--text)]",
+                  "h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-3 font-ui text-[12.5px] transition-colors disabled:opacity-[.45]",
+                  dirty ? "bg-[var(--go-bg)] text-[var(--go-fg)]" : "bg-[var(--raised)] text-[var(--text)]",
                 )}
                 onClick={() => void save(false)}
               >
                 {busy ? "Saving…" : creating ? "Create" : "Save"}
               </button>
             </div>
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </AppDialog>
   );
 }

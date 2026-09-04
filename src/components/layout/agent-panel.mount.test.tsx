@@ -158,13 +158,13 @@ describe("AgentPanel on the gateway", () => {
     await act(async () => trigger.click());
     const options = Array.from(panel.container.querySelectorAll<HTMLButtonElement>('[role="option"]'));
     expect(options.map((o) => o.textContent)).toEqual([
-      "defaultdeepseek-v4-flashdefault",
-      "fionagpt-5.6-sol",
-      "hr-agentdeepseek-v4-flash-vision-exp",
-      "islaMiniMax-M3",
-      "keelgpt-5.6-sol",
-      "nashgpt-5.6-sol",
-      "rookgpt-5.6-sol",
+      "Ddefaultdeepseekdefault›",
+      "Ffionaopenai-codex",
+      "Hhr-agentdeepseek",
+      "Iislaminimax",
+      "Kkeelopenai-codex",
+      "Nnashopenai-codex",
+      "Rrookopenai-codex",
     ]);
     expect(options[0].getAttribute("aria-selected")).toBe("true");
     await act(async () => options[1].click());
@@ -201,7 +201,7 @@ describe("AgentPanel on the gateway", () => {
     const text = panel.container.textContent ?? "";
     expect(text).toContain("The current date is");
     expect(text).toContain("197 ms");
-    expect(text).toContain("ok");
+    expect(text).toContain("verified");
     expect(panel.container.querySelector('[data-run-state="done"]')?.textContent).toMatch(/Done in \d+ s/);
     expect(panel.container.querySelector('button[aria-label="Speaking is switched off in Settings"]')).not.toBeNull();
     expect(text).toContain("Ask first");
@@ -227,7 +227,7 @@ describe("AgentPanel on the gateway", () => {
     const card = panel.container.querySelector('[data-decision="approval"]')!;
     expect(card).not.toBeNull();
     expect(card.textContent).toContain("This step needs your confirmation");
-    expect(card.querySelector("pre")?.textContent).toBe("cd /tmp && rm -rf iz-approval-dir");
+    expect(card.textContent).toContain("cd /tmp && rm -rf iz-approval-dir");
     expect(card.textContent).toContain("recursive delete");
     const buttons = Array.from(card.querySelectorAll("button")).map((b) => b.textContent);
     expect(buttons).toEqual(["Allow once", "Allow this session", "Always allow", "Deny"]);

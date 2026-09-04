@@ -44,7 +44,7 @@ type ResizeDirection =
 const CLEAR = { top: 27, side: 33, bottom: 43 };
 
 const ICON =
-  "inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] " +
+  "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] " +
   "transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent";
 
 /** The bar's ground and the one sanctioned shadow: separation from a desktop
@@ -314,7 +314,7 @@ export function Hud({
             <div className="flex shrink-0 justify-center py-1">
               <button
                 type="button"
-                className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[var(--t-meta)] text-[var(--text)]"
+                className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] bg-[var(--raised)] px-2.5 text-[12.5px] text-[var(--text)]"
                 onClick={() => {
                   const el = log.current;
                   if (!el) return;
@@ -363,7 +363,7 @@ export function Hud({
       <div
         onMouseDown={drag}
         onDoubleClick={onRedock}
-        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-[var(--r-pill)] px-[18px]"
+        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-[var(--r-plane)] px-[18px]"
         style={SURFACE}
         data-run-state={run.kind}
       >
@@ -555,7 +555,7 @@ function HudComposer({
           onClick={voice.abandon}
           aria-label="Discard the recording"
           title="Discard the recording"
-          className="rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+          className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 font-ui text-[12.5px] text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
         >
           Cancel
         </button>
@@ -617,7 +617,7 @@ function HudComposer({
           disabled={sending || !ready || !draft.trim()}
           aria-label={sending ? "Working — this turn cannot be stopped from here" : "Send"}
           title="Send"
-          className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40"
+          className="inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] shrink-0 items-center justify-center rounded-[var(--r-ctl)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40"
         >
           <ChevronRight className="h-3 w-3" strokeWidth={2.4} aria-hidden />
         </button>

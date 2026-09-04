@@ -5,25 +5,16 @@ import { MoreHorizontal, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { Pill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 
 const CARD =
-  "flex w-full flex-col gap-[13px] rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 text-left text-[var(--text)] " +
-  "transition-colors hover:bg-[color-mix(in_srgb,var(--text)_4%,var(--mantle))]";
+  "flex w-full flex-col gap-[13px] rounded-[var(--r-ctl)] bg-[var(--raised)] px-[11px] py-[9px] text-left text-[var(--text)] " +
+  "transition-shadow hover:shadow-[inset_0_0_0_999px_var(--hover)]";
 
 export function Tag({ children, tone, className }: { children: ReactNode; tone?: "bad" | "wait" | "ok"; className?: string }) {
-  const color = tone ? `var(--${tone})` : "var(--subtext-0)";
-  return (
-    <span
-      className={cn("whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4", className)}
-      style={{
-        color,
-        background: tone ? `color-mix(in srgb, ${color} 14%, transparent)` : "color-mix(in srgb, var(--text) 10%, transparent)",
-      }}
-    >
-      {children}
-    </span>
-  );
+  const variant = tone === "bad" ? "failure" : tone === "wait" ? "waiting" : tone === "ok" ? "verified" : "neutral";
+  return <Pill variant={variant} className={className}>{children}</Pill>;
 }
 
 export function Card({ label, items, onOpen, children }: { label: string; items: ContextMenuItem[]; onOpen: () => void; children: ReactNode }) {

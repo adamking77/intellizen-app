@@ -2,8 +2,10 @@ import { forwardRef, type KeyboardEvent } from "react";
 import { ArrowUp, Check, PictureInPicture2, Square } from "lucide-react";
 
 import { doneIn } from "@/components/agent/turn-time";
+import { Control } from "@/components/ui/control";
+import { Pill } from "@/components/ui/status-pill";
+import { Textarea } from "@/components/ui/textarea";
 import type { TurnOutcome } from "@/engine/transcript";
-import { cn } from "@/lib/utils";
 
 export type RunState =
   | { kind: "idle" }
@@ -37,9 +39,7 @@ export function RunStatus({ run, agent }: { run: RunState; agent: string }) {
         </>
       ) : run.kind === "waiting" ? (
         <>
-          <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--wait)_16%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--wait)] whitespace-nowrap">
-            waiting on you
-          </span>
+          <Pill variant="waiting">waiting on you</Pill>
           <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{agent} needs a decision above.</span>
         </>
       ) : run.kind === "done" ? (
@@ -122,13 +122,13 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && draft.trim().length > 0;
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
         <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
         </p>
       ) : null}
-      <textarea
+      <Textarea
         ref={ref}
         value={draft}
         onChange={(e) => onDraft(e.target.value)}
@@ -138,19 +138,19 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         disabled={!ready}
         readOnly={dictating}
         aria-label={agent ? `Message ${agent}` : "Message"}
-        className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full resize-none font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] placeholder:text-[var(--text-muted)]"
       />
       <div className="flex items-center gap-2">
         {onEject ? (
-          <button
-            type="button"
+          <Control
             onClick={onEject}
             aria-label="Eject agent panel"
             title="Eject to its own window"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]"
+            variant="quiet"
+            size="icon"
           >
             <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-          </button>
+          </Control>
         ) : null}
         {dictate}
         {permission ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{permission}</span> : null}
@@ -161,29 +161,26 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         {!running && !draft.trim() && converse ? (
           converse
         ) : running ? (
-          <button
-            type="button"
+          <Control
             onClick={onStop}
             aria-label="Stop this turn"
             title="Stop"
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] border border-[var(--line-strong)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+            variant="quiet"
+            size="icon"
           >
             <Square className="h-[11px] w-[11px]" strokeWidth={2.2} aria-hidden />
-          </button>
+          </Control>
         ) : (
-          <button
-            type="button"
+          <Control
             onClick={onSend}
             disabled={!canSend}
             aria-label="Send"
             title="Send"
-            className={cn(
-              "inline-flex h-[26px] w-[26px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity",
-              "disabled:opacity-40",
-            )}
+            variant="primary"
+            size="icon"
           >
             <ArrowUp className="h-[15px] w-[15px]" strokeWidth={2.2} aria-hidden />
-          </button>
+          </Control>
         )}
       </div>
     </div>

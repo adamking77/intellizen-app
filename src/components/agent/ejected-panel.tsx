@@ -39,7 +39,7 @@ import { runStateOf } from "./run-state";
 import type { HermesProfile } from "@/engine/profiles";
 
 const ICON =
-  "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors " +
+  "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] transition-colors " +
   "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]";
 
 const NO_THREADS: Record<string, ProfileThread> = {};

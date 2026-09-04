@@ -35,7 +35,7 @@ const agent: Agent = {
 };
 
 describe("AgentEditor avatar controls", () => {
-  it("uses the shared compact pill geometry without wrapping picture actions", async () => {
+  it("uses the shared control geometry without wrapping picture actions", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -61,7 +61,8 @@ describe("AgentEditor avatar controls", () => {
       Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label);
 
     for (const label of ["Sphere", "Blob", "Replace picture", "Remove"]) {
-      expect(button(label)?.className).toContain("pill-compact");
+      expect(button(label)?.className).toContain("h-[var(--h-ctl)]");
+      expect(button(label)?.className).toContain("rounded-[var(--r-ctl)]");
     }
     expect(button("Sphere")?.getAttribute("aria-selected")).toBe("true");
     expect(button("Blob")?.getAttribute("aria-selected")).toBe("false");

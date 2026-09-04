@@ -3,11 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpDown, PanelRightClose } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
-import { Avatar } from "@/components/agents/avatar";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
 import { AgentTurn, UserTurn, type TurnActions } from "@/components/agent/agent-turn";
 import { DecisionCard } from "@/components/agent/decision-card";
 import { TargetPicker } from "@/components/agent/target-picker";
+import { Control } from "@/components/ui/control";
+import { Identity } from "@/components/ui/identity";
 import { usePanelSession } from "@/components/agent/use-panel-session";
 import {
   AGENT_PANEL_MAX_WIDTH,
@@ -35,7 +36,7 @@ import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
 
 const ICON_BUTTON =
-  "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
+  "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
 
 function panelStorage() {
   if (typeof window === "undefined") return null;
@@ -377,38 +378,26 @@ export function AgentPanel({
             title="Who to talk to"
             className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-ctl)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           >
-            {profile ? (
-              <Avatar
-                agent={{
-                  displayName: agentName ?? profile.name,
-                  avatarStyle: profile.avatarStyle,
-                  avatarKind: profile.avatarKind,
-                  avatarColor: profile.avatarColor,
-                }}
-                size={20}
-                image={profile.avatarImage}
-                animate="always"
-              />
-            ) : null}
-            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
-              {agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
-            </span>
+            <Identity
+              name={agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
+              hue={profile?.avatarColor}
+              runtime={profile?.provider || undefined}
+              model={profile?.model || undefined}
+            />
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
-          {profile?.model ? (
-            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
-          ) : null}
           <div className="flex-1" />
           {!standalone ? (
-            <button
-              type="button"
+            <Control
+              variant="quiet"
+              size="icon"
               onClick={toggleCollapsed}
               aria-label="Collapse agent panel"
               title="Collapse agent panel"
               className={ICON_BUTTON}
             >
               <PanelRightClose className="h-4 w-4" strokeWidth={1.5} />
-            </button>
+            </Control>
           ) : null}
           {picking ? (
             <TargetPicker
@@ -481,13 +470,12 @@ export function AgentPanel({
 
         {behind ? (
           <div className="flex shrink-0 items-center justify-center pb-1.5">
-            <button
-              type="button"
+            <Control
+              size="sm"
               onClick={jumpToLive}
-              className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-3 py-0.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
             >
               New reply ↓
-            </button>
+            </Control>
           </div>
         ) : null}
 

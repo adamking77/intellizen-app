@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "re
 
 import type { HermesProfile } from "@/engine/profiles";
 import { nextIndex } from "@/components/layout/use-roving";
-import { Avatar } from "@/components/agents/avatar";
+import { Identity } from "@/components/ui/identity";
+import { Pill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 
 /** Who you are talking to. A popover on the name in the panel's header,
@@ -110,31 +111,18 @@ export function TargetPicker({
             onFocus={() => setActive(i)}
             onClick={() => pick(p.name)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none",
-              "hover:bg-[var(--base)] focus-visible:bg-[var(--base)]",
-              selected && "bg-[var(--base)]",
+              "flex min-h-[var(--h-row)] w-full items-center gap-2 rounded-[var(--r-ctl)] px-2 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none",
+              "hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]",
+              selected && "bg-[var(--selected)] hover:bg-[var(--selected-hover)]",
               !on && "text-[var(--text-muted)]",
             )}
           >
-            <Avatar
-              agent={{
-                displayName: p.displayName || p.name,
-                avatarStyle: p.avatarStyle,
-                avatarKind: p.avatarKind,
-                avatarColor: p.avatarColor,
-              }}
-              size={20}
-              image={p.avatarImage}
-              animate={false}
-            />
-            <span className="min-w-0 flex-1 truncate">{p.displayName || p.name}</span>
-            {p.model ? (
-              <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">{p.model}</span>
-            ) : null}
-            {!on ? <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">offline</span> : null}
+            <Identity className="min-w-0 flex-1" name={p.displayName || p.name} hue={p.avatarColor} runtime={p.provider || undefined} model={p.model || undefined} />
+            {!on ? <Pill>offline</Pill> : null}
             {p.isDefault ? (
-              <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span>
+              <Pill>default</Pill>
             ) : null}
+            {selected ? <span aria-hidden>›</span> : null}
           </button>
         );
       })}

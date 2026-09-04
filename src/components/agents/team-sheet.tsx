@@ -1,9 +1,11 @@
 // Make or edit a team, after hermes-app's `TeamSheet.tsx`: member checkboxes,
 // the six cap, the name defaulting to who is in it.
 
-import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
+import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -18,10 +20,6 @@ import {
   type Team,
 } from "./agent-model";
 import { Avatar } from "./avatar";
-
-const INPUT =
-  "min-w-0 rounded-[var(--r-ctl)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none ";
 
 export function TeamSheet({
   agents,
@@ -96,24 +94,17 @@ export function TeamSheet({
   };
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="modal-backdrop fixed inset-0 z-[120]" />
-        <Dialog.Viewport className="fixed inset-0 z-[121] flex items-center justify-center p-3">
-          <Dialog.Popup
-            aria-label={team ? "Edit team" : "New team"}
-            className="modal-surface flex max-h-[72dvh] w-[min(420px,calc(100vw-24px))] flex-col overflow-hidden"
-          >
-            <div className="px-[17px] pb-[11px] pt-[15px]">
-              <Dialog.Title className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{team ? "Edit team" : "New team"}</Dialog.Title>
-              <div className="mt-[3px] font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
-                {MIN_TEAM_MEMBERS} to {MAX_TEAM_MEMBERS} agents. They answer in turn, in one log.
-              </div>
-            </div>
-
+    <AppDialog
+      open
+      title={team ? "Edit team" : "New team"}
+      description={`${MIN_TEAM_MEMBERS} to ${MAX_TEAM_MEMBERS} agents. They answer in turn, in one log.`}
+      onOpenChange={(open) => !open && onClose()}
+      className="max-h-[72dvh] w-[min(420px,calc(100vw-24px))]"
+      bodyClassName="p-0"
+    >
             {agents.length >= TEAM_SEARCH_THRESHOLD ? (
               <div className="px-[17px] pb-2.5">
-                <input className={cn(INPUT, "w-full")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
+                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
               </div>
             ) : null}
 
@@ -127,7 +118,7 @@ export function TeamSheet({
                   <label
                     key={a.id}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-[var(--r-ctl)] px-2 py-[7px]",
+                      "flex min-h-[var(--h-row)] items-center gap-2.5 rounded-[var(--r-ctl)] px-2",
                       on && "bg-[var(--selected)]",
                       shut ? "opacity-40" : "cursor-pointer hover:bg-[var(--hover)]",
                     )}
@@ -146,9 +137,9 @@ export function TeamSheet({
             </div>
 
             <div className="flex items-center gap-[9px] px-[13px] py-[11px]">
-              <input
+              <Input
                 ref={input}
-                className={cn(INPUT, "flex-1 bg-[var(--input)]")}
+                className="flex-1"
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
@@ -160,32 +151,25 @@ export function TeamSheet({
                 placeholder={fallback || "Team name"}
                 aria-label="Team name"
               />
-              <button type="button" className="pill" onClick={onClose} disabled={busy}>
+              <Control size="sm" onClick={onClose} disabled={busy}>
                 Cancel
-              </button>
+              </Control>
               {team && onDelete ? (
-                <button type="button" className="pill" onClick={() => void run(onDelete)} disabled={busy}>
+                <Control size="sm" variant="danger" onClick={() => void run(onDelete)} disabled={busy}>
                   Delete
-                </button>
+                </Control>
               ) : null}
-              <button
-                type="button"
+              <Control
                 onClick={save}
                 disabled={picked.length < MIN_TEAM_MEMBERS || busy}
-                className={cn(
-                  "rounded-[var(--r-pill)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] disabled:opacity-45",
-                  picked.length >= MIN_TEAM_MEMBERS
-                    ? "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]"
-                    : "bg-[color-mix(in_srgb,var(--text)_8%,transparent)] text-[var(--text)]",
-                )}
+                loading={busy}
+                variant="primary"
+                size="sm"
               >
                 {busy ? "Saving…" : team ? "Save" : "Create"}
-              </button>
+              </Control>
             </div>
             {error ? <div className="px-[13px] pb-2.5 font-ui text-[var(--t-meta)] text-[var(--bad)]">{error}</div> : null}
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </AppDialog>
   );
 }

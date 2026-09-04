@@ -10,6 +10,7 @@ interface AppDialogProps {
   footer?: ReactNode;
   onOpenChange: (open: boolean) => void;
   className?: string;
+  bodyClassName?: string;
   role?: "dialog" | "alertdialog";
 }
 
@@ -22,6 +23,7 @@ export function AppDialog({
   footer,
   onOpenChange,
   className,
+  bodyClassName,
   role = "dialog",
 }: AppDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -56,7 +58,7 @@ export function AppDialog({
             <p className="mt-1 font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>
           ) : null}
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-[19px] py-3">{children}</div>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-[19px] py-3", bodyClassName)}>{children}</div>
         {footer ? <footer className="flex shrink-0 justify-end gap-2 px-[19px] pb-[17px] pt-2">{footer}</footer> : null}
       </div>
     </dialog>

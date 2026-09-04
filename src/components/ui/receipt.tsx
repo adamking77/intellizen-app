@@ -19,6 +19,7 @@ export function ToolRow({ tool, detail, duration, state = "running", className, 
   return (
     <div className={cn("flex min-h-[var(--h-row)] items-center gap-1.5 font-mono text-[11px] text-[var(--text-muted)]", className)} {...props}>
       <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-[var(--r-pill)]" style={{ background: dot[state] }} />
+      <span className="sr-only">{state}</span>
       <span className="text-[var(--text)]">{tool}</span>
       {detail ? <><span>·</span><span className="truncate">{detail}</span></> : null}
       {duration ? <><span>·</span><span>{duration}</span></> : null}
