@@ -19,9 +19,10 @@ import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { clientFor } from "@/rooms/door";
 import { currentGroupActivity, groupActivityLabel, groupActivityTone } from "@/rooms/group-activity";
-import { $groupChats, $groupClarify, $groupNeedsYou } from "@/rooms/group-chat";
+import { $groupChats, $groupClarify, $groupNeedsYou, updateGroupChat } from "@/rooms/group-chat";
 import { displayName, groupMemberKey } from "@/rooms/group-membership";
 import { sendToGroupChat, stopGroupThread } from "@/rooms/group-rounds";
+import { approveHostedRoom, refreshHostedRoom, sendHostedRoom, stopHostedRoom } from "@/rooms/hermes-hosted";
 import { clearGroupPrompt, respondGroupApproval } from "@/rooms/group-turns";
 import { NewRoomSheet } from "@/rooms/new-room-sheet";
 import { RoomComposer } from "@/rooms/room-composer";
@@ -140,6 +141,25 @@ export function RoomView({
   );
   const pendingMember = pending ? members.find((m) => m.name === pending.member) ?? null : null;
 
+  const syncHosted = async () => {
+    if (!id || room?.owner !== "hermes") return;
+    try {
+      await refreshHostedRoom(id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateGroupChat(id, (current) => ({ ...current, synced: false, syncError: message }));
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (!id || room?.owner !== "hermes") return;
+    const timer = window.setInterval(() => void syncHosted().catch(() => undefined), 1_500);
+    return () => window.clearInterval(timer);
+    // refreshHostedRoom reads current atom state on every tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, room?.owner]);
+
   // Reading the room clears its @user badge.
   useEffect(() => {
     if (id && needsYou[id]) $groupNeedsYou.set({ ...$groupNeedsYou.get(), [id]: false });
@@ -160,7 +180,8 @@ export function RoomView({
     if (!pending || !pendingMember) return;
     setBusy(true);
     try {
-      await respondGroupApproval(id, pendingMember, decision.requestId, choice);
+      if (pending.hosted) await approveHostedRoom(id, pending, choice);
+      else await respondGroupApproval(id, pendingMember, decision.requestId, choice);
     } catch (error) {
       toastError("Couldn't answer that request", error);
     } finally {
@@ -225,7 +246,14 @@ export function RoomView({
         <NewRoomSheet
           open={sheet}
           onOpenChange={setSheet}
-          onCreate={(name, seated) => navigate(`/room/${createRoom(name, seated)}`)}
+          onCreate={async (name, seated) => {
+            try {
+              navigate(`/room/${await createRoom(name, seated)}`);
+            } catch (error) {
+              toastError("Couldn't create that room", error);
+              throw error;
+            }
+          }}
         />
       </div>
     );
@@ -262,7 +290,7 @@ export function RoomView({
             <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               {room.turn
                 ? `${displayName(members.find((m) => m.name === room.turn) ?? { name: room.turn })} is thinking…`
-                : `${members.length} members${room.running ? " · running" : ""}`}
+                : `${members.length} members${room.running ? " · running" : ""} · ${room.owner === "hermes" ? "Hermes durable log" : "ACP-compatible local room"}`}
             </p>
           </div>
           <Button
@@ -338,11 +366,39 @@ export function RoomView({
           </div>
         ) : null}
 
+        {room.owner === "hermes" && room.synced !== true ? (
+          <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <span>Hermes durable room is offline{room.syncError ? ` — ${room.syncError}` : ""}.</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void syncHosted().catch((error) => toastError("Couldn't reconnect the room", error))}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
         <RoomComposer
           members={members}
           running={room.running === true}
-          onSend={(text) => sendToGroupChat(id, members, text)}
-          onStop={() => void stopGroupThread(id, null, members)}
+          disabled={room.owner === "hermes" && room.synced !== true}
+          onSend={async (text) => {
+            try {
+              if (room.owner === "hermes") await sendHostedRoom(id, text);
+              else sendToGroupChat(id, members, text);
+            } catch (error) {
+              toastError("Couldn't send to that room", error);
+              throw error;
+            }
+          }}
+          onStop={async () => {
+            try {
+              if (room.owner === "hermes") await stopHostedRoom(id);
+              else await stopGroupThread(id, null, members);
+            } catch (error) {
+              toastError("Couldn't stop that room", error);
+            }
+          }}
         />
       </div>
 

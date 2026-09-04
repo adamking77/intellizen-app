@@ -39,6 +39,11 @@ import { VoiceButton } from "@/voice/voice-button";
 import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAction } from "@/components/agent/panel-window";
+import { loadTeams } from "@/components/agents/teams-store";
+import { $groupChats, hasGroupChatNameBase } from "@/rooms/group-chat";
+import { ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
+import { useValue } from "@/rooms/store";
+import { openTeamRoom } from "@/rooms/team-room";
 
 const ICON_BUTTON =
   "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
@@ -159,6 +164,16 @@ export function AgentPanel({
     usePanelSession();
   const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
   const selectRoom = useSessionStore((state) => state.selectRoom);
+  useValue($groupChats);
+  const rooms = listRooms();
+  const teamsQuery = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
+  const teams = (teamsQuery.data || []).filter(
+    (team) => !rooms.some((room) => hasGroupChatNameBase(room.name, team.name)),
+  );
+
+  useEffect(() => {
+    void ensureRoomsLoaded();
+  }, []);
 
   // The first selection is the profile Hermes marks default; nothing is
   // hard-coded. An explicit choice is never overridden afterwards.
@@ -460,6 +475,14 @@ export function AgentPanel({
               target={selectedProfile}
               usable={usable}
               onTarget={selectProfile}
+              rooms={rooms}
+              onRoom={selectRoom}
+              teams={teams}
+              onTeam={(team) => {
+                void openTeamRoom(team, useSessionStore.getState().profileDirectory)
+                  .then(selectRoom)
+                  .catch((error) => toastError("Couldn't open that team", error));
+              }}
               onClose={closePicker}
             />
           ) : null}

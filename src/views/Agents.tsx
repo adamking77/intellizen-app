@@ -145,7 +145,7 @@ export function AgentsView() {
     const existing = listRooms().find(
       (room) => hasGroupChatNameBase(room.name, team.name) && (room.members ?? []).map(groupMemberKey).sort().join("|") === keys,
     );
-    useSessionStore.getState().selectRoom(existing?.roomId ?? createRoom(team.name, members));
+    useSessionStore.getState().selectRoom(existing?.roomId ?? await createRoom(team.name, members));
     requestAgentPanelOpen();
   };
 

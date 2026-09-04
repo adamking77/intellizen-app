@@ -137,7 +137,7 @@ I.5 **Home without fixtures.** **Choice A approved 2026-09-04.** Remove the rota
     named after retired surfaces (Daily Brief, Agent Work, Roles), or move
     the banner to a plugin. Adam decides which.
     Approval flow: `docs/stages/approval-flows/I.5-home-without-fixtures.md`.
-I.6 **Rooms on Hermes.** Hermes-only rooms ride the gateway's `groups.*`
+I.6 **Rooms on Hermes.** **Approved and implemented 2026-09-04.** Hermes-only rooms ride the gateway's `groups.*`
     with durable logs; the vendored engine stays only for rooms that seat
     ACP members. Rooms and teams appear in the tree and the target picker.
     Decide with the code open whether `groups.*` can seat ACP members; if

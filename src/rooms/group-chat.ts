@@ -77,7 +77,10 @@ export function durableGroupChat(room: GroupChat): GroupChat {
     roomId: typeof room.roomId === "string" && room.roomId ? room.roomId : null,
     name: room.name || "",
     createdAt: room.createdAt || 0,
+    owner: room.owner || "local",
+    ...(typeof room.remoteCursor === "number" ? { remoteCursor: room.remoteCursor } : {}),
     log: room.log,
+    ...(room.activity?.length ? { activity: room.activity } : {}),
     watermarks: room.watermarks || {},
     // Sticky per-member stop holds. Watermarks persist, so holds must too —
     // otherwise a restart silently releases a member the user stopped.

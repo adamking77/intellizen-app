@@ -26,7 +26,7 @@ describe("rooms", () => {
   it("creates, routes mentions, persists and disbands a mixed room", async () => {
     const storage = memoryRoomStorage();
     setRoomStorage(storage);
-    const id = createRoom("Build room", members);
+    const id = await createRoom("Build room", members);
     expect(getRoom(id)?.members).toMatchObject(members);
     expect(parseGroupChatMentions("@cc take this", members).mentioned).toEqual(new Set(["cc"]));
     expect(resolveGroupResponders([{ at: 1, from: { kind: "user", name: "You" }, text: "@cc take this" }], members)).toEqual([members[1]]);

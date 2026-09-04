@@ -5,6 +5,9 @@ import { nextIndex } from "@/components/layout/use-roving";
 import { Avatar } from "@/components/agents/avatar";
 import { Pill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
+import type { GroupChatRoom } from "@/rooms/group-chat";
+import type { GroupMember } from "@/rooms/types";
+import type { Team } from "@/components/agents/agent-model";
 
 /** Who you are talking to. A popover on the name in the panel's header,
  *  after hermes-app's `TargetPicker.tsx`: the name states the target every
@@ -16,12 +19,20 @@ export function TargetPicker({
   target,
   usable,
   onTarget,
+  rooms = [],
+  onRoom,
+  teams = [],
+  onTeam,
   onClose,
 }: {
   profiles: HermesProfile[];
   target: string | null;
   usable: (profile: HermesProfile) => boolean;
   onTarget: (name: string) => void;
+  rooms?: GroupChatRoom[];
+  onRoom?: (roomId: string) => void;
+  teams?: Team[];
+  onTeam?: (team: Team) => void;
   onClose: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -30,6 +41,10 @@ export function TargetPicker({
     const at = profiles.findIndex((p) => p.name === target);
     return at >= 0 ? at : 0;
   });
+  const groups = [
+    ...rooms.map((room) => ({ kind: "room" as const, key: room.roomId || room.name || "room", name: room.name || "Room", room })),
+    ...teams.map((team) => ({ kind: "team" as const, key: team.id, name: team.name, team })),
+  ];
 
   useEffect(() => {
     const key = (e: globalThis.KeyboardEvent) => {
@@ -65,15 +80,23 @@ export function TargetPicker({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter" || e.key === " ") {
-      const row = profiles[active];
-      if (row) {
+      const profile = profiles[active];
+      const group = groups[active - profiles.length];
+      if (profile || group) {
         e.preventDefault();
         e.stopPropagation();
-        pick(row.name);
+        if (profile) pick(profile.name);
+        else if (group.kind === "room" && group.room.roomId) {
+          onRoom?.(group.room.roomId);
+          onClose();
+        } else if (group.kind === "team") {
+          onTeam?.(group.team);
+          onClose();
+        }
       }
       return;
     }
-    const next = nextIndex(e.key, active, profiles.length);
+    const next = nextIndex(e.key, active, profiles.length + groups.length);
     if (next === null) return;
     e.preventDefault();
     e.stopPropagation();
@@ -142,6 +165,85 @@ export function TargetPicker({
           </button>
         );
       })}
+      {rooms.length || teams.length ? (
+        <div className="px-2 pb-1 pt-[9px] font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+          Rooms &amp; teams
+        </div>
+      ) : null}
+      {groups.map((group, groupIndex) => {
+        const i = profiles.length + groupIndex;
+        const faces = group.kind === "room"
+          ? (group.room.members || []).slice(0, 3).map((member) => ({
+              key: `${member.door}:${member.name}`,
+              profile: profileForMember(profiles, member),
+              displayName: member.title || member.display_name || member.name,
+              avatarStyle: member.avatar_style,
+              avatarKind: member.avatar_kind,
+              avatarColor: member.avatar_color,
+            }))
+          : group.team.members.slice(0, 3).map((agentId) => {
+              const profile = profileForTeamMember(profiles, agentId);
+              return {
+                key: agentId,
+                profile,
+                displayName: profile?.displayName || profile?.name || agentId,
+                avatarStyle: undefined,
+                avatarKind: undefined,
+                avatarColor: undefined,
+              };
+            });
+        return (
+          <button
+            key={group.key}
+            ref={(el) => {
+              rows.current[i] = el;
+            }}
+            type="button"
+            role="option"
+            aria-selected={false}
+            tabIndex={i === active ? 0 : -1}
+            onFocus={() => setActive(i)}
+            onClick={() => {
+              if (group.kind === "room" && group.room.roomId) onRoom?.(group.room.roomId);
+              else if (group.kind === "team") onTeam?.(group.team);
+              onClose();
+            }}
+            className="flex min-h-[var(--h-row)] w-full items-center gap-2 rounded-[var(--r-ctl)] px-2 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
+          >
+            <span className="flex shrink-0 items-center">
+              {faces.map((face, memberIndex) => (
+                  <span key={face.key} style={{ marginInlineStart: memberIndex ? -5 : 0 }}>
+                    <Avatar
+                      agent={{
+                        displayName: face.displayName,
+                        avatarStyle: face.profile?.avatarStyle ?? face.avatarStyle,
+                        avatarKind: face.profile?.avatarKind ?? face.avatarKind,
+                        avatarColor: face.profile?.avatarColor ?? face.avatarColor,
+                      }}
+                      size={18}
+                      image={face.profile?.avatarImage}
+                      animate={false}
+                    />
+                  </span>
+              ))}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{group.name}</span>
+            <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+              {group.kind === "room" ? (group.room.members || []).length : group.team.members.length}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
+}
+
+function profileForMember(profiles: HermesProfile[], member: GroupMember): HermesProfile | undefined {
+  const name = member.door === "acp" ? `acp:${member.name}` : member.name;
+  return profiles.find((profile) => profile.name === name);
+}
+
+function profileForTeamMember(profiles: HermesProfile[], agentId: string): HermesProfile | undefined {
+  const name = agentId.startsWith("hermes:") ? agentId.slice(7) : agentId;
+  return profiles.find((profile) => profile.name === name);
 }

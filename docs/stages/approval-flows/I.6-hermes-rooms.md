@@ -1,7 +1,6 @@
 # I.6 approval flow — Hermes rooms
 
-Status: **awaiting Adam's approval**. This describes the flow only; no I.6
-implementation is authorized by this document.
+Status: **approved and implemented 2026-09-04**.
 
 ## Decision
 
@@ -59,3 +58,22 @@ without duplicating the room.
 
 Approval authorizes I.6 only. It does not authorize I.1–I.5, a migration,
 deployment, publication, or push.
+
+## Implementation record
+
+The pinned Hermes source at `src/engine/HERMES_PIN` exposes the required
+`groups.*` methods, but its roster validator accepts only local or peer Hermes
+profiles. It has no ACP target kind. Hermes therefore owns rooms whose members
+all use the gateway; the existing local round engine remains only when any
+member uses ACP.
+
+Both doors use the existing room store and room surface. Hermes room events
+rehydrate the cached transcript and receipts from sequence zero on launch,
+then continue from the durable cursor. A failed rehydrate keeps the cache
+readable, disables the composer, names Hermes as offline and offers Retry.
+Rooms and unopened teams are listed in the shared tree and target picker;
+opening a team reuses its matching room instead of creating a second copy.
+
+Verification covers the pinned method parity, owner selection, exact hosted
+roster, relaunch replay, typed message projection, approval identity, mentions,
+mixed-room persistence and tree roving behavior. No room migration was run.

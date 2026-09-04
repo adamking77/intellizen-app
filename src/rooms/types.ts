@@ -6,6 +6,7 @@ import type { Decision } from "@/engine/transcript";
 
 /** Which door a member is reached through. */
 export type DoorKind = "gateway" | "acp";
+export type RoomOwner = "hermes" | "local";
 
 /** A room member: a Hermes profile (`gateway`) or an ACP agent (`acp`). The
  *  name is the profile name or agent id and is the member's key in a room, so
@@ -54,10 +55,21 @@ export interface GroupChat {
   /** Editable display name. */
   name?: string;
   createdAt?: number;
+  /** Hermes owns durable gateway-only rooms; the local engine owns rooms
+   *  that need ACP. Records from before this field are local rooms. */
+  owner?: RoomOwner;
+  /** Last Hermes log sequence copied into this readable local cache. */
+  remoteCursor?: number;
+  /** Runtime-only: this cached Hermes room has rehydrated this app run. */
+  synced?: boolean;
+  /** Runtime-only reason a Hermes room could not rehydrate. */
+  syncError?: string | null;
   /** Bumped to abandon in-flight member turns from a previous round. */
   epoch?: number;
   holds?: Record<string, GroupHold>;
   log: GroupMessage[];
+  /** Durable Hermes status receipts projected from its typed room events. */
+  activity?: GroupActivityEvent[];
   members?: GroupMember[];
   running?: boolean;
   /** Live gateway session per member key. Runtime-only: a fresh app run
@@ -80,6 +92,11 @@ export interface GroupPrompt {
   sessionId: string;
   thread: null | string;
   decision: Decision;
+  hosted?: {
+    memberId: string;
+    taskId: string;
+    executionGeneration: number;
+  };
 }
 
 export type GroupActivityKind =

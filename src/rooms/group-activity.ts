@@ -42,7 +42,12 @@ export function recordGroupActivity(group: string, event: Omit<GroupActivityEntr
 /** Events for the room's CURRENT run — superseded runs (epoch moved on)
  *  are dropped from view instead of describing work that already ended. */
 export function currentGroupActivity(group: string): GroupActivityEntry[] {
-  const epoch = ($groupChats.get()[group] || {}).epoch || 0;
+  const room = $groupChats.get()[group] || {};
+  const epoch = room.epoch || 0;
+
+  if (room.owner === "hermes") {
+    return (room.activity || []).map(({ group: _group, ...event }) => ({ ...event, epoch }));
+  }
 
   return ($groupActivity.get()[group] || {}).events?.filter((event) => (event.epoch || 0) === epoch) || [];
 }

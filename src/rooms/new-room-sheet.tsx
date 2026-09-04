@@ -39,10 +39,11 @@ export function NewRoomSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (name: string, members: GroupMember[]) => void;
+  onCreate: (name: string, members: GroupMember[]) => void | Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
   const seatable = useSeatableMembers();
 
   useEffect(() => {
@@ -84,13 +85,20 @@ export function NewRoomSheet({
           </Button>
           <Button
             size="sm"
-            disabled={tooFew}
-            onClick={() => {
-              onCreate(name.trim() || "Room", chosen);
-              onOpenChange(false);
+            disabled={tooFew || creating}
+            onClick={async () => {
+              setCreating(true);
+              try {
+                await onCreate(name.trim() || "Room", chosen);
+                onOpenChange(false);
+              } catch {
+                // The caller names the error; keep the sheet open for Retry.
+              } finally {
+                setCreating(false);
+              }
             }}
           >
-            Open room
+            {creating ? "Opening…" : "Open room"}
           </Button>
         </>
       }

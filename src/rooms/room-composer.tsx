@@ -45,16 +45,19 @@ export function RoomComposer({
   onSend,
   onStop,
   placeholder,
+  disabled = false,
 }: {
   members: GroupMember[];
   running: boolean;
-  onSend: (text: string) => void;
-  onStop: () => void;
+  onSend: (text: string) => void | Promise<void>;
+  onStop: () => void | Promise<void>;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const [text, setText] = useState("");
   const [mention, setMention] = useState<null | { start: number; query: string }>(null);
   const [active, setActive] = useState(0);
+  const [sending, setSending] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const matches = useMemo(
@@ -84,12 +87,17 @@ export function RoomComposer({
     });
   };
 
-  const send = () => {
+  const send = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
-    setText("");
-    setMention(null);
+    if (!trimmed || disabled || sending) return;
+    setSending(true);
+    try {
+      await onSend(trimmed);
+      setText("");
+      setMention(null);
+    } finally {
+      setSending(false);
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -117,7 +125,7 @@ export function RoomComposer({
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      send();
+      void send();
     }
   };
 
@@ -161,18 +169,19 @@ export function RoomComposer({
           ref={ref}
           rows={1}
           value={text}
+          disabled={disabled || sending}
           placeholder={placeholder ?? "Message the room. @name to address someone."}
           onChange={(event) => sync(event.target.value, event.target.selectionStart ?? 0)}
           onKeyDown={onKeyDown}
           className="max-h-40 min-h-9 flex-1 resize-none"
         />
         {running ? (
-          <Button size="sm" variant="ghost" onClick={onStop} title="Stop the room">
+          <Button size="sm" variant="ghost" onClick={() => void onStop()} title="Stop the room">
             <Square className="h-3.5 w-3.5" />
             Stop
           </Button>
         ) : (
-          <Button size="sm" onClick={send} disabled={!text.trim()} title="Send (Enter)">
+          <Button size="sm" onClick={() => void send()} disabled={disabled || sending || !text.trim()} title="Send (Enter)">
             <CornerDownLeft className="h-3.5 w-3.5" />
           </Button>
         )}

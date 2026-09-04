@@ -16,6 +16,7 @@ import {
 } from "./group-chat";
 import { durableGroupChatMembers } from "./group-membership";
 import { clearGroupClarify } from "./group-turns";
+import { createHostedRoom, disbandHostedRoom, refreshHostedRooms, roomOwnerFor } from "./hermes-hosted";
 import { getRoomStorage, loadRooms } from "./persist";
 import type { GroupChat, GroupMember } from "./types";
 
@@ -32,6 +33,19 @@ export function ensureRoomsLoaded(): Promise<void> {
     }
     // Anything already in the atom (a room made before the load finished) wins.
     $groupChats.set({ ...byId, ...$groupChats.get() });
+    try {
+      await refreshHostedRooms();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const all = { ...$groupChats.get() };
+      let changed = false;
+      for (const [roomId, room] of Object.entries(all)) {
+        if (room.owner !== "hermes") continue;
+        all[roomId] = { ...room, synced: false, syncError: message };
+        changed = true;
+      }
+      if (changed) $groupChats.set(all);
+    }
   })());
 }
 
@@ -56,7 +70,7 @@ export class RoomMemberCountError extends Error {}
 /** Make a room. Returns its roomId — the route parameter and the file name.
  *  The display name is deduplicated; the id never is, so a disbanded and
  *  recreated room never resumes the old one's member sessions. */
-export function createRoom(name: string, members: GroupMember[]): string {
+export async function createRoom(name: string, members: GroupMember[]): Promise<string> {
   const seated = members.filter((m) => m?.name);
   if (seated.length < GROUP_CHAT_MIN_MEMBERS) {
     throw new RoomMemberCountError(`A room needs at least ${GROUP_CHAT_MIN_MEMBERS} members.`);
@@ -68,11 +82,19 @@ export function createRoom(name: string, members: GroupMember[]): string {
   const taken = new Set(listRooms().map((room) => room.name || ""));
   const display = uniqueGroupChatName(String(name || "").trim().slice(0, 64) || "Room", taken);
   const roomId = mintGroupRoomId();
+  const owner = roomOwnerFor(seated);
+
+  if (owner === "hermes") {
+    await createHostedRoom(roomId, display, seated);
+    return roomId;
+  }
 
   updateGroupChat(roomId, (room) => {
     room.roomId = roomId;
     room.name = display;
     room.createdAt = Date.now();
+    room.owner = "local";
+    room.synced = true;
     room.members = durableGroupChatMembers(seated);
     return room;
   });
@@ -110,6 +132,8 @@ export function setRoomMembers(roomId: string, members: GroupMember[]): void {
  *  holds the epoch bump so a drive still in flight bails at its next member
  *  boundary instead of writing into a room that no longer exists. */
 export async function disbandRoom(roomId: string): Promise<void> {
+  const existing = $groupChats.get()[roomId];
+  if (existing?.owner === "hermes") await disbandHostedRoom(roomId);
   updateGroupChat(roomId, (room) => {
     room.epoch = (room.epoch || 0) + 1;
     room.running = false;

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { ChevronRight, Ellipsis, Plus } from "lucide-react";
+import { ChevronRight, Ellipsis, Plus, Users } from "lucide-react";
 
 import { useTreeRoving } from "@/components/layout/use-roving";
 import { ProjectSessionTree } from "@/components/project/project-session-tree";
+import { loadTeams } from "@/components/agents/teams-store";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import type { DepartmentNode, NodeKind, ProjectNode, WorkspaceNode } from "@/lib/hierarchy";
@@ -14,6 +15,11 @@ import { toastError } from "@/lib/toast";
 import { useHierarchy } from "@/lib/use-hierarchy";
 import { cn } from "@/lib/utils";
 import { listHermesSidebarSessions } from "@/services/hermes-project-sessions";
+import { $groupChats, hasGroupChatNameBase } from "@/rooms/group-chat";
+import { ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
+import { useValue } from "@/rooms/store";
+import { openTeamRoom } from "@/rooms/team-room";
+import { useSessionStore } from "@/engine/session-store";
 
 // The hierarchy in the sidebar: department → workspace → project (recursive).
 // Behaviour ported from hermes-app's Tree.tsx; rows reuse the nav's density so
@@ -299,6 +305,14 @@ export function WorkspaceTree() {
     [sidebarSessions.data, tree],
   );
   const selectedSessionKey = new URLSearchParams(location.search).get("session");
+  useValue($groupChats);
+  const rooms = listRooms();
+  const teams = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
+  const directory = useSessionStore((state) => state.profileDirectory);
+
+  useEffect(() => {
+    void ensureRoomsLoaded();
+  }, []);
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [editing, setEditing] = useState<string | null>(null);
@@ -598,6 +612,57 @@ export function WorkspaceTree() {
           >
             Add a department to begin
           </button>
+        ) : null}
+        {rooms.length || (teams.data?.length ?? 0) ? (
+          <div role="none" className="pt-2">
+            <div className="flex h-7 items-center px-4 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+              Rooms &amp; teams
+            </div>
+            {rooms.map((room) => (
+              <div
+                key={room.roomId}
+                role="treeitem"
+                tabIndex={-1}
+                data-id={`room:${room.roomId}`}
+                aria-selected={location.pathname === `/room/${room.roomId}`}
+                aria-label={room.name || "Room"}
+                onClick={() => navigate(`/room/${room.roomId}`)}
+                className={cn(
+                  "nav-node group h-[var(--h-row)] select-none pl-4 pr-2",
+                  location.pathname === `/room/${room.roomId}` && "bg-[var(--selected)]",
+                )}
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--overlay-1)]">
+                  <Users className="h-3.5 w-3.5" strokeWidth={1.5} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{room.name || "Room"}</span>
+                <span className="text-meta">{(room.members || []).length}</span>
+                {location.pathname === `/room/${room.roomId}` ? <span aria-hidden>›</span> : null}
+              </div>
+            ))}
+            {(teams.data || []).filter((team) => !rooms.some((room) => hasGroupChatNameBase(room.name, team.name))).map((team) => (
+              <div
+                key={team.id}
+                role="treeitem"
+                tabIndex={-1}
+                data-id={`team:${team.id}`}
+                aria-selected={false}
+                aria-label={team.name}
+                onClick={() => {
+                  void openTeamRoom(team, directory)
+                    .then((roomId) => navigate(`/room/${roomId}`))
+                    .catch((error) => toastError("Couldn't open that team", error));
+                }}
+                className="nav-node group h-[var(--h-row)] select-none pl-4 pr-2"
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--overlay-1)]">
+                  <Users className="h-3.5 w-3.5" strokeWidth={1.5} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{team.name}</span>
+                <span className="text-meta">{team.members.length}</span>
+              </div>
+            ))}
+          </div>
         ) : null}
       </div>
 

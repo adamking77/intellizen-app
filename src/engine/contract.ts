@@ -34,6 +34,17 @@ export const GATEWAY_METHODS = [
   "profiles.get_asset",
   "profiles.set_asset",
   "gateway.capabilities",
+  // Durable Hermes-only rooms (tui_gateway/methods_groups.py).
+  "groups.capabilities",
+  "groups.list",
+  "groups.create",
+  "groups.state",
+  "groups.send",
+  "groups.rename",
+  "groups.log",
+  "groups.disband",
+  "groups.stop",
+  "groups.approve",
 ] as const;
 
 export type GatewayMethod = (typeof GATEWAY_METHODS)[number];
