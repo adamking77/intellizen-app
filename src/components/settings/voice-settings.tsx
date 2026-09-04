@@ -1,8 +1,8 @@
 /** Speaking and listening — hermes-app's `pages/Voice.tsx`, screen for screen.
  *
  *  Two independent halves, both live: the composer's microphone records and
- *  transcribes through `voice_transcribe`, and a reply is read aloud through
- *  `voice_speak`. "Service", never "Provider": that word already names the
+ *  transcribes through `voice_transcribe`, and a reply is prepared through
+ *  `voice_prepare` for frontend playback. "Service", never "Provider": that word already names the
  *  thing that runs an agent. */
 
 import { useEffect, useState } from "react";
@@ -26,7 +26,7 @@ interface Catalog {
  *  read from the machine at open (`voice_models`): what is on disk is a fact. */
 const DICTATION_SERVICES: Catalog[] = [{ id: "local", label: "On this Mac", models: [], needsKey: false }];
 
-/** MiniMax is what `voice_speak` implements. `speech-02-hd` first: it is the
+/** MiniMax is what `voice_prepare` implements. `speech-02-hd` first: it is the
  *  model Hermes's own profiles speak through. The key comes from
  *  `MINIMAX_API_KEY` in `~/.hermes/.env`, so it needs no field of its own. */
 const SPEAKING_SERVICES: Catalog[] = [

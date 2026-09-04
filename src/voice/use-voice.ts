@@ -101,7 +101,6 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
   const hush = useCallback(() => {
     audio.current?.element.pause();
     audio.current?.finish();
-    void invoke("voice_stop").catch(() => undefined);
     speakingId.current = null;
     setTalking(null);
     setSaid(0);
@@ -332,7 +331,6 @@ export function useVoice({ profile, messages, sending, onSend, onTranscript, bar
       browserListening.current?.stop();
       audio.current?.element.pause();
       audio.current?.finish();
-      void invoke("voice_stop").catch(() => undefined);
     },
     [],
   );

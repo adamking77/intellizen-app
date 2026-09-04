@@ -24,32 +24,30 @@ IntelliZen is also one door among several: Adam delegates from Hermes desktop, T
 
 3. **Anything observational is a widget, never fixed app chrome.** If it tracks, counts, or monitors something, it's a widget — agent-buildable, filterable, replaceable. The shell stays thin: pages for working, widgets for watching, panel for talking. New capability earns its way in as a widget first.
 
-4. **Fiona is the only counterpart in the panel.** No agent picker. Choosing who executes is her job. Threads are separate per platform (Telegram, Hermes desktop, IntelliZen panel) for token/storage economy, but context is shared — her memory lives below the threads, so any door knows what happened at the others.
+4. **A doc is a file plus a row — one object.** The words live as a real markdown file in a real GenZen OS vault folder (readable by Adam, Claude, Codex, Fiona; movable in Finder/Obsidian — a frontmatter id lets sync re-find moved files). The facts (type, venture, client, case, stage, template flag) live on the doc's row in the workspace database. Sync keeps file and row agreeing. Docs never get trapped inside the app.
 
-5. **A doc is a file plus a row — one object.** The words live as a real markdown file in a real GenZen OS vault folder (readable by Adam, Claude, Codex, Fiona; movable in Finder/Obsidian — a frontmatter id lets sync re-find moved files). The facts (type, venture, client, case, stage, template flag) live on the doc's row in the workspace database. Sync keeps file and row agreeing. Docs never get trapped inside the app.
+5. **Attachment = the doc's row pointing at another record.** Points at a case → case artifact, filed in the case folder. Points at a client → deliverable, filed in the client folder. Points at a company → e.g. an invoice. Points at nothing → note, framework, knowledge doc — folder-filed only. Same doc system throughout; only the pointer differs.
 
-6. **Attachment = the doc's row pointing at another record.** Points at a case → case artifact, filed in the case folder. Points at a client → deliverable, filed in the client folder. Points at a company → e.g. an invoice. Points at nothing → note, framework, knowledge doc — folder-filed only. Same doc system throughout; only the pointer differs.
+6. **Templates are rows flagged "template."** "New invoice / contract / report / brief" copies the template row and its page, fields pre-wired. Create-from-template is the primary creation flow for anything repeatable; blank quick-note creation stays zero-friction.
 
-7. **Templates are rows flagged "template."** "New invoice / contract / report / brief" copies the template row and its page, fields pre-wired. Create-from-template is the primary creation flow for anything repeatable; blank quick-note creation stays zero-friction.
+7. **Docs (the page) is the writing room** — the surface with the good editor, over everything with a body. Money records (invoices, contracts) are mostly touched from their databases; their documents are one click deep, never a separate copy.
 
-8. **Docs (the page) is the writing room** — the surface with the good editor, over everything with a body. Money records (invoices, contracts) are mostly touched from their databases; their documents are one click deep, never a separate copy.
+8. **Monitors and Inbox are dead.** Wasted API calls. Replaced by an **agent-led daily brief**: Fiona-side job that reads Adam's RSS feeds, Substack feed, email newsletters, and current headlines, and produces one digest — a doc (typed "Daily brief") plus a Home widget. Topic-specific hunting happens as Search sessions.
 
-9. **Monitors and Inbox are dead.** Wasted API calls. Replaced by an **agent-led daily brief**: Fiona-side job that reads Adam's RSS feeds, Substack feed, email newsletters, and current headlines, and produces one digest — a doc (typed "Daily brief") plus a Home widget. Topic-specific hunting happens as Search sessions.
-
-10. **Intel is the research desk for everything**, four work types on one engine (search sessions, saved evidence, entity map, output docs):
+9. **Intel is the research desk for everything**, four work types on one engine (search sessions, saved evidence, entity map, output docs):
     - **Client case** (GZS) — staged: Scoping → Discovery → Report → Live
     - **Venture research** — OSINT for GoKart or any venture
     - **Publication research** — deep research becoming articles, pattern briefs, expertise pages
     - **Relationship research** — e.g. an introduction report to open an introducer relationship
     Client cases keep stage gates; research types don't pretend to have them. The case/work item is the spine; collections are just evidence piles inside it (current hierarchy is inverted and gets fixed).
 
-11. **Case participants by stage:** Scoping = Adam + agents. Discovery = Adam + client (session). Report = Adam + agents + **contractors**. Live = Adam + agents + contractors + **client**. Contractors and clients are relations on the case record — who's on it, what they sent, what they received — never app users. Multi-user auth stays out of scope. Contractor material gets ingested as case evidence/docs credited to them (mechanics designed at Report-stage build).
+10. **Case participants by stage:** Scoping = Adam + agents. Discovery = Adam + client (session). Report = Adam + agents + **contractors**. Live = Adam + agents + contractors + **client**. Contractors and clients are relations on the case record — who's on it, what they sent, what they received — never app users. Multi-user auth stays out of scope. Contractor material gets ingested as case evidence/docs credited to them (mechanics designed at Report-stage build).
 
-12. **The scoping run is the app's first job on any client case** — OSINT-light entity work: who's who, companies, ecosystem of connections. The entity map (Graph) is the scoping workspace, born per-case; its output feeds the discovery session. The 15k report is a doc attached to the case; its skeleton can come from the canonical OSINT spec (ACH, POLE, Admiralty) as a template.
+11. **The scoping run is the app's first job on any client case** — OSINT-light entity work: who's who, companies, ecosystem of connections. The entity map (Graph) is the scoping workspace, born per-case; its output feeds the discovery session. The 15k report is a doc attached to the case; its skeleton can come from the canonical OSINT spec (ACH, POLE, Admiralty) as a template.
 
-13. **AgentWork / Workflows / Roles pages become widgets**, not sidebar-adjacent pages (per decision 3).
+12. **AgentWork / Workflows / Roles pages become widgets**, not sidebar-adjacent pages (per decision 3).
 
-14. **Plain language rule.** All design and option discussions with Adam are in plain English — what it's like to use, analogies over architecture words. (Also recorded in agent memory.)
+13. **Plain language rule.** All design and option discussions with Adam are in plain English — what it's like to use, analogies over architecture words. (Also recorded in agent memory.)
 
 ---
 

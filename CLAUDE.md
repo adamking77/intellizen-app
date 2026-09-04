@@ -92,7 +92,7 @@ RLS is enabled on the app schemas. The desktop app uses anon-key access plus the
 
 ## Investigation + Docs integration
 
-- **Fiona/Hermes execution**: [src/services/agent.ts](src/services/agent.ts) dispatches workflow runs through the local Hermes run queue, then webhook, then durable `comms.fiona_inbox` fallback. [src/lib/shell.ts](src/lib/shell.ts) is now prompt builders for Fiona/Hermes workflow payloads, not a shell runner.
+- **Hermes execution**: [src/services/agent.ts](src/services/agent.ts) dispatches workflow runs through the connected Agent Gateway. Dispatch failures remain visible on the durable Workflow Run for retry; there is no second execution path. [src/lib/shell.ts](src/lib/shell.ts) contains workflow prompt builders, not a shell runner.
 - **Vault I/O**: [src/lib/vault.ts](src/lib/vault.ts) wraps the Tauri fs plugin. Reads/writes under `$HOME/vault/intelligence/investigations/<case-id>/`.
 - **Artifact tracking**: workflow outputs and vault files are tracked in Supabase, with investigation artifacts keyed to `case_id` and agent receipts written to `workspace.records` / `workspace.work_events`.
 - **Docs workspace**: `/docs` is backed by the workspace `Documents` database and vault markdown bodies. `knowledge.documents` remains the embedded corpus, not the editing surface.

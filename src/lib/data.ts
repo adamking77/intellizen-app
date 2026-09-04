@@ -3601,25 +3601,20 @@ async function getWorkflowTemplateByWorkflowId(workflowId: string) {
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 function workflowRuntimeDispatchSection(input: {
-  status: "submitted" | "queued" | "failed";
+  status: "submitted" | "failed";
   actor: string | null;
   workflowRunId: string;
   messageId?: string;
-  inboxItemId?: string;
   error?: unknown;
 }) {
   const details: string[] = [];
   if (input.messageId) details.push(`- Gateway delivery: ${input.messageId}`);
-  if (input.inboxItemId) details.push(`- Fallback inbox item: ${input.inboxItemId}`);
   if (input.error instanceof Error && input.error.message) details.push(`- Error: ${input.error.message}`);
   if (!details.length) details.push("- No delivery identifier returned.");
 
-  const summary =
-    input.status === "submitted"
-      ? "Agent Gateway accepted the run for local Hermes execution."
-      : input.status === "queued"
-        ? "Agent Gateway was unavailable; the run was queued through the Fiona inbox fallback."
-        : "Runtime dispatch did not complete. The Workflow Run remains durable for retry.";
+  const summary = input.status === "submitted"
+    ? "Agent Gateway accepted the run for local Hermes execution."
+    : "Runtime dispatch did not complete. The Workflow Run remains durable for retry.";
 
   return `## Workflow Run Update
 
@@ -3864,7 +3859,6 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         actor: workflowItem.default_actor,
         workflowRunId: created.id,
         messageId: dispatch.messageId,
-        inboxItemId: dispatch.inboxItemId,
       });
       created = await appendRecordSectionAtomic(created.id, section, {
         [WORKFLOW_RUN_FIELDS.status]: "In progress",
@@ -3884,8 +3878,6 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
           workflow_id: input.workflowId,
           dispatch_status: dispatch.status,
           message_id: dispatch.messageId ?? null,
-          inbox_item_id: dispatch.inboxItemId ?? null,
-          dispatch_error: dispatch.dispatchError ?? null,
         },
       });
     } catch (error) {

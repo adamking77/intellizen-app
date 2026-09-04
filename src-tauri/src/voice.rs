@@ -1,10 +1,9 @@
-//! Speaking and dictation, ported from hermes-app's `speak` / `transcribe`.
+//! Speech preparation and dictation, ported from hermes-app.
 //!
 //! Speaking is MiniMax `t2a_v2` (the service the donor spiked and shipped,
 //! and the one Hermes's own `tts` block names on this machine). Rust makes the
-//! call, writes the MP3 to a temp file and plays it through `afplay`, so
-//! `voice_speak` resolves when the sentence has finished and `voice_stop`
-//! can cut it mid-word. Dictation is Whisper or Parakeet through Hermes's own
+//! call and writes the MP3 to a temp file for frontend playback. Dictation is
+//! Whisper or Parakeet through Hermes's own
 //! venv, exactly as the donor ran them; `voice_models` reads what is
 //! installed rather than offering what is not.
 //!
@@ -12,20 +11,12 @@
 //! from settings storage: this app stores no secret it was not handed.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 /// Hermes's own MiniMax defaults (`tools/tts_tool.py` at the pinned commit),
 /// so an agent without a voice of its own sounds the same here as it does
 /// from Hermes.
 const DEFAULT_MODEL: &str = "speech-02-hd";
 const DEFAULT_VOICE: &str = "English_expressive_narrator";
-
-/// The pid of the `afplay` currently speaking, so `voice_stop` can reach it.
-/// The `Child` itself stays with the `voice_speak` call that spawned it.
-#[derive(Default)]
-pub struct VoiceState {
-    speaking: Mutex<Option<u32>>,
-}
 
 /// A credential from the process environment, or from Hermes's own `.env`.
 ///
@@ -142,64 +133,6 @@ pub async fn voice_prepare(
     )
     .await?;
     Ok(path.to_string_lossy().into_owned())
-}
-
-/// Speak one sentence and return when it has been heard.
-///
-/// `voice` is a MiniMax voice id — the agent's own when it has one, Hermes's
-/// default narrator otherwise. A second call while one is playing cuts the
-/// first: two agents' words over each other is never what was asked for.
-#[tauri::command]
-pub async fn voice_speak(
-    state: tauri::State<'_, VoiceState>,
-    text: String,
-    voice: Option<String>,
-    model: Option<String>,
-) -> Result<(), String> {
-    let text = text.trim().to_string();
-    if text.is_empty() {
-        return Ok(());
-    }
-    let path = synthesize(&text, voice.as_deref().unwrap_or(""), model.as_deref().unwrap_or("")).await?;
-
-    let mut child = std::process::Command::new("/usr/bin/afplay")
-        .arg(&path)
-        .spawn()
-        .map_err(|e| format!("could not play the audio: {e}"))?;
-    let pid = child.id();
-    stop_current(&state)?;
-    *state.speaking.lock().map_err(|_| "voice state poisoned")? = Some(pid);
-
-    // `Child::wait` blocks, so it runs off the async runtime. A kill from
-    // `voice_stop` ends the wait like any other exit.
-    tauri::async_runtime::spawn_blocking(move || child.wait())
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| format!("playback ended badly: {e}"))?;
-
-    let mut speaking = state.speaking.lock().map_err(|_| "voice state poisoned")?;
-    if *speaking == Some(pid) {
-        *speaking = None;
-    }
-    Ok(())
-}
-
-fn stop_current(state: &VoiceState) -> Result<(), String> {
-    let mut speaking = state.speaking.lock().map_err(|_| "voice state poisoned")?;
-    if let Some(pid) = speaking.take() {
-        // SIGTERM to the player we spawned; the `wait` in `voice_speak`
-        // reaps it.
-        unsafe {
-            libc::kill(pid as libc::pid_t, libc::SIGTERM);
-        }
-    }
-    Ok(())
-}
-
-/// Stop whatever is being said. Harmless when nothing is.
-#[tauri::command]
-pub fn voice_stop(state: tauri::State<'_, VoiceState>) -> Result<(), String> {
-    stop_current(&state)
 }
 
 /// Which service a profile speaks through and the voice id under it, read

@@ -1,7 +1,6 @@
 import { getGatewayClient } from "@/engine/gateway";
 import { defaultProfile, listProfiles, type HermesProfile } from "@/engine/profiles";
 import { createSession, submitPrompt } from "@/engine/session";
-import { supabase } from "@/lib/supabase";
 import type { GraphEntityType } from "@/lib/types";
 
 export type { HermesProfile } from "@/engine/profiles";
@@ -25,12 +24,9 @@ export interface AgentWorkflowInput {
 }
 
 export interface AgentSubmission {
-  status: "submitted" | "queued";
+  status: "submitted";
   /** The gateway session the prompt was submitted to. */
-  messageId?: string;
-  inboxItemId?: string;
-  /** Why gateway dispatch failed when the message fell back to the inbox queue. */
-  dispatchError?: string;
+  messageId: string;
 }
 
 export interface GraphExtractionOutput {
@@ -67,33 +63,6 @@ export function workflowDispatchPrompt(payload: Record<string, unknown>): string
   ].join("\n");
 }
 
-async function enqueueFionaInbox(input: {
-  task: string;
-  payload: Record<string, unknown>;
-  priority?: "low" | "normal" | "high" | "urgent";
-}) {
-  const { data, error } = await supabase
-    .schema("comms").from("fiona_inbox")
-    .insert([
-      {
-        from_agent: "intelizen",
-        task: input.task,
-        context: input.payload,
-        priority: input.priority ?? "normal",
-        status: "pending",
-      },
-    ])
-    .select("id")
-    .single();
-
-  if (error) throw error;
-  return data.id as string;
-}
-
-function dispatchErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** Open a session on the profile and submit the prompt without waiting for
  *  the turn. Resolves with the session id. */
 async function dispatchThroughGateway(profile: string | null | undefined, prompt: string) {
@@ -109,21 +78,9 @@ async function dispatchThroughGateway(profile: string | null | undefined, prompt
   return sessionId;
 }
 
-/** Dispatch a workflow to a Hermes profile through the gateway. When the
- *  engine cannot take it, the work is queued durably in Fiona's inbox. */
+/** Dispatch a workflow to a Hermes profile through the gateway. */
 export async function submitWorkflow(input: AgentWorkflowInput): Promise<AgentSubmission> {
   const payload = workflowPayload(input);
-  try {
-    const sessionId = await dispatchThroughGateway(input.profile, workflowDispatchPrompt(payload));
-    return { status: "submitted", messageId: sessionId };
-  } catch (error) {
-    const dispatchError = dispatchErrorMessage(error);
-    console.warn(`Hermes workflow dispatch failed, queuing to Fiona inbox: ${dispatchError}`);
-    const inboxItemId = await enqueueFionaInbox({
-      task: input.task,
-      payload: { ...payload, dispatch_error: dispatchError },
-      priority: input.priority,
-    });
-    return { status: "queued", inboxItemId, dispatchError };
-  }
+  const sessionId = await dispatchThroughGateway(input.profile, workflowDispatchPrompt(payload));
+  return { status: "submitted", messageId: sessionId };
 }

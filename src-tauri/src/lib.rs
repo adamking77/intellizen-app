@@ -501,7 +501,6 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(engine::EngineState::default())
-        .manage(voice::VoiceState::default())
         .register_uri_scheme_protocol("genui", |_ctx, _request| {
             tauri::http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
@@ -531,9 +530,7 @@ pub fn run() {
             proposals::proposal_accept_hunk,
             proposals::proposal_reject_hunk,
             supabase_proxy::supabase_proxy_request,
-            voice::voice_speak,
             voice::voice_prepare,
-            voice::voice_stop,
             voice::voice_transcribe,
             voice::voice_models,
             voice::voice_of_profile

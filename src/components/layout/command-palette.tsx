@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { searchWorkspace } from "@/lib/data";
 import { LABELS } from "@/lib/labels";
 import type { InternalSearchResult } from "@/lib/types";
@@ -88,7 +88,6 @@ interface Command {
   label: string;
   hint?: string;
   kind: CommandKind;
-  scope?: string; // route prefix for scoped-only commands
   run: (ctx: { navigate: (to: string) => void }) => void;
 }
 
@@ -114,11 +113,6 @@ const ACTION_COMMANDS: Command[] = [
   { id: "act:search-research", label: "Search — Research", kind: "action", run: ({ navigate }) => navigate("/search?mode=research") },
   { id: "act:focus-mode", label: "Focus mode", hint: "⌘⇧F", kind: "action", run: shell("focus-mode") },
   { id: "act:toggle-sidebar", label: "Toggle sidebar", hint: "⌘\\", kind: "action", run: shell("toggle-sidebar") },
-];
-
-const SCOPED_COMMANDS: Command[] = [
-  { id: "scope:investigate:run-phase", label: "Run active phase", hint: "Investigate", kind: "action", scope: "/investigate", run: () => {} },
-  { id: "scope:investigate:open-artifact", label: "Open artifact", hint: "Investigate", kind: "action", scope: "/investigate", run: () => {} },
 ];
 
 function commandFromWorkspaceResult(result: InternalSearchResult): Command {
@@ -166,7 +160,6 @@ function fuzzyScore(query: string, text: string): number {
 function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const navigate = useNavigate();
-  const location = useLocation();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -187,12 +180,6 @@ function CommandPalette() {
     }
   }, [isOpen]);
 
-  const scoped = useMemo(
-    () =>
-      SCOPED_COMMANDS.filter((c) => !c.scope || location.pathname.startsWith(c.scope)),
-    [location.pathname],
-  );
-
   const pluginCommands = usePluginPaletteCommands(); // wave-1 plugins
   const groups = useMemo(() => {
     const rank = (cmds: Command[]) =>
@@ -206,11 +193,11 @@ function CommandPalette() {
 
     return [
       { heading: "Navigation", items: rank(NAV_COMMANDS) },
-      { heading: "Actions", items: rank([...scoped, ...ACTION_COMMANDS]) },
+      { heading: "Actions", items: rank(ACTION_COMMANDS) },
       { heading: "Workspace", items: workspaceCommands },
       { heading: "Plugins", items: rank(pluginCommands) },
     ].filter((g) => g.items.length > 0);
-  }, [query, scoped, workspaceResults, pluginCommands]);
+  }, [query, workspaceResults, pluginCommands]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 

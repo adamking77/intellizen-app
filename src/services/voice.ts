@@ -1,6 +1,3 @@
-import { isTauri } from "@tauri-apps/api/core";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-
 export type VoiceProviderId = "hermes" | "browser";
 
 export interface VoiceProviderStatus {
@@ -28,52 +25,17 @@ const hermesVoiceUrl =
   import.meta.env.VITE_HERMES_VOICE_URL?.replace(/\/$/, "") || null;
 
 // ── Hermes dashboard transport ─────────────────────────────────────────────
-// The dashboard (voice + profile catalog) has no CORS and gates /api behind
-// a per-boot session token embedded in its SPA HTML. Two transports:
-// - Tauri (dev app + packaged DMG): tauri-plugin-http, which is not subject
-//   to CORS — scrape the token from the SPA, retry once on 401. The vite
-//   proxy does not exist in a packaged app.
-// - Plain browser (QA): the /hermes-dash vite dev middleware, which scrapes
-//   the token server-side.
-
-const HERMES_DASHBOARD_DIRECT = "http://127.0.0.1:9119";
-
-let dashboardSessionToken: string | null = null;
-
-async function scrapeDashboardToken() {
-  try {
-    const res = await tauriFetch(`${HERMES_DASHBOARD_DIRECT}/`);
-    const html = await res.text();
-    dashboardSessionToken = /SESSION_TOKEN__\s*=\s*"([^"]+)"/.exec(html)?.[1] ?? null;
-  } catch {
-    dashboardSessionToken = null;
-  }
-  return dashboardSessionToken;
-}
+// The configured same-origin bridge owns dashboard authentication. The
+// frontend never discovers or stores the dashboard's session token.
 
 export function hermesDashboardConfigured() {
-  return isTauri() || Boolean(hermesVoiceUrl);
+  return Boolean(hermesVoiceUrl);
 }
 
 export async function hermesDashboardFetch(
   path: string,
   init?: { method?: string; body?: string },
 ): Promise<Response> {
-  if (isTauri()) {
-    const attempt = (token: string | null) =>
-      tauriFetch(`${HERMES_DASHBOARD_DIRECT}${path}`, {
-        method: init?.method ?? "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "X-Hermes-Session-Token": token } : {}),
-        },
-        body: init?.body,
-      });
-    let res = await attempt(dashboardSessionToken ?? (await scrapeDashboardToken()));
-    if (res.status === 401) res = await attempt(await scrapeDashboardToken());
-    return res;
-  }
-
   if (!hermesVoiceUrl) throw new Error("Hermes voice URL is not configured.");
   return fetch(`${hermesVoiceUrl}${path}`, {
     method: init?.method ?? "GET",
