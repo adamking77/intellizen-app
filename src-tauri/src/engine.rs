@@ -1,6 +1,8 @@
 //! The engine door. IntelliZen owns one `hermes serve`: it spawns it with a
-//! token it chose, or attaches to one already running (recorded in
-//! `<app_data_dir>/engine.json`), and only ever kills what it spawned.
+//! token it chose, or attaches to a healthy loopback `hermes serve` (from its
+//! own record or process discovery), and only ever kills what it spawned.
+
+mod discovery;
 
 use std::{
     collections::VecDeque,
@@ -25,6 +27,8 @@ use tokio::{
     sync::Mutex,
     task::JoinHandle,
 };
+
+use discovery::discover_running_engine;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(90);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(3);
@@ -609,7 +613,6 @@ pub async fn engine_start(
         }
     }
 
-    let binary = hermes_binary(&app)?;
     let record_path = record_path(&app)?;
 
     if let Some(record) = read_record(&record_path) {
@@ -637,6 +640,14 @@ pub async fn engine_start(
         let _ = fs::remove_file(&record_path);
     }
 
+    if let Some(info) = discover_running_engine().await {
+        slot.child = None;
+        slot.info = Some(info.clone());
+        state.set_current(Some(info.clone()));
+        return Ok(info);
+    }
+
+    let binary = hermes_binary(&app)?;
     let spawned = spawn(&binary, &record_path, READY_TIMEOUT, &state.pending).await?;
     slot.child = Some(spawned.child);
     slot.info = Some(spawned.info.clone());
