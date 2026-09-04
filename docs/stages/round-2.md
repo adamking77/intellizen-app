@@ -184,7 +184,7 @@ J.5 **Design record.** Port `--user-bubble`, `--hud-bg`, `--hud-shadow`,
 
 These add to Phase F and Phase I:
 
-F.7 **Control kit.** One control primitive in `ui/` (default, selected,
+F.7 **Control kit.** Full brief: `docs/stages/design-system-v3.md` (work packages K.1 to K.8; this item and F.8 are executed through that file). One control primitive in `ui/` (default, selected,
     primary, quiet, field), radius tokens collapsed to plane, control, pill,
     the segmented control, the drawer component. Base UI and Mantine
     dependencies removed. **Selection intensity is a user setting:** a

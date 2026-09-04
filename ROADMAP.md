@@ -172,6 +172,10 @@ what is in the wrong place. Adam does not need to name components.
 
 ## Round 2
 
+The front-end design-system change approved 2026-09-04 is specified in
+`docs/stages/design-system-v3.md`; any agent can run it to completion from
+that file.
+
 A 2026-09-04 audit of the built app against this file found the gaps
 listed in `docs/stages/round-2.md`. That file is the plan for the next
 round: repairs, the engine seam second pass, MCP tree writes, the center
