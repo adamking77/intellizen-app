@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import { getRecordTitle, getViewRecords } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,

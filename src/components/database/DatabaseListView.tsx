@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 
-import { DatabasePill } from "@/components/database/primitives/DatabasePill";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Badge } from "@/components/database/primitives/Badge";
+import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -180,16 +180,16 @@ function ListPropertyValue({
   }
 
   if (field.type === "status" && typeof rawValue === "string") {
-    return <DatabasePill color={resolveStatusColor(rawValue, field)}>{rawValue}</DatabasePill>;
+    return <Badge color={resolveStatusColor(rawValue, field)}>{rawValue}</Badge>;
   }
   if (field.type === "select" && typeof rawValue === "string") {
-    return <DatabasePill color={resolveFieldOptionColor(field, rawValue)}>{rawValue}</DatabasePill>;
+    return <Badge color={resolveFieldOptionColor(field, rawValue)}>{rawValue}</Badge>;
   }
   if (field.type === "multiselect" && Array.isArray(rawValue)) {
     return (
       <div className="db-list-property-badges">
         {rawValue.map((value) => (
-          <DatabasePill key={value} color={resolveFieldOptionColor(field, value)}>{value}</DatabasePill>
+          <Badge key={value} color={resolveFieldOptionColor(field, value)}>{value}</Badge>
         ))}
       </div>
     );
@@ -199,7 +199,7 @@ function ListPropertyValue({
       <div className="db-list-property-badges">
         {rawValue.map((id) => {
           const label = resolveRelationLabel(field, String(id), catalog);
-          return <DatabasePill key={id} color={resolveRelationColor(label)}>{label}</DatabasePill>;
+          return <Badge key={id} color={resolveRelationColor(label)}>{label}</Badge>;
         })}
       </div>
     );

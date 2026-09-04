@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import {
   getReadableTextColor,
   resolveFieldOptionColor,

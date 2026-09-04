@@ -3,8 +3,8 @@ import { Link2, Plus } from "lucide-react";
 
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { RecordPickerDropdown } from "@/components/database/primitives/RecordPickerDropdown";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatabaseButton as Button } from "@/components/database/primitives/DatabaseButton";
+import { DatabaseInput as Input } from "@/components/database/primitives/DatabaseInput";
 import { getRecordTitle } from "@/lib/database-core";
 import type {
   WorkspaceDatabaseCatalogEntry,

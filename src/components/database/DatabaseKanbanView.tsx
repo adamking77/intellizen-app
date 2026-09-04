@@ -15,9 +15,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { Copy, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { DatabasePill } from "@/components/database/primitives/DatabasePill";
+import { Badge } from "@/components/database/primitives/Badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import { resolveFieldOptionColor, resolveRelationColor, resolveStatusColor } from "@/lib/database-colors";
 import {
   getFieldDisplayValue,
@@ -496,9 +496,9 @@ function KanbanCard({
                 {row.kind === "badges" ? (
                   <div className="db-kanban-card-field-badges">
                     {row.badges?.map((badge) => (
-                      <DatabasePill key={badge.key} color={badge.color} className="max-w-full truncate">
+                      <Badge key={badge.key} color={badge.color} className="max-w-full truncate">
                         {badge.label}
-                      </DatabasePill>
+                      </Badge>
                     ))}
                   </div>
                 ) : (

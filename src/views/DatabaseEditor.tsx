@@ -15,8 +15,8 @@ import { DatabaseSchemaEditor } from "@/components/database/DatabaseSchemaEditor
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
 import { ViewTabBar } from "@/components/database/ViewTabBar";
 import { TaxonomyFields, taxonomyDraftFromMetadata } from "@/components/taxonomy/TaxonomyFields";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatabaseButton as Button } from "@/components/database/primitives/DatabaseButton";
+import { DatabaseInput as Input } from "@/components/database/primitives/DatabaseInput";
 import { saveCurrentDatabaseId } from "@/lib/current-database";
 import {
   exportDatabaseCsv,
@@ -1414,7 +1414,7 @@ export function DatabaseEditorView({
   const databaseBreadcrumb = taxonomyBreadcrumb(bundle.database.taxonomy);
 
   return (
-    <div className="relative flex h-full flex-col bg-[var(--base)]">
+    <div className="db-surface flex h-full flex-col bg-[var(--base)]">
       {/* Hidden CSV input */}
       <input
         ref={csvInputRef}
@@ -1449,7 +1449,7 @@ export function DatabaseEditorView({
             void handleUpdateDatabaseName(e.target.value);
           }}
           disabled={isSystemDatabase}
-          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[var(--t-title)] font-semibold tracking-[-0.03em] shadow-none   placeholder:text-[var(--overlay-1)]"
+          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[var(--t-title)] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
         />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
@@ -1489,7 +1489,7 @@ export function DatabaseEditorView({
           />
         ) : null}
         {taxonomyEditorOpen && !isSystemDatabase ? (
-          <div className="mb-4 grid max-w-2xl gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+          <div className="mb-4 grid max-w-2xl gap-3 rounded-[var(--db-r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
             <TaxonomyFields value={taxonomyDraft} onChange={setTaxonomyDraft} />
             <div className="flex justify-end gap-2">
               <Button

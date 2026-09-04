@@ -17,6 +17,18 @@ function walk(directory) {
 
 walk(sourceRoot);
 
+// Adam explicitly preserved the existing database workspace design on
+// 2026-09-04. Its Sogo-parity primitives are a scoped exception to the v3 kit.
+function isPreservedDatabaseSurface(path) {
+  const relative = path.pathname.replace(sourceRoot.pathname, "src/");
+  return relative.startsWith("src/components/database/")
+    || relative === "src/views/Databases.tsx"
+    || relative === "src/views/DatabaseEditor.tsx";
+}
+
+const kitFiles = files.filter((path) => !isPreservedDatabaseSurface(path));
+const kitCodeFiles = codeFiles.filter((path) => !isPreservedDatabaseSurface(path));
+
 function occurrences(pattern, paths = files) {
   let count = 0;
   for (const path of paths) count += readFileSync(path, "utf8").match(pattern)?.length ?? 0;
@@ -34,36 +46,36 @@ function lines(pattern, paths = files) {
 
 function audit() {
   const closed = [
-    ["retired radius token", /var\(--r-(?:row|msg)\)/g],
-    ["bare or named Tailwind radius", /(?:["'`]\S*\s|\s)rounded(?=[\s"'`]|-(?:sm|md|lg|xl|2xl)\b)/gm],
-    ["click-focus border", /focus:(?:border|ring)[^\s"`]*/g],
-    ["left selection bar", /border-l-/g],
-    ["one-pixel inset ring", /inset 0 0 0 1px/g],
-    ["forbidden product phrase", /needs(?:[\s_-]+)me/gi],
+    ["retired radius token", /var\(--r-(?:row|msg)\)/g, kitFiles],
+    ["bare or named Tailwind radius", /(?:["'`]\S*\s|\s)rounded(?=[\s"'`]|-(?:sm|md|lg|xl|2xl)\b)/gm, kitFiles],
+    ["click-focus border", /focus:(?:border|ring)[^\s"`]*/g, kitFiles],
+    ["left selection bar", /border-l-/g, kitFiles],
+    ["one-pixel inset ring", /inset 0 0 0 1px/g, kitFiles],
+    ["forbidden product phrase", /needs(?:[\s_-]+)me/gi, files],
   ];
 
-  const failures = closed.flatMap(([name, pattern]) => {
-    const matches = lines(pattern);
+  const failures = closed.flatMap(([name, pattern, paths]) => {
+    const matches = lines(pattern, paths);
     return matches.length ? [`${name}:\n  ${matches.join("\n  ")}`] : [];
   });
 
   const closedCode = [
-    ["ring utility", /\bring-/g, codeFiles],
-    ["custom outline utility", /outline-(?!none)/g, codeFiles],
-    ["dashed border", /(?:border-dashed|border\s*:\s*[^;\n]*dashed)/g, files],
-    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, codeFiles],
-    ["Loader2", /\bLoader2\b/g, codeFiles.filter((path) => !/[\\/](?:control|receipt)\.tsx$/.test(path.pathname))],
+    ["ring utility", /\bring-/g, kitCodeFiles],
+    ["custom outline utility", /outline-(?!none)/g, kitCodeFiles],
+    ["dashed border", /(?:border-dashed|border\s*:\s*[^;\n]*dashed)/g, kitFiles],
+    ["Badge", /(?:<Badge\b|\bimport\s*\{[^}]*\bBadge\b)/g, kitCodeFiles],
+    ["Loader2", /\bLoader2\b/g, kitCodeFiles.filter((path) => !/[\\/](?:control|receipt)\.tsx$/.test(path.pathname))],
   ];
   for (const [name, pattern, paths] of closedCode) {
     const count = occurrences(pattern, paths);
     if (count) failures.push(`${name}: ${count} remaining`);
   }
 
-  const legacyHeights = lines(/rounded-\[var\(--r-ctl\)\].*\bh-(?:7|8|9|10|11)\b|\bh-(?:7|8|9|10|11)\b.*rounded-\[var\(--r-ctl\)\]/);
+  const legacyHeights = lines(/rounded-\[var\(--r-ctl\)\].*\bh-(?:7|8|9|10|11)\b|\bh-(?:7|8|9|10|11)\b.*rounded-\[var\(--r-ctl\)\]/, kitFiles);
   if (legacyHeights.length) failures.push(`legacy control heights:\n  ${legacyHeights.join("\n  ")}`);
 
   if (failures.length) throw new Error(`Design-system audit failed\n\n${failures.join("\n\n")}`);
-  console.log("Design-system audit passed (K.1–K.8 rules closed).")
+  console.log("Design-system audit passed (v3 kit; preserved Database surfaces excluded).")
 }
 
 function hexRgb(hex) {

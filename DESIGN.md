@@ -179,6 +179,11 @@ selection, button, checkbox, or card decoration.
 writes `--sel-step`. Its 0.04–0.14 slider defaults to 0.08, and every selected
 surface reads the same token.
 
+**The Database Preservation Rule.** The existing Databases workspace is an
+approved Sogo-parity instrument, not a v3-kit migration target. Its local
+controls, compact row radius, neutral selection, colored property badges, and
+resizable/full-page record panel stay intact until Adam explicitly revisits it.
+
 ## Typography
 
 **Display Font:** Geist

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { DatabasePill } from "./DatabasePill";
+import { Badge } from "./Badge";
 import { PickerDropdown } from "./PickerDropdown";
 
 import { resolveFieldOptionColor, resolveStatusColor } from "@/lib/database-colors";
@@ -46,7 +46,7 @@ export function InlineEditor({ record, field, database, catalog, onSave, onCance
       return (
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
-          className="w-full rounded-[var(--r-ctl)] px-1 py-0.5 text-xs"
+          className="w-full rounded px-1 py-0.5 text-xs"
           style={inputStyle}
           defaultValue={(currentValue as string) ?? ""}
           onBlur={(e) => onSave(e.target.value || null)}
@@ -59,7 +59,7 @@ export function InlineEditor({ record, field, database, catalog, onSave, onCance
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type="number"
-          className="w-full rounded-[var(--r-ctl)] px-1 py-0.5 text-xs"
+          className="w-full rounded px-1 py-0.5 text-xs"
           style={inputStyle}
           defaultValue={currentValue != null ? String(currentValue) : ""}
           onBlur={(e) => {
@@ -75,7 +75,7 @@ export function InlineEditor({ record, field, database, catalog, onSave, onCance
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type="date"
-          className="w-full rounded-[var(--r-ctl)] px-1 py-0.5 text-xs"
+          className="w-full rounded px-1 py-0.5 text-xs"
           style={inputStyle}
           defaultValue={(currentValue as string) ?? ""}
           onBlur={(e) => onSave(e.target.value || null)}
@@ -144,7 +144,7 @@ export function InlineEditor({ record, field, database, catalog, onSave, onCance
       return (
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
-          className="w-full rounded-[var(--r-ctl)] px-1 py-0.5 text-xs"
+          className="w-full rounded px-1 py-0.5 text-xs"
           style={inputStyle}
           defaultValue={String(currentValue ?? "")}
           onBlur={(e) => onSave(e.target.value || null)}
@@ -198,11 +198,11 @@ function InlineRelationEditor({
 
   return (
     <div
-      className="rounded-[var(--r-ctl)] p-1.5 space-y-1"
+      className="rounded p-1.5 space-y-1"
       style={{ border: "1px solid var(--border)", backgroundColor: "var(--mantle)" }}
     >
       <input
-        className="w-full rounded-[var(--r-ctl)] px-1.5 py-0.5 text-xs"
+        className="w-full rounded px-1.5 py-0.5 text-xs"
         style={{ backgroundColor: "var(--base)", color: "var(--text)" }}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -263,7 +263,7 @@ function InlinePillPicker({
     <>
       <div ref={setAnchor} className="flex items-center min-h-[24px]">
         {value ? (
-          <DatabasePill color={getColor(value)}>{value}</DatabasePill>
+          <Badge color={getColor(value)}>{value}</Badge>
         ) : (
           <span style={{ opacity: 0.25 }}>&mdash;</span>
         )}
@@ -306,7 +306,7 @@ function InlineMultiPillPicker({
     <>
       <div ref={setAnchor} className="flex flex-wrap gap-1 items-center min-h-[24px]">
         {current.length > 0 ? (
-          current.map((opt) => <DatabasePill key={opt} color={getColor(opt)}>{opt}</DatabasePill>)
+          current.map((opt) => <Badge key={opt} color={getColor(opt)}>{opt}</Badge>)
         ) : (
           <span style={{ opacity: 0.25 }}>&mdash;</span>
         )}

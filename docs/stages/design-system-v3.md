@@ -10,6 +10,12 @@ Status: **approved by Adam 2026-09-04.** The rules in "Binding rules" are his.
 Where this file and `DESIGN.md` disagree, this file wins until `DESIGN.md` is
 amended in work package K.8, after which they must agree.
 
+**Database correction, Adam 2026-09-04:** the Databases workspace and its
+table, list, board, gallery, calendar, timeline, chart, and record-panel designs
+were already approved. K.7 must not restyle them. Their Sogo-parity controls,
+compact row radius, neutral selection, and resizable/full-page record panel are
+a scoped exception to the kit migration.
+
 Prototype (the visual reference for every rule below):
 `https://claude.ai/code/artifact/d0ad8810-8d17-433b-b45b-6cf3981c98ad`.
 Direction studies with the Docs and Workflows pages and the Pinterest pass:

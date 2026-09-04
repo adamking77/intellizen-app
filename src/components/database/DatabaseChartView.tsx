@@ -15,7 +15,7 @@ import { ProfitLossLine } from "@/components/charts/profit-loss-line";
 import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 import { XAxis } from "@/components/charts/x-axis";
 import { YAxis } from "@/components/charts/y-axis";
-import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseEmptyState as EmptyState } from "@/components/database/primitives/DatabaseEmptyState";
 import {
   findDefaultChartGroupField,
   findDefaultChartValueField,

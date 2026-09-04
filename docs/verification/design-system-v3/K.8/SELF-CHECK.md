@@ -2,7 +2,7 @@
 
 ## Review context
 
-- **Verdict:** `READY_RECOMMENDATION`
+- **Verdict:** `AWAITING_ADAM_REVIEW`
 - **Mode:** final implementation self-check
 - **Candidate:** `v3/phase-0` at `92ad39d`
 - **Authority:** advisory review
@@ -16,7 +16,7 @@
 | Tokens and selection | Ready | `--r-plane: 12px`, `--r-ctl: 8px`, `--r-pill: 999px`, `--h-ctl: 28px`, and `--sel-step: 0.08` agree across CSS, `DESIGN.md`, and `.impeccable/design.json`. |
 | Component rules | Ready | Shared controls, pills, identity, empty/failure states, skeletons, drawers, and selection states are recorded in `DESIGN.md`. |
 | Product surfaces | Ready | Existing K.1–K.7 and K.9–K.13 evidence covers all seven flavors, edge selection strengths, drawers, Docs, Workflows, settings, agent surfaces, sidebar, continuity, and Activity. |
-| Consistency sweep | Ready | The K.7 audit closes legacy badge/spinner/dashed-state/control-height/custom-outline patterns. Home database pins now render one attributed row per record and open the shared drawer. |
+| Consistency sweep | Corrected | The v3 kit audit closes legacy patterns outside Databases. Adam rejected the database restyle; the existing database controls, property badges, views, and resizable/full-page record panel are restored as a scoped exception. Home database pins remain compact rows. |
 | Brief alignment | Ready | `docs/stages/round-2.md` routes the visual-system work to `docs/stages/design-system-v3.md`; the implementation follows its dependency order. |
 
 ## Validation
@@ -31,6 +31,8 @@
 ## Remaining approval gates
 
 - Adam's final native-app walk is still required.
+- Adam must verify the restored Databases workspace before this recommendation
+  can return to ready.
 - An independent reviewer may convert this recommendation into an independent verdict.
 - Phase I items remain individually approval-gated, including the rotation banner/retired presets and three non-case Brief templates.
 - Slider and Follow-system light/dark defaults remain decisions to make after use, as specified by the brief.

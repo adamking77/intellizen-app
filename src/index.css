@@ -1334,6 +1334,18 @@ textarea:focus-visible,
    ============================================================ */
 
 /* ─── Root editor chrome ────────────────────────────────── */
+.db-surface {
+  --db-r-row: 4px;
+  --hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --selected: var(--raised);
+  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
+}
+
+:root[data-flavor="latte"] .db-surface,
+:root[data-flavor="flat"] .db-surface {
+  --hover: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
 .db-editor-root {
   display: flex;
   flex-direction: column;
@@ -2342,6 +2354,39 @@ textarea:focus-visible,
 
 .db-fields-name {
   flex: 1;
+}
+
+/* The database workspace keeps its original resizable record panel. */
+.db-record-panel {
+  background: var(--mantle);
+  border-left: 1px solid var(--border);
+}
+
+.db-record-panel--fullpage {
+  box-shadow: none;
+  border-left: none;
+}
+
+.db-record-resize-handle {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+}
+
+.db-record-resize-handle:hover {
+  background: linear-gradient(
+    to right,
+    transparent 0,
+    transparent 2px,
+    var(--accent) 2px,
+    var(--accent) 4px,
+    transparent 4px,
+    transparent 100%
+  );
 }
 
 .db-record-header {
