@@ -189,8 +189,10 @@ spec per stage, written the morning it starts, not before.
 > **Adam walked all five steps 2026-09-02 and they passed.** His feedback was
 > applied the same morning: Settings in the sidebar, themed sidebar mark,
 > Appearance page redone to the donor screen for screen including Panes
-> (Connected and Segmented), no icons in page menus, selected state is a
-> faded accent fill everywhere with the donor's hover, no accent bar.
+> (Connected and Segmented), no icons in page menus, selected state with the
+> donor's hover, no accent bar. **Revised by Adam 2026-09-03 (`0552215`):**
+> ordinary selection is the donor's neutral raised plane, not a faded accent
+> fill. `DESIGN.md` is current on this.
 
 0.1 **Tokens.** hermes-app's `tokens.css` flavors, accents, type scale and
     radius roles become IntelliZen's CSS variables under Tailwind. Geist in,
