@@ -290,8 +290,8 @@ describe("AgentPanel on the gateway", () => {
     await type(panel, "hello");
     await pressEnter(panel);
     expect(calls.slice(0, 2)).toEqual([
-      { command: "acp_start", args: { agentId: "cc" } },
-      { command: "acp_prompt", args: { agentId: "cc", text: "hello" } },
+      { command: "acp_start", args: { agentId: "cc", caller: "panel" } },
+      { command: "acp_prompt", args: { sessionId: "acp-1", text: "hello" } },
     ]);
     await act(async () => {
       emit?.({ agent_id: "cc", type: "message.start", session_id: "acp-1", payload: {} });
@@ -324,8 +324,8 @@ describe("AgentPanel on the gateway", () => {
     await type(panel, "hello from the picker");
     await pressEnter(panel);
     expect(calls.slice(0, 2)).toEqual([
-      { command: "acp_start", args: { agentId: "cc" } },
-      { command: "acp_prompt", args: { agentId: "cc", text: "hello from the picker" } },
+      { command: "acp_start", args: { agentId: "cc", caller: "panel" } },
+      { command: "acp_prompt", args: { sessionId: "acp-picker", text: "hello from the picker" } },
     ]);
     await panel.unmount();
   });

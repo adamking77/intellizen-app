@@ -167,7 +167,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
         let sessionId = await ensureSession(profile);
         const agentId = acpId(profile);
         if (agentId) {
-          await submitAcpPrompt(agentId, trimmed);
+          await submitAcpPrompt(sessionId, trimmed);
           return;
         }
         try {
@@ -198,7 +198,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
       const thread = get().threads[profile];
       if (!thread?.sessionId) return;
       const agentId = acpId(profile);
-      if (agentId) await interruptAcpSession(agentId);
+      if (agentId) await interruptAcpSession(thread.sessionId);
       else await interruptSession(getGatewayClient(), thread.sessionId);
     },
 
@@ -208,7 +208,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
       update(profile, (t) => ({ ...t, deciding: decision.requestId }));
       try {
         const agentId = acpId(profile);
-        if (agentId) await respondAcpApproval({ agentId, requestId: decision.requestId, choice });
+        if (agentId) await respondAcpApproval({ sessionId: thread.sessionId, requestId: decision.requestId, choice });
         else {
           await respondApproval(getGatewayClient(), {
             sessionId: thread.sessionId,

@@ -357,7 +357,7 @@ export async function connectAcpProvider(provider: AcpProviderDiscovery): Promis
     await writeRegistry(agents);
   }
   try {
-    const started = await invoke<AcpProviderStatus>("acp_start", { agentId: agent.id });
+    const started = await invoke<AcpProviderStatus>("acp_start", { agentId: agent.id, caller: "provider" });
     rememberProvider(provider.engine, true);
     return started;
   } catch (error) {
@@ -371,13 +371,13 @@ export async function connectAcpProvider(provider: AcpProviderDiscovery): Promis
 export async function disconnectAcpProvider(engine: AcpEngine): Promise<void> {
   const [agents, statuses] = await Promise.all([readRegistry(), listAcpProviderStatuses()]);
   const ids = new Set(agents.filter((agent) => agent.engine === engine).map((agent) => agent.id));
-  await Promise.all(statuses.filter((status) => ids.has(status.agentId)).map((status) => invoke("acp_stop", { agentId: status.agentId })));
+  await Promise.all(statuses.filter((status) => ids.has(status.agentId)).map((status) => invoke("acp_stop", { sessionId: status.sessionId })));
   rememberProvider(engine, false);
 }
 
 export async function disconnectAllAcpProviders(): Promise<void> {
   const statuses = await listAcpProviderStatuses();
-  await Promise.all(statuses.map((status) => invoke("acp_stop", { agentId: status.agentId })));
+  await Promise.all(statuses.map((status) => invoke("acp_stop", { sessionId: status.sessionId })));
   writeConnectedProviders([]);
 }
 

@@ -26,9 +26,9 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::acp_paths::{child_path, resolve_binary, resolve_cwd};
-use crate::acp_wire::{permission_payload, text, translate_update};
 #[cfg(test)]
 use crate::acp_paths::{expand_tilde, home_dir};
+use crate::acp_wire::{permission_payload, text, translate_update};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
@@ -93,6 +93,8 @@ struct PendingPermission {
 /// A running adapter process and its one session.
 struct Live {
     agent_id: String,
+    public_session_id: String,
+    /// The adapter's own id is process-local and may repeat across callers.
     session_id: OnceLock<String>,
     pid: Option<u32>,
     child: StdMutex<Option<Child>>,
@@ -111,13 +113,17 @@ fn agents() -> &'static StdMutex<HashMap<String, Arc<Live>>> {
     AGENTS.get_or_init(|| StdMutex::new(HashMap::new()))
 }
 
-fn live(agent_id: &str) -> Result<Arc<Live>, String> {
+fn session_key(agent_id: &str, caller: &str, cwd: &Path) -> String {
+    serde_json::to_string(&(agent_id, caller, cwd.to_string_lossy())).unwrap_or_default()
+}
+
+fn live(session_id: &str) -> Result<Arc<Live>, String> {
     agents()
         .lock()
         .map_err(|_| "the agent table is poisoned".to_string())?
-        .get(agent_id)
+        .get(session_id)
         .cloned()
-        .ok_or_else(|| format!("{agent_id} is not running"))
+        .ok_or_else(|| format!("ACP session {session_id} is not running"))
 }
 
 // ── Registry file ───────────────────────────────────────────────────────
@@ -157,7 +163,7 @@ impl Live {
             json!({
                 "agent_id": self.agent_id,
                 "type": event_type,
-                "session_id": self.session_id.get().cloned().unwrap_or_default(),
+                "session_id": self.public_session_id,
                 "payload": payload,
             }),
         );
@@ -355,7 +361,11 @@ fn stderr_excerpt(tail: &StderrTail) -> String {
 }
 
 /// Spawn the adapter and complete the handshake.
-async fn connect(agent: &AcpAgentSpawn, sink: Sink) -> Result<Arc<Live>, String> {
+async fn connect(
+    agent: &AcpAgentSpawn,
+    sink: Sink,
+    public_session_id: String,
+) -> Result<Arc<Live>, String> {
     let binary = resolve_binary(&agent.command).ok_or_else(|| {
         format!(
             "{} is not installed (looked on PATH and in the usual bin folders)",
@@ -406,6 +416,7 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink) -> Result<Arc<Live>, String>
 
     let live = Arc::new(Live {
         agent_id: agent.id.clone(),
+        public_session_id,
         session_id: OnceLock::new(),
         pid,
         child: StdMutex::new(Some(child)),
@@ -568,11 +579,11 @@ async fn cancel(live: &Arc<Live>) -> Result<(), String> {
         .await
 }
 
-fn stop(agent_id: &str) {
+fn stop(session_id: &str) {
     let removed = agents()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .remove(agent_id);
+        .remove(session_id);
     if let Some(live) = removed {
         live.kill();
         if live.set_turn(false) {
@@ -605,45 +616,52 @@ fn app_sink(app: AppHandle) -> Sink {
 pub async fn acp_start(
     app: AppHandle,
     agent_id: String,
+    caller: String,
     cwd: Option<String>,
 ) -> Result<AcpStarted, String> {
-    if let Ok(existing) = live(&agent_id) {
-        return Ok(AcpStarted {
-            agent_id,
-            session_id: existing.session_id.get().cloned().unwrap_or_default(),
-            pid: existing.pid,
-        });
-    }
     let mut spec = registry_entry(&registry_path(&app)?, &agent_id)?;
     if cwd.as_deref().is_some_and(|path| !path.trim().is_empty()) {
         spec.cwd = cwd;
     }
-    let ready = connect(&spec, app_sink(app)).await?;
+    let key = session_key(&agent_id, &caller, &resolve_cwd(spec.cwd.as_deref()));
+    if let Some(existing) = agents()
+        .lock()
+        .map_err(|_| "the agent table is poisoned".to_string())?
+        .get(&key)
+        .cloned()
+    {
+        return Ok(AcpStarted {
+            agent_id,
+            session_id: existing.public_session_id.clone(),
+            pid: existing.pid,
+        });
+    }
+    let ready = connect(&spec, app_sink(app), key.clone()).await?;
     let started = AcpStarted {
         agent_id: agent_id.clone(),
-        session_id: ready.session_id.get().cloned().unwrap_or_default(),
+        session_id: key.clone(),
         pid: ready.pid,
     };
     agents()
         .lock()
         .map_err(|_| "the agent table is poisoned".to_string())?
-        .insert(agent_id, ready);
+        .insert(key, ready);
     Ok(started)
 }
 
 #[tauri::command]
-pub async fn acp_prompt(agent_id: String, text: String) -> Result<(), String> {
-    prompt(&live(&agent_id)?, &text).await
+pub async fn acp_prompt(session_id: String, text: String) -> Result<(), String> {
+    prompt(&live(&session_id)?, &text).await
 }
 
 #[tauri::command]
-pub async fn acp_cancel(agent_id: String) -> Result<(), String> {
-    cancel(&live(&agent_id)?).await
+pub async fn acp_cancel(session_id: String) -> Result<(), String> {
+    cancel(&live(&session_id)?).await
 }
 
 #[tauri::command]
-pub async fn acp_stop(agent_id: String) -> Result<(), String> {
-    stop(&agent_id);
+pub async fn acp_stop(session_id: String) -> Result<(), String> {
+    stop(&session_id);
     Ok(())
 }
 
@@ -657,7 +675,7 @@ pub fn acp_statuses() -> Vec<AcpStatus> {
         .values()
         .map(|agent| AcpStatus {
             agent_id: agent.agent_id.clone(),
-            session_id: agent.session_id.get().cloned().unwrap_or_default(),
+            session_id: agent.public_session_id.clone(),
             pid: agent.pid,
         })
         .collect()
@@ -682,11 +700,11 @@ pub fn acp_probe(commands: Vec<String>) -> Vec<AcpCommandProbe> {
 
 #[tauri::command]
 pub async fn acp_respond_permission(
-    agent_id: String,
+    session_id: String,
     request_id: String,
     option_id: String,
 ) -> Result<(), String> {
-    live(&agent_id)?
+    live(&session_id)?
         .answer_permission(
             &request_id,
             json!({ "outcome": "selected", "optionId": option_id }),
@@ -698,6 +716,17 @@ pub async fn acp_respond_permission(
 mod tests {
     use super::*;
     use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, sync::Mutex as TestMutex};
+
+    #[test]
+    fn live_session_key_separates_callers_and_working_directories() {
+        let panel = session_key("cc", "panel", Path::new("/work/app"));
+        assert_ne!(
+            panel,
+            session_key("cc", "room:alpha", Path::new("/work/app"))
+        );
+        assert_ne!(panel, session_key("cc", "panel", Path::new("/work/other")));
+        assert_eq!(panel, session_key("cc", "panel", Path::new("/work/app")));
+    }
 
     #[test]
     fn binaries_resolve_from_path_and_known_folders() {
@@ -779,7 +808,7 @@ done
             args: vec![],
             cwd: Some(dir.to_string_lossy().into_owned()),
         };
-        let live = connect(&spec, Arc::new(|_, _| {}))
+        let live = connect(&spec, Arc::new(|_, _| {}), "retry-test".into())
             .await
             .expect("the second session/new should connect");
         assert_eq!(
@@ -803,7 +832,9 @@ done
             args: vec![],
             cwd: Some(dir.to_string_lossy().into_owned()),
         };
-        let live = connect(&spec, sink).await.expect("handshake");
+        let live = connect(&spec, sink, "turn-test".into())
+            .await
+            .expect("handshake");
         assert_eq!(live.session_id.get().map(String::as_str), Some("sess-1"));
 
         prompt(&live, "reply with pong").await.unwrap();
@@ -828,7 +859,7 @@ done
                 .iter()
                 .find(|e| e["type"] == "approval.request")
                 .unwrap();
-            assert_eq!(req["session_id"], "sess-1");
+            assert_eq!(req["session_id"], "turn-test");
             assert_eq!(req["agent_id"], "fake");
             assert_eq!(req["payload"]["choices"], json!(["once", "deny"]));
             req["payload"]["request_id"].as_str().unwrap().to_string()
@@ -873,7 +904,10 @@ done
             args: vec![],
             cwd: None,
         };
-        let err = connect(&spec, sink).await.err().unwrap();
+        let err = connect(&spec, sink, "missing-test".into())
+            .await
+            .err()
+            .unwrap();
         assert!(err.contains("/definitely/not/here"), "{err}");
     }
 
@@ -888,7 +922,10 @@ done
             args: vec![],
             cwd: None,
         };
-        let err = connect(&spec, sink).await.err().unwrap();
+        let err = connect(&spec, sink, "silent-test".into())
+            .await
+            .err()
+            .unwrap();
         assert!(err.contains("not logged in"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
@@ -906,7 +943,9 @@ done
             args: vec![],
             cwd: Some(env!("CARGO_MANIFEST_DIR").into()),
         };
-        let live = connect(&spec, sink).await.expect("codex-acp handshake");
+        let live = connect(&spec, sink, "live-test".into())
+            .await
+            .expect("codex-acp handshake");
 
         prompt(&live, "Reply with exactly: ACP OK")
             .await
@@ -935,7 +974,10 @@ done
             .filter(|event| event["type"] == "message.delta")
             .filter_map(|event| event["payload"]["text"].as_str())
             .collect::<String>();
-        assert!(text.contains("ACP OK"), "missing streamed reply: {events:?}");
+        assert!(
+            text.contains("ACP OK"),
+            "missing streamed reply: {events:?}"
+        );
         live.kill();
     }
 }

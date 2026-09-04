@@ -27,7 +27,7 @@ class FakeBridge implements AcpBridge {
     this.calls.push({ command, args });
     if (this.failOn === command) throw new Error(`${command} refused`);
     if (command === "acp_start") {
-      return { agentId: args?.agentId, sessionId: "sess-1", pid: 42 } as T;
+      return { agentId: args?.agentId, sessionId: args?.caller === "room:alpha" ? "sess-room" : "sess-1", pid: 42 } as T;
     }
     return undefined as T;
   }
@@ -38,8 +38,8 @@ class FakeBridge implements AcpBridge {
     return () => this.handlers.delete(handler);
   }
 
-  emit(type: AcpEnvelope["type"], payload: unknown, agentId = "cc") {
-    for (const h of this.handlers) h({ agent_id: agentId, type, session_id: "sess-1", payload });
+  emit(type: AcpEnvelope["type"], payload: unknown, sessionId = "sess-1", agentId = "cc") {
+    for (const h of this.handlers) h({ agent_id: agentId, type, session_id: sessionId, payload });
   }
 }
 
@@ -63,24 +63,37 @@ afterEach(() => {
 describe("acp session helpers send the Tauri command shapes", () => {
   it("start, prompt and cancel address the agent", async () => {
     await expect(createAcpSession("cc")).resolves.toBe("sess-1");
-    await submitAcpPrompt("cc", "hello");
-    await interruptAcpSession("cc");
+    await submitAcpPrompt("sess-1", "hello");
+    await interruptAcpSession("sess-1");
     expect(bridge.calls).toEqual([
-      { command: "acp_start", args: { agentId: "cc" } },
-      { command: "acp_prompt", args: { agentId: "cc", text: "hello" } },
-      { command: "acp_cancel", args: { agentId: "cc" } },
+      { command: "acp_start", args: { agentId: "cc", caller: "panel" } },
+      { command: "acp_prompt", args: { sessionId: "sess-1", text: "hello" } },
+      { command: "acp_cancel", args: { sessionId: "sess-1" } },
     ]);
     expect(bridge.listenCount).toBe(1);
   });
 
   it("presents the gateway-shaped client used by rooms", async () => {
-    const client = acpGatewayClient("cc");
+    const client = acpGatewayClient("cc", "room:one");
     expect(client.connectionState).toBe("open");
     await expect(client.request("session.create")).resolves.toEqual({ session_id: "sess-1" });
     await client.request("prompt.submit", { text: "room hello" });
     expect(bridge.calls.slice(-2)).toEqual([
-      { command: "acp_start", args: { agentId: "cc" } },
-      { command: "acp_prompt", args: { agentId: "cc", text: "room hello" } },
+      { command: "acp_start", args: { agentId: "cc", caller: "room:one" } },
+      { command: "acp_prompt", args: { sessionId: "sess-1", text: "room hello" } },
+    ]);
+  });
+
+  it("keeps the panel and each room on separate ACP sessions", async () => {
+    const panel = acpGatewayClient("cc", "panel");
+    const room = acpGatewayClient("cc", "room:alpha");
+    await panel.request("session.create", { cwd: "/work/app" });
+    await room.request("session.create", { cwd: "/work/app" });
+    await room.request("prompt.submit", { text: "room only" });
+    expect(bridge.calls.slice(-3)).toEqual([
+      { command: "acp_start", args: { agentId: "cc", caller: "panel", cwd: "/work/app" } },
+      { command: "acp_start", args: { agentId: "cc", caller: "room:alpha", cwd: "/work/app" } },
+      { command: "acp_prompt", args: { sessionId: "sess-room", text: "room only" } },
     ]);
   });
 
@@ -97,12 +110,12 @@ describe("acp session helpers send the Tauri command shapes", () => {
     onAcpEvent(() => undefined);
     await Promise.resolve();
     bridge.emit("approval.request", { request_id: "perm-7", command: "rm -rf x", choices: ["once", "always", "deny"], options });
-    await respondAcpApproval({ agentId: "cc", requestId: "perm-7", choice: "deny" });
+    await respondAcpApproval({ sessionId: "sess-1", requestId: "perm-7", choice: "deny" });
     expect(bridge.calls.at(-1)).toEqual({
       command: "acp_respond_permission",
-      args: { agentId: "cc", requestId: "perm-7", optionId: "reject" },
+      args: { sessionId: "sess-1", requestId: "perm-7", optionId: "reject" },
     });
-    await expect(respondAcpApproval({ agentId: "cc", requestId: "perm-7", choice: "once" })).rejects.toThrow("No pending permission");
+    await expect(respondAcpApproval({ sessionId: "sess-1", requestId: "perm-7", choice: "once" })).rejects.toThrow("No pending permission");
   });
 });
 
@@ -141,12 +154,12 @@ describe("runAcpPrompt", () => {
     bridge.emit("message.delta", { text: "po" });
     bridge.emit("approval.request", { request_id: "perm-2", choices: ["once", "deny"], options });
     await vi.advanceTimersByTimeAsync(0);
-    bridge.emit("message.delta", { text: "ng" }, "other-agent");
+    bridge.emit("message.delta", { text: "ng" }, "other-session");
     bridge.emit("message.delta", { text: "ng" });
     bridge.emit("message.complete", { status: "complete" });
     await expect(run).resolves.toEqual({ sessionId: "sess-1", text: "pong" });
     expect(bridge.calls.find((c) => c.command === "acp_respond_permission")?.args).toEqual({
-      agentId: "cc",
+      sessionId: "sess-1",
       requestId: "perm-2",
       optionId: "reject",
     });

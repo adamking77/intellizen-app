@@ -74,7 +74,7 @@ export async function ensureGroupChatSession(
   group: string,
   member: GroupMember,
 ): Promise<{ client: GatewayClientLike; sessionId: string }> {
-  const client = clientFor(member);
+  const client = clientFor(member, `room:${group}`);
   const key = groupMemberKey(member);
   const existing = ($groupChats.get()[group]?.sessions || {})[key];
   if (existing) return { client, sessionId: existing };

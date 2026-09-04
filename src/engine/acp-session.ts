@@ -17,6 +17,7 @@ export const ACP_EVENT = "acp:event";
 /** A gateway-shaped event plus the agent it came from. */
 export interface AcpEnvelope extends GatewayEvent {
   agent_id: string;
+  session_id: string;
 }
 
 export interface AcpPermissionOption {
@@ -60,23 +61,23 @@ export function setAcpBridge(next: AcpBridge | null) {
 
 const handlers = new Set<(envelope: AcpEnvelope) => void>();
 let listening: Promise<() => void> | null = null;
-/** The options each pending permission offered, by `agentId:requestId`,
+/** The options each pending permission offered, by `sessionId:requestId`,
  *  so a Hermes-style choice can be answered with the adapter's option id. */
 const permissionOptions = new Map<string, AcpPermissionOption[]>();
 
-function permissionKey(agentId: string, requestId: string) {
-  return `${agentId}:${requestId}`;
+function permissionKey(sessionId: string, requestId: string) {
+  return `${sessionId}:${requestId}`;
 }
 
 function dispatch(envelope: AcpEnvelope) {
   if (envelope.type === "approval.request") {
     const payload = (envelope.payload ?? {}) as AcpApprovalPayload;
     if (payload.request_id) {
-      permissionOptions.set(permissionKey(envelope.agent_id, payload.request_id), payload.options ?? []);
+      permissionOptions.set(permissionKey(envelope.session_id, payload.request_id), payload.options ?? []);
     }
   } else if (envelope.type === "message.complete") {
     for (const key of [...permissionOptions.keys()]) {
-      if (key.startsWith(`${envelope.agent_id}:`)) permissionOptions.delete(key);
+      if (key.startsWith(`${envelope.session_id}:`)) permissionOptions.delete(key);
     }
   }
   for (const handler of handlers) handler(envelope);
@@ -102,55 +103,66 @@ export function resetAcpSubscription() {
   listening = null;
   handlers.clear();
   permissionOptions.clear();
+  clients.clear();
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────
 
 /** Spawn the adapter for a registry entry (or reuse the running one) and
  *  complete the ACP handshake. */
-export async function startAcpAgent(agentId: string, cwd?: string | null): Promise<AcpStarted> {
+export async function startAcpAgent(agentId: string, caller = "panel", cwd?: string | null): Promise<AcpStarted> {
   await ensureListening();
-  return bridge.invoke<AcpStarted>("acp_start", cwd ? { agentId, cwd } : { agentId });
+  return bridge.invoke<AcpStarted>("acp_start", cwd ? { agentId, caller, cwd } : { agentId, caller });
 }
 
 /** The session id, like `createSession` for the gateway. */
-export async function createAcpSession(agentId: string, cwd?: string | null): Promise<string> {
-  const started = await startAcpAgent(agentId, cwd);
+export async function createAcpSession(agentId: string, caller = "panel", cwd?: string | null): Promise<string> {
+  const started = await startAcpAgent(agentId, caller, cwd);
   if (!started.sessionId) throw new Error("acp_start returned no session id");
   return started.sessionId;
 }
 
-export function submitAcpPrompt(agentId: string, text: string): Promise<void> {
-  return bridge.invoke<void>("acp_prompt", { agentId, text });
+export function submitAcpPrompt(sessionId: string, text: string): Promise<void> {
+  return bridge.invoke<void>("acp_prompt", { sessionId, text });
 }
 
-export function interruptAcpSession(agentId: string): Promise<void> {
-  return bridge.invoke<void>("acp_cancel", { agentId });
+export function interruptAcpSession(sessionId: string): Promise<void> {
+  return bridge.invoke<void>("acp_cancel", { sessionId });
 }
 
 /** Kill the adapter process. The next `startAcpAgent` spawns a fresh one. */
-export function stopAcpAgent(agentId: string): Promise<void> {
-  return bridge.invoke<void>("acp_stop", { agentId });
+export function stopAcpAgent(sessionId: string): Promise<void> {
+  return bridge.invoke<void>("acp_stop", { sessionId });
 }
 
 const clients = new Map<string, GatewayClientLike>();
 
 /** ACP behind the gateway-shaped seam the room engine already uses. */
-export function acpGatewayClient(agentId: string): GatewayClientLike {
-  const existing = clients.get(agentId);
+export function acpGatewayClient(agentId: string, caller: string, cwd?: string | null): GatewayClientLike {
+  const key = JSON.stringify([agentId, caller, cwd ?? null]);
+  const existing = clients.get(key);
   if (existing) return existing;
+  let sessionId: string | null = null;
   const client: GatewayClientLike = {
     connectionState: "open" as ConnectionState,
     async request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-      if (method === "session.create") return { session_id: await createAcpSession(agentId) } as T;
+      if (method === "session.create") {
+        sessionId = await createAcpSession(agentId, caller, String(params.cwd ?? cwd ?? "") || null);
+        return { session_id: sessionId } as T;
+      }
       if (method === "prompt.submit") {
-        await submitAcpPrompt(agentId, String(params.text ?? ""));
+        if (!sessionId) throw new Error(`No ACP session is open for ${agentId}.`);
+        await submitAcpPrompt(sessionId, String(params.text ?? ""));
         return { status: "streaming" } as T;
       }
-      if (method === "session.interrupt") return (await interruptAcpSession(agentId)) as T;
+      if (method === "session.interrupt") {
+        if (!sessionId) return undefined as T;
+        return (await interruptAcpSession(sessionId)) as T;
+      }
       if (method === "approval.respond") {
+        if (!sessionId) throw new Error(`No ACP session is open for ${agentId}.`);
         await respondAcpApproval({
-          agentId,
+          sessionId,
           requestId: String(params.request_id ?? ""),
           choice: params.choice as ApprovalChoice,
         });
@@ -160,7 +172,7 @@ export function acpGatewayClient(agentId: string): GatewayClientLike {
     },
     onAny(handler) {
       return onAcpEvent((event) => {
-        if (event.agent_id === agentId) handler(event);
+        if (event.session_id === sessionId) handler(event);
       });
     },
     onState(handler) {
@@ -168,7 +180,7 @@ export function acpGatewayClient(agentId: string): GatewayClientLike {
       return () => undefined;
     },
   };
-  clients.set(agentId, client);
+  clients.set(key, client);
   return client;
 }
 
@@ -192,15 +204,15 @@ export function optionIdForChoice(
 }
 
 export async function respondAcpApproval(input: {
-  agentId: string;
+  sessionId: string;
   requestId: string;
   choice: ApprovalChoice;
 }): Promise<void> {
-  const key = permissionKey(input.agentId, input.requestId);
+  const key = permissionKey(input.sessionId, input.requestId);
   const optionId = optionIdForChoice(permissionOptions.get(key) ?? [], input.choice);
-  if (!optionId) throw new Error(`No pending permission ${input.requestId} for ${input.agentId}.`);
+  if (!optionId) throw new Error(`No pending permission ${input.requestId} for ${input.sessionId}.`);
   await bridge.invoke<void>("acp_respond_permission", {
-    agentId: input.agentId,
+    sessionId: input.sessionId,
     requestId: input.requestId,
     optionId,
   });
@@ -210,6 +222,8 @@ export async function respondAcpApproval(input: {
 export interface RunAcpPromptInput {
   agentId: string;
   text: string;
+  caller?: string;
+  cwd?: string | null;
   signal?: AbortSignal;
   /** Whole-turn deadline. Default ten minutes. */
   timeoutMs?: number;
@@ -222,7 +236,7 @@ export interface RunAcpPromptInput {
 export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionId: string; text: string }> {
   const timeoutMs = input.timeoutMs ?? 10 * 60_000;
   if (input.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  const sessionId = await createAcpSession(input.agentId);
+  const sessionId = await createAcpSession(input.agentId, input.caller ?? "workflow", input.cwd);
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -239,12 +253,12 @@ export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionI
       outcome();
     };
     const onAbort = () => {
-      void interruptAcpSession(input.agentId).catch(() => undefined);
+      void interruptAcpSession(sessionId).catch(() => undefined);
       finish(() => reject(new DOMException("Aborted", "AbortError")));
     };
 
     unsubscribe = onAcpEvent((envelope) => {
-      if (envelope.agent_id !== input.agentId) return;
+      if (envelope.session_id !== sessionId) return;
       if (envelope.type === "message.delta") {
         const delta = (envelope.payload as { text?: unknown } | undefined)?.text;
         if (typeof delta === "string") text += delta;
@@ -253,7 +267,7 @@ export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionI
       if (envelope.type === "approval.request") {
         const requestId = (envelope.payload as AcpApprovalPayload | undefined)?.request_id;
         if (requestId) {
-          void respondAcpApproval({ agentId: input.agentId, requestId, choice: "deny" }).catch(() => undefined);
+          void respondAcpApproval({ sessionId, requestId, choice: "deny" }).catch(() => undefined);
         }
         return;
       }
@@ -271,13 +285,13 @@ export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionI
     input.signal?.addEventListener("abort", onAbort, { once: true });
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
-        void interruptAcpSession(input.agentId).catch(() => undefined);
+        void interruptAcpSession(sessionId).catch(() => undefined);
         finish(() =>
           reject(new TurnError(`The turn did not finish within ${Math.round(timeoutMs / 1000)}s.`, sessionId, "timeout")),
         );
       }, timeoutMs);
     }
-    submitAcpPrompt(input.agentId, input.text).catch((error: unknown) => {
+    submitAcpPrompt(sessionId, input.text).catch((error: unknown) => {
       finish(() => reject(error instanceof Error ? error : new Error(String(error))));
     });
   });

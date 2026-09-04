@@ -17,8 +17,8 @@ export interface AgentDoor {
   readonly kind: DoorKind;
   /** The client a member's turns go through. For the gateway door this is
    *  the app's one gateway client; an ACP door answers the same five methods
-   *  and emits the same events over stdio, one process per member. */
-  client(member: GroupMember): GatewayClientLike;
+   *  and emits the same events over stdio, isolated by room caller. */
+  client(member: GroupMember, caller?: string): GatewayClientLike;
   /** Whether a turn could start right now. */
   ready(): boolean;
 }
@@ -31,7 +31,7 @@ export const gatewayDoor: AgentDoor = {
 
 const acpDoor: AgentDoor = {
   kind: "acp",
-  client: (member) => acpGatewayClient(member.name),
+  client: (member, caller = "room") => acpGatewayClient(member.name, caller),
   ready: () => true,
 };
 
@@ -73,8 +73,8 @@ export function memberReady(member: GroupMember): boolean {
 }
 
 /** The client a member's turn goes through. */
-export function clientFor(member: GroupMember): GatewayClientLike {
-  return doorFor(member).client(member);
+export function clientFor(member: GroupMember, caller?: string): GatewayClientLike {
+  return doorFor(member).client(member, caller);
 }
 
 /** Call this app's gateway. */

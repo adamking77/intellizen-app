@@ -198,10 +198,10 @@ describe("ACP launch defaults", () => {
         command: "npx",
       }),
     ]);
-    expect(tauri.invoke).toHaveBeenCalledWith("acp_start", { agentId: "provider-claude-code" });
+    expect(tauri.invoke).toHaveBeenCalledWith("acp_start", { agentId: "provider-claude-code", caller: "provider" });
 
     await disconnectAcpProvider("claude-code");
-    expect(tauri.invoke).toHaveBeenCalledWith("acp_stop", { agentId: "provider-claude-code" });
+    expect(tauri.invoke).toHaveBeenCalledWith("acp_stop", { sessionId: "session-1" });
   });
 });
 
