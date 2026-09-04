@@ -5,7 +5,9 @@ vi.mock("@/engine/rest", () => ({ hermesRest }));
 
 import {
   createCronJob,
+  defaultBlueprintSchedule,
   deleteCronJob,
+  listCronBlueprints,
   listCronJobRuns,
   listCronJobs,
   pauseCronJob,
@@ -13,7 +15,14 @@ import {
   runCronJobNow,
   scheduledWorkflowPrompt,
 } from "./hermes-cron";
-import { createKanbanCard, listKanbanBoard, listKanbanBoards } from "./hermes-kanban";
+import {
+  createKanbanCard,
+  getKanbanBoard,
+  kanbanEventsUrl,
+  listKanbanBoard,
+  listKanbanBoards,
+  moveKanbanCard,
+} from "./hermes-kanban";
 
 beforeEach(() => hermesRest.mockReset());
 
@@ -53,6 +62,8 @@ describe("Hermes scheduling services", () => {
       startedAt: "2026-09-04T07:00:00Z",
       endedAt: null,
       isActive: true,
+      outcome: "running",
+      preview: "",
     }]);
 
     expect(hermesRest.mock.calls).toEqual([
@@ -60,6 +71,20 @@ describe("Hermes scheduling services", () => {
       ["/api/cron/jobs/daily/resume?profile=fiona", { method: "POST" }],
       ["/api/cron/jobs/daily/runs?profile=fiona&limit=3"],
     ]);
+  });
+
+  it("reads Hermes blueprint defaults instead of carrying a local preset catalog", async () => {
+    hermesRest.mockResolvedValueOnce({ blueprints: [{
+      key: "workday-start",
+      title: "Workday start",
+      schedule: "{minute} {hour} * * 1-5",
+      scheduleHuman: "weekdays at 09:00",
+      fields: [{ name: "time", type: "time", default: "09:00" }],
+    }] });
+
+    const blueprints = await listCronBlueprints();
+    expect(defaultBlueprintSchedule(blueprints[0])).toBe("00 09 * * 1-5");
+    expect(hermesRest).toHaveBeenCalledWith("/api/cron/blueprints");
   });
 
   it("maps boards and creates idempotent progress cards", async () => {
@@ -73,7 +98,7 @@ describe("Hermes scheduling services", () => {
       body: "Gather inputs",
       assignee: "fiona",
       idempotencyKey: "run:collect",
-    })).toEqual({ id: "card-1", title: "Collect", status: "todo", assignee: "fiona" });
+    })).toEqual({ id: "card-1", title: "Collect", status: "todo", assignee: "fiona", projectId: null, latestSummary: null });
     expect(hermesRest.mock.calls[1]).toEqual([
       "/api/plugins/kanban/tasks?board=ops",
       {
@@ -92,6 +117,7 @@ describe("Hermes scheduling services", () => {
 
   it("maps a project board into display columns", async () => {
     hermesRest.mockResolvedValueOnce({
+      latest_event_id: 42,
       columns: [{ name: "running", tasks: [{ id: "card-1", title: "Build", assignee: "keel", latest_summary: "Wired" }] }],
     });
 
@@ -107,6 +133,25 @@ describe("Hermes scheduling services", () => {
       }],
     }]);
     expect(hermesRest).toHaveBeenCalledWith("/api/plugins/kanban/board?board=app%20build");
+  });
+
+  it("keeps the board cursor, moves cards through Hermes, and builds its event URL", async () => {
+    hermesRest
+      .mockResolvedValueOnce({ latest_event_id: 42, columns: [] })
+      .mockResolvedValueOnce({ task: { id: "card/1", title: "Build", status: "review" } });
+
+    await expect(getKanbanBoard("app build")).resolves.toEqual({ columns: [], latestEventId: 42 });
+    await expect(moveKanbanCard("app build", "card/1", "review")).resolves.toMatchObject({
+      id: "card/1",
+      status: "review",
+    });
+    expect(hermesRest.mock.calls[1]).toEqual([
+      "/api/plugins/kanban/tasks/card%2F1?board=app%20build",
+      { method: "PATCH", body: JSON.stringify({ status: "review" }) },
+    ]);
+    expect(kanbanEventsUrl({ port: 56083, token: "a b&c" }, "app build", 42)).toBe(
+      "ws://127.0.0.1:56083/api/plugins/kanban/events?token=a+b%26c&board=app+build&since=42",
+    );
   });
 
   it("puts the workflow definition and progress-card identities into the cron prompt", () => {

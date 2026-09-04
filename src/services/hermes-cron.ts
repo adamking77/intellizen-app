@@ -30,15 +30,23 @@ export interface CronJobRun {
   startedAt: string | null;
   endedAt: string | null;
   isActive: boolean;
+  outcome: "completed" | "incomplete" | "running" | "unknown";
+  preview: string;
 }
 
-export const CRON_PRESETS = [
-  { label: "Hourly", expression: "0 * * * *" },
-  { label: "Daily 07:00", expression: "0 7 * * *" },
-  { label: "Weekdays 07:00", expression: "0 7 * * 1-5" },
-  { label: "Weekly Mon 07:00", expression: "0 7 * * 1" },
-  { label: "Monthly 1st 07:00", expression: "0 7 1 * *" },
-] as const;
+export interface CronBlueprintField {
+  name: string;
+  type: "enum" | "text" | "time" | "weekdays" | string;
+  default: unknown;
+}
+
+export interface CronBlueprint {
+  key: string;
+  title: string;
+  schedule: string;
+  scheduleHuman: string;
+  fields: CronBlueprintField[];
+}
 
 function text(value: unknown, fallback = "") {
   return typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -109,12 +117,74 @@ export async function listCronJobRuns(profile: string, jobId: string, limit = 5)
   const result = await hermesRest<{ runs?: Array<Record<string, unknown>> }>(
     `/api/cron/jobs/${encodeURIComponent(jobId)}/runs${profileQuery(profile)}&limit=${limit}`,
   );
-  return (result.runs ?? []).map((run): CronJobRun => ({
-    id: text(run.id),
-    startedAt: optionalText(run.started_at),
-    endedAt: optionalText(run.ended_at),
-    isActive: run.is_active === true,
-  }));
+  return (result.runs ?? []).map((run): CronJobRun => {
+    const endReason = text(run.end_reason);
+    const isActive = run.is_active === true;
+    return {
+      id: text(run.id),
+      startedAt: optionalText(run.started_at),
+      endedAt: optionalText(run.ended_at),
+      isActive,
+      outcome: isActive
+        ? "running"
+        : endReason === "cron_complete"
+          ? "completed"
+          : endReason === "cron_incomplete_no_output" || /error|interrupt|fail/i.test(endReason)
+            ? "incomplete"
+            : "unknown",
+      preview: text(run.preview),
+    };
+  });
+}
+
+export async function listCronBlueprints(): Promise<CronBlueprint[]> {
+  const result = await hermesRest<{ blueprints?: Array<Record<string, unknown>> }>("/api/cron/blueprints");
+  return (result.blueprints ?? []).flatMap((row) => {
+    const key = text(row.key);
+    const schedule = text(row.schedule);
+    if (!key || !schedule) return [];
+    const fields = Array.isArray(row.fields) ? row.fields.flatMap((field) => {
+      if (!field || typeof field !== "object") return [];
+      const value = field as Record<string, unknown>;
+      const name = text(value.name);
+      return name ? [{ name, type: text(value.type), default: value.default }] : [];
+    }) : [];
+    return [{
+      key,
+      title: text(row.title) || key,
+      schedule,
+      scheduleHuman: text(row.scheduleHuman) || schedule,
+      fields,
+    }];
+  });
+}
+
+const DAY_NUMBER: Record<string, string> = {
+  sunday: "0",
+  monday: "1",
+  tuesday: "2",
+  wednesday: "3",
+  thursday: "4",
+  friday: "5",
+  saturday: "6",
+  everyday: "*",
+  weekdays: "1-5",
+  weekends: "0,6",
+};
+
+/** Resolve a catalog entry's default form values to the cron expression Hermes
+ * would create. Entries with non-defaulted slots remain custom-only. */
+export function defaultBlueprintSchedule(blueprint: CronBlueprint): string | null {
+  const values = Object.fromEntries(blueprint.fields.map((field) => [field.name, field.default]));
+  const time = typeof values.time === "string" ? values.time.match(/^(\d{1,2}):(\d{2})$/) : null;
+  const dow = text(values.day ?? values.recurrence);
+  const resolved = blueprint.schedule.replace(/\{([^}]+)\}/g, (_whole, name: string) => {
+    if (name === "hour") return time?.[1] ?? "";
+    if (name === "minute") return time?.[2] ?? "";
+    if (name === "dow") return DAY_NUMBER[dow] ?? dow;
+    return text(values[name]);
+  });
+  return resolved.includes("{") || resolved.trim().split(/\s+/).length !== 5 ? null : resolved;
 }
 
 export async function deleteCronJob(profile: string, jobId: string) {

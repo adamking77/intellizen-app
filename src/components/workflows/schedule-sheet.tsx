@@ -13,9 +13,10 @@ import type { WorkflowDefinitionV1, WorkflowStep } from "@/lib/workflow-schema";
 import { errorMessage, toast } from "@/lib/toast";
 import { fetchHermesProfiles } from "@/services/agent";
 import {
-  CRON_PRESETS,
   createCronJob,
+  defaultBlueprintSchedule,
   deleteCronJob,
+  listCronBlueprints,
   listCronJobRuns,
   listCronJobs,
   pauseCronJob,
@@ -50,7 +51,7 @@ function stepBody(workflow: WorkflowTemplateItem, step: WorkflowStep, schedule: 
 }
 
 export function ScheduleSheet({ open, workflow, definition, onOpenChange }: ScheduleSheetProps) {
-  const [schedule, setSchedule] = useState<string>(CRON_PRESETS[2].expression);
+  const [schedule, setSchedule] = useState("");
   const [profile, setProfile] = useState("");
   const [board, setBoard] = useState("");
   const [saving, setSaving] = useState(false);
@@ -64,6 +65,12 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     queryFn: fetchHermesProfiles,
     enabled: open,
     staleTime: 30_000,
+  });
+  const blueprintsQuery = useQuery({
+    queryKey: ["workflow-schedule", "blueprints"],
+    queryFn: listCronBlueprints,
+    enabled: open,
+    staleTime: 60_000,
   });
   const boardsQuery = useQuery({
     queryKey: ["workflow-schedule", "boards"],
@@ -89,6 +96,15 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     if (profile || !profilesQuery.data?.length) return;
     setProfile(profilesQuery.data.find((item) => item.isDefault)?.name ?? profilesQuery.data[0].name);
   }, [profile, profilesQuery.data]);
+
+  const schedulePatterns = useMemo(() => (blueprintsQuery.data ?? []).flatMap((blueprint) => {
+    const expression = defaultBlueprintSchedule(blueprint);
+    return expression ? [{ ...blueprint, expression }] : [];
+  }), [blueprintsQuery.data]);
+
+  useEffect(() => {
+    if (!schedule && schedulePatterns[0]) setSchedule(schedulePatterns[0].expression);
+  }, [schedule, schedulePatterns]);
 
   const jobs = useMemo(
     () => (jobsQuery.data ?? []).filter((job) =>
@@ -156,7 +172,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     setFailure(null);
     try {
       await runCronJobNow(jobProfile, jobId);
-      await jobsQuery.refetch();
+      await Promise.all([jobsQuery.refetch(), runsQuery.refetch()]);
       toast.success("Scheduled workflow started");
     } catch (error) {
       setFailure(errorMessage(error));
@@ -220,18 +236,17 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
       <div className="space-y-5">
         <section>
           <div className="mb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">When</div>
-          <div className="flex flex-wrap gap-1.5">
-            {CRON_PRESETS.map((preset) => (
-              <Control
-                size="sm"
-                variant={schedule === preset.expression ? "selected" : "quiet"}
-                key={preset.expression}
-                onClick={() => setSchedule(preset.expression)}
-              >
-                {preset.label}
-              </Control>
+          <Select
+            aria-label="Hermes schedule pattern"
+            disabled={blueprintsQuery.isLoading}
+            onChange={(event) => setSchedule(event.target.value)}
+            value={schedulePatterns.some((pattern) => pattern.expression === schedule) ? schedule : ""}
+          >
+            <option value="">Custom schedule</option>
+            {schedulePatterns.map((pattern) => (
+              <option key={pattern.key} value={pattern.expression}>{pattern.scheduleHuman} · {pattern.title}</option>
             ))}
-          </div>
+          </Select>
           <label className="mt-3 block">
             <span className="sr-only">Cron expression</span>
             <Input
@@ -274,9 +289,9 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           {board ? ` ${definition.steps.length} idempotent progress cards will be created on ${board}.` : " No board data will be created."}
         </div>
 
-        {profilesQuery.error || boardsQuery.error || jobsQuery.error || failure ? (
+        {profilesQuery.error || blueprintsQuery.error || boardsQuery.error || jobsQuery.error || failure ? (
           <div role="alert" className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[var(--t-section)] text-[var(--danger)]">
-            {failure ?? errorMessage(profilesQuery.error ?? boardsQuery.error ?? jobsQuery.error)}
+            {failure ?? errorMessage(profilesQuery.error ?? blueprintsQuery.error ?? boardsQuery.error ?? jobsQuery.error)}
           </div>
         ) : null}
 
@@ -295,7 +310,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
                       <Pill variant={job.lastStatus === "error" ? "failure" : "neutral"}>{job.state}</Pill>
                     </div>
                     <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
-                    {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].isActive ? "Running" : runsQuery.data[job.id][0].endedAt ? "Finished" : "Interrupted"}</p> : null}
+                    {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].outcome}{runsQuery.data[job.id][0].preview ? ` · ${runsQuery.data[job.id][0].preview}` : ""}</p> : null}
                   </div>
                   <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
                     {job.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}

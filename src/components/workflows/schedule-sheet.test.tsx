@@ -12,6 +12,7 @@ const services = vi.hoisted(() => ({
   fetchHermesProfiles: vi.fn(),
   listCronJobs: vi.fn(),
   listCronJobRuns: vi.fn(),
+  listCronBlueprints: vi.fn(),
   listKanbanBoards: vi.fn(),
   pauseCronJob: vi.fn(),
   resumeCronJob: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/services/hermes-cron", async (importOriginal) => ({
   deleteCronJob: services.deleteCronJob,
   listCronJobs: services.listCronJobs,
   listCronJobRuns: services.listCronJobRuns,
+  listCronBlueprints: services.listCronBlueprints,
   pauseCronJob: services.pauseCronJob,
   resumeCronJob: services.resumeCronJob,
   runCronJobNow: services.runCronJobNow,
@@ -106,6 +108,13 @@ beforeEach(() => {
   services.listKanbanBoards.mockResolvedValue([{ slug: "ops", name: "Operations", total: 3 }]);
   services.listCronJobs.mockResolvedValue([]);
   services.listCronJobRuns.mockResolvedValue([]);
+  services.listCronBlueprints.mockResolvedValue([{
+    key: "workday-start",
+    title: "Workday start",
+    schedule: "{minute} {hour} * * 1-5",
+    scheduleHuman: "weekdays at 09:00",
+    fields: [{ name: "time", type: "time", default: "09:00" }],
+  }]);
   services.createKanbanCard.mockResolvedValue({ id: "card-1", title: "Collect", status: "todo", assignee: "fiona" });
   services.createCronJob.mockResolvedValue({ id: "cron-1" });
   services.deleteCronJob.mockResolvedValue(undefined);
@@ -127,13 +136,13 @@ describe("ScheduleSheet", () => {
   it("creates visible progress cards and then the cron schedule", async () => {
     const body = await mount();
     expect(body.textContent).toContain("Schedule Weekly review");
-    expect(body.textContent).toContain("Weekdays 07:00");
+    expect(body.textContent).toContain("weekdays at 09:00");
 
     const selects = body.querySelectorAll("select");
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
-      setter.call(selects[1], "ops");
-      selects[1].dispatchEvent(new Event("change", { bubbles: true }));
+      setter.call(selects[2], "ops");
+      selects[2].dispatchEvent(new Event("change", { bubbles: true }));
     });
     const create = Array.from(body.querySelectorAll("button")).find((button) => button.textContent?.includes("Create schedule"))!;
     await act(async () => create.click());

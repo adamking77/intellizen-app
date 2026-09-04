@@ -1,16 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Control } from "@/components/ui/control";
 import { Drawer } from "@/components/ui/drawer";
 import { Identity } from "@/components/ui/identity";
 import { QueryState } from "@/components/ui/query-state";
+import { Select } from "@/components/ui/select";
 import { Pill } from "@/components/ui/status-pill";
 import { boardsForProject } from "@/lib/project-room";
+import { errorMessage, toast } from "@/lib/toast";
 import { runViewTransition } from "@/lib/view-transitions";
-import { listKanbanBoard, listKanbanBoards, type KanbanCard } from "@/services/hermes-kanban";
+import {
+  getKanbanBoard,
+  listKanbanBoards,
+  moveKanbanCard,
+  subscribeKanbanEvents,
+  type KanbanCard,
+} from "@/services/hermes-kanban";
 
 const COLUMN_LABELS: Record<string, string> = {
   triage: "Triage",
@@ -24,14 +32,37 @@ const COLUMN_LABELS: Record<string, string> = {
 };
 
 export function ProjectBoard({ folders }: { folders: string[] }) {
-  const [selected, setSelected] = useState<(KanbanCard & { board: string }) | null>(null);
+  const [selected, setSelected] = useState<(KanbanCard & { board: string; boardSlug: string }) | null>(null);
+  const [moving, setMoving] = useState(false);
   const boards = useQuery({ queryKey: ["kanban-boards", "project-room"], queryFn: listKanbanBoards });
   const scoped = boardsForProject(boards.data ?? [], folders);
   const boardData = useQuery({
     queryKey: ["kanban-project-room", scoped.map((board) => board.slug)],
-    queryFn: async () => Promise.all(scoped.map(async (board) => ({ board, columns: await listKanbanBoard(board.slug) }))),
+    queryFn: async () => Promise.all(scoped.map(async (board) => ({ board, snapshot: await getKanbanBoard(board.slug) }))),
     enabled: scoped.length > 0,
   });
+
+  useEffect(() => {
+    const close = (boardData.data ?? []).map(({ board, snapshot }) =>
+      subscribeKanbanEvents(board.slug, snapshot.latestEventId, () => void boardData.refetch())
+    );
+    return () => close.forEach((stop) => stop());
+  }, [boardData.data]);
+
+  async function move(status: string) {
+    if (!selected || status === selected.status) return;
+    setMoving(true);
+    try {
+      const updated = await moveKanbanCard(selected.boardSlug, selected.id, status);
+      setSelected({ ...selected, ...updated });
+      await boardData.refetch();
+      toast.success(`Moved to ${COLUMN_LABELS[updated.status] ?? updated.status}`);
+    } catch (error) {
+      toast.error("Couldn't move card", { description: errorMessage(error) });
+    } finally {
+      setMoving(false);
+    }
+  }
 
   return (
     <ProjectTabFrame>
@@ -48,14 +79,14 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
         onRetry={() => void (boards.error ? boards.refetch() : boardData.refetch())}
       >
         <div className="space-y-6">
-          {(boardData.data ?? []).map(({ board, columns }) => (
+          {(boardData.data ?? []).map(({ board, snapshot }) => (
             <section key={board.slug} aria-label={board.name}>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h2 className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{board.name}</h2>
                 <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{board.total} cards</span>
               </div>
               <div className="flex min-w-0 gap-3 overflow-x-auto pb-2">
-                {columns.map((column) => (
+                {snapshot.columns.map((column) => (
                   <div key={column.name} className="w-56 shrink-0">
                     <div className="mb-2 flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
                       <span className="text-label">{COLUMN_LABELS[column.name] ?? column.name}</span>
@@ -63,7 +94,7 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                     </div>
                     <div className="space-y-2">
                       {column.cards.map((card) => (
-                        <button key={card.id} type="button" className="block w-full text-left" onClick={(event) => runViewTransition("drawer", () => setSelected({ ...card, board: board.name }), event.currentTarget)}>
+                        <button key={card.id} type="button" className="block w-full text-left" onClick={(event) => runViewTransition("drawer", () => setSelected({ ...card, board: board.name, boardSlug: board.slug }), event.currentTarget)}>
                           <Card selected={selected?.id === card.id}>
                           <p className="font-ui text-[var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
                           {card.latestSummary ? (
@@ -98,7 +129,10 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
               <dt className="text-[var(--text-muted)]">State</dt><dd><Pill>{selected.status}</Pill></dd>
             </dl>
             <div className="flex flex-wrap gap-2">
-              <Control disabled>Move to…</Control><Control disabled>Reassign</Control><Control disabled>Open in Table</Control>
+              <Select aria-label="Move card" disabled={moving} value={selected.status} onChange={(event) => void move(event.target.value)}>
+                {Object.entries(COLUMN_LABELS).filter(([status]) => status !== "running").map(([status, label]) => <option key={status} value={status}>{label}</option>)}
+              </Select>
+              <Control disabled>Reassign</Control><Control disabled>Open in Table</Control>
             </div>
           </div>
         ) : null}
