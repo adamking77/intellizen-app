@@ -133,7 +133,7 @@ I.4 **D.14 for real.** **Approved 2026-09-04 for implementation only.** An agent
     capability grants from the donor's SPEC-v9. *Open it: ask an agent for
     a widget, approve the record, see the widget.*
     Approval flow: `docs/stages/approval-flows/I.4-plugin-approval.md`.
-I.5 **Home without fixtures.** Remove the rotation banner and the presets
+I.5 **Home without fixtures.** **Choice A approved 2026-09-04.** Remove the rotation banner and the presets
     named after retired surfaces (Daily Brief, Agent Work, Roles), or move
     the banner to a plugin. Adam decides which.
     Approval flow: `docs/stages/approval-flows/I.5-home-without-fixtures.md`.

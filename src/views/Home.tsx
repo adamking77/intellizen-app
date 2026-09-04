@@ -43,7 +43,6 @@ import {
   listWorkspaceDatabaseCatalog,
   saveHomePinsToWorkspace,
 } from "@/lib/data";
-import { currentRotation, type RotationWeek } from "@/lib/rotation";
 import { useAppStore } from "@/store";
 import { toast } from "@/lib/toast";
 import {
@@ -52,13 +51,6 @@ import {
   PluginWidgetMenuItems,
   readLegacyPluginWidgetKeys,
 } from "@/plugins/home-widgets";
-
-const ROTATION_ACCENTS: Record<RotationWeek, string> = {
-  Build: "var(--teal)",
-  Marketing: "var(--peach)",
-  Ops: "var(--yellow)",
-  Slack: "var(--lavender)",
-};
 
 export function HomeView() {
   const navigate = useNavigate();
@@ -70,7 +62,6 @@ export function HomeView() {
   const pinMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const legacyGenuiMigrationStartedRef = useRef(false);
   const legacyPluginMigrationStartedRef = useRef(false);
-  const rotation = currentRotation();
   const {
     data: catalog = [],
     isLoading,
@@ -356,15 +347,7 @@ export function HomeView() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
       <div className="shrink-0 bg-[var(--base)] px-3 py-4 sm:px-6">
-        <div className="flex flex-col gap-2">
-          <span className="t-title text-[var(--text)]">Home</span>
-          <p
-            className="font-ui text-[var(--t-meta)]"
-            style={{ color: ROTATION_ACCENTS[rotation.week] }}
-          >
-            {rotation.week} week · {rotation.daysRemaining} days remaining
-          </p>
-        </div>
+        <span className="t-title text-[var(--text)]">Home</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-6">

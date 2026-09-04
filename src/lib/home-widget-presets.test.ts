@@ -28,7 +28,7 @@ function database(
 }
 
 describe("Home widget presets", () => {
-  it("offers database-backed Daily Brief, Agent Work, Workflow, and Role widgets", () => {
+  it("offers only the surviving database-backed Workflow widget", () => {
     const presets = buildHomeWidgetPresets([
       database("documents", "Documents"),
       database("654acc9c-0270-49e2-86f7-788e25c59a76", "Tasks"),
@@ -39,37 +39,29 @@ describe("Home widget presets", () => {
       ),
     ]);
 
-    expect(presets.map((preset) => preset.id)).toEqual(["daily-brief", "agent-work", "workflows", "roles"]);
-    expect(presets.find((preset) => preset.id === "daily-brief")?.filter).toEqual([
-      { fieldId: "doc_type", op: "equals", value: "daily-brief" },
-      { fieldId: "doc_created_at", op: "is_today", value: "" },
-    ]);
-    expect(presets.find((preset) => preset.id === "roles")?.config).toEqual({
-      presetKey: "roles",
-      groupBy: "workflow_owner_role",
-    });
+    expect(presets.map((preset) => preset.id)).toEqual(["workflows"]);
   });
 
   it("recognizes an already-pinned preset independently of its shared source view", () => {
     const pin: HomeDatabaseViewPin = {
-      id: "pin-role",
+      id: "pin-workflows",
       kind: "database-view",
       databaseId: "db",
       viewId: "view",
-      config: { presetKey: "roles" },
+      config: { presetKey: "workflows" },
       x: 0,
       y: 0,
       w: 4,
       h: 11,
     };
     const preset = {
-      id: "roles" as const,
-      label: "Roles",
-      description: "Roles",
+      id: "workflows" as const,
+      label: "Workflows",
+      description: "Workflows",
       databaseId: "db",
       viewId: "view",
-      title: "Roles",
-      config: { presetKey: "roles" },
+      title: "Workflows",
+      config: { presetKey: "workflows" },
     };
 
     expect(isHomeWidgetPresetPinned([pin], preset)).toBe(true);

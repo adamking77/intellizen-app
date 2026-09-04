@@ -1,7 +1,7 @@
 # I.5 approval flow — Home without fixtures
 
-Status: **awaiting Adam's decision**. This describes the choices only; no I.5
-implementation is authorized by this document.
+Status: **Choice A approved 2026-09-04**. Remove the core rotation banner and
+retired presets; preserve every existing pin.
 
 ## Decision
 
