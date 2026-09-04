@@ -81,7 +81,7 @@ export function renderInline(text: string): ReactNode[] {
     const token = match[0];
     if (match[1]) {
       out.push(
-        <code key={key++} className="rounded bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1 py-px font-mono text-[0.92em]">
+        <code key={key++} className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-1 py-px font-mono text-[0.92em]">
           {token.slice(1, -1)}
         </code>,
       );

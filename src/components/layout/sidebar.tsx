@@ -255,7 +255,7 @@ export function Sidebar() {
               to="/settings?section=providers"
               aria-label="Open settings"
               title={engineTitle}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--r-row)] px-0.5 py-1 text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--r-ctl)] px-0.5 py-1 text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             >
               <span
                 className={cn(

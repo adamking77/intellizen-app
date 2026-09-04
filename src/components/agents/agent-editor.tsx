@@ -36,8 +36,8 @@ function voiceLabel(service: VoiceService | undefined): string {
 
 const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
 const FIELD =
-  "w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
+  "w-full rounded-[var(--r-ctl)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "placeholder:text-[var(--overlay-0)] focus:outline-none ";
 const PILL = "pill";
 const COMPACT_PILL = "pill pill-compact";
 const COMPACT_GROUP =
@@ -247,7 +247,7 @@ export function AgentEditor({
                         setProceduralPreview(true);
                         set({ avatarKind: undefined });
                       }}
-                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
+                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                     >
                       Auto
                     </button>
@@ -262,7 +262,7 @@ export function AgentEditor({
                           setProceduralPreview(true);
                           set({ avatarKind: kind });
                         }}
-                        className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-row)] bg-transparent hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
+                        className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                       >
                         <Avatar agent={{ ...draft, avatarStyle: "blob", avatarKind: kind }} size={26} animate={false} />
                       </button>
@@ -463,7 +463,7 @@ export function AgentEditor({
                 </div>
 
                 {detailError ? (
-                  <div className="rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
+                  <div className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
                     Hermes did not describe this profile — {detailError}
                   </div>
                 ) : null}
@@ -509,7 +509,7 @@ export function AgentEditor({
                 </div>
                 <div className="flex flex-col gap-px">
                   {context.map((path) => (
-                    <div key={path} className="flex items-center gap-[9px] rounded-[var(--r-row)] bg-[var(--input)] px-[10px] py-2">
+                    <div key={path} className="flex items-center gap-[9px] rounded-[var(--r-ctl)] bg-[var(--input)] px-[10px] py-2">
                       <span className="grow truncate font-mono text-[var(--t-meta)] text-[var(--text)]">{path}</span>
                       <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)] px-2 py-px font-ui text-[var(--t-section)] text-[var(--subtext-0)]">read</span>
                       <button type="button" className={PILL} style={{ padding: "2px 7px" }} title={`Remove ${path}`} onClick={() => set({ context: context.filter((p) => p !== path) })}>
@@ -532,7 +532,7 @@ export function AgentEditor({
             </div>
 
             {confirm ? (
-              <div className="mx-[22px] mt-4 flex items-center gap-3 rounded-[var(--r-row)] border border-[var(--wait)] bg-[color-mix(in_srgb,var(--wait)_11%,transparent)] px-[10px] py-2">
+              <div className="mx-[22px] mt-4 flex items-center gap-3 rounded-[var(--r-ctl)] border border-[var(--wait)] bg-[color-mix(in_srgb,var(--wait)_11%,transparent)] px-[10px] py-2">
                 <span className="grow font-ui text-[var(--t-meta)] text-[var(--wait)]">{confirm}</span>
                 <button type="button" className={PILL} disabled={busy} onClick={() => void save(true)}>
                   Use it anyway
@@ -540,7 +540,7 @@ export function AgentEditor({
               </div>
             ) : null}
             {error ? (
-              <div className="mx-[22px] mt-4 rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
+              <div className="mx-[22px] mt-4 rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
                 {error}
               </div>
             ) : null}

@@ -21,7 +21,7 @@ export function WorkflowDefinitionDriftPanel({
   return (
     <section
       aria-label="Workflow definition drift"
-      className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_7%,var(--base))] px-4 py-3"
+      className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_7%,var(--base))] px-4 py-3"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

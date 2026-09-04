@@ -52,7 +52,7 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
             Entity
           </span>
           <select
-            className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
             value={value.entity}
             onChange={(event) => onChange({ ...value, entity: event.target.value })}
           >
@@ -69,7 +69,7 @@ export function TaxonomyFields({ value, onChange, className }: TaxonomyFieldsPro
             Area
           </span>
           <select
-            className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+            className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
             value={value.area}
             onChange={(event) => onChange({ ...value, area: event.target.value })}
           >

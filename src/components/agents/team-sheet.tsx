@@ -20,8 +20,8 @@ import {
 import { Avatar } from "./avatar";
 
 const INPUT =
-  "min-w-0 rounded-[var(--r-row)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
+  "min-w-0 rounded-[var(--r-ctl)] border-0 bg-[var(--mantle)] px-[9px] py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "placeholder:text-[var(--overlay-0)] focus:outline-none ";
 
 export function TeamSheet({
   agents,
@@ -127,7 +127,7 @@ export function TeamSheet({
                   <label
                     key={a.id}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-[var(--r-row)] px-2 py-[7px]",
+                      "flex items-center gap-2.5 rounded-[var(--r-ctl)] px-2 py-[7px]",
                       on && "bg-[var(--selected)]",
                       shut ? "opacity-40" : "cursor-pointer hover:bg-[var(--hover)]",
                     )}

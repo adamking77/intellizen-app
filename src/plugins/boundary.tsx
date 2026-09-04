@@ -5,7 +5,7 @@ export function PluginErrorBox({ name, error }: { name: string; error: string })
   return (
     <div
       role="alert"
-      className="rounded-[var(--r-msg)] border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_11%,transparent)] px-[11px] py-2"
+      className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_11%,transparent)] px-[11px] py-2"
     >
       <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--danger)]">Plugin “{name}” failed.</p>
       <p className="mt-0.5 break-words font-mono text-[var(--t-section)] leading-normal text-[var(--text-muted)]">{error}</p>

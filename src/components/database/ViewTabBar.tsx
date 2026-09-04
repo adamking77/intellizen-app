@@ -927,7 +927,7 @@ function ViewSettingsModal({
                           return (
                             <button
                               className={cn(
-                                "grid min-h-[76px] gap-1 rounded-[var(--r-row)] border p-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                                "grid min-h-[76px] gap-1 rounded-[var(--r-ctl)] border p-3 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                                 selected
                                   ? "border-[var(--border)] bg-[var(--base)] text-[var(--text)]"
                                   : "border-transparent bg-transparent text-[var(--subtext-0)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -1016,7 +1016,7 @@ function ViewSettingsModal({
                           <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                             Numeric fields
                           </span>
-                          <div className="grid max-h-40 gap-1 overflow-y-auto rounded-[var(--r-row)] bg-[var(--base)] p-2">
+                          <div className="grid max-h-40 gap-1 overflow-y-auto rounded-[var(--r-ctl)] bg-[var(--base)] p-2">
                             {chartValueCandidates.map((field) => {
                               const checked = selectedChartValueFields.includes(field.id);
                               return (

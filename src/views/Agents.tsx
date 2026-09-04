@@ -336,7 +336,7 @@ export function AgentsView() {
 function Notice({ tone, children }: { tone: "bad" | "wait"; children: React.ReactNode }) {
   return (
     <div
-      className="mb-4 rounded-[var(--r-row)] border px-3 py-2 font-ui text-[var(--t-meta)] leading-[1.5]"
+      className="mb-4 rounded-[var(--r-ctl)] border px-3 py-2 font-ui text-[var(--t-meta)] leading-[1.5]"
       style={{ borderColor: `var(--${tone})`, color: `var(--${tone})`, background: `color-mix(in srgb, var(--${tone}) 11%, transparent)` }}
     >
       {children}

@@ -576,7 +576,7 @@ export function DatabasePeekPanel({
                       return (
                         <label
                           key={field.id}
-                          className="db-record-header-field-row flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer"
+                          className="db-record-header-field-row flex items-center gap-1.5 text-xs rounded-[var(--r-ctl)] px-1.5 py-1 cursor-pointer"
                           draggable
                           onDragStart={() => setHeaderDragId(field.id)}
                           onDragEnd={() => setHeaderDragId(null)}

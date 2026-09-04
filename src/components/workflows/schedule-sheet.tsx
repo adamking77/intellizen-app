@@ -214,7 +214,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
             <span className="sr-only">Cron expression</span>
             <input
               aria-invalid={!validSchedule}
-              className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-3 font-mono text-[var(--t-meta)] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 font-mono text-[var(--t-meta)] text-[var(--text)] outline-none "
               onChange={(event) => setSchedule(event.target.value)}
               value={schedule}
             />
@@ -226,7 +226,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           <label>
             <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Hermes profile</span>
             <select
-              className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none "
               disabled={profilesQuery.isLoading}
               onChange={(event) => setProfile(event.target.value)}
               value={profile}
@@ -238,7 +238,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           <label>
             <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Progress board</span>
             <select
-              className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+              className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none "
               disabled={boardsQuery.isLoading}
               onChange={(event) => setBoard(event.target.value)}
               value={board}
@@ -249,13 +249,13 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           </label>
         </section>
 
-        <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 font-ui text-[var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
+        <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 font-ui text-[var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
           Hermes will run the saved definition as <span className="font-mono text-[var(--text)]">{profile || "the selected profile"}</span>.
           {board ? ` ${definition.steps.length} idempotent progress cards will be created on ${board}.` : " No board data will be created."}
         </div>
 
         {profilesQuery.error || boardsQuery.error || jobsQuery.error || failure ? (
-          <div role="alert" className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[var(--t-section)] text-[var(--danger)]">
+          <div role="alert" className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[var(--t-section)] text-[var(--danger)]">
             {failure ?? errorMessage(profilesQuery.error ?? boardsQuery.error ?? jobsQuery.error)}
           </div>
         ) : null}
@@ -268,7 +268,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           {jobs.length ? (
             <div className="space-y-2">
               {jobs.map((job) => (
-                <div className="flex items-center gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-3 py-2" key={job.id}>
+                <div className="flex items-center gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2" key={job.id}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">{job.scheduleDisplay}</span>
@@ -293,7 +293,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
               ))}
             </div>
           ) : (
-            <div className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No schedules for this workflow.</div>
+            <div className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No schedules for this workflow.</div>
           )}
         </section>
       </div>

@@ -395,7 +395,7 @@ export function CanvasView() {
                     <div
                       key={canvas.id}
                       className={cn(
-                        "group relative flex items-center gap-1 rounded py-1.5 pl-2 pr-1 transition-colors",
+                        "group relative flex items-center gap-1 rounded-[var(--r-ctl)] py-1.5 pl-2 pr-1 transition-colors",
                         isActive
                           ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                           : "hover:bg-[var(--surface-wash)]",

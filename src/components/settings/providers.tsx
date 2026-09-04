@@ -129,8 +129,8 @@ export function ProvidersSettings() {
         connecting={connection === "connecting" || (connection === "idle" && !engineError)}
       />
 
-      {providers.isPending ? [0, 1, 2, 3].map((row) => <div key={row} className="mt-1 h-14 rounded-[var(--r-row)] bg-[var(--line)] opacity-40" />) : null}
-      {providers.error ? <p className="rounded-[var(--r-row)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">ACP discovery failed — {errorMessage(providers.error)}</p> : null}
+      {providers.isPending ? [0, 1, 2, 3].map((row) => <div key={row} className="mt-1 h-14 rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />) : null}
+      {providers.error ? <p className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">ACP discovery failed — {errorMessage(providers.error)}</p> : null}
       {(providers.data ?? []).map((provider) => {
         const live = (statuses.data ?? []).filter((status) => provider.agentIds.includes(status.agentId));
         const connected = live.length > 0;
@@ -274,7 +274,7 @@ function ProviderLine({
           <div>
             <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Connections</span>
             <div className="mt-1 flex flex-wrap gap-1">
-              {connections.length ? connections.map((connection) => <span key={connection} className="rounded-[var(--r-row)] bg-[var(--crust)] px-2.5 py-1 text-[var(--subtext-0)]">{connection}</span>) : <span className="text-[var(--overlay-1)]">None configured.</span>}
+              {connections.length ? connections.map((connection) => <span key={connection} className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-1 text-[var(--subtext-0)]">{connection}</span>) : <span className="text-[var(--overlay-1)]">None configured.</span>}
             </div>
           </div>
           <div className="flex items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Capabilities</span><span className="font-mono text-[var(--subtext-0)]">{capabilities}</span></div>

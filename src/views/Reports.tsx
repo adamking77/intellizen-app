@@ -85,7 +85,7 @@ function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabas
 
 function EditorFallback() {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--surface-wash)]">
+    <div className="flex min-h-[280px] items-center justify-center rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--surface-wash)]">
       <Loader2 className="h-4 w-4 text-[var(--accent)]" />
     </div>
   );

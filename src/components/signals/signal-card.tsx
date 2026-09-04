@@ -68,7 +68,7 @@ export function SignalCard({
           }}
           aria-label={isSelected ? "Deselect signal" : "Select signal"}
           className={cn(
-            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-[var(--t-base)] ease-[var(--ease)]",
+            "relative z-[1] mt-[3px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--r-ctl)] border transition-all duration-[var(--t-base)] ease-[var(--ease)]",
             isSelected
               ? "border-[var(--accent)] bg-[var(--accent)] opacity-100"
               : selectionActive

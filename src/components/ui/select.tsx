@@ -5,9 +5,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const selectVariants = cva(
-  "block w-full appearance-none rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--input)] " +
+  "block w-full appearance-none rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--input)] " +
     "font-ui text-[var(--text)] transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)] " +
-    "focus:outline-none focus:border-[var(--border-strong)] focus:shadow-none " +
+    "focus:outline-none   " +
     "disabled:cursor-not-allowed disabled:opacity-50",
   {
     variants: {

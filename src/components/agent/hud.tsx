@@ -227,7 +227,7 @@ export function Hud({
                   onOpen("none");
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-[var(--r-row)] px-1.5 py-1 text-left outline-none",
+                  "flex w-full items-center gap-2 rounded-[var(--r-ctl)] px-1.5 py-1 text-left outline-none",
                   "hover:bg-[var(--base)] focus-visible:bg-[var(--base)]",
                   selected && "bg-[var(--base)]",
                 )}
@@ -281,7 +281,7 @@ export function Hud({
               m.from === "you" ? (
                 <div
                   key={m.id}
-                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
                 >
                   {m.text}
                 </div>
@@ -293,7 +293,7 @@ export function Hud({
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="t-section uppercase tracking-[0.14em] text-[var(--text-muted)]">{name}</span>
                     <div
-                      className="whitespace-pre-wrap rounded-[var(--r-msg)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                      className="whitespace-pre-wrap rounded-[var(--r-ctl)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
                       style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
                     >
                       {m.text.replace(/^\s+/, "")}
@@ -394,7 +394,7 @@ export function Hud({
                 aria-label={open === "roster" ? "Close the agent list" : "Open the agent list"}
                 aria-expanded={open === "roster"}
                 title="Agents"
-                className="flex min-w-0 items-center gap-[9px] rounded-[var(--r-row)] px-1 py-0.5 outline-none transition-colors hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
+                className="flex min-w-0 items-center gap-[9px] rounded-[var(--r-ctl)] px-1 py-0.5 outline-none transition-colors hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
               >
                 <Avatar agent={face} size={20} image={face.avatarImage} animate="always" />
                 <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">

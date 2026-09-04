@@ -36,7 +36,7 @@ export function Card({ label, items, onOpen, children }: { label: string; items:
         aria-haspopup="menu"
         aria-expanded={!!menu}
         className={cn(
-          "absolute right-2.5 top-2.5 z-[2] flex h-5 w-5 items-center justify-center rounded-[var(--r-row)] text-[var(--text-muted)] transition-opacity",
+          "absolute right-2.5 top-2.5 z-[2] flex h-5 w-5 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-opacity",
           "hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100",
           menu ? "opacity-100" : "opacity-0",
         )}

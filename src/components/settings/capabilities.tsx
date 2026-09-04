@@ -84,12 +84,12 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
           placeholder="Filter…"
           aria-label="Filter capabilities"
           disabled={!engineOpen}
-          className="w-[180px] rounded-[var(--r-row)] border-0 bg-[var(--crust)] px-2.5 py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-0)] max-[900px]:w-full"
+          className="w-[180px] rounded-[var(--r-ctl)] border-0 bg-[var(--crust)] px-2.5 py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-0)] max-[900px]:w-full"
         />
       </div>
 
       {capabilities.isPending && engineOpen ? (
-        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 rounded bg-[var(--line)] opacity-40" />)}</div>
+        <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-10 rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />)}</div>
       ) : null}
 
       {GROUPS.map((group) => {
@@ -138,5 +138,5 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
 }
 
 function Notice({ children, bad }: { children: React.ReactNode; bad?: boolean }) {
-  return <p className={cn("rounded-[var(--r-row)] px-3 py-2 text-xs", bad ? "border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] text-[var(--danger)]" : "bg-[var(--mantle)] text-[var(--subtext-0)]")}>{children}</p>;
+  return <p className={cn("rounded-[var(--r-ctl)] px-3 py-2 text-xs", bad ? "border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] text-[var(--danger)]" : "bg-[var(--mantle)] text-[var(--subtext-0)]")}>{children}</p>;
 }

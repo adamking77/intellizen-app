@@ -80,7 +80,7 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
   return (
     <>
       <div
-        className="group/vf flex items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--surface-0)]"
+        className="group/vf flex items-center gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 hover:bg-[var(--surface-0)]"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShowTooltip(false)}
       >
@@ -88,7 +88,7 @@ export function VaultFileRow({ file, onDeleted }: VaultFileRowProps) {
         <span className="min-w-0 flex-1 truncate font-mono text-[var(--t-section)] text-[var(--subtext-0)]">
           {label}
         </span>
-        <span className="shrink-0 rounded bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <span className="shrink-0 rounded-[var(--r-ctl)] bg-[var(--surface-1)] px-1.5 py-0.5 font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {file.file_type}
         </span>
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover/vf:opacity-100">

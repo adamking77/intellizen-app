@@ -116,7 +116,7 @@ export function ProposalCard({
       {error ? (
         <div
           role="status"
-          className="mt-2 rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--bad)_40%,transparent)] bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] px-2.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
+          className="mt-2 rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--bad)_40%,transparent)] bg-[color-mix(in_srgb,var(--bad)_10%,transparent)] px-2.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
         >
           {error}
         </div>
@@ -127,7 +127,7 @@ export function ProposalCard({
           {proposal.hunks.map((h) => {
             const off = rejected.has(h.id);
             return (
-              <div key={h.id} data-rejected={off || undefined} className={cn("overflow-hidden rounded-[var(--r-row)] bg-[var(--crust)]", off && "opacity-55")}>
+              <div key={h.id} data-rejected={off || undefined} className={cn("overflow-hidden rounded-[var(--r-ctl)] bg-[var(--crust)]", off && "opacity-55")}>
                 <label className="flex items-center gap-2 px-2 py-1.5">
                   <input type="checkbox" checked={!off} onChange={() => toggle(h.id)} disabled={busy} className="accent-[var(--accent)]" />
                   <span className="font-ui text-[var(--t-count)] uppercase tracking-wide text-[var(--subtext-0)]">line {h.at + 1}</span>

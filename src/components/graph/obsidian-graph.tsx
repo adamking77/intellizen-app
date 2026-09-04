@@ -413,7 +413,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
               ctx.strokeStyle = withAlpha(palette.line, 0.6);
               ctx.lineWidth = 1;
               ctx.beginPath();
-              // rounded rect
+              // curved rect
               const r = 4;
               ctx.moveTo(px + r, py);
               ctx.lineTo(px + w - r, py);

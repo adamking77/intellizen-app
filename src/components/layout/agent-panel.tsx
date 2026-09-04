@@ -375,7 +375,7 @@ export function AgentPanel({
             aria-haspopup="listbox"
             aria-expanded={picking}
             title="Who to talk to"
-            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-row)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
+            className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-ctl)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           >
             {profile ? (
               <Avatar
@@ -541,7 +541,7 @@ function EmptyState({
   return (
     <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5" data-panel-state={state}>
       {failed || profilesError ? (
-        <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
+        <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
           <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">
             {failed ? "Hermes is offline." : "Hermes did not list its profiles."}
           </p>

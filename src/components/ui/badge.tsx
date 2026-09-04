@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * Tinted bg @ 15% + full-strength text color. No borders unless outline.
  */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-[var(--r-row)] px-2 py-0.5 text-[var(--t-count)] font-light uppercase tracking-[0.14em] font-ui select-none",
+  "inline-flex items-center rounded-[var(--r-ctl)] px-2 py-0.5 text-[var(--t-count)] font-light uppercase tracking-[0.14em] font-ui select-none",
   {
     variants: {
       variant: {

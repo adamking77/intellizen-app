@@ -72,7 +72,7 @@ function PinAction({ widget }: { widget: AgentChatWidgetModel }) {
 
 function WidgetCard({ widget }: { widget: Exclude<AgentChatWidgetModel, { kind: "html" }> }) {
   return (
-    <div className="mt-1.5 overflow-hidden rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)]">
+    <div className="mt-1.5 overflow-hidden rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)]">
       {widget.title ? (
         <div className="border-b border-[var(--border-subtle)] px-2 py-1 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           {widget.title}

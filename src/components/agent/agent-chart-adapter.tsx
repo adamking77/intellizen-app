@@ -117,8 +117,8 @@ function ChartState({ tone, message }: { tone: "empty" | "error"; message: strin
     <div
       className={
         tone === "error"
-          ? "m-2 rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--danger)]"
-          : "m-2 rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]"
+          ? "m-2 rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--danger)]"
+          : "m-2 rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-4 text-center font-ui text-[var(--t-section)] text-[var(--overlay-1)]"
       }
       role={tone === "error" ? "alert" : "status"}
     >

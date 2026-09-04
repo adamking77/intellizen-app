@@ -67,7 +67,7 @@ export function ContextSettings() {
         {context.map((path) => (
           <div
             key={path}
-            className="flex items-center gap-2.5 rounded-[var(--r-row)] bg-[var(--crust)] px-2.5 py-[9px]"
+            className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[9px]"
             style={missing[path] ? { border: "1px solid var(--bad)" } : undefined}
           >
             <Folder className="h-[13px] w-[13px] shrink-0 text-[var(--text-muted)]" strokeWidth={1.6} aria-hidden />

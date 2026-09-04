@@ -277,7 +277,7 @@ const BarInner = memo(function BarInner({
         // Use categoryValue as key since it's the unique identifier from data
         const barKey = `bar-${dataKey}-${categoryValue}`;
 
-        // Apply rounded corners:
+        // Apply curved corners:
         // - For non-stacked: always apply
         // - For stacked with gap: apply to all bars
         // - For stacked without gap: only apply to the last series

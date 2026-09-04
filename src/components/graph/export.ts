@@ -115,7 +115,7 @@ function escapeXml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const rounded = (value: number) => Math.round(value * 10) / 10;
+const roundTenth = (value: number) => Math.round(value * 10) / 10;
 
 export function serializeGraphSvg(
   nodes: GraphNodeRecord[],
@@ -131,11 +131,11 @@ export function serializeGraphSvg(
   const minY = Math.min(0, ...placed.map((node) => node.exportY - halfHeight)) - 48;
   const maxX = Math.max(240, ...placed.map((node) => node.exportX + halfWidth)) + 48;
   const maxY = Math.max(160, ...placed.map((node) => node.exportY + halfHeight)) + 48;
-  const width = rounded(maxX - minX);
-  const height = rounded(maxY - minY);
+  const width = roundTenth(maxX - minX);
+  const height = roundTenth(maxY - minY);
   const parts = [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rounded(minX)} ${rounded(minY)} ${width} ${height}" role="img" aria-label="Relationship graph">`,
-    `<rect x="${rounded(minX)}" y="${rounded(minY)}" width="${width}" height="${height}" fill="${escapeXml(palette.background)}"/>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${roundTenth(minX)} ${roundTenth(minY)} ${width} ${height}" role="img" aria-label="Relationship graph">`,
+    `<rect x="${roundTenth(minX)}" y="${roundTenth(minY)}" width="${width}" height="${height}" fill="${escapeXml(palette.background)}"/>`,
   ];
   for (const edge of edges) {
     const source = byId.get(edge.source_node_id);
@@ -143,23 +143,23 @@ export function serializeGraphSvg(
     if (!source || !target) continue;
     const path = mode === "construct"
       ? buildEdgePath({ x: source.exportX, y: source.exportY }, { x: target.exportX, y: target.exportY })
-      : `M ${rounded(source.exportX)} ${rounded(source.exportY)} L ${rounded(target.exportX)} ${rounded(target.exportY)}`;
+      : `M ${roundTenth(source.exportX)} ${roundTenth(source.exportY)} L ${roundTenth(target.exportX)} ${roundTenth(target.exportY)}`;
     parts.push(`<path d="${path}" fill="none" stroke="${escapeXml(palette.line)}" stroke-width="1.2" opacity="0.7"/>`);
     if (edge.label) {
-      parts.push(`<text x="${rounded((source.exportX + target.exportX) / 2)}" y="${rounded((source.exportY + target.exportY) / 2 - 5)}" text-anchor="middle" font-family="system-ui" font-size="10" fill="${escapeXml(palette.muted)}">${escapeXml(edge.label)}</text>`);
+      parts.push(`<text x="${roundTenth((source.exportX + target.exportX) / 2)}" y="${roundTenth((source.exportY + target.exportY) / 2 - 5)}" text-anchor="middle" font-family="system-ui" font-size="10" fill="${escapeXml(palette.muted)}">${escapeXml(edge.label)}</text>`);
     }
   }
   for (const node of placed) {
     const color = palette.entity[node.entity_type];
     if (mode === "construct") {
-      const x = rounded(node.exportX - NODE_WIDTH / 2);
-      const y = rounded(node.exportY - NODE_HEIGHT / 2);
+      const x = roundTenth(node.exportX - NODE_WIDTH / 2);
+      const y = roundTenth(node.exportY - NODE_HEIGHT / 2);
       parts.push(`<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${NODE_HEIGHT}" rx="8" fill="${escapeXml(palette.surface)}" stroke="${escapeXml(color)}"/>`);
       parts.push(`<text x="${x + 14}" y="${y + 31}" font-family="system-ui" font-size="10" font-weight="600" fill="${escapeXml(color)}">${escapeXml(node.entity_type.toUpperCase())}</text>`);
       parts.push(`<text x="${x + 14}" y="${y + 57}" font-family="system-ui" font-size="13" fill="${escapeXml(palette.text)}">${escapeXml(node.label.slice(0, 24))}</text>`);
     } else {
-      parts.push(`<circle cx="${rounded(node.exportX)}" cy="${rounded(node.exportY)}" r="${node.radius}" fill="${escapeXml(color)}"/>`);
-      parts.push(`<text x="${rounded(node.exportX)}" y="${rounded(node.exportY + node.radius + 15)}" text-anchor="middle" font-family="system-ui" font-size="11" fill="${escapeXml(palette.muted)}">${escapeXml(node.label)}</text>`);
+      parts.push(`<circle cx="${roundTenth(node.exportX)}" cy="${roundTenth(node.exportY)}" r="${node.radius}" fill="${escapeXml(color)}"/>`);
+      parts.push(`<text x="${roundTenth(node.exportX)}" y="${roundTenth(node.exportY + node.radius + 15)}" text-anchor="middle" font-family="system-ui" font-size="11" fill="${escapeXml(palette.muted)}">${escapeXml(node.label)}</text>`);
     }
   }
   parts.push("</svg>");

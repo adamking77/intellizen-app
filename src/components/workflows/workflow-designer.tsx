@@ -296,7 +296,7 @@ export function WorkflowDesigner({
                 type="button"
                 onClick={() => setSelectedStepId(step.id)}
                 className={cn(
-                  "w-full rounded-[var(--r-row)] border px-2.5 py-2 text-left transition-colors",
+                  "w-full rounded-[var(--r-ctl)] border px-2.5 py-2 text-left transition-colors",
                   selectedStep?.id === step.id
                     ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                     : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)]",
@@ -316,7 +316,7 @@ export function WorkflowDesigner({
               value={addKind}
               onChange={(event) => setAddKind(event.target.value as DesignerStepKind)}
               aria-label="Step kind"
-              className="h-8 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-section)] text-[var(--text)]"
+              className="h-8 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-section)] text-[var(--text)]"
             >
               {STEP_KINDS.map((kind) => (
                 <option key={kind.id} value={kind.id}>{kind.label}</option>
@@ -347,7 +347,7 @@ export function WorkflowDesigner({
           />
 
           {dryRun ? (
-            <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-[var(--r-row)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
+            <section className="absolute inset-x-3 bottom-3 z-10 max-h-[34%] overflow-y-auto rounded-[var(--r-ctl)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--base)_94%,transparent)] p-3 shadow-[var(--shadow-elevated)] backdrop-blur">
               <p className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.12em] text-[var(--overlay-1)]">
                 Dry-run · dispatches nothing
               </p>
@@ -397,7 +397,7 @@ export function WorkflowDesigner({
                   id="workflow-step-title"
                   value={selectedStep.title}
                   onChange={(event) => updateSelected({ ...selectedStep, title: event.target.value })}
-                  className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
+                  className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
                 />
               </div>
 
@@ -421,7 +421,7 @@ export function WorkflowDesigner({
                           execution: target?.execution ?? selectedStep.execution,
                         } as WorkflowRoleAssignStep);
                       }}
-                      className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
+                      className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]"
                     >
                       {roleTargets.map((role) => (
                         <option key={role.roleKey} value={role.roleKey}>{role.roleName} · {role.state}</option>
@@ -450,7 +450,7 @@ export function WorkflowDesigner({
                       value={selectedStep.instructions}
                       onChange={(event) => updateSelected({ ...selectedStep, instructions: event.target.value })}
                       rows={5}
-                      className="mt-1 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--text)]"
+                      className="mt-1 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--text)]"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -459,7 +459,7 @@ export function WorkflowDesigner({
                       <select
                         value={selectedStep.execution}
                         onChange={(event) => updateSelected({ ...selectedStep, execution: event.target.value as "ephemeral" | "durable" })}
-                        className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] normal-case text-[var(--text)]"
+                        className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] normal-case text-[var(--text)]"
                       >
                         <option value="ephemeral">ephemeral</option>
                         <option value="durable">durable</option>
@@ -473,7 +473,7 @@ export function WorkflowDesigner({
                         max={240}
                         value={selectedStep.timeoutMinutes}
                         onChange={(event) => updateSelected({ ...selectedStep, timeoutMinutes: Number(event.target.value) })}
-                        className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] normal-case text-[var(--text)]"
+                        className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] normal-case text-[var(--text)]"
                       />
                     </label>
                   </div>
@@ -500,7 +500,7 @@ export function WorkflowDesigner({
                         verification: { required: true, method: event.target.value },
                       })}
                       placeholder="verifier-step:step_3"
-                      className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
+                      className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
                     />
                   ) : null}
                 </>
@@ -513,7 +513,7 @@ export function WorkflowDesigner({
                     onChange={(event) => updateSelected({ ...selectedStep, expr: event.target.value })}
                     rows={3}
                     aria-label="Condition expression"
-                    className="w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
+                    className="w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-mono text-[var(--t-section)] text-[var(--text)]"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     {(["then", "else"] as const).map((field) => (
@@ -522,7 +522,7 @@ export function WorkflowDesigner({
                         <select
                           value={selectedStep[field]}
                           onChange={(event) => updateSelected({ ...selectedStep, [field]: event.target.value })}
-                          className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
+                          className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
                         >
                           {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
                         </select>
@@ -534,25 +534,25 @@ export function WorkflowDesigner({
 
               {selectedStep.kind === "approval" ? (
                 <>
-                  <input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
-                  <input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  <input value={selectedStep.gate} onChange={(event) => updateSelected({ ...selectedStep, gate: event.target.value })} aria-label="Approval gate role" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  <input value={selectedStep.payloadRef} onChange={(event) => updateSelected({ ...selectedStep, payloadRef: event.target.value })} aria-label="Approval payload reference" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
                 </>
               ) : null}
 
               {selectedStep.kind === "artifact" ? (
                 <>
-                  <select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-section)] text-[var(--text)]">
+                  <select value={selectedStep.action} onChange={(event) => updateSelected({ ...selectedStep, action: event.target.value as typeof selectedStep.action })} aria-label="Artifact action" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-ui text-[var(--t-section)] text-[var(--text)]">
                     <option value="create-doc">Create document</option>
                     <option value="revise-doc">Revise document</option>
                     <option value="create-record">Create record</option>
                     <option value="simulate-consequential-action">Simulate consequential action</option>
                   </select>
-                  <input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
+                  <input value={selectedStep.template} onChange={(event) => updateSelected({ ...selectedStep, template: event.target.value })} aria-label="Artifact template" className="h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2.5 font-mono text-[var(--t-section)] text-[var(--text)]" />
                 </>
               ) : null}
 
               {selectedStep.kind === "decision" ? (
-                <textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} className="w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]" />
+                <textarea value={selectedStep.rationale} onChange={(event) => updateSelected({ ...selectedStep, rationale: event.target.value })} aria-label="Decision rationale" rows={4} className="w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]" />
               ) : null}
 
               {selectedStep.kind !== "condition" ? (
@@ -561,7 +561,7 @@ export function WorkflowDesigner({
                   <select
                     value={selectedStep.next ?? ""}
                     onChange={(event) => updateSelected({ ...selectedStep, next: event.target.value || null })}
-                    className="mt-1 h-9 w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
+                    className="mt-1 h-9 w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-count)] normal-case text-[var(--text)]"
                   >
                     <option value="">terminal</option>
                     {targetOptions.filter((target) => target !== selectedStep.id).map((target) => <option key={target} value={target}>{target}</option>)}
@@ -604,7 +604,7 @@ export function WorkflowDesigner({
               </Badge>
               {pendingSave.diff.addedApprovalGates.map((gate) => <Badge key={gate} variant="info">+ {gate}</Badge>)}
             </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] bg-[var(--crust)] p-3 font-mono text-[var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[var(--crust)] p-3 font-mono text-[var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
               {JSON.stringify(pendingSave.definition, null, 2)}
             </pre>
           </div>

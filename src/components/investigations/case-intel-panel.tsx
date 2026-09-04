@@ -63,7 +63,7 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
           {loading ? (
             <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading case intelligence…</p>
           ) : loadError ? (
-            <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
+            <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
               Case intelligence could not be loaded.
             </p>
           ) : (
@@ -85,7 +85,7 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
                   ))}
                 </div>
               ) : (
-                <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+                <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
                   No canonical entities resolved for this case yet. Collation (Phase 3) populates them.
                 </p>
               )}
@@ -93,11 +93,11 @@ export function CaseIntelPanel({ caseId, subject }: { caseId: string; subject: s
               {claims.length > 0 ? (
                 <ul className="space-y-1">
                   {claims.slice(0, 5).map((claim) => (
-                    <li key={claim.id} className="rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
+                    <li key={claim.id} className="rounded-[var(--r-ctl)] border border-[var(--border-subtle)] px-2.5 py-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "rounded border px-1 font-mono text-[var(--t-count)]",
+                            "rounded-[var(--r-ctl)] border px-1 font-mono text-[var(--t-count)]",
                             claim.source_reliability && claim.info_credibility
                               ? "border-[var(--accent-border)] text-[var(--accent)]"
                               : "border-[var(--border)] text-[var(--overlay-1)]",

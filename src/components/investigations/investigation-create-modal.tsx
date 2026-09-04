@@ -135,7 +135,7 @@ export function InvestigationCreateModal({
                   type="button"
                   onClick={() => setUseCase(uc.id)}
                   className={cn(
-                    "flex items-start gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
+                    "flex items-start gap-3 rounded-[var(--r-ctl)] border px-3 py-2.5 text-left transition-colors",
                     useCase === uc.id
                       ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                       : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
@@ -175,7 +175,7 @@ export function InvestigationCreateModal({
               </span>
             </span>
             <select
-              className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
               value={projectId ?? ""}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
             >

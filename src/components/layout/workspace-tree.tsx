@@ -141,9 +141,9 @@ function NameField({
         defaultValue={initial}
         aria-label={initial ? "Rename" : "Name"}
         className={cn(
-          "h-7 w-full rounded border border-[var(--accent-border)] bg-[var(--base)] px-2",
+          "h-7 w-full rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--base)] px-2",
           "font-ui text-[var(--t-ui)] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
-          "focus:outline-none focus:border-[var(--accent)]",
+          "focus:outline-none ",
         )}
         placeholder="Name"
         onBlur={commit}
@@ -247,7 +247,7 @@ function Row({
           onToggle(node.id);
         }}
         className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)]",
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)]",
           hasChildren ? "hover:text-[var(--text)]" : "invisible",
         )}
       >
@@ -272,7 +272,7 @@ function Row({
           onOpenMenu(node, r.left, r.bottom + 2, e.currentTarget.parentElement);
         }}
         className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--overlay-1)]",
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)]",
           "opacity-0 transition-opacity duration-[var(--t-base)] ease-[var(--ease)] group-hover:opacity-100 group-focus-within:opacity-100",
           "hover:bg-[var(--base)] hover:text-[var(--text)]",
         )}
@@ -593,7 +593,7 @@ export function WorkspaceTree() {
           <button
             type="button"
             onClick={() => startAdding(null)}
-            className="rounded px-4 py-1.5 text-left font-ui text-[var(--t-meta)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="rounded-[var(--r-ctl)] px-4 py-1.5 text-left font-ui text-[var(--t-meta)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             Add a department to begin
           </button>

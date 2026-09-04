@@ -109,7 +109,7 @@ export function OperationCreateModal({ open, onClose, onCreated }: OperationCrea
               Work type
             </span>
             <select
-              className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
               value={workType}
               onChange={(event) => setWorkType(event.target.value as IntelWorkType)}
             >

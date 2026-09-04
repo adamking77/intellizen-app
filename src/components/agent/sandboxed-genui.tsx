@@ -115,7 +115,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
     <div className="relative mt-1.5">
       {currentState.status === "loading" ? (
         <div
-          className="flex min-h-28 items-center justify-center rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-3 py-4"
+          className="flex min-h-28 items-center justify-center rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-4"
           role="status"
           aria-live="polite"
         >
@@ -124,7 +124,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
       ) : null}
       {currentState.status === "error" ? (
         <div
-          className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-3"
+          className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-3"
           role="alert"
         >
           <p className="font-ui text-[var(--t-meta)] font-medium text-[var(--danger)]">Generated view unavailable</p>
@@ -151,7 +151,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
           setRenderState({ nonce, status: "error", message: "The generated view frame could not be loaded." })
         }
         className={cn(
-          "w-full rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)]",
+          "w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)]",
           currentState.status === "ready" ? "block" : "pointer-events-none absolute inset-0 opacity-0",
         )}
       />

@@ -60,7 +60,7 @@ function ApprovalBody({
   return (
     <>
       <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--wait)]">This step needs your confirmation</span>
-      <div className="rounded-[var(--r-row)] bg-[var(--crust)] px-[9px] py-[9px]">
+      <div className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-[9px] py-[9px]">
         <pre className="whitespace-pre-wrap break-words font-mono text-[var(--t-section)] leading-relaxed text-[var(--text)]">
           {decision.command || decision.description}
         </pre>

@@ -135,7 +135,7 @@ function catalogStateLabel(state: WorkflowCatalogState) {
 
 function InfoCell({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
-    <div className="min-w-0 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
+    <div className="min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-3 py-2">
       <div className="font-ui text-[var(--t-count)] font-light uppercase text-[var(--overlay-1)]">{label}</div>
       <div className="mt-1 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{value ?? "None"}</div>
     </div>
@@ -157,7 +157,7 @@ function WorkflowCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        "w-full rounded-[var(--r-row)] border px-3 py-3 text-left transition-colors",
+        "w-full rounded-[var(--r-ctl)] border px-3 py-3 text-left transition-colors",
         selected
           ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
           : "border-[var(--border)] bg-[var(--mantle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
@@ -481,7 +481,7 @@ export function WorkflowsView() {
         {!designerOpen ? (
           <aside className="flex h-[46%] w-full shrink-0 flex-col bg-[var(--mantle)] lg:h-auto lg:w-[390px]">
           <div className="space-y-3 p-4">
-            <div className="grid grid-cols-2 gap-1 rounded-[var(--r-row)] bg-[var(--base)] p-1">
+            <div className="grid grid-cols-2 gap-1 rounded-[var(--r-ctl)] bg-[var(--base)] p-1">
               {([
                 { id: "executable" as const, label: "Executable", count: laneCounts.executable },
                 { id: "sop-only" as const, label: "SOP only", count: laneCounts.sopOnly },
@@ -494,7 +494,7 @@ export function WorkflowsView() {
                     setStateFilter("all");
                   }}
                   className={cn(
-                    "h-8 min-w-0 rounded px-2 font-ui text-[var(--t-section)] font-medium transition-colors",
+                    "h-8 min-w-0 rounded-[var(--r-ctl)] px-2 font-ui text-[var(--t-section)] font-medium transition-colors",
                     lane === filter.id
                       ? "bg-[var(--selected)] text-[var(--text)]"
                       : "text-[var(--overlay-1)] hover:text-[var(--subtext-0)]",
@@ -525,7 +525,7 @@ export function WorkflowsView() {
               </div>
             ) : null}
 
-            <label className="flex h-9 items-center gap-2 rounded-[var(--r-row)] bg-[var(--input)] px-2.5">
+            <label className="flex h-9 items-center gap-2 rounded-[var(--r-ctl)] bg-[var(--input)] px-2.5">
               <Search className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
               <input
                 value={search}
@@ -539,7 +539,7 @@ export function WorkflowsView() {
               value={ownerFilter}
               onChange={(event) => setOwnerFilter(event.target.value)}
               aria-label="Workflow owner role filter"
-              className="h-9 w-full rounded-[var(--r-row)] border-0 bg-[var(--input)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none"
+              className="h-9 w-full rounded-[var(--r-ctl)] border-0 bg-[var(--input)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] outline-none"
             >
               <option value="">All owner roles</option>
               {ownerOptions.map((owner) => (
@@ -640,7 +640,7 @@ export function WorkflowsView() {
                 {selectedActiveRun ? (
                   <Link
                     to={`/workflows?run=${selectedActiveRun.id}`}
-                    className="mt-4 flex items-center justify-between gap-4 rounded-[var(--r-row)] bg-[var(--selected)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors hover:bg-[var(--selected-hover)]"
+                    className="mt-4 flex items-center justify-between gap-4 rounded-[var(--r-ctl)] bg-[var(--selected)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors hover:bg-[var(--selected-hover)]"
                   >
                     <span className="min-w-0 truncate">
                       Current work · {selectedActiveRun.name}
@@ -653,7 +653,7 @@ export function WorkflowsView() {
               </section>
 
               {selectedItem?.state === "sop-only" ? (
-                <section className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                <section className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                   <div className="flex items-start gap-2">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--overlay-1)]" />
                     <div>
@@ -669,7 +669,7 @@ export function WorkflowsView() {
               ) : null}
 
               {selectedItem && selectedItem.blockers.length > 0 ? (
-                <section className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-4 py-3">
+                <section className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-4 py-3">
                   <div className="flex items-center gap-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--danger)]">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Exact blockers
@@ -748,7 +748,7 @@ export function WorkflowsView() {
                   />
                 </section>
               ) : selectedRun ? (
-                <section className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
+                <section className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
                   This run has no valid schema-v1 snapshot, so it cannot be represented as an executable topology.
                 </section>
               ) : null}
@@ -771,7 +771,7 @@ export function WorkflowsView() {
                       <InfoCell label="Trigger" value={selected.trigger} />
                       <InfoCell label="Default routing" value={selected.default_routing} />
                     </div>
-                    <pre className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.required_inputs)}
                     </pre>
                   </div>
@@ -781,7 +781,7 @@ export function WorkflowsView() {
                       <ShieldCheck className="h-3.5 w-3.5" />
                       Approval Gates
                     </div>
-                    <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.approval_gates)}
                     </pre>
                   </div>
@@ -792,10 +792,10 @@ export function WorkflowsView() {
                       Success / Failure
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
-                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                         {normalizeSnippet(selected.success_criteria)}
                       </pre>
-                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                      <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                         {normalizeSnippet(selected.failure_behavior)}
                       </pre>
                     </div>
@@ -808,7 +808,7 @@ export function WorkflowsView() {
                       <FileText className="h-3.5 w-3.5" />
                       Source / Output
                     </div>
-                    <div className="space-y-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+                    <div className="space-y-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                       <InfoCell label="Source path" value={selected.source_path} />
                       <InfoCell label="Related databases" value={selected.related_databases.join(", ") || null} />
                       <div>
@@ -825,14 +825,14 @@ export function WorkflowsView() {
                       <UserRound className="h-3.5 w-3.5" />
                       Receipt Template
                     </div>
-                    <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.receipt_template)}
                     </pre>
                   </div>
 
                   <div>
                     <div className="mb-2 font-ui text-[var(--t-section)] font-light uppercase text-[var(--overlay-1)]">Body Preview</div>
-                    <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
+                    <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3 font-ui text-[var(--t-meta)] leading-relaxed text-[var(--subtext-0)]">
                       {normalizeSnippet(selected.body_preview)}
                     </pre>
                   </div>
@@ -840,7 +840,7 @@ export function WorkflowsView() {
               </section>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-[var(--r-row)] border border-dashed border-[var(--border)] p-4 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
+            <div className="flex h-full items-center justify-center rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] p-4 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
               Select a workflow template to inspect its source, routing, and approval policy.
             </div>
           )}

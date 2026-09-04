@@ -41,17 +41,17 @@ export function RecordActivitySection({ recordId, isWorkflowRun }: { recordId: s
       {eventsQuery.isLoading ? (
         <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading activity…</p>
       ) : eventsQuery.error ? (
-        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
+        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           Activity could not be loaded.
         </p>
       ) : events.length === 0 ? (
-        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No structured activity recorded yet.
         </p>
       ) : (
         <ul className="space-y-1.5">
           {events.map((event) => (
-            <li key={event.id} className="rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={event.id} className="rounded-[var(--r-ctl)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--accent)]">{event.event_kind.replace(/_/g, " ")}</span>
                 <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{formatDateTime(event.created_at)}</span>
@@ -111,17 +111,17 @@ export function RecordHistorySection({ recordId }: { recordId: string }) {
       {revisionsQuery.isLoading ? (
         <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading history…</p>
       ) : revisionsQuery.error ? (
-        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
+        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           History could not be loaded.
         </p>
       ) : revisions.length === 0 ? (
-        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No prior versions captured yet. Edits from here on are versioned automatically.
         </p>
       ) : (
         <ul className="space-y-1">
           {revisions.map((revision) => (
-            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="min-w-0">
                 <span className="font-mono text-[var(--t-count)] text-[var(--text)]">{formatDateTime(revision.revised_at)}</span>
                 <span className="ml-2 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
@@ -188,7 +188,7 @@ export function DatabaseTrashPanel({
   }
 
   return (
-    <div className="mb-4 max-w-2xl rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+    <div className="mb-4 max-w-2xl rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Trash</span>
         <button type="button" className="db-btn" onClick={onClose}>
@@ -198,17 +198,17 @@ export function DatabaseTrashPanel({
       {trashQuery.isLoading ? (
         <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading trash…</p>
       ) : trashQuery.error ? (
-        <p className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
+        <p className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--danger)]">
           Trash could not be loaded.
         </p>
       ) : deleted.length === 0 ? (
-        <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+        <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
           No deleted records. Deletions from here on land in the trash automatically.
         </p>
       ) : (
         <ul className="space-y-1">
           {deleted.map((revision) => (
-            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5">
+            <li key={revision.id} className="flex items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="min-w-0">
                 <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{titleFor(revision)}</p>
                 <p className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">deleted {formatDateTime(revision.revised_at)}</p>
@@ -295,7 +295,7 @@ export function RecordBacklinksSection({
           <li key={`${backlink.databaseId}-${backlink.record.id}`}>
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
+              className="flex w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border-subtle)] px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
               onClick={() => onOpenRecord?.(backlink.databaseId, backlink.record.id)}
             >
               <span className="min-w-0 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">{backlink.recordTitle}</span>

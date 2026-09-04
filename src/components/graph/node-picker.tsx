@@ -71,8 +71,8 @@ export function NodePicker({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-8 w-full items-center justify-between gap-2 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
-          "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none",
+          "flex h-8 w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
+          "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none",
         )}
       >
         {selected ? (
@@ -104,7 +104,7 @@ export function NodePicker({
                   onChange(null);
                 }
               }}
-              className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+              className="inline-flex h-4 w-4 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
             >
               <X className="h-3 w-3" />
             </span>
@@ -119,7 +119,7 @@ export function NodePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
+        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
           <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-2 py-1.5">
             <Search className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
             <input

@@ -1005,14 +1005,14 @@ function ProjectDetailPane({
                   else if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
                 }}
                 disabled={renamePending}
-                className="min-w-0 flex-1 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--mantle)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
+                className="min-w-0 flex-1 rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--mantle)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none "
               />
             ) : (
               <button
                 type="button"
                 onClick={onEditNameStart}
                 title="Click to rename"
-                className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-row)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
+                className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
               >
                 <span className="min-w-0 truncate font-ui text-[var(--t-body)] font-semibold text-[var(--text)]">{project.name}</span>
                 <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
@@ -1241,14 +1241,14 @@ function OperationDetailPane({
                 else if (e.key === "Escape") { e.preventDefault(); onCancelRename(); }
               }}
               disabled={renamePending}
-              className="min-w-0 flex-1 rounded-[var(--r-row)] border border-[var(--accent-border)] bg-[var(--base)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
+              className="min-w-0 flex-1 rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--base)] px-1.5 py-0.5 font-ui text-[var(--t-body)] font-semibold text-[var(--text)] outline-none "
             />
           ) : (
             <button
               type="button"
               onClick={onEditNameStart}
               title="Click to rename"
-              className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-row)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
+              className="group/rename flex min-w-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-1 py-0.5 text-left transition-colors hover:bg-[var(--surface-wash)]"
             >
               <span className="min-w-0 truncate font-ui text-[var(--t-body)] font-semibold text-[var(--text)]">{operation.name}</span>
               <Pencil className="h-3 w-3 shrink-0 text-[var(--overlay-1)] opacity-0 transition-opacity group-hover/rename:opacity-100" />
@@ -1363,7 +1363,7 @@ function OperationDetailPane({
             </div>
           )}
           {operationProjects.length === 0 ? (
-            <div className="mb-5 rounded-[var(--r-row)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+            <div className="mb-5 rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-4 py-8 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
               No evidence piles yet. Add one to collect signals, files, and graph material inside this work item.
             </div>
           ) : (
@@ -1376,7 +1376,7 @@ function OperationDetailPane({
                     key={p.id}
                     type="button"
                     onClick={() => onSelectProject(p.id)}
-                    className="flex items-center gap-3 rounded-[var(--r-row)] px-3 py-2 text-left transition-colors hover:bg-[var(--surface-wash)]"
+                    className="flex items-center gap-3 rounded-[var(--r-ctl)] px-3 py-2 text-left transition-colors hover:bg-[var(--surface-wash)]"
                   >
                     <span aria-hidden className="h-2 w-2 shrink-0 rounded-[var(--r-pill)]" style={{ background: dot }} />
                     <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">{p.name}</span>

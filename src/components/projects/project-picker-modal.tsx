@@ -117,7 +117,7 @@ export function ProjectPickerModal({
           </p>
         ) : null}
           {detailsSlot ? (
-            <div className="mb-4 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] p-3">
+            <div className="mb-4 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] p-3">
               {detailsSlot}
             </div>
           ) : null}
@@ -132,7 +132,7 @@ export function ProjectPickerModal({
           </div>
 
           {existing.length === 0 ? (
-            <p className="rounded-[var(--r-row)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+            <p className="rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] bg-[var(--surface-wash)] px-3 py-4 text-center font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
               No evidence piles yet — create a standalone one below, then assign it to a work item in Intel.
             </p>
           ) : (
@@ -154,7 +154,7 @@ export function ProjectPickerModal({
                       }
                     }}
                     className={cn(
-                      "group flex items-center justify-between gap-3 rounded-[var(--r-row)] border px-3 py-2.5 text-left transition-colors",
+                      "group flex items-center justify-between gap-3 rounded-[var(--r-ctl)] border px-3 py-2.5 text-left transition-colors",
                       isSaving
                         ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
                         : "border-[var(--border)] bg-[var(--base)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)]",
@@ -208,7 +208,7 @@ export function ProjectPickerModal({
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <select
-                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                     value={type}
                     onChange={(event) => setType(event.target.value as ProjectType)}
                   >
@@ -218,7 +218,7 @@ export function ProjectPickerModal({
                     <option value="client_case">Client Case</option>
                   </select>
                   <select
-                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                     value={watchDomain}
                     onChange={(event) => setWatchDomain(event.target.value)}
                   >
@@ -244,7 +244,7 @@ export function ProjectPickerModal({
                 type="button"
                 onClick={() => setCreating(true)}
                 className={cn(
-                  "w-full rounded-[var(--r-row)] border border-dashed border-[var(--border)] px-3 py-2.5",
+                  "w-full rounded-[var(--r-ctl)] border border-dashed border-[var(--border)] px-3 py-2.5",
                   "font-ui text-[var(--t-meta)] font-medium text-[var(--subtext-0)]",
                   "transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                 )}

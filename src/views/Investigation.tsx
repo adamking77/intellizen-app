@@ -932,7 +932,7 @@ export function InvestigationView() {
                         disabled={isLocked}
                         title={phase.hint}
                         className={cn(
-                          "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-[var(--r-row)] border px-3 py-2 text-left transition-all",
+                          "group/phase relative flex flex-1 flex-col items-start gap-1 rounded-[var(--r-ctl)] border px-3 py-2 text-left transition-all",
                           isActive ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : isLocked ? "cursor-not-allowed border-[var(--border-subtle)] opacity-60" : "border-[var(--border-subtle)] bg-[var(--base)] hover:border-[var(--border)]",
                         )}
                       >
@@ -968,7 +968,7 @@ export function InvestigationView() {
                   </div>
 
                   {isPhaseLocked && (
-                    <div className="mb-4 flex items-center gap-2 rounded-[var(--r-row)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-meta text-[var(--warning)]">
+                    <div className="mb-4 flex items-center gap-2 rounded-[var(--r-ctl)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-meta text-[var(--warning)]">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
                       Locked — finish earlier phases first.
                     </div>
@@ -1024,7 +1024,7 @@ export function InvestigationView() {
                       )}
 
                       {needsEthicsGate && (
-                        <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-4">
+                        <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-4">
                           <p className="text-label">Ethics gates — all four required</p>
                           <p className="mt-1 text-meta text-[var(--subtext-0)]">Confirm before any intelligence gathering begins.</p>
                           <div className="mt-3 grid gap-2">
@@ -1036,13 +1036,13 @@ export function InvestigationView() {
                             ].map((item) => (
                               <label
                                 key={item.key}
-                                className="flex cursor-pointer items-start gap-2.5 rounded border border-transparent px-2 py-1.5 text-meta hover:bg-[var(--surface-wash)]"
+                                className="flex cursor-pointer items-start gap-2.5 rounded-[var(--r-ctl)] border border-transparent px-2 py-1.5 text-meta hover:bg-[var(--surface-wash)]"
                               >
                                 <input
                                   type="checkbox"
                                   checked={briefForm[item.key as keyof typeof briefForm] as boolean}
                                   onChange={(e) => setBriefForm({ ...briefForm, [item.key]: e.target.checked })}
-                                  className="mt-0.5 rounded border-[var(--border)] accent-[var(--accent)]"
+                                  className="mt-0.5 rounded-[var(--r-ctl)] border-[var(--border)] accent-[var(--accent)]"
                                 />
                                 <span className="min-w-0">
                                   <span className="font-medium text-[var(--text)]">{item.label}</span>
@@ -1086,7 +1086,7 @@ export function InvestigationView() {
                       }}
                     >
                     <div className="space-y-5">
-                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                      <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="font-medium text-ui text-[var(--text)]">
                             {investigationSignals?.length ?? 0} signal{investigationSignals?.length !== 1 ? "s" : ""} attached
@@ -1103,7 +1103,7 @@ export function InvestigationView() {
                       </div>
 
                       {/* Exa collection */}
-                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-4">
+                      <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-label">Exa collection</p>
@@ -1138,7 +1138,7 @@ export function InvestigationView() {
 
                       {/* Parent project — auto-import status */}
                       {parentProject && (
-                        <div className="flex items-center gap-2 rounded-[var(--r-row)] bg-[var(--selected)] px-3 py-2.5">
+                        <div className="flex items-center gap-2 rounded-[var(--r-ctl)] bg-[var(--selected)] px-3 py-2.5">
                           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--text)]" />
                           <p className="text-meta text-[var(--subtext-0)]">
                             Signals from{" "}
@@ -1157,7 +1157,7 @@ export function InvestigationView() {
                         <div className="space-y-2">
                           <p className="text-label">Attached ({investigationSignals!.length})</p>
                           {investigationSignals!.map((sig) => (
-                            <div key={sig.id} className="flex items-start justify-between gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+                            <div key={sig.id} className="flex items-start justify-between gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-ui font-medium text-[var(--text)]">{sig.intel_signals?.title}</p>
                                 <div className="mt-0.5 flex items-center gap-2">
@@ -1194,7 +1194,7 @@ export function InvestigationView() {
                         <div className="space-y-2">
                           <p className="text-label">From saved signals ({importableSavedSignals.length})</p>
                           {importableSavedSignals.map((signal) => (
-                            <div key={signal.id} className="flex items-start justify-between gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+                            <div key={signal.id} className="flex items-start justify-between gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-ui font-medium text-[var(--text)]">{signal.title}</p>
                                 <div className="mt-0.5 flex items-center gap-2">
@@ -1241,7 +1241,7 @@ export function InvestigationView() {
                       onRetry={() => void investigationSignalsQuery.refetch()}
                     >
                     <div className="space-y-5">
-                      <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+                      <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="font-medium text-ui text-[var(--text)]">
                             {investigationSignals?.length ?? 0} signal{investigationSignals?.length !== 1 ? "s" : ""} ready

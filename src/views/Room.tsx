@@ -69,7 +69,7 @@ function Turn({
       {isUser ? (
         <div className="group flex max-w-[82%] flex-col gap-1 self-end">
           <span className="text-right font-ui text-[var(--t-meta)] text-[var(--text-muted)]">You</span>
-          <p className="whitespace-pre-wrap rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2 font-ui text-[var(--t-body)] leading-6 text-[var(--text)]">
+          <p className="whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2 font-ui text-[var(--t-body)] leading-6 text-[var(--text)]">
             {entry.text}
           </p>
         </div>
@@ -81,7 +81,7 @@ function Turn({
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{who}</span>
             <div
-              className="rounded-[var(--r-msg)] px-[11px] py-2"
+              className="rounded-[var(--r-ctl)] px-[11px] py-2"
               style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
             >
               <ReplyMarkdown content={entry.text} />

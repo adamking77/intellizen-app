@@ -163,7 +163,7 @@ export function GraphStatChip({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 rounded-[var(--r-row)] border px-2 py-1",
+        "flex items-center gap-1.5 rounded-[var(--r-ctl)] border px-2 py-1",
         accent
           ? "border-[var(--accent-border)] bg-[var(--accent-soft)]"
           : "border-[var(--border)] bg-[color-mix(in_srgb,var(--mantle)_85%,transparent)]",

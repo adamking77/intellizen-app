@@ -1969,7 +1969,7 @@ export function GraphView() {
                 setConnectSourceId(null);
                 hasAutoFitRef.current = null;
               }}
-              className="h-7 min-w-0 max-w-[180px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+              className="h-7 min-w-0 max-w-[180px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
             >
               <option value="standalone">Standalone</option>
               {graphMode === "project" && graphProjectId === null ? (
@@ -2024,7 +2024,7 @@ export function GraphView() {
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
                   placeholder="Search ( / )"
-                  className="h-7 w-[160px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+                  className="h-7 w-[160px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
                 />
               </div>
             )}
@@ -2071,7 +2071,7 @@ export function GraphView() {
               {overflowOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOverflowOpen(false)} />
-                  <div className="absolute right-0 top-full z-50 mt-1 w-[220px] rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[var(--shadow-elevated)]">
+                  <div className="absolute right-0 top-full z-50 mt-1 w-[220px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[var(--shadow-elevated)]">
                     <OverflowItem
                       label="Reset view"
                       onClick={() => {
@@ -2516,7 +2516,7 @@ export function GraphView() {
                       }}
                     >
                       <div
-                        className="pointer-events-none flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--r-row)]"
+                        className="pointer-events-none flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--r-ctl)]"
                         style={{ background: style.chip, color: style.accent }}
                       >
                         {(() => {
@@ -2623,7 +2623,7 @@ export function GraphView() {
           {!isInsightMode && showMinimap ? (
             <div
               data-graph-interactive="true"
-              className="absolute bottom-4 right-4 z-30 overflow-hidden rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-1.5"
+              className="absolute bottom-4 right-4 z-30 overflow-hidden rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-1.5"
               onPointerDown={(event) => {
                 event.stopPropagation();
                 const target = event.currentTarget.getBoundingClientRect();
@@ -2642,7 +2642,7 @@ export function GraphView() {
                 }));
               }}
             >
-              <div className="relative h-[120px] w-[180px] overflow-hidden rounded bg-[var(--crust)]">
+              <div className="relative h-[120px] w-[180px] overflow-hidden rounded-[var(--r-ctl)] bg-[var(--crust)]">
                 {renderedFilteredNodes.map((node) => (
                   <span
                     key={`mini-${node.node_id}`}
@@ -2759,7 +2759,7 @@ export function GraphView() {
             <div className="pointer-events-none absolute bottom-4 left-4 z-30">
               <div
                 className={cn(
-                  "rounded-[var(--r-row)] border px-3 py-1.5 font-ui text-[var(--t-section)]",
+                  "rounded-[var(--r-ctl)] border px-3 py-1.5 font-ui text-[var(--t-section)]",
                   errorMessage
                     ? "border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-[var(--danger)]"
                     : "border-[color-mix(in_srgb,var(--success)_40%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]",
@@ -2993,7 +2993,7 @@ export function GraphView() {
                               <button
                                 key={relation.edgeId}
                                 type="button"
-                                className="flex items-center justify-between rounded px-1.5 py-1 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)]"
+                                className="flex items-center justify-between rounded-[var(--r-ctl)] px-1.5 py-1 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)]"
                                 onClick={() => {
                                   selectSingleNode(relation.otherNodeId);
                                   setSelectedEdgeId(relation.edgeId);
@@ -3183,7 +3183,7 @@ export function GraphView() {
                           type="button"
                           onClick={() => toggleEntityTypeFilter(type)}
                           className={cn(
-                            "flex items-center justify-between rounded px-2 py-1.5 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                            "flex items-center justify-between rounded-[var(--r-ctl)] px-2 py-1.5 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                             entityTypeFilters[type]
                               ? "hover:bg-[var(--surface-wash)]"
                               : "opacity-50 hover:opacity-80 hover:bg-[var(--surface-wash)]",
@@ -3485,7 +3485,7 @@ export function GraphView() {
                     value={exportFilename}
                     onChange={(e) => setExportFilename(e.target.value)}
                     autoFocus
-                    className="h-9 flex-1 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 flex-1 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   />
                   <span className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">.png</span>
                 </div>
@@ -3524,7 +3524,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(Number(e.target.value))}
-                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   >
                     {(projects ?? []).map((p) => (
                       <option key={p.id} value={p.id}>
@@ -3536,7 +3536,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(e.target.value)}
-                    className="h-9 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none"
+                    className="h-9 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
                   >
                     {(investigations ?? []).map((inv) => (
                       <option key={inv.case_id} value={inv.case_id}>

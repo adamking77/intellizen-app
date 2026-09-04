@@ -297,7 +297,7 @@ export function SearchView() {
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto flex max-w-[880px] flex-col gap-3 px-6 py-6">
               {searchMutation.error ? (
-                <div className="rounded-[var(--r-row)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--danger)]">
+                <div className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--danger)]">
                   {searchMutation.error.message}
                 </div>
               ) : null}
@@ -312,7 +312,7 @@ export function SearchView() {
 
               {sortedListResults ? (
                 sortedListResults.length === 0 ? (
-                  <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--subtext-0)]">
+                  <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-4 py-3 font-ui text-[var(--t-ui)] text-[var(--subtext-0)]">
                     No results.
                   </div>
                 ) : (
@@ -353,7 +353,7 @@ export function SearchView() {
                   </>
                 )
               ) : results && !Array.isArray(results) ? (
-                <div className="flex flex-col gap-5 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-6">
+                <div className="flex flex-col gap-5 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-6">
                   <div className="flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
                     <div className="flex min-w-0 flex-col gap-1">
                       <span className="text-label">Deep Research</span>
@@ -559,7 +559,7 @@ function ModeTabs({
           >
             {item.label}
             {isDeep && !compact ? (
-              <span className="rounded-[var(--r-row)] bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] px-1 text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--warning)]">
+              <span className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] px-1 text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--warning)]">
                 Async
               </span>
             ) : null}
@@ -635,7 +635,7 @@ function SearchComposer({
             rows={compact ? 2 : 3}
             className={cn(
               "w-full resize-none rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] px-3 py-2.5 text-[var(--text)] placeholder:text-[var(--overlay-1)]",
-              "focus:border-[var(--accent)] focus:outline-none",
+              "focus:outline-none",
               compact ? "font-ui text-[var(--t-ui)]" : "font-ui text-[var(--t-body)] leading-[1.5]",
             )}
             autoFocus={!compact}
@@ -661,7 +661,7 @@ function SearchComposer({
             onKeyDown={onKeyDown}
             className={cn(
               "w-full rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] pl-10 pr-[116px] text-[var(--text)] placeholder:text-[var(--overlay-1)]",
-              "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)] focus:outline-none focus:shadow-none",
+              "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)] focus:outline-none ",
               compact ? "h-9 font-ui text-[var(--t-ui)]" : "h-12 font-ui text-[var(--t-body)]",
             )}
             autoFocus={!compact}
@@ -684,7 +684,7 @@ function SearchComposer({
               value={startDate}
               onChange={(e) => onStartDate(e.target.value)}
               className={cn(
-                "rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] text-[var(--text)] focus:border-[var(--accent)] focus:outline-none",
+                "rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-mono text-[var(--t-section)] text-[var(--text)]  focus:outline-none",
                 compact ? "h-9" : "h-12",
               )}
               title="Earliest publish date"
@@ -701,11 +701,11 @@ function InternalResultCard({ result }: { result: InternalSearchResult }) {
   const sourceLabel = result.source_type.replace(/_/g, " ");
 
   return (
-    <div className="rounded-[var(--r-row)] border border-[var(--border-subtle)] bg-[var(--mantle)] p-4">
+    <div className="rounded-[var(--r-ctl)] border border-[var(--border-subtle)] bg-[var(--mantle)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="rounded-[var(--r-row)] bg-[var(--surface-wash)] px-1.5 py-0.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="rounded-[var(--r-ctl)] bg-[var(--surface-wash)] px-1.5 py-0.5 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {sourceLabel}
             </span>
             <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
@@ -751,14 +751,14 @@ function ResultsSkeleton() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="rounded-[var(--r-row)] bg-[var(--mantle)] p-4 opacity-70"
+          className="rounded-[var(--r-ctl)] bg-[var(--mantle)] p-4 opacity-70"
         >
-          <div className="h-4 w-3/4 rounded bg-[var(--surface-wash-strong)]" />
-          <div className="mt-3 h-3 w-full rounded bg-[var(--surface-wash)]" />
-          <div className="mt-2 h-3 w-5/6 rounded bg-[var(--surface-wash)]" />
+          <div className="h-4 w-3/4 rounded-[var(--r-ctl)] bg-[var(--surface-wash-strong)]" />
+          <div className="mt-3 h-3 w-full rounded-[var(--r-ctl)] bg-[var(--surface-wash)]" />
+          <div className="mt-2 h-3 w-5/6 rounded-[var(--r-ctl)] bg-[var(--surface-wash)]" />
           <div className="mt-3 flex gap-3">
-            <div className="h-2.5 w-16 rounded bg-[var(--surface-wash)]" />
-            <div className="h-2.5 w-20 rounded bg-[var(--surface-wash)]" />
+            <div className="h-2.5 w-16 rounded-[var(--r-ctl)] bg-[var(--surface-wash)]" />
+            <div className="h-2.5 w-20 rounded-[var(--r-ctl)] bg-[var(--surface-wash)]" />
           </div>
         </div>
       ))}
@@ -768,7 +768,7 @@ function ResultsSkeleton() {
 
 function DeepProgressStrip() {
   return (
-    <div className="rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-5">
+    <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-5">
       <div className="flex items-center gap-2">
         <Loader2 className="h-4 w-4 text-[var(--accent)]" />
         <span className="font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">

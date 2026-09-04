@@ -14,7 +14,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         "font-ui text-[var(--t-ui)] text-[var(--text)]",
         "placeholder:text-[var(--overlay-0)]",
         "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
-        "focus:outline-none focus:shadow-none",
+        "focus:outline-none ",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "resize-y",
         className,

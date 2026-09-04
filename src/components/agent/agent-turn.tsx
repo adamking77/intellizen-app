@@ -20,7 +20,7 @@ import { writeTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 const TURN_ICON =
-  "inline-flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
+  "inline-flex h-5 w-5 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
 
 /** A fact about a turn, in the row with its controls. Not a control, so it
  *  never rides the hover fade. */
@@ -104,7 +104,7 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(tool.resultText);
   return (
-    <div className="rounded-[var(--r-row)] bg-[var(--crust)]">
+    <div className="rounded-[var(--r-ctl)] bg-[var(--crust)]">
       <button
         type="button"
         onClick={() => canOpen && setOpen((v) => !v)}
@@ -170,7 +170,7 @@ export function UserTurn({
   if (editing) {
     return (
       <div className="max-w-[82%] self-end">
-        <div className="rounded-[var(--r-msg)] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
+        <div className="rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-[11px] py-2">
           <textarea
             value={draft}
             autoFocus
@@ -214,7 +214,7 @@ export function UserTurn({
 
   return (
     <div className="group relative max-w-[82%] self-end">
-      <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
+      <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] px-[11px] py-2">
         <span className="whitespace-pre-wrap font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
       </div>
       <TurnBar align="end">
@@ -288,7 +288,7 @@ export function AgentTurn({
         </div>
 
         {showReasoning && message.thought ? (
-          <details className="rounded-[var(--r-row)] bg-[var(--crust)] px-2.5 py-[7px]">
+          <details className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]">
             <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
               Thought
             </summary>
@@ -302,7 +302,7 @@ export function AgentTurn({
           <button
             type="button"
             onClick={() => setRunOpen(true)}
-            className="flex items-center gap-2 rounded-[var(--r-row)] bg-[var(--crust)] px-[9px] py-1.5 text-left"
+            className="flex items-center gap-2 rounded-[var(--r-ctl)] bg-[var(--crust)] px-[9px] py-1.5 text-left"
           >
             <span className="flex-1 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
             <ChevronDown className="h-3 w-3 text-[var(--text-muted)]" strokeWidth={1.8} aria-hidden />
@@ -315,7 +315,7 @@ export function AgentTurn({
 
         {message.text || message.streaming ? (
           <div
-            className="rounded-[var(--r-msg)] px-[11px] py-2"
+            className="rounded-[var(--r-ctl)] px-[11px] py-2"
             style={{ background: `color-mix(in srgb, ${agentColor} 12%, transparent)` }}
           >
             {message.text ? (
@@ -353,7 +353,7 @@ export function AgentTurn({
         ) : null}
 
         {message.failed ? (
-          <div className="rounded-[var(--r-msg)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
+          <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
             <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
             {/* Word-labelled and always visible: an action you must hover to
                 discover is not offered, and the row survives greyscale. */}

@@ -3,10 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   FLAVORS,
+  DEFAULT_SELECTION_STRENGTH,
+  MAX_SELECTION_STRENGTH,
+  MIN_SELECTION_STRENGTH,
   applyPanes,
+  applySelectionStrength,
   applyTheme,
   flavorById,
   loadPanes,
+  loadSelectionStrength,
   loadTheme,
   sameAccentIn,
   saveTheme,
@@ -29,14 +34,14 @@ function PanesDrawing({ panes }: { panes: Panes }) {
   const joined = panes === "connected";
   return (
     <div
-      className={cn("flex h-[62px] overflow-hidden rounded", joined ? "gap-px bg-[var(--line)]" : "gap-[5px] p-[5px]")}
+      className={cn("flex h-[62px] overflow-hidden rounded-[var(--r-ctl)]", joined ? "gap-px bg-[var(--line)]" : "gap-[5px] p-[5px]")}
     >
       {[
         ["0 0 18%", "var(--crust)"],
         ["1", "var(--base)"],
         ["0 0 26%", "var(--mantle)"],
       ].map(([flex, bg], i) => (
-        <div key={i} className={joined ? "" : "rounded-[var(--r-row)]"} style={{ flex, background: bg }} />
+        <div key={i} className={joined ? "" : "rounded-[var(--r-ctl)]"} style={{ flex, background: bg }} />
       ))}
     </div>
   );
@@ -148,6 +153,7 @@ function AccentPicker({
 export function AppearanceSection() {
   const [theme, setTheme] = useState(loadTheme);
   const [panes, setPanes] = useState(loadPanes);
+  const [selectionStrength, setSelectionStrength] = useState(loadSelectionStrength);
   const [picking, setPicking] = useState(false);
   const active = flavorById(theme.flavor);
   const accentName = active.accents.find((a) => a.hex === theme.accent)?.name ?? "custom";
@@ -161,6 +167,11 @@ export function AppearanceSection() {
   function commitPanes(next: Panes) {
     setPanes(next);
     applyPanes(next);
+  }
+
+  function commitSelectionStrength(next: number) {
+    setSelectionStrength(next);
+    applySelectionStrength(next);
   }
 
   return (
@@ -182,7 +193,7 @@ export function AppearanceSection() {
               onClick={() => commit(flavor.id, swatch)}
               className={cn(card, on ? "bg-[var(--raised)]" : "bg-[var(--mantle)]")}
             >
-              <div className="flex h-[92px] overflow-hidden rounded">
+              <div className="flex h-[92px] overflow-hidden rounded-[var(--r-ctl)]">
                 {flavor.planes.map((plane, i) => (
                   <div key={i} className="flex-1" style={{ background: plane }} />
                 ))}
@@ -202,7 +213,7 @@ export function AppearanceSection() {
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="flex items-center gap-2.5 rounded bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[var(--t-ui)] text-[var(--text)] motion-safe:transition-colors hover:bg-[var(--raised)]"
+          className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[var(--t-ui)] text-[var(--text)] motion-safe:transition-colors hover:bg-[var(--raised)]"
         >
           <span className="h-[22px] w-[22px] rounded-[var(--r-pill)]" style={{ background: theme.accent }} />
           {accentName}
@@ -213,6 +224,34 @@ export function AppearanceSection() {
         <span className="text-xs text-[var(--text-muted)]">
           Switching flavor keeps this choice, in that flavor's own palette.
         </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 pt-[18px]">
+        <label htmlFor="selection-strength" className={cn(caps, "text-[var(--t-count)]")}>
+          Selection strength
+        </label>
+        <input
+          id="selection-strength"
+          type="range"
+          min={MIN_SELECTION_STRENGTH}
+          max={MAX_SELECTION_STRENGTH}
+          step="0.01"
+          value={selectionStrength}
+          onChange={(event) => commitSelectionStrength(Number(event.currentTarget.value))}
+          className="selection-strength"
+        />
+        <button
+          type="button"
+          className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 text-xs text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+          onClick={() => commitSelectionStrength(DEFAULT_SELECTION_STRENGTH)}
+        >
+          Default
+        </button>
+        <div className="selection-preview" aria-label="Selection preview">
+          <span className="nav-node">Plain</span>
+          <span className="nav-node selection-preview-hover">Hovered</span>
+          <span className="nav-node" aria-selected="true">Selected</span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2.5 pt-[26px]">

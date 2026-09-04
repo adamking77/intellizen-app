@@ -105,9 +105,44 @@ export const FLAVORS: Flavor[] = [
 export const FLAVOR_KEY = "intelizen:flavor";
 export const ACCENT_KEY = "intelizen:accent";
 export const PANES_KEY = "intelizen:panes";
+export const SELECTION_STRENGTH_KEY = "intelizen:selection-strength";
 export const THEME_CHANGED_EVENT = "intelizen:theme-changed";
 
-/** How the shell's panes sit: separate rounded panels over the window, or
+export const DEFAULT_SELECTION_STRENGTH = 0.08;
+export const MIN_SELECTION_STRENGTH = 0.04;
+export const MAX_SELECTION_STRENGTH = 0.14;
+
+export function normalizeSelectionStrength(value: string | number): number {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_SELECTION_STRENGTH;
+  return Math.round(
+    Math.min(MAX_SELECTION_STRENGTH, Math.max(MIN_SELECTION_STRENGTH, parsed)) * 100,
+  ) / 100;
+}
+
+export function loadSelectionStrength(): number {
+  return normalizeSelectionStrength(
+    readPreference(SELECTION_STRENGTH_KEY, String(DEFAULT_SELECTION_STRENGTH)),
+  );
+}
+
+function setSelectionStrength(value: number) {
+  const strength = normalizeSelectionStrength(value);
+  document.documentElement.style.setProperty("--sel-step", String(strength));
+  document.documentElement.style.setProperty(
+    "--sel-accent-weight",
+    `${Math.round(strength * 600) / 10}%`,
+  );
+  return strength;
+}
+
+export function applySelectionStrength(value: number) {
+  const strength = setSelectionStrength(value);
+  writePreference(SELECTION_STRENGTH_KEY, String(strength));
+  window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+}
+
+/** How the shell's panes sit: separate panels over the window, or
  *  one surface divided by hairlines. Read by `[data-panes]` rules in index.css. */
 export type Panes = "connected" | "segmented";
 export const DEFAULT_PANES: Panes = "connected";
@@ -144,6 +179,7 @@ export function isLight(flavorId: string) {
 export function applyTheme(flavorId: string, accentHex: string) {
   document.documentElement.dataset.flavor = flavorId;
   document.documentElement.dataset.panes = loadPanes();
+  setSelectionStrength(loadSelectionStrength());
   // Every accent use in the app reads --accent, so setting it here moves
   // selection, focus, active nav, links and primary actions together.
   document.documentElement.style.setProperty("--accent", accentHex);

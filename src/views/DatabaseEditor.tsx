@@ -1449,7 +1449,7 @@ export function DatabaseEditorView({
             void handleUpdateDatabaseName(e.target.value);
           }}
           disabled={isSystemDatabase}
-          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[var(--t-title)] font-semibold tracking-[-0.03em] shadow-none focus:border-transparent focus:shadow-none placeholder:text-[var(--overlay-1)]"
+          className="mb-4 h-auto border-transparent bg-transparent px-0 text-[var(--t-title)] font-semibold tracking-[-0.03em] shadow-none   placeholder:text-[var(--overlay-1)]"
         />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">
@@ -1489,7 +1489,7 @@ export function DatabaseEditorView({
           />
         ) : null}
         {taxonomyEditorOpen && !isSystemDatabase ? (
-          <div className="mb-4 grid max-w-2xl gap-3 rounded-[var(--r-row)] border border-[var(--border)] bg-[var(--mantle)] p-3">
+          <div className="mb-4 grid max-w-2xl gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-3">
             <TaxonomyFields value={taxonomyDraft} onChange={setTaxonomyDraft} />
             <div className="flex justify-end gap-2">
               <Button

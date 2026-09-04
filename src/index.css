@@ -243,7 +243,7 @@
 
   /* Hover: one wash everywhere something is clickable. Mixed against --text
      so it lightens on dark and darkens on light. */
-  --hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --hover: color-mix(in srgb, var(--text) 6%, transparent);
   --hover-strong: color-mix(in srgb, var(--text) 8%, transparent);
   /* The hairline between two planes that cannot separate by value. */
   --edge: color-mix(in srgb, var(--text) 10%, transparent);
@@ -299,9 +299,11 @@
 
   /* Closed shape and type roles shared with Hermes. */
   --r-plane: 12px;
-  --r-row: 4px;
-  --r-msg: 10px;
+  --r-ctl: 8px;
   --r-pill: 999px;
+  --h-ctl: 28px;
+  --h-row: 26px;
+  --h-line: 32px;
   --t-title: 16px;
   --t-section: 11px;
   --t-body: 14px;
@@ -373,7 +375,7 @@
   --ok: #4a7c4e;
   --bad: #b04a5f;
   --runtime: #3f6ba8;
-  --hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --hover: color-mix(in srgb, var(--text) 8%, transparent);
   --hover-strong: color-mix(in srgb, var(--text) 11%, transparent);
   --go-bg: var(--accent);
   --go-fg: #fff;
@@ -893,7 +895,7 @@ pre {
 .mantine-Menu-item,
 .bn-toolbar .mantine-Button-root,
 .bn-toolbar .mantine-ActionIcon-root {
-  border-radius: var(--r-row) !important;
+  border-radius: var(--r-ctl) !important;
   background: transparent !important;
   color: var(--text) !important;
   transition: background-color 120ms ease, color 120ms ease;
@@ -1035,7 +1037,7 @@ pre {
 .bn-root .mantine-Menu-item,
 .bn-root .bn-toolbar .mantine-Button-root,
 .bn-root .bn-toolbar .mantine-ActionIcon-root {
-  border-radius: var(--r-row) !important;
+  border-radius: var(--r-ctl) !important;
   background: transparent !important;
   color: var(--text) !important;
 }
@@ -4822,18 +4824,31 @@ textarea:focus-visible,
    accent remains reserved for actions, focus and semantic colour choices.
    ============================================================ */
 :root {
-  --r-row: 4px;
-  --r-pill: 999px;
-  --t-ui: 13px;
-  --t-meta: 12px;
-  --selected: var(--raised);
-  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
+  --sel-step: 0.08;
+  --sel-dir: 1;
+  --sel-chroma: 0.02;
+  --sel-accent-weight: 4.8%;
+  --selected-muted: oklch(from var(--text-muted) 0.98 c h);
+  --selected-base: oklch(from var(--raised)
+    calc(l + max(var(--sel-step), 0.06))
+    calc(c + var(--sel-chroma))
+    h);
+  --selected-hover-base: oklch(from var(--raised)
+    calc(l + max(var(--sel-step), 0.06) + 0.03)
+    calc(c + var(--sel-chroma))
+    h);
+  --selected: color-mix(in oklch, var(--selected-base), var(--accent) var(--sel-accent-weight));
+  --selected-hover: color-mix(in oklch, var(--selected-hover-base), var(--accent) var(--sel-accent-weight));
 }
 
 :root[data-flavor="latte"],
 :root[data-flavor="flat"] {
-  --selected: var(--raised);
-  --selected-hover: color-mix(in srgb, var(--text) 4%, var(--raised));
+  --sel-dir: -1;
+  --selected-muted: oklch(from var(--text-muted) 0.28 c h);
+  --selected: oklch(from var(--raised)
+    calc(l - max(var(--sel-step), 0.06)) c h);
+  --selected-hover: oklch(from var(--raised)
+    calc(l - max(var(--sel-step), 0.06) - 0.03) c h);
 }
 
 .nav-node {
@@ -4841,15 +4856,55 @@ textarea:focus-visible,
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 7px 10px;
+  min-height: var(--h-row);
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--r-row);
+  border-radius: var(--r-ctl);
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: var(--t-ui);
   cursor: default;
   transition: color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out);
+}
+
+.selection-strength {
+  width: min(220px, 40vw);
+  height: var(--h-ctl);
+  appearance: none;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.selection-strength::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+}
+
+.selection-strength::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--accent);
+}
+
+.selection-preview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  width: 140px;
+  padding: 4px;
+  border-radius: var(--r-ctl);
+  background: var(--base);
+}
+
+.selection-preview-hover {
+  background: var(--hover);
+  color: var(--text);
 }
 
 .nav-node:hover {
@@ -4859,6 +4914,8 @@ textarea:focus-visible,
 
 .nav-node[aria-selected="true"],
 .nav-node[aria-current="page"] {
+  --text-muted: var(--selected-muted);
+  --subtext-0: var(--selected-muted);
   background: var(--selected);
   color: var(--text);
   font-weight: 450;
