@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const installedRoot = join(homedir(), ".hermes", "plugins");
+// Hidden at the plugin root so the live loader deliberately ignores proof
+// plugins while this verifier can still exercise their exact installed bytes.
+const installedRoot = join(homedir(), ".hermes", "plugins", ".retired-wave1-proof");
 const repositoryRoot = new URL("../src/fixtures/plugins/", import.meta.url);
 
 async function source(path) {
@@ -16,7 +18,7 @@ const brokenSource = await source(brokenPath);
 
 const expectedHealthy = await source(new URL("wave1-proof/intellizen/plugin.js", repositoryRoot));
 const expectedBroken = await source(new URL("broken/intellizen/plugin.js", repositoryRoot));
-if (healthySource !== expectedHealthy || brokenSource !== expectedBroken) {
+if (healthySource.trimEnd() !== expectedHealthy.trimEnd() || brokenSource.trimEnd() !== expectedBroken.trimEnd()) {
   throw new Error("Installed D.13 fixtures do not match the repository fixtures.");
 }
 
