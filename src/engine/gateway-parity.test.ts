@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { GATEWAY_EVENTS, GATEWAY_METHODS } from "./contract";
+import { GATEWAY_EVENTS, GATEWAY_METHODS, HERMES_REST_ROUTES } from "./contract";
 import pinFile from "./HERMES_PIN?raw";
 
 // The app tsconfig carries no Node types (it compiles a webview). The test
@@ -38,6 +38,15 @@ function pinnedGatewaySource(): { files: string[]; source: string } {
   return { files, source };
 }
 
+function pinnedRestSource(): { files: string[]; source: string } {
+  const files = git(`ls-tree -r --name-only ${PIN} hermes_cli plugins/kanban`)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.endsWith(".py"));
+  const source = files.map((file) => git(`show ${PIN}:${file}`)).join("\n");
+  return { files, source };
+}
+
 const present = existsSync(`${CHECKOUT}/.git`);
 
 if (!present) {
@@ -60,5 +69,17 @@ if (!present) {
 
   it.each([...GATEWAY_EVENTS])("emits event %s as a string literal", (event) => {
     expect(source.includes(`"${event}"`) || source.includes(`'${event}'`)).toBe(true);
+  });
+
+  const rest = pinnedRestSource();
+  it("reads the pinned REST and kanban sources", () => {
+    expect(rest.files).toContain("hermes_cli/web_server.py");
+    expect(rest.files).toContain("plugins/kanban/dashboard/plugin_api.py");
+  });
+
+  it.each([...HERMES_REST_ROUTES])("registers $method $path", ({ method, path, ...route }) => {
+    const sourcePath = "sourcePath" in route ? route.sourcePath : path;
+    const decorator = `.${method.toLowerCase()}(\"${sourcePath}\")`;
+    expect(rest.source.includes(decorator)).toBe(true);
   });
 });

@@ -18,6 +18,12 @@ describe("deriveEngineTag", () => {
     expect(deriveEngineTag({ connection: "open", error: "stale error" })).toBe("connected");
   });
 
+  it("names an open gateway whose runtime guarantees do not match the pin", () => {
+    expect(deriveEngineTag({ connection: "open", error: null, pinCompatible: false })).toBe("pin mismatch");
+    expect(describeEngine({ connection: "open", info: spawned, error: null, pinCompatible: false }))
+      .toContain("runtime capabilities do not match HERMES_PIN");
+  });
+
   it("is offline when there is an error and no open socket", () => {
     expect(deriveEngineTag({ connection: "closed", error: "Hermes is not installed" })).toBe("offline");
     expect(deriveEngineTag({ connection: "idle", error: "offline: not in the desktop host" })).toBe("offline");
@@ -57,7 +63,7 @@ describe("describeEngine", () => {
 
 describe("useEngineStore", () => {
   beforeEach(() => {
-    useEngineStore.setState({ connection: "idle", info: null, error: null });
+    useEngineStore.setState({ connection: "idle", info: null, error: null, pinCompatible: null });
   });
 
   it("starts idle with nothing known", () => {
@@ -65,14 +71,16 @@ describe("useEngineStore", () => {
     expect(state.connection).toBe("idle");
     expect(state.info).toBeNull();
     expect(state.error).toBeNull();
+    expect(state.pinCompatible).toBeNull();
   });
 
   it("setters replace one field each", () => {
-    const { setConnection, setInfo, setError } = useEngineStore.getState();
+    const { setConnection, setInfo, setError, setPinCompatible } = useEngineStore.getState();
     setConnection("open");
     setInfo(spawned);
     setError("boom");
-    expect(useEngineStore.getState()).toMatchObject({ connection: "open", info: spawned, error: "boom" });
+    setPinCompatible(false);
+    expect(useEngineStore.getState()).toMatchObject({ connection: "open", info: spawned, error: "boom", pinCompatible: false });
     setError(null);
     expect(useEngineStore.getState().error).toBeNull();
     expect(useEngineStore.getState().info).toEqual(spawned);

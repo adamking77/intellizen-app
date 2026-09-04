@@ -11,6 +11,7 @@ import {
 } from "./engine";
 import { useEngineStore } from "./engine-store";
 import { getGatewayClient } from "./gateway";
+import { request, type GatewayClientLike } from "./contract";
 import type { ConnectionState, JsonRpcGatewayClient } from "./json-rpc-gateway";
 import {
   ENGINE_MANUAL_DISCONNECT_KEY,
@@ -23,6 +24,19 @@ export const RETRY_DELAY_MS = 3_000;
  *  trusting its record (a wrong token is refused forever otherwise). */
 export const ATTACHED_RESET_AFTER = 3;
 
+type GatewayCapabilities = { per_session_exclusive_submit?: boolean };
+
+/** The pinned client requires the concurrency guarantee advertised by the
+ *  pinned gateway. Missing methods and false guarantees are both mismatch. */
+export async function gatewayMatchesPinnedContract(client: GatewayClientLike): Promise<boolean> {
+  try {
+    const capabilities = await request<GatewayCapabilities>(client, "gateway.capabilities");
+    return capabilities.per_session_exclusive_submit === true;
+  } catch {
+    return false;
+  }
+}
+
 export type EngineSupervisorDeps = {
   start: () => Promise<EngineInfo>;
   reset: () => Promise<void>;
@@ -30,6 +44,8 @@ export type EngineSupervisorDeps = {
   setConnection: (connection: ConnectionState) => void;
   setInfo: (info: EngineInfo) => void;
   setError: (error: string | null) => void;
+  checkCompatibility: () => Promise<boolean>;
+  setPinCompatible: (compatible: boolean | null) => void;
   retryMs?: number;
   resetAfterFailures?: number;
 };
@@ -92,6 +108,7 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
       const info = await deps.start();
       if (disposed) return;
       deps.setInfo(info);
+      deps.setPinCompatible(null);
       try {
         const stateVersionBeforeConnect = stateEventVersion;
         await deps.client.connect(engineWebSocketUrl(info));
@@ -106,6 +123,10 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
           deps.setConnection("open");
           deps.setError(null);
           attachedFailures = 0;
+        }
+        const compatible = await deps.checkCompatibility().catch(() => false);
+        if (!disposed && deps.client.connectionState === "open") {
+          deps.setPinCompatible(compatible);
         }
       } catch (error) {
         await noteConnectFailure(info);
@@ -136,6 +157,7 @@ export function createEngineSupervisor(deps: EngineSupervisorDeps): EngineSuperv
         attachedFailures = 0;
       }
       if (state === "closed" || state === "error") {
+        deps.setPinCompatible(null);
         if (booting) closedDuringBoot = true;
         scheduleRetry();
       }
@@ -171,6 +193,8 @@ function makeSupervisor() {
     setConnection: store.setConnection,
     setInfo: store.setInfo,
     setError: store.setError,
+    checkCompatibility: () => gatewayMatchesPinnedContract(getGatewayClient()),
+    setPinCompatible: store.setPinCompatible,
   });
 }
 
@@ -190,6 +214,7 @@ function pauseLocalEngine() {
   store.setConnection("closed");
   store.setInfo(null);
   store.setError(null);
+  store.setPinCompatible(null);
   (globalThis as BootGlobal)[BOOT_FLAG] = false;
 }
 

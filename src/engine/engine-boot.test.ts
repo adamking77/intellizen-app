@@ -2,7 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EngineInfo, EngineMode } from "./engine";
 import type { ConnectionState } from "./json-rpc-gateway";
-import { ATTACHED_RESET_AFTER, createEngineSupervisor, RETRY_DELAY_MS } from "./use-engine";
+import { FakeGatewayClient } from "./test-support";
+import { ATTACHED_RESET_AFTER, createEngineSupervisor, gatewayMatchesPinnedContract, RETRY_DELAY_MS } from "./use-engine";
+
+describe("gatewayMatchesPinnedContract", () => {
+  it("requires the pinned concurrency guarantee", async () => {
+    const compatible = new FakeGatewayClient();
+    compatible.respondWith(() => ({ per_session_exclusive_submit: true }));
+    await expect(gatewayMatchesPinnedContract(compatible)).resolves.toBe(true);
+
+    const incompatible = new FakeGatewayClient();
+    incompatible.respondWith(() => ({}));
+    await expect(gatewayMatchesPinnedContract(incompatible)).resolves.toBe(false);
+  });
+});
 
 const engine = (port: number, mode: EngineMode = "spawned"): EngineInfo => ({
   mode,
@@ -67,8 +80,10 @@ function harness(options: ClientOptions & { start?: () => Promise<EngineInfo> } 
   const setConnection = vi.fn();
   const setInfo = vi.fn();
   const setError = vi.fn();
-  const supervisor = createEngineSupervisor({ start, reset, client, setConnection, setInfo, setError });
-  return { client, start, reset, setConnection, setInfo, setError, supervisor };
+  const checkCompatibility = vi.fn(async () => true);
+  const setPinCompatible = vi.fn();
+  const supervisor = createEngineSupervisor({ start, reset, client, setConnection, setInfo, setError, checkCompatibility, setPinCompatible });
+  return { client, start, reset, setConnection, setInfo, setError, checkCompatibility, setPinCompatible, supervisor };
 }
 
 function deferred<T>() {
@@ -97,6 +112,8 @@ describe("createEngineSupervisor", () => {
     expect(h.client.connect).toHaveBeenCalledWith("ws://127.0.0.1:56083/api/ws?token=tok");
     expect(h.setConnection.mock.calls.map(([state]) => state)).toEqual(["idle", "connecting", "open"]);
     expect(h.setError).toHaveBeenLastCalledWith(null);
+    expect(h.checkCompatibility).toHaveBeenCalledOnce();
+    expect(h.setPinCompatible).toHaveBeenLastCalledWith(true);
     expect(h.reset).not.toHaveBeenCalled();
     h.supervisor.dispose();
   });

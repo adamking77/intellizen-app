@@ -26,6 +26,7 @@ export const GATEWAY_METHODS = [
   "profiles.create",
   "profiles.get_asset",
   "profiles.set_asset",
+  "gateway.capabilities",
 ] as const;
 
 export type GatewayMethod = (typeof GATEWAY_METHODS)[number];
@@ -47,6 +48,34 @@ export const GATEWAY_EVENTS = [
 ] as const;
 
 export type GatewayEventName = (typeof GATEWAY_EVENTS)[number];
+
+/** Every Hermes HTTP route IntelliZen calls outside the JSON-RPC gateway.
+ *  `sourcePath` is the decorator path when a plugin mounts under a prefix. */
+export const HERMES_REST_ROUTES = [
+  { method: "GET", path: "/api/health" },
+  { method: "GET", path: "/api/cron/jobs" },
+  { method: "POST", path: "/api/cron/jobs" },
+  { method: "POST", path: "/api/cron/jobs/{job_id}/trigger" },
+  { method: "POST", path: "/api/cron/jobs/{job_id}/pause" },
+  { method: "POST", path: "/api/cron/jobs/{job_id}/resume" },
+  { method: "GET", path: "/api/cron/jobs/{job_id}/runs" },
+  { method: "DELETE", path: "/api/cron/jobs/{job_id}" },
+  { method: "GET", path: "/api/plugins/kanban/boards", sourcePath: "/boards" },
+  { method: "GET", path: "/api/plugins/kanban/board", sourcePath: "/board" },
+  { method: "POST", path: "/api/plugins/kanban/tasks", sourcePath: "/tasks" },
+  { method: "GET", path: "/api/profiles/sessions" },
+  { method: "GET", path: "/api/sessions/{session_id}/messages" },
+  { method: "GET", path: "/api/skills" },
+  { method: "PUT", path: "/api/skills/toggle" },
+  { method: "GET", path: "/api/tools/toolsets" },
+  { method: "PUT", path: "/api/tools/toolsets/{name}" },
+  { method: "GET", path: "/api/mcp/servers" },
+  { method: "PUT", path: "/api/mcp/servers/{name}/enabled" },
+  { method: "PUT", path: "/api/config" },
+  { method: "DELETE", path: "/api/profiles/{name}" },
+  { method: "POST", path: "/api/audio/transcribe" },
+  { method: "POST", path: "/api/audio/speak" },
+] as const;
 
 /** The slice of the gateway client the session layer needs. Tests hand in a
  *  fake with this shape; production hands in `getGatewayClient()`. */

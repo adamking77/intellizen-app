@@ -46,11 +46,13 @@ const APP_VERSION = `v${appPackage.version}`;
 // Donor: hermes-app tokens.css `.tag` / `.tag.ok` — 11px, 1px 8px, pill.
 const ENGINE_TAG_CLASS: Record<EngineTag, string> = {
   connected: "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]",
+  "pin mismatch": "bg-[color-mix(in_srgb,var(--wait)_14%,transparent)] text-[var(--wait)]",
   "starting…": "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--subtext-0)]",
   offline: "bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-[var(--danger)]",
 };
 const ENGINE_DOT_CLASS: Record<EngineTag, string> = {
   connected: "bg-[var(--success)]",
+  "pin mismatch": "bg-[var(--wait)]",
   "starting…": "bg-[var(--subtext-0)]",
   offline: "bg-[var(--danger)]",
 };
@@ -85,8 +87,9 @@ export function Sidebar() {
   const engineConnection = useEngineStore((state) => state.connection);
   const engineInfo = useEngineStore((state) => state.info);
   const engineError = useEngineStore((state) => state.error);
-  const engineTag = deriveEngineTag({ connection: engineConnection, error: engineError });
-  const engineTitle = `${describeEngine({ connection: engineConnection, info: engineInfo, error: engineError })} · IntelliZen ${APP_VERSION}`;
+  const pinCompatible = useEngineStore((state) => state.pinCompatible);
+  const engineTag = deriveEngineTag({ connection: engineConnection, error: engineError, pinCompatible });
+  const engineTitle = `${describeEngine({ connection: engineConnection, info: engineInfo, error: engineError, pinCompatible })} · IntelliZen ${APP_VERSION}`;
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
 
@@ -271,7 +274,7 @@ export function Sidebar() {
               >
                 {engineTag}
               </span>
-              {engineTag === "connected" && engineInfo ? (
+              {(engineTag === "connected" || engineTag === "pin mismatch") && engineInfo ? (
                 <span className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
                   {engineInfo.version} · :{engineInfo.port}
                 </span>
