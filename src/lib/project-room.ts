@@ -12,13 +12,13 @@ export function projectRoomViews(clientCase: boolean): ProjectRoomView[] {
     : ["brief", "table", "board", "canvas"];
 }
 
-export function loadRoomView(nodeId: string, views: ProjectRoomView[]): ProjectRoomView {
+export function loadRoomView<T extends string>(nodeId: string, views: readonly T[]): T {
   if (typeof window === "undefined") return views[0];
-  const stored = window.localStorage.getItem(`${VIEW_PREFIX}${nodeId}`) as ProjectRoomView | null;
+  const stored = window.localStorage.getItem(`${VIEW_PREFIX}${nodeId}`) as T | null;
   return stored && views.includes(stored) ? stored : views[0];
 }
 
-export function saveRoomView(nodeId: string, view: ProjectRoomView) {
+export function saveRoomView(nodeId: string, view: string) {
   if (typeof window !== "undefined") window.localStorage.setItem(`${VIEW_PREFIX}${nodeId}`, view);
 }
 

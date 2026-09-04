@@ -107,10 +107,12 @@ H.3 **Retire the legacy tools.** The twelve monitor and investigation
 Each stage begins with a one-page flow shown to Adam. Nothing is built
 until he approves it.
 
-I.1 **The unit page.** Department or workspace shows its projects as rows:
-    who holds each, what is blocked, what waits on you, from the project's
-    board and records. Its own empty widget board, pinnable like Home.
-    *Open it: click a workspace, see the rows and pin a widget to it.*
+I.1 **The unit page.** **Approved 2026-09-04, workspace-first.** A workspace
+    always offers Projects and Dashboard. Projects shows who holds each, what
+    is blocked, and what waits on you from the project's board and records.
+    Dashboard remains available when blank and pins existing database views
+    through Add widget, using the Home grid without sharing Home's pins.
+    *Open it: click a workspace, switch to Dashboard, and add a widget.*
     Approval flow: `docs/stages/approval-flows/I.1-unit-page.md`.
 I.2 **The session page.** Selecting a session in the tree opens the large
     read-only transcript with receipts (files written, cards moved) derived

@@ -10,6 +10,7 @@ import {
   locateUnit,
   projectDocuments,
   shortenHome,
+  unitProjectSummary,
 } from "@/lib/project-center";
 import type { WorkspaceDatabaseRecord } from "@/lib/types";
 
@@ -30,7 +31,7 @@ function row(partial: Partial<HierarchyNode> & Pick<HierarchyNode, "id" | "kind"
 const tree = buildTree([
   row({ id: "d1", kind: "department", name: "GenZen Solutions" }),
   row({ id: "w1", kind: "workspace", name: "Client Work", parent_id: "d1" }),
-  row({ id: "p1", kind: "project", name: "Acme", parent_id: "w1", legacy_investigation_id: 7, folders: ["/Users/adam/projects/acme"] }),
+  row({ id: "p1", kind: "project", name: "Acme", parent_id: "w1", legacy_project_id: 42, legacy_investigation_id: 7, folders: ["/Users/adam/projects/acme"] }),
   row({ id: "p2", kind: "project", name: "Beta", parent_id: "w1", position: 1 }),
   row({ id: "p3", kind: "project", name: "Beta sub", parent_id: "p2" }),
 ]);
@@ -61,7 +62,7 @@ describe("project-center", () => {
 
   it("lists children with case flags and descendant project ids", () => {
     expect(childrenOf(tree, "d1")).toEqual([
-      { id: "w1", kind: "workspace", name: "Client Work", caseLinked: false, projectIds: ["p1", "p2", "p3"] },
+      { id: "w1", kind: "workspace", name: "Client Work", caseLinked: false, folders: [], legacyProjectId: null, projectIds: ["p1", "p2", "p3"] },
     ]);
     const projects = childrenOf(tree, "w1");
     expect(projects.map((p) => [p.name, p.caseLinked])).toEqual([["Acme", true], ["Beta", false]]);
@@ -83,5 +84,33 @@ describe("project-center", () => {
     expect(shortenHome("/Users/adam")).toBe("~");
     expect(shortenHome("/Users/adamant/x")).toBe("~/x");
     expect(shortenHome("/opt/Users/adam")).toBe("/opt/Users/adam");
+  });
+
+  it("derives project operating facts from linked records and board cards", () => {
+    const [project] = childrenOf(tree, "w1");
+    const catalog = [
+      {
+        id: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3",
+        name: "Biz Ops",
+        schema: [], headerFieldIds: [], views: [],
+        records: [{ id: "initiative", legacy_project_id: 42, initiative_name: "Acme", initiative_agent_owner: "Keel", initiative_stage: "In progress" }],
+      },
+      {
+        id: "654acc9c-0270-49e2-86f7-788e25c59a76",
+        name: "Tasks",
+        schema: [], headerFieldIds: [], views: [],
+        records: [
+          { id: "blocked", task_name: "Repair import", task_status: "Blocked", task_project: ["initiative"] },
+          { id: "review", task_name: "Approve copy", task_stage: "Review", task_project: ["initiative"] },
+        ],
+      },
+    ];
+
+    expect(unitProjectSummary(project, catalog)).toEqual({
+      holder: "Keel",
+      state: "In progress",
+      blocker: "Repair import",
+      waiting: "Approve copy",
+    });
   });
 });

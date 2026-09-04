@@ -4,6 +4,9 @@ import {
   createGenuiHomePin,
   createInstrumentHomePin,
   createPluginHomePin,
+  configForDashboard,
+  dashboardScope,
+  findHomePin,
   isDatabaseViewHomePin,
   isGenuiHomePin,
   isInstrumentHomePin,
@@ -13,7 +16,9 @@ import {
   parseHomeWidgetFilterJson,
   patchHomePinPlacements,
   removeHomePinById,
+  removeHomePin,
   restoreHomePin,
+  pinsForDashboard,
   toggleInstrumentHomePin,
   type HomePin,
 } from "@/lib/home-pins";
@@ -130,5 +135,20 @@ describe("Home pin mutations", () => {
     expect(restoreHomePin([{ ...first, id: "replacement" }], first)).toEqual([
       { ...first, id: "replacement" },
     ]);
+  });
+
+  it("keeps Home and workspace pins in separate dashboards", () => {
+    const workspacePin: HomePin = {
+      ...first,
+      id: "workspace-pin",
+      config: configForDashboard(undefined, "workspace:client-work"),
+    };
+
+    expect(dashboardScope(first)).toBe("home");
+    expect(dashboardScope(workspacePin)).toBe("workspace:client-work");
+    expect(pinsForDashboard([first, workspacePin], "home")).toEqual([first]);
+    expect(findHomePin([workspacePin], first)).toBeNull();
+    expect(removeHomePin([first, workspacePin], first).pins).toEqual([workspacePin]);
+    expect(restoreHomePin([workspacePin], first)).toEqual([workspacePin, first]);
   });
 });

@@ -22,6 +22,7 @@ import {
   patchHomePinMetadata,
   removeHomePinById,
   restoreHomePin,
+  pinsForDashboard,
   saveHomePins,
   supportsPinnedHomeView,
   type HomePin,
@@ -105,7 +106,7 @@ export function HomeView() {
 
   const pinnedWidgets = useMemo<PinnedHomeWidgetModel[]>(() => {
     const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
-    return pins
+    return pinsForDashboard(pins, "home")
       .map((pin): PinnedHomeWidgetModel | null => {
         if (isGenuiHomePin(pin)) return { kind: "genui", pin };
         if (isPluginHomePin(pin)) return { kind: "plugin", pin };
@@ -119,7 +120,8 @@ export function HomeView() {
   }, [catalog, pins]);
 
   const widgetPresets = useMemo(() => buildHomeWidgetPresets(catalog), [catalog]);
-  const databasePins = useMemo(() => pins.filter(isDatabaseViewHomePin), [pins]);
+  const homePins = useMemo(() => pinsForDashboard(pins, "home"), [pins]);
+  const databasePins = useMemo(() => homePins.filter(isDatabaseViewHomePin), [homePins]);
 
   useEffect(() => {
     const validIds = new Set(pinnedWidgets.map((widget) => widget.pin.id));
@@ -149,7 +151,7 @@ export function HomeView() {
   );
 
   const applyAuthoritativePins = useCallback((nextPins: HomePin[]) => {
-    const nextLayout = nextPins.map((pin) => ({
+    const nextLayout = pinsForDashboard(nextPins, "home").map((pin) => ({
       id: pin.id,
       x: pin.x,
       y: pin.y,
@@ -191,7 +193,7 @@ export function HomeView() {
     legacyPluginMigrationStartedRef.current = true;
     void enqueuePinMutation((current) => legacyKeys.reduce((next, key) => {
       const widget = parseWidgetKey(key);
-      if (!widget || next.some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return next;
+      if (!widget || pinsForDashboard(next, "home").some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return next;
       return [...next, createPluginHomePin(next, { ...widget, title: widget.widgetId })];
     }, current)).then(clearLegacyPluginWidgetKeys).catch((migrationError) => {
       legacyPluginMigrationStartedRef.current = false;
@@ -307,7 +309,7 @@ export function HomeView() {
     if (isHomeWidgetPresetPinned(databasePins, preset)) return;
     setWidgetPickerOpen(false);
     void enqueuePinMutation((current) => {
-      if (isHomeWidgetPresetPinned(current.filter(isDatabaseViewHomePin), preset)) return current;
+      if (isHomeWidgetPresetPinned(pinsForDashboard(current, "home").filter(isDatabaseViewHomePin), preset)) return current;
       return [...current, createDatabaseHomePin(current, {
         databaseId: preset.databaseId,
         viewId: preset.viewId,
@@ -326,7 +328,7 @@ export function HomeView() {
   function handleAddPluginWidget(widget: { pluginId: string; widgetId: string; title: string }) {
     setWidgetPickerOpen(false);
     void enqueuePinMutation((current) => {
-      if (current.some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return current;
+      if (pinsForDashboard(current, "home").some((pin) => isPluginHomePin(pin) && pin.pluginId === widget.pluginId && pin.widgetId === widget.widgetId)) return current;
       return [...current, createPluginHomePin(current, widget)];
     }).then(() => toast.success(`${widget.title} added to Home`)).catch((err) => {
       void restoreRemotePinsAfterFailure();
@@ -415,7 +417,7 @@ export function HomeView() {
                   );
                 })}
                 {/* wave-1 plugins: widgets contributed by ~/.hermes/plugins */}
-                <PluginWidgetMenuItems pins={pins} onAdd={handleAddPluginWidget} />
+                <PluginWidgetMenuItems pins={homePins} onAdd={handleAddPluginWidget} />
               </div>
             ) : null}
           </div>

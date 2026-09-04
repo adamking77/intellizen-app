@@ -48,6 +48,10 @@ export interface HomeInstrumentPin extends HomePinBase {
 
 export type HomePin = HomeDatabaseViewPin | HomeGenuiPin | HomePluginPin | HomeInstrumentPin;
 export type HomePinPlacement = Pick<HomePin, "id" | "x" | "y" | "w" | "h">;
+export type DashboardScope = "home" | `workspace:${string}`;
+
+export const HOME_DASHBOARD_SCOPE: DashboardScope = "home";
+const DASHBOARD_SCOPE_KEY = "dashboardScope";
 
 const GRID_COLS = 12;
 const DEFAULT_PIN_W = 4;
@@ -95,12 +99,34 @@ export function isInstrumentHomePin(pin: HomePin): pin is HomeInstrumentPin {
   return pin.kind === "instrument";
 }
 
+/** Missing scope is Home so every existing pin remains backward-compatible. */
+export function dashboardScope(pin: HomePin): DashboardScope {
+  const scope = pin.config?.[DASHBOARD_SCOPE_KEY];
+  return typeof scope === "string" && scope.startsWith("workspace:")
+    ? scope as DashboardScope
+    : HOME_DASHBOARD_SCOPE;
+}
+
+export function pinsForDashboard(pins: HomePin[], scope: DashboardScope) {
+  return pins.filter((pin) => dashboardScope(pin) === scope);
+}
+
+export function configForDashboard(
+  config: Record<string, unknown> | undefined,
+  scope: DashboardScope,
+) {
+  const next = { ...(config ?? {}) };
+  if (scope === HOME_DASHBOARD_SCOPE) delete next[DASHBOARD_SCOPE_KEY];
+  else next[DASHBOARD_SCOPE_KEY] = scope;
+  return Object.keys(next).length ? next : undefined;
+}
+
 export function findHomePin(
   pins: HomePin[],
   input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId">,
 ) {
   return pins.find(
-    (pin) => isDatabaseViewHomePin(pin) && pin.databaseId === input.databaseId && pin.viewId === input.viewId,
+    (pin) => dashboardScope(pin) === HOME_DASHBOARD_SCOPE && isDatabaseViewHomePin(pin) && pin.databaseId === input.databaseId && pin.viewId === input.viewId,
   ) ?? null;
 }
 
@@ -117,7 +143,7 @@ export function upsertHomePin(
     id: crypto.randomUUID(),
     databaseId: input.databaseId,
     viewId: input.viewId,
-    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    ...getNextPinPlacement(pinsForDashboard(pins, HOME_DASHBOARD_SCOPE), DEFAULT_PIN_W),
     w: DEFAULT_PIN_W,
     h: DEFAULT_PIN_H,
   };
@@ -136,6 +162,7 @@ export function removeHomePin(
   const nextPins = pins.filter(
     (pin) => !(
       isDatabaseViewHomePin(pin) &&
+      dashboardScope(pin) === HOME_DASHBOARD_SCOPE &&
       pin.databaseId === input.databaseId &&
       pin.viewId === input.viewId
     ),
@@ -188,14 +215,16 @@ export function restoreHomePin(pins: HomePin[], pin: HomePin) {
         isDatabaseViewHomePin(pin) &&
         candidate.databaseId === pin.databaseId &&
         candidate.viewId === pin.viewId &&
-        candidate.config?.presetKey === pin.config?.presetKey
+        candidate.config?.presetKey === pin.config?.presetKey &&
+        dashboardScope(candidate) === dashboardScope(pin)
       ),
   );
   return alreadyPresent ? pins : [...pins, pin];
 }
 
 export function createGenuiHomePin(widget: AgentChatWidget, pins: HomePin[]): HomeGenuiPin {
-  const generatedPins = pins.filter(isGenuiHomePin);
+  const homePins = pinsForDashboard(pins, HOME_DASHBOARD_SCOPE);
+  const generatedPins = homePins.filter(isGenuiHomePin);
   if (generatedPins.length >= 12) {
     throw new Error("Home already has the maximum of 12 generated views.");
   }
@@ -206,7 +235,7 @@ export function createGenuiHomePin(widget: AgentChatWidget, pins: HomePin[]): Ho
     title: widget.title?.trim() || defaultGenuiTitle(widget),
     widget,
     pinnedAt: new Date().toISOString(),
-    ...getNextPinPlacement(pins, width),
+    ...getNextPinPlacement(homePins, width),
     w: width,
     h: 12,
   };
@@ -223,7 +252,7 @@ export function createPluginHomePin(
     widgetId: input.widgetId,
     title: input.title,
     pinnedAt: new Date().toISOString(),
-    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    ...getNextPinPlacement(pinsForDashboard(pins, HOME_DASHBOARD_SCOPE), DEFAULT_PIN_W),
     w: DEFAULT_PIN_W,
     h: DEFAULT_PIN_H,
   };
@@ -239,7 +268,7 @@ export function createInstrumentHomePin(
     instrumentId: input.instrumentId,
     title: input.title,
     pinnedAt: new Date().toISOString(),
-    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    ...getNextPinPlacement(pinsForDashboard(pins, HOME_DASHBOARD_SCOPE), DEFAULT_PIN_W),
     w: DEFAULT_PIN_W,
     h: 9,
   };
@@ -249,7 +278,7 @@ export function toggleInstrumentHomePin(
   pins: HomePin[],
   input: Pick<HomeInstrumentPin, "instrumentId" | "title">,
 ) {
-  const existing = pins.find((pin) => isInstrumentHomePin(pin) && pin.instrumentId === input.instrumentId);
+  const existing = pins.find((pin) => dashboardScope(pin) === HOME_DASHBOARD_SCOPE && isInstrumentHomePin(pin) && pin.instrumentId === input.instrumentId);
   return existing
     ? pins.filter((pin) => pin.id !== existing.id)
     : [...pins, createInstrumentHomePin(pins, input)];
@@ -260,6 +289,9 @@ export function createDatabaseHomePin(
   input: Pick<HomeDatabaseViewPin, "databaseId" | "viewId"> &
     Pick<HomeDatabaseViewPin, "title" | "filter" | "config">,
 ): HomeDatabaseViewPin {
+  const scope = typeof input.config?.[DASHBOARD_SCOPE_KEY] === "string" && input.config[DASHBOARD_SCOPE_KEY].startsWith("workspace:")
+    ? input.config[DASHBOARD_SCOPE_KEY] as DashboardScope
+    : HOME_DASHBOARD_SCOPE;
   return {
     id: crypto.randomUUID(),
     kind: "database-view",
@@ -268,7 +300,7 @@ export function createDatabaseHomePin(
     title: input.title,
     filter: input.filter,
     config: input.config,
-    ...getNextPinPlacement(pins, DEFAULT_PIN_W),
+    ...getNextPinPlacement(pinsForDashboard(pins, scope), DEFAULT_PIN_W),
     w: DEFAULT_PIN_W,
     h: DEFAULT_PIN_H,
   };
