@@ -5,6 +5,7 @@ import GridLayout, { type Layout } from "react-grid-layout";
 import { ExternalLink, GripVertical, Plus, RefreshCw, Settings2, X } from "lucide-react";
 
 import { AgentChatWidget } from "@/components/agent/agent-chat-widget";
+import { InstrumentWidget } from "@/components/home/instrument-widget";
 import { DatabaseChartView } from "@/components/database/DatabaseChartView";
 import { DatabaseListView } from "@/components/database/DatabaseListView";
 import { DatabaseTableView } from "@/components/database/DatabaseTableView";
@@ -12,6 +13,7 @@ import { DatabaseTimelineView } from "@/components/database/DatabaseTimelineView
 import {
   type HomeDatabaseViewPin,
   type HomeGenuiPin,
+  type HomeInstrumentPin,
   type HomePinBase,
   type HomePluginPin,
   type HomeWidgetFilter,
@@ -51,7 +53,12 @@ export interface PinnedPluginWidgetModel {
   pin: HomePluginPin;
 }
 
-export type PinnedHomeWidgetModel = PinnedDatabaseWidgetModel | PinnedGenuiWidgetModel | PinnedPluginWidgetModel;
+export interface PinnedInstrumentWidgetModel {
+  kind: "instrument";
+  pin: HomeInstrumentPin;
+}
+
+export type PinnedHomeWidgetModel = PinnedDatabaseWidgetModel | PinnedGenuiWidgetModel | PinnedPluginWidgetModel | PinnedInstrumentWidgetModel;
 
 export function PinnedViewGrid({
   widgets,
@@ -170,8 +177,8 @@ function PinnedWidgetCard({
   );
   const title = widget.pin.title || (widget.kind === "database-view"
     ? widget.view.name
-    : widget.kind === "genui" ? widget.pin.widget.title || "Generated view" : widget.pin.widgetId);
-  const sourceLabel = widget.kind === "database-view" ? widget.database.name : widget.kind === "genui" ? "Agent widget" : "Plugin widget";
+    : widget.kind === "genui" ? widget.pin.widget.title || "Generated view" : widget.kind === "plugin" ? widget.pin.widgetId : "Activity");
+  const sourceLabel = widget.kind === "database-view" ? widget.database.name : widget.kind === "genui" ? "Agent widget" : widget.kind === "plugin" ? "Plugin widget" : "Activity";
 
   function beginEditing() {
     setTitleDraft(title);
@@ -400,6 +407,8 @@ function PinnedWidgetCard({
           <div className="h-full overflow-auto px-3 py-2">
             <PluginWidgetSurface pluginId={widget.pin.pluginId} widgetId={widget.pin.widgetId} />
           </div>
+        ) : widget.kind === "instrument" ? (
+          <InstrumentWidget pin={widget.pin} />
         ) : null}
       </div>
     </div>

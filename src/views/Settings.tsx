@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 
 import { AppearanceSection } from "@/components/settings/appearance";
+import { ActivitySettings } from "@/components/settings/activity";
 import { CapabilitiesSettings } from "@/components/settings/capabilities";
 import { ContextSettings } from "@/components/settings/context";
 import { GeneralSettings } from "@/components/settings/general";
@@ -14,6 +15,7 @@ const SECTIONS = [
   { id: "context", label: "Context" },
   { id: "voice", label: "Voice" },
   { id: "appearance", label: "Appearance" },
+  { id: "activity", label: "Activity" },
   { id: "general", label: "General" },
 ] as const;
 
@@ -55,6 +57,7 @@ export function SettingsView() {
           {section === "context" ? <ContextSettings /> : null}
           {section === "voice" ? <VoiceSettings /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
+          {section === "activity" ? <ActivitySettings /> : null}
           {section === "general" ? <GeneralSettings /> : null}
           </div>
         </div>

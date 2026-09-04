@@ -47,4 +47,18 @@ describe("homePinIdentitySignature", () => {
       homePinIdentitySignature([{ ...first, x: 3, y: 16, w: 9, h: 12 }]),
     );
   });
+
+  it("tracks an activity instrument by its stable metric id", () => {
+    const instrument: HomePin = {
+      id: "activity-a",
+      kind: "instrument",
+      instrumentId: "attention.waiting",
+      pinnedAt: "2026-09-04T00:00:00Z",
+      x: 0,
+      y: 0,
+      w: 4,
+      h: 9,
+    };
+    expect(homePinIdentitySignature([instrument])).toContain("instrument:attention.waiting");
+  });
 });

@@ -1270,7 +1270,7 @@ async function ensureHomePinsDatabase(): Promise<WorkspaceDatabaseRow> {
   // Mirrors ensureHomePinsWorkspaceDatabase() in src/lib/data.ts — keep in sync.
   const schema = [
     { id: HOME_PIN_FIELDS.pinId, name: "Pin ID", type: "text" },
-    { id: HOME_PIN_FIELDS.kind, name: "Kind", type: "select", options: ["database-view", "genui", "plugin"] },
+    { id: HOME_PIN_FIELDS.kind, name: "Kind", type: "select", options: ["database-view", "genui", "plugin", "instrument"] },
     { id: HOME_PIN_FIELDS.databaseId, name: "Database ID", type: "text" },
     { id: HOME_PIN_FIELDS.viewId, name: "View ID", type: "text" },
     { id: HOME_PIN_FIELDS.title, name: "Title", type: "text" },
@@ -1355,7 +1355,9 @@ function homePinPlacement(record: WorkspaceRecordRow): HomePinPlacement {
 }
 
 async function pinViewToHome(input: {
-  view_id: string;
+  view_id?: string;
+  instrument_id?: string;
+  title?: string;
   x?: number;
   y?: number;
   width?: number;
@@ -1365,6 +1367,9 @@ async function pinViewToHome(input: {
   summary?: string | null;
   confirm_write?: boolean;
 }) {
+  if (input.view_id && input.instrument_id) throw new Error("Use either view_id or instrument_id, not both.");
+  if (input.instrument_id) return pinInstrumentToHome(input as typeof input & { instrument_id: string });
+  if (!input.view_id) throw new Error("pin_view_to_home needs either view_id or instrument_id.");
   const view = await getWorkspaceViewById(input.view_id);
   if (!HOME_PINNABLE_VIEW_TYPES.has(view.type)) {
     throw new Error(`View type "${view.type}" cannot be pinned to Home. Pinnable types: ${Array.from(HOME_PINNABLE_VIEW_TYPES).join(", ")}`);
@@ -1462,6 +1467,75 @@ async function pinViewToHome(input: {
     view_id: view.id,
     message: `Pinned "${view.name}" to Home. The running desktop app picks up remote pins within ~15 seconds.`,
   };
+}
+
+async function pinInstrumentToHome(input: {
+  instrument_id: string;
+  title?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  actor: string;
+  durable_role?: string | null;
+  summary?: string | null;
+  confirm_write?: boolean;
+}) {
+  const instrumentId = input.instrument_id.trim();
+  if (!/^[a-z0-9][a-z0-9.-]{0,127}$/.test(instrumentId)) {
+    throw new Error("instrument_id must be a lowercase activity metric id.");
+  }
+  const existingPinsDatabase = await findHomePinsDatabase();
+  const pinRecords = existingPinsDatabase ? await listHomePinRecords(existingPinsDatabase.id) : [];
+  const alreadyPinned = pinRecords.find((record) => {
+    if (record.fields?.[HOME_PIN_FIELDS.kind] !== "instrument") return false;
+    try {
+      const widget = JSON.parse(String(record.fields?.[HOME_PIN_FIELDS.widget] ?? "")) as { instrumentId?: unknown };
+      return widget.instrumentId === instrumentId;
+    } catch {
+      return false;
+    }
+  });
+  if (alreadyPinned) {
+    return { dry_run: false, already_pinned: true, pin_record_id: alreadyPinned.id, instrument_id: instrumentId };
+  }
+  const w = Math.min(Math.max(Math.round(input.width ?? HOME_PIN_DEFAULT_W), 3), HOME_PIN_GRID_COLS);
+  const h = Math.max(Math.round(input.height ?? 9), 8);
+  const placement = resolveHomePinPlacement(pinRecords.map(homePinPlacement), { x: input.x, y: input.y, w, h }, HOME_PIN_GRID_COLS);
+  const title = input.title?.trim() || instrumentId.split(".").at(-1)?.replaceAll("-", " ") || "Activity";
+  const preview = { instrument_id: instrumentId, title, placement };
+  if (!input.confirm_write) return recordWritePreview("pin_view_to_home", preview);
+
+  const pinsDatabase = existingPinsDatabase ?? await ensureHomePinsDatabase();
+  const pinId = randomUUID();
+  const { data, error } = await supabase.schema("workspace").from("records").insert([{
+    database_id: pinsDatabase.id,
+    entity: pinsDatabase.entity ?? "genzen",
+    fields: {
+      [HOME_PIN_FIELDS.pinId]: pinId,
+      [HOME_PIN_FIELDS.kind]: "instrument",
+      [HOME_PIN_FIELDS.title]: title,
+      [HOME_PIN_FIELDS.widget]: JSON.stringify({ instrumentId }),
+      [HOME_PIN_FIELDS.pinnedAt]: new Date().toISOString(),
+      [HOME_PIN_FIELDS.x]: placement.x,
+      [HOME_PIN_FIELDS.y]: placement.y,
+      [HOME_PIN_FIELDS.w]: placement.w,
+      [HOME_PIN_FIELDS.h]: placement.h,
+    },
+    body: null,
+    taxonomy: { ...(pinsDatabase.taxonomy ?? {}), object_type: "home_dashboard_pin", routing_rule: "home_dashboard_pins" },
+  }]).select("id").single();
+  if (error) throw new Error(error.message);
+  const pinRecordId = (data as { id: string }).id;
+  await recordWorkEvent({
+    record_id: pinRecordId,
+    event_kind: "home_pin.created",
+    actor: input.actor,
+    durable_role: input.durable_role ?? null,
+    summary: input.summary ?? `Pinned activity instrument "${title}" to Home`,
+    payload: { tool: "pin_view_to_home", pin_id: pinId, ...preview },
+  });
+  return { dry_run: false, pinned: true, pin_record_id: pinRecordId, pin_id: pinId, ...preview };
 }
 
 async function unpinViewFromHome(input: {
@@ -3304,11 +3378,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     {
       name: "pin_view_to_home",
       description:
-        "Preview or pin a database view (chart, table, list, or timeline) to the Home dashboard's 12-column bento grid. Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
+        "Preview or pin a database view or Activity instrument to the Home dashboard's 12-column bento grid. Use view_id for chart/table/list/timeline views, or instrument_id for a Settings > Activity metric such as attention.waiting. Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
       inputSchema: {
         type: "object",
         properties: {
           view_id: { type: "string", description: "View UUID from list_database_views or create_database_view." },
+          instrument_id: { type: "string", description: "Stable Activity metric id, for example attention.waiting, engine.hermes-connected, or work.cards-moved." },
+          title: { type: "string", description: "Optional Home title for an Activity instrument." },
           x: { type: "integer", minimum: 0, maximum: 11, description: "Optional zero-based bento grid column. Supply with y; x + width must be <= 12." },
           y: { type: "integer", minimum: 0, description: "Optional zero-based bento grid row. Supply with x." },
           width: { type: "integer", minimum: 3, maximum: 12, description: "Widget width in grid columns (3-12). Defaults to 4." },
@@ -3318,7 +3394,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           summary: { type: "string", description: "Receipt summary." },
           confirm_write: { type: "boolean", description: "Required true to write. Defaults to preview only." },
         },
-        required: ["view_id", "actor"],
+        required: ["actor"],
+        anyOf: [{ required: ["view_id"] }, { required: ["instrument_id"] }],
       },
     },
     {
@@ -4258,7 +4335,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── pin_view_to_home ──────────────────────────────────────────────────────
   if (name === "pin_view_to_home") {
     const result = await pinViewToHome((args ?? {}) as {
-      view_id: string;
+      view_id?: string;
+      instrument_id?: string;
+      title?: string;
       x?: number;
       y?: number;
       width?: number;

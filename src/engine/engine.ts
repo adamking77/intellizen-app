@@ -12,6 +12,8 @@ export type EngineInfo = {
   token: string;
   version: string;
   url: string;
+  /** Process start recorded by IntelliZen; absent for a discovered external engine. */
+  startedAt?: string | null;
 };
 
 export const NOT_DESKTOP_HOST = "offline: not in the desktop host";

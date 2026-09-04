@@ -51,10 +51,11 @@ pub struct EngineInfo {
     pub token: String,
     pub version: String,
     pub url: String,
+    pub started_at: Option<String>,
 }
 
 impl EngineInfo {
-    fn new(mode: &str, pid: u32, port: u16, token: String, version: String) -> Self {
+    fn new(mode: &str, pid: u32, port: u16, token: String, version: String, started_at: Option<String>) -> Self {
         Self {
             mode: mode.to_string(),
             pid,
@@ -62,6 +63,7 @@ impl EngineInfo {
             token,
             version,
             url: format!("http://127.0.0.1:{port}"),
+            started_at,
         }
     }
 
@@ -586,7 +588,7 @@ async fn wait_until_ready(
     }
 
     Ok(Spawned {
-        info: EngineInfo::new(MODE_SPAWNED, pid, port, token, version),
+        info: EngineInfo::new(MODE_SPAWNED, pid, port, token, version, Some(record.started_at.clone())),
         child,
     })
 }
@@ -624,6 +626,7 @@ pub async fn engine_start(
                     record.port,
                     record.token,
                     version,
+                    Some(record.started_at),
                 );
                 slot.child = None;
                 slot.info = Some(info.clone());
@@ -784,11 +787,12 @@ mod tests {
 
     #[test]
     fn engine_info_serialises_camel_case() {
-        let info = EngineInfo::new(MODE_SPAWNED, 42, 56083, "t".into(), "0.21.0".into());
+        let info = EngineInfo::new(MODE_SPAWNED, 42, 56083, "t".into(), "0.21.0".into(), Some("2026-09-02T09:00:00Z".into()));
         let json = serde_json::to_value(&info).expect("serialise");
         assert_eq!(json["mode"], "spawned");
         assert_eq!(json["url"], "http://127.0.0.1:56083");
         assert_eq!(json["port"], 56083);
+        assert_eq!(json["startedAt"], "2026-09-02T09:00:00Z");
     }
 
     #[test]

@@ -15,6 +15,7 @@ import {
   createPluginHomePin,
   isDatabaseViewHomePin,
   isGenuiHomePin,
+  isInstrumentHomePin,
   isPluginHomePin,
   patchHomePinPlacements,
   patchHomePinMetadata,
@@ -107,6 +108,7 @@ export function HomeView() {
       .map((pin): PinnedHomeWidgetModel | null => {
         if (isGenuiHomePin(pin)) return { kind: "genui", pin };
         if (isPluginHomePin(pin)) return { kind: "plugin", pin };
+        if (isInstrumentHomePin(pin)) return { kind: "instrument", pin };
         const database = catalogById.get(pin.databaseId);
         const view = database?.views.find((candidate) => candidate.id === pin.viewId);
         if (!database || !view || !supportsPinnedHomeView(view.type)) return null;

@@ -18,7 +18,7 @@ export interface WorkEventItem {
   created_at: string;
 }
 
-export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; limit?: number }) {
+export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; since?: string; limit?: number }) {
   let query = supabase
     .schema("workspace").from("work_events")
     .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, created_at")
@@ -31,9 +31,34 @@ export async function listWorkEvents(input: { recordId?: string; workflowRunId?:
   } else if (input.workflowRunId) {
     query = query.eq("workflow_run_id", input.workflowRunId);
   }
+  if (input.since) query = query.gte("created_at", input.since);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as WorkEventItem[];
+}
+
+export async function recordProposalDecision(input: {
+  proposalId: string;
+  docPath: string;
+  decision: "accepted" | "rejected";
+  hunkCount: number;
+  actor: string;
+}) {
+  const { error } = await supabase.schema("workspace").from("work_events").insert([{
+    record_id: null,
+    workflow_run_id: null,
+    event_kind: `proposal.${input.decision}`,
+    actor: input.actor,
+    durable_role: null,
+    decision_role: input.actor === "Adam" ? "founder_approval_authority" : null,
+    summary: `${input.decision === "accepted" ? "Accepted" : "Rejected"} ${input.hunkCount} proposal change${input.hunkCount === 1 ? "" : "s"}`,
+    payload: {
+      proposal_id: input.proposalId,
+      doc_path: input.docPath,
+      hunk_count: input.hunkCount,
+    },
+  }]);
+  if (error) throw error;
 }
 
 export interface ReceiptIntegrityDiagnostic {

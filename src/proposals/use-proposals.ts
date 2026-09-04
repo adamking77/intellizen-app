@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+import { recordProposalDecision } from "@/lib/data/work-receipts";
 import type { Hunk, Proposal } from "./types";
+
+async function proposalReceipt(input: Parameters<typeof recordProposalDecision>[0]) {
+  try {
+    await recordProposalDecision(input);
+    return null;
+  } catch (error) {
+    return `The document decision was applied, but its Activity receipt failed: ${String(error)}`;
+  }
+}
 
 /** What is waiting on the open document, and the decisions about it.
  *
@@ -47,13 +57,17 @@ export function useProposals(docPath: string | null) {
       setBusy(true);
       try {
         let text: string | null = null;
+        let receiptError: string | null = null;
         if (taken.length > 0) {
           text = await invoke<string>("proposal_accept_hunk", { docPath, id, hunks: taken });
+          receiptError = await proposalReceipt({ proposalId: id, docPath, decision: "accepted", hunkCount: taken.length, actor: "Adam" });
         }
         if (dropped.length > 0) {
           await invoke("proposal_reject_hunk", { docPath, id, hunks: dropped });
+          const droppedReceiptError = await proposalReceipt({ proposalId: id, docPath, decision: "rejected", hunkCount: dropped.length, actor: "Adam" });
+          receiptError ??= droppedReceiptError;
         }
-        setError(null);
+        setError(receiptError);
         return text;
       } catch (e) {
         setError(String(e));
@@ -72,7 +86,7 @@ export function useProposals(docPath: string | null) {
       setBusy(true);
       try {
         await invoke("proposal_reject_hunk", { docPath, id, hunks: [] });
-        setError(null);
+        setError(await proposalReceipt({ proposalId: id, docPath, decision: "rejected", hunkCount: 1, actor: "Adam" }));
       } catch (e) {
         setError(String(e));
       } finally {

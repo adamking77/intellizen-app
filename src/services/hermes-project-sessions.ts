@@ -13,6 +13,8 @@ export interface HermesProjectSession {
   source: string | null;
   lastActive: number;
   messageCount: number;
+  failed: boolean;
+  toolCallCount: number;
 }
 
 export interface HermesStoredMessage {
@@ -33,6 +35,8 @@ interface RawSession {
   last_active?: unknown;
   started_at?: unknown;
   message_count?: unknown;
+  tool_call_count?: unknown;
+  end_reason?: unknown;
 }
 
 interface HermesProjectResult {
@@ -71,6 +75,8 @@ function normalizeSessions(rows: RawSession[]): HermesProjectSession[] {
       source: string(row.source) || null,
       lastActive: Number(row.last_active ?? row.started_at ?? 0) || 0,
       messageCount: Number(row.message_count ?? 0) || 0,
+      failed: /error|fail|crash/i.test(string(row.end_reason)),
+      toolCallCount: Number(row.tool_call_count ?? 0) || 0,
     }];
   });
   return sessions.sort((left, right) => right.lastActive - left.lastActive);

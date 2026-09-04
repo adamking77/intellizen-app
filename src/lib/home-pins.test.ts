@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   createGenuiHomePin,
+  createInstrumentHomePin,
   createPluginHomePin,
   isDatabaseViewHomePin,
   isGenuiHomePin,
+  isInstrumentHomePin,
   isPluginHomePin,
   parseHomePin,
   parseHomeWidgetConfigJson,
@@ -12,6 +14,7 @@ import {
   patchHomePinPlacements,
   removeHomePinById,
   restoreHomePin,
+  toggleInstrumentHomePin,
   type HomePin,
 } from "@/lib/home-pins";
 
@@ -75,6 +78,25 @@ describe("Home pin mutations", () => {
 
     expect(parsed && isPluginHomePin(parsed)).toBe(true);
     expect(parsed).toMatchObject({ kind: "plugin", pluginId: "weather", widgetId: "forecast", title: "Forecast" });
+  });
+
+  it("parses durable activity instruments from their shared Home Pin payload", () => {
+    const pin = createInstrumentHomePin([first], { instrumentId: "attention.waiting", title: "Waits on you" });
+    const parsed = parseHomePin({
+      ...pin,
+      instrumentId: undefined,
+      widget: { instrumentId: pin.instrumentId },
+    });
+
+    expect(parsed && isInstrumentHomePin(parsed)).toBe(true);
+    expect(parsed).toMatchObject({ kind: "instrument", instrumentId: "attention.waiting", title: "Waits on you" });
+  });
+
+  it("pins and unpins an activity instrument without touching other pins", () => {
+    const pinned = toggleInstrumentHomePin([first], { instrumentId: "attention.waiting", title: "Waits on you" });
+    expect(pinned).toHaveLength(2);
+    expect(pinned.some((pin) => isInstrumentHomePin(pin) && pin.instrumentId === "attention.waiting")).toBe(true);
+    expect(toggleInstrumentHomePin(pinned, { instrumentId: "attention.waiting", title: "Waits on you" })).toEqual([first]);
   });
 
   it("validates filter and config metadata before persistence", () => {

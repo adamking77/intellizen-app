@@ -113,7 +113,7 @@ pub(super) async fn discover_running_engine() -> Option<EngineInfo> {
             let Ok(token) = session_token(port).await else {
                 continue;
             };
-            return Some(EngineInfo::new(MODE_ATTACHED, pid, port, token, version));
+            return Some(EngineInfo::new(MODE_ATTACHED, pid, port, token, version, None));
         }
     }
     None
