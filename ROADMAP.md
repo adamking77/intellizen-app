@@ -92,14 +92,15 @@ That scene is done when all of these are true:
 Anything not on this list is a later version, not a reason this one is not
 done.
 
-## Still to decide
+## Decisions made with the code open
 
-Decided with the code open, at the stage that needs it. Not before.
+Settled in the stages that needed them, 2026-09-04.
 
-| Decision | Whose | When | Recommendation |
-|---|---|---|---|
-| How an agent asks permission (its own prompt or the app's) | Claude | Phase B.5 | Every request stays in the conversation, room, document, or card that raised it. No global queue. |
-| Gateway polling vs events for room members; plugin entry format | Claude | B.7, D.12 | Engineering calls. |
+| Decision | Stage | Decision |
+|---|---|---|
+| How an agent asks permission | B.5, F.5 | IntelliZen renders the gateway or adapter's real choices as a decision card in the conversation that raised them. There is no second terminal prompt and no global queue. |
+| Room continuity | B.7, G.3 | Gateway events drive the live room. On reconnect, `session.events.since` replays the gap from the last sequence watermark; there is no `session.resume` polling loop. |
+| Plugin entry format | D.12 | A Hermes plugin may add `intellizen/plugin.js` beside `plugin.yaml`. It default-exports an object with `register(ctx)` and contributes through the typed IntelliZen plugin contract. |
 
 Settled by Adam, 2026-09-01: **no hard-coded Home widgets** (Home ships empty;
 widgets are made after the app is done). **No default counterpart**: agents
@@ -442,11 +443,7 @@ the overseer must wire.
 - Long specs. One page per stage. The audit found 45,000 words of spec
   against 33,000 lines of code; that ratio does not repeat.
 
-## Open questions
+## Open question
 
-1. Does the group engine's `session.resume` polling loop need replacing with
-   gateway events for ACP members? Decide in stage 7 with the code open.
-2. Which Home widgets survive the move to the plugin contract as-is, and which
-   become plugins? Decide in stage 13.
-3. Whether Claude Code as an ACP member should run with Claude's own
-   permission prompts or ours. Decide in stage 5 by trying both.
+Which Home widgets survive the move to the plugin contract as-is, and which
+become plugins? Decide in stage 13.
