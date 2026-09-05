@@ -1,7 +1,8 @@
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 import { AppearanceSection } from "@/components/settings/appearance";
-import { ActivitySettings } from "@/components/settings/activity";
+import { Select } from "@/components/ui/select";
+import { usePreference } from "@/lib/settings-preferences";
 import { CapabilitiesSettings } from "@/components/settings/capabilities";
 import { ContextSettings } from "@/components/settings/context";
 import { GeneralSettings } from "@/components/settings/general";
@@ -17,7 +18,6 @@ const SECTIONS = [
   { id: "context", label: "Context" },
   { id: "voice", label: "Voice" },
   { id: "appearance", label: "Appearance" },
-  { id: "activity", label: "Activity" },
   { id: "general", label: "General" },
 ] as const;
 
@@ -29,9 +29,12 @@ export function SettingsView() {
   const section = SECTIONS.some((item) => item.id === requested) ? requested! : "providers";
   const engineOpen = useEngineStore((state) => state.connection === "open");
 
+  const [collapsed, setCollapsed] = usePreference("intelizen:settings-nav-collapsed", "false");
+  if (params.get("section") === "activity") return <Navigate to="/agents?view=activity" replace />;
+
   return (
-    <div className="subshell h-full bg-[var(--base)]">
-      <aside className="subpane flex w-[clamp(168px,15vw,210px)] shrink-0 flex-col gap-0.5 bg-[var(--mantle)] p-[14px]">
+    <div className="@container subshell h-full bg-[var(--base)]">
+      {collapsed !== "true" ? <aside className="subpane hidden w-[180px] shrink-0 flex-col gap-0.5 bg-[var(--mantle)] p-[14px] @[700px]:flex">
         <span className="block px-0.5 pb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
         <nav className="flex flex-col gap-0.5" aria-label="Settings sections" role="tablist" aria-orientation="vertical">
           {SECTIONS.map((item) => (
@@ -49,18 +52,22 @@ export function SettingsView() {
             </button>
           ))}
         </nav>
-      </aside>
+        <button className="action mt-auto text-left" onClick={() => setCollapsed("true")}>Collapse sections</button>
+      </aside> : null}
 
       <main className="subpane relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
+        <div className={`flex flex-wrap items-center gap-3 px-6 pt-4 ${collapsed !== "true" ? "@[700px]:hidden" : ""}`}>
+          <label className="flex min-w-0 items-center gap-3 text-[var(--t-meta)] text-[var(--text-muted)]">Settings section<Select aria-label="Settings section" value={section} onChange={(e) => setParams({ section: e.target.value }, { replace: true })}>{SECTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Select></label>
+          {collapsed === "true" ? <button className="action hidden @[700px]:block" onClick={() => setCollapsed("false")}>Show sections</button> : null}
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5">
-          <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${section}`} className="flex max-w-[880px] flex-col gap-2">
+          <div id="settings-panel" role="tabpanel" aria-label={`${SECTIONS.find((item) => item.id === section)?.label} settings`} className="flex max-w-[880px] flex-col gap-2">
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
           {section === "plugins" ? <PluginsSettings /> : null}
           {section === "context" ? <ContextSettings /> : null}
           {section === "voice" ? <VoiceSettings /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
-          {section === "activity" ? <ActivitySettings /> : null}
           {section === "general" ? <GeneralSettings /> : null}
           </div>
         </div>

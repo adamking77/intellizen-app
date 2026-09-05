@@ -1,3 +1,7 @@
+import { ActivityWidget } from "@/components/activity/activity-dashboard";
+import { ACTIVITY_CARDS, type ActivityCardId } from "@/lib/activity-dashboard";
+import { LineChart } from "@/components/charts/line-chart";
+import { Line } from "@/components/charts/line";
 import { useQuery } from "@tanstack/react-query";
 
 import { collectActivitySnapshot, type ActivityMetric } from "@/lib/activity";
@@ -7,6 +11,12 @@ import { cn } from "@/lib/utils";
 export const ACTIVITY_QUERY_KEY = ["activity", "snapshot"] as const;
 
 export function InstrumentWidget({ pin }: { pin: HomeInstrumentPin }) {
+  const card = pin.instrumentId.slice(9) as ActivityCardId;
+  if (pin.instrumentId.startsWith("activity.") && ACTIVITY_CARDS.includes(card)) return <ActivityWidget pin={pin} card={card} />;
+  return <LegacyInstrumentWidget pin={pin} />;
+}
+
+function LegacyInstrumentWidget({ pin }: { pin: HomeInstrumentPin }) {
   const { data, isPending, error } = useQuery({
     queryKey: ACTIVITY_QUERY_KEY,
     queryFn: () => collectActivitySnapshot(),
@@ -55,19 +65,6 @@ export function InstrumentFigure({ metric, compact = false }: { metric: Activity
 }
 
 function Sparkline({ values }: { values: number[] }) {
-  const width = 160;
-  const height = 32;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const points = values.map((value, index) => {
-    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * width;
-    const y = height - ((value - min) / range) * (height - 4) - 2;
-    return `${x},${y}`;
-  }).join(" ");
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-8 w-full text-[var(--overlay-1)]" aria-hidden="true">
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
+  const data = values.map((value, index) => ({ date: new Date(2020, 0, index + 1), value }));
+  return <div className="h-8 w-full" aria-hidden><LineChart data={data} className="h-8" margin={{ top: 2, bottom: 2, left: 0, right: 0 }} aspectRatio="5 / 1" animationDuration={0}><Line dataKey="value" animate={false} showHighlight={false} fadeEdges={false} /></LineChart></div>;
 }

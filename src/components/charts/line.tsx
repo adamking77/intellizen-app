@@ -130,6 +130,7 @@ export function Line({
         <LinePath
           curve={curve}
           data={renderData}
+          defined={(d) => typeof d[dataKey] === "number" && Number.isFinite(d[dataKey])}
           innerRef={pathRef}
           stroke={hasDashTail ? "transparent" : lineStroke}
           strokeLinecap="round"

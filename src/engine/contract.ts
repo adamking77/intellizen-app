@@ -241,6 +241,8 @@ export interface ClarifyRequestPayload extends ClarifyQuestionPayload {
 }
 
 export interface SessionUsage {
+  /** Optional cumulative session cost reported by an ACP provider. */
+  cost?: { amount: number; currency: string } | null;
   model?: string;
   input?: number;
   output?: number;

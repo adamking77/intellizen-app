@@ -364,3 +364,9 @@ Surface and semantic palette roles above remain the authority. `scripts/check-de
 When the agent panel or HUD is detached, the main app reserves no side strip or placeholder pane. The existing header panel button focuses the detached window.
 
 The HUD always shows idle dictation and voice-chat controls. Unavailable controls remain disabled with a reason in their label/tooltip; visibility must not enable recording or change voice preferences.
+
+### Activity and Settings navigation
+
+Agents has a directory/activity switch. Activity presents five neutral cards: Needs attention, In progress, Outcomes, Usage and Connections. Period and workspace stay visible; target filters and detailed counters expand on demand. Cards become one column based on the content pane width. Use the existing chart kit; keep exact counts/coverage available as text. Pin dialogs use labeled Home/workspace destinations, a visible Cancel action and focus return to the invoking control.
+
+Settings sections remain labeled. At narrow content widths the section list becomes a native section picker; on wider panes users can collapse and restore the list. Agent/team identity and picker remain in the common panel header through docking/HUD. HUD height is bounded by the native viewport so long rosters scroll while the pill stays visible.

@@ -1491,6 +1491,8 @@ async function pinInstrumentToHome(input: {
   const alreadyPinned = pinRecords.find((record) => {
     if (record.fields?.[HOME_PIN_FIELDS.kind] !== "instrument") return false;
     try {
+      const config = JSON.parse(String(record.fields?.[HOME_PIN_FIELDS.config] ?? "{}")) as { dashboardScope?: unknown } | null;
+      if (typeof config?.dashboardScope === "string" && config.dashboardScope.startsWith("workspace:")) return false;
       const widget = JSON.parse(String(record.fields?.[HOME_PIN_FIELDS.widget] ?? "")) as { instrumentId?: unknown };
       return widget.instrumentId === instrumentId;
     } catch {
@@ -3380,12 +3382,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     {
       name: "pin_view_to_home",
       description:
-        "Preview or pin a database view or Activity instrument to the Home dashboard's 12-column bento grid. Use view_id for chart/table/list/timeline views, or instrument_id for a Settings > Activity metric such as attention.waiting. Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
+        "Preview or pin a database view or Activity instrument to the Home dashboard's 12-column bento grid. Use view_id for chart/table/list/timeline views, or instrument_id for an Agents > Activity card such as activity.attention (legacy metrics remain supported). Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
       inputSchema: {
         type: "object",
         properties: {
           view_id: { type: "string", description: "View UUID from list_database_views or create_database_view." },
-          instrument_id: { type: "string", description: "Stable Activity metric id, for example attention.waiting, engine.hermes-connected, or work.cards-moved." },
+          instrument_id: { type: "string", description: "Stable Activity card id: activity.attention, activity.progress, activity.outcomes, activity.usage, or activity.connections. Legacy metric ids remain supported." },
           title: { type: "string", description: "Optional Home title for an Activity instrument." },
           x: { type: "integer", minimum: 0, maximum: 11, description: "Optional zero-based bento grid column. Supply with y; x + width must be <= 12." },
           y: { type: "integer", minimum: 0, description: "Optional zero-based bento grid row. Supply with x." },

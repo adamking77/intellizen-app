@@ -51,6 +51,7 @@ export function AppDialog({
     <dialog
       ref={dialog}
       role={role}
+      aria-label={title}
       className={cn(
         "app-dialog modal-surface m-auto max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] overflow-hidden p-0 text-[var(--text)]",
         className,

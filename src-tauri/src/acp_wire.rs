@@ -121,8 +121,12 @@ pub fn translate_update(
         "usage_update" => Some((
             "session.usage",
             json!({ "usage": {
-                "context_used": update.get("used").and_then(Value::as_u64).unwrap_or(0),
-                "context_max": update.get("size").and_then(Value::as_u64).unwrap_or(0),
+                "context_used": update.get("used").and_then(Value::as_u64),
+                "context_max": update.get("size").and_then(Value::as_u64),
+                "cost": update.get("cost").filter(|cost| {
+                    cost.get("amount").and_then(Value::as_f64).is_some_and(|n| n.is_finite() && n >= 0.0)
+                        && cost.get("currency").and_then(Value::as_str).is_some_and(|s| !s.is_empty())
+                }),
             }}),
         )),
         _ => None,
@@ -179,6 +183,21 @@ mod tests {
     fn translate(body: Value) -> Option<(&'static str, Value)> {
         let mut tools = HashMap::new();
         translate_update(&body, &mut tools, Instant::now())
+    }
+
+    #[test]
+    fn usage_preserves_reported_zero_cost_and_unknown_fields() {
+        let (_, p) = translate(json!({"sessionUpdate": "usage_update", "used": 21, "size": 100, "cost": {"amount": 0.0, "currency": "USD"}})).unwrap();
+        assert_eq!(p["usage"]["context_used"], 21);
+        assert_eq!(p["usage"]["cost"]["amount"], 0.0);
+        let (_, p) = translate(json!({"sessionUpdate": "usage_update"})).unwrap();
+        assert!(p["usage"]["context_used"].is_null());
+        assert!(p["usage"]["cost"].is_null());
+        let (_, p) = translate(
+            json!({"sessionUpdate": "usage_update", "cost": {"amount": -1, "currency": "USD"}}),
+        )
+        .unwrap();
+        assert!(p["usage"]["cost"].is_null());
     }
 
     #[test]
@@ -278,7 +297,10 @@ mod tests {
         let p = permission_payload("perm-4", &params);
         assert_eq!(p["request_id"], "perm-4");
         assert_eq!(p["command"], "rm -rf /tmp/x");
-        assert_eq!(p["choices"], json!(["once", "always", "deny", "deny_always"]));
+        assert_eq!(
+            p["choices"],
+            json!(["once", "always", "deny", "deny_always"])
+        );
         assert_eq!(p["options"].as_array().unwrap().len(), 4);
         assert_eq!(permission_choices(&[]), vec!["once", "deny"]);
     }

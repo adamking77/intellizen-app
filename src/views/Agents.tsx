@@ -1,3 +1,6 @@
+import { useSearchParams } from "react-router-dom";
+import { ActivityDashboard } from "@/components/activity/activity-dashboard";
+import { Segmented } from "@/components/ui/segmented";
 // The Agents page: every agent (Hermes profiles and ACP entries) and every
 // team, after hermes-app's `pages/Agents.tsx`. One grid grammar for both.
 
@@ -36,6 +39,15 @@ function talkTo(target: string) {
 }
 
 export function AgentsView() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get("view") === "activity" ? "activity" : "directory";
+  return <div className="flex h-full min-w-0 flex-col bg-[var(--base)]">
+    <div className="shrink-0 px-5 pt-4 pb-2"><Segmented label="Agents view" value={view} options={[{ value: "directory", label: "Agents & teams" }, { value: "activity", label: "Activity" }]} onValueChange={(next) => setParams({ view: next }, { replace: true })} /></div>
+    <div className="min-h-0 flex-1 overflow-y-auto">{view === "activity" ? <div className="px-5 py-4"><ActivityDashboard /></div> : <AgentDirectory />}</div>
+  </div>;
+}
+
+function AgentDirectory() {
   const [defaultContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
   const client = getGatewayClient();
   const queryClient = useQueryClient();
