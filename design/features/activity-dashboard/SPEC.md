@@ -4,7 +4,7 @@ Approved by Adam on 2026-09-05. Sequence: GitHub checkpoint → team panel repai
 
 ## Experience
 
-Activity lives in the existing Agents destination at `/agents?view=activity`. Agents & teams and Activity are adjacent views. Old Settings Activity links redirect there. Settings keeps configuration; its labeled section list can collapse and becomes a native section picker when the content pane is narrow.
+Activity stays in Settings at `/settings?section=activity`. Transitional `/agents?view=activity` links redirect back to Settings. The Settings menu uses the shared CollapsibleRail and CollapsedRailTrigger controls, with a persisted collapse preference, matching Databases and Canvas.
 
 Five neutral cards answer the main operating questions:
 

@@ -15,3 +15,9 @@ Delivery verification complete. Current receipt: VERIFICATION.md.
    reuses the shared Composer and panel surfaces while preserving mentions,
    team identity, per-room drafts and main-window execution ownership. Native
    cross-mode design acceptance is recorded in the team panel verification.
+
+5. Adam reported that Activity had disappeared from its Settings location and
+   rejected inconsistent Settings collapse controls. Restored the Settings
+   destination and shared rail controls. Backlog/donor review also exposed the
+   missing provider capability inventory. Repair verification is recorded in
+   `design/features/hermes-settings-parity/CLI-INVENTORY-VERIFICATION.md`.

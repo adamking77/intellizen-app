@@ -376,6 +376,12 @@ The HUD always shows idle dictation and voice-chat controls. Unavailable control
 
 ### Activity and Settings navigation
 
-Agents has a directory/activity switch. Activity presents five neutral cards: Needs attention, In progress, Outcomes, Usage and Connections. Period and workspace stay visible; target filters and detailed counters expand on demand. Cards become one column based on the content pane width. Use the existing chart kit; keep exact counts/coverage available as text. Pin dialogs use labeled Home/workspace destinations, a visible Cancel action and focus return to the invoking control.
+Settings retains the Activity destination. Activity presents five neutral cards: Needs attention, In progress, Outcomes, Usage and Connections. Period and workspace stay visible; target filters and detailed counters expand on demand. Cards become one column based on the content pane width. Use the existing chart kit; keep exact counts/coverage available as text. Pin dialogs use labeled Home/workspace destinations, a visible Cancel action and focus return to the invoking control.
 
-Settings sections remain labeled. At narrow content widths the section list becomes a native section picker; on wider panes users can collapse and restore the list. Agent/team identity and picker remain in the common panel header through docking/HUD. HUD height is bounded by the native viewport so long rosters scroll while the pill stays visible.
+Settings sections remain labeled. The menu uses the same CollapsibleRail and CollapsedRailTrigger chevrons as Databases and Canvas, with a persisted collapse preference. Agent/team identity and picker remain in the common panel header through docking/HUD. HUD height is bounded by the native viewport so long rosters scroll while the pill stays visible.
+
+### Settings capability taxonomy
+
+Plugins is reserved exclusively for IntelliZen SDK extensions built for this app. CLI plugins, skills, commands and MCP connections belong together in Capabilities: one provider selector, one search field and collapsible type sections. Provider details link to a filtered view. Do not move CLI inventories into Plugins or create separate Skills/MCP pages.
+
+New capability switches are scoped to IntelliZen sessions and disclose when reconnection is needed. Existing Hermes profile controls must clearly identify their shared scope. Unsupported adapter controls are labeled provider managed rather than displayed as functional switches.

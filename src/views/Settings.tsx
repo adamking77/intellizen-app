@@ -1,7 +1,10 @@
-import { Navigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { AppearanceSection } from "@/components/settings/appearance";
-import { Select } from "@/components/ui/select";
+import { CollapsibleRail } from "@/components/layout/collapsible-rail";
+import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger";
+import { ActivityDashboard } from "@/components/activity/activity-dashboard";
+import { cn } from "@/lib/utils";
 import { usePreference } from "@/lib/settings-preferences";
 import { CapabilitiesSettings } from "@/components/settings/capabilities";
 import { ContextSettings } from "@/components/settings/context";
@@ -17,6 +20,7 @@ const SECTIONS = [
   { id: "plugins", label: "Plugins" },
   { id: "context", label: "Context" },
   { id: "voice", label: "Voice" },
+  { id: "activity", label: "Activity" },
   { id: "appearance", label: "Appearance" },
   { id: "general", label: "General" },
 ] as const;
@@ -30,13 +34,11 @@ export function SettingsView() {
   const engineOpen = useEngineStore((state) => state.connection === "open");
 
   const [collapsed, setCollapsed] = usePreference("intelizen:settings-nav-collapsed", "false");
-  if (params.get("section") === "activity") return <Navigate to="/agents?view=activity" replace />;
 
   return (
-    <div className="@container subshell h-full bg-[var(--base)]">
-      {collapsed !== "true" ? <aside className="subpane hidden w-[180px] shrink-0 flex-col gap-0.5 bg-[var(--mantle)] p-[14px] @[700px]:flex">
-        <span className="block px-0.5 pb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Settings</span>
-        <nav className="flex flex-col gap-0.5" aria-label="Settings sections" role="tablist" aria-orientation="vertical">
+    <div className="subshell h-full bg-[var(--base)]">
+      <CollapsibleRail title="Settings" width={180} collapsed={collapsed === "true"} onCollapse={() => setCollapsed("true")} collapseLabel="Collapse settings menu">
+        <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-3" aria-label="Settings sections" role="tablist" aria-orientation="vertical">
           {SECTIONS.map((item) => (
             <button
               key={item.id}
@@ -52,21 +54,18 @@ export function SettingsView() {
             </button>
           ))}
         </nav>
-        <button className="action mt-auto text-left" onClick={() => setCollapsed("true")}>Collapse sections</button>
-      </aside> : null}
+      </CollapsibleRail>
 
       <main className="subpane relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
-        <div className={`flex flex-wrap items-center gap-3 px-6 pt-4 ${collapsed !== "true" ? "@[700px]:hidden" : ""}`}>
-          <label className="flex min-w-0 items-center gap-3 text-[var(--t-meta)] text-[var(--text-muted)]">Settings section<Select aria-label="Settings section" value={section} onChange={(e) => setParams({ section: e.target.value }, { replace: true })}>{SECTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Select></label>
-          {collapsed === "true" ? <button className="action hidden @[700px]:block" onClick={() => setCollapsed("false")}>Show sections</button> : null}
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5">
+        <CollapsedRailTrigger visible={collapsed === "true"} onExpand={() => setCollapsed("false")} label="Expand settings menu" />
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5", collapsed === "true" && "pl-14")}>
           <div id="settings-panel" role="tabpanel" aria-label={`${SECTIONS.find((item) => item.id === section)?.label} settings`} className="flex max-w-[880px] flex-col gap-2">
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
           {section === "plugins" ? <PluginsSettings /> : null}
           {section === "context" ? <ContextSettings /> : null}
           {section === "voice" ? <VoiceSettings /> : null}
+          {section === "activity" ? <ActivityDashboard /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
           {section === "general" ? <GeneralSettings /> : null}
           </div>

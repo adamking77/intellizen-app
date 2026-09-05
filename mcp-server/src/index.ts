@@ -3382,7 +3382,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     {
       name: "pin_view_to_home",
       description:
-        "Preview or pin a database view or Activity instrument to the Home dashboard's 12-column bento grid. Use view_id for chart/table/list/timeline views, or instrument_id for an Agents > Activity card such as activity.attention (legacy metrics remain supported). Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
+        "Preview or pin a database view or Activity instrument to the Home dashboard's 12-column bento grid. Use view_id for chart/table/list/timeline views, or instrument_id for an Settings > Activity card such as activity.attention (legacy metrics remain supported). Supply x and y together for exact placement; otherwise the first open grid slot is used. The running desktop app picks up remote pins within ~15 seconds. Every confirmed write emits a workspace.work_events receipt.",
       inputSchema: {
         type: "object",
         properties: {

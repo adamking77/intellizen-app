@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { CliCapabilities } from "./cli-capabilities";
 
 import { getGatewayClient } from "@/engine/gateway";
 import { listProfiles } from "@/engine/profiles";
@@ -18,9 +19,15 @@ const GROUPS: { id: HermesCapabilityKind; label: string; description: string }[]
 ];
 
 export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
+  return <div className="space-y-4">
+    <h1 className={SETTINGS_TITLE}>Capabilities</h1>
+    <CliCapabilities hermesControls={(query) => <HermesCapabilities engineOpen={engineOpen} query={query} />} />
+  </div>;
+}
+
+function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query: string }) {
   const client = useQueryClient();
   const [profile, setProfile] = useState("");
-  const [query, setQuery] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
   const profiles = useQuery({
     queryKey: ["settings", "profiles"],
@@ -52,14 +59,16 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
     <div className="space-y-4">
       <header className="flex items-start gap-4 pb-1">
         <div className="min-w-0 flex-1">
-          <h1 className={SETTINGS_TITLE}>Capabilities</h1>
+          <h2 className="text-sm text-[var(--text)]">Shared Hermes profile</h2>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">
-            What this Hermes profile can use. Changes are written through Hermes and apply to its next session.
+            Hermes profile settings are shared with other apps using this profile. Changes apply to its next session.
           </p>
         </div>
       </header>
 
       {!engineOpen ? <Notice>Hermes is offline. Start it to read or change its capabilities.</Notice> : null}
+      {profiles.error ? <Notice bad>{errorMessage(profiles.error)}</Notice> : null}
+      {toggle.error ? <Notice bad>Capability was not updated. {errorMessage(toggle.error)}</Notice> : null}
       {capabilities.error ? <Notice bad>{errorMessage(capabilities.error)}</Notice> : null}
 
       <div className="flex flex-wrap items-center gap-2 py-1">
@@ -78,17 +87,10 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
         {(profiles.data?.length ?? 0) > 0 ? <div className="h-[18px] w-px bg-[var(--line)]" /> : null}
         <button type="button" className="pill" aria-selected={availableOnly} disabled={!engineOpen} onClick={() => setAvailableOnly((value) => !value)}>Available only</button>
         <div className="min-w-2 flex-1" />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter…"
-          aria-label="Filter capabilities"
-          disabled={!engineOpen}
-          className="w-[180px] rounded-[var(--r-ctl)] border-0 bg-[var(--crust)] px-2.5 py-1.5 font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--overlay-0)] max-[900px]:w-full"
-        />
+
       </div>
 
-      {capabilities.isPending && engineOpen ? (
+      {(capabilities.isFetching || profiles.isFetching) && engineOpen ? (
         <div className="space-y-1" aria-busy>{[0, 1, 2, 3].map((row) => <div key={row} className="h-[var(--h-row)] rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />)}</div>
       ) : null}
 
@@ -97,7 +99,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
         if (!rows.length) return null;
         return (
           <section key={group.id} className="pt-2">
-            <div className="flex items-baseline gap-2 pb-0.5">
+            <div className="flex flex-wrap items-baseline gap-2 pb-0.5">
               <h2 className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</h2>
               <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
               <span className="text-[var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
@@ -105,7 +107,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
             {rows.map((row) => {
               const pending = toggle.isPending && toggle.variables?.id === row.id && toggle.variables.kind === row.kind;
               return (
-                <div key={`${row.kind}:${row.id}`} className={cn("flex items-center gap-3 border-b border-[var(--hair)] px-0.5 py-[9px]", !row.available && "opacity-45")}>
+                <div key={`${row.kind}:${row.id}`} className={cn("flex flex-wrap items-center gap-3 border-b border-[var(--hair)] px-0.5 py-[9px]", !row.available && "opacity-45")}>
                   <SettingSwitch
                     size="compact"
                     on={row.enabled}
@@ -113,7 +115,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
                     disabled={pending || !row.available}
                     onToggle={() => toggle.mutate({ id: row.id, kind: row.kind, enabled: !row.enabled })}
                   />
-                  <span className="w-52 shrink-0 truncate font-ui text-xs text-[var(--text)]">{row.name}</span>
+                  <span className="min-w-0 flex-1 basis-48 truncate font-ui text-xs text-[var(--text)]">{row.name}</span>
                   <span className="min-w-0 flex-1 truncate text-[var(--t-section)] text-[var(--subtext-0)]">{row.description || "—"}</span>
                   <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
                 </div>
@@ -123,7 +125,7 @@ export function CapabilitiesSettings({ engineOpen }: { engineOpen: boolean }) {
         );
       })}
 
-      {!capabilities.isPending && engineOpen && shown.length === 0 ? (
+      {!(capabilities.isFetching || profiles.isFetching) && engineOpen && shown.length === 0 ? (
         <div className="py-5">
           <p className="text-sm text-[var(--text)]">Nothing matches.</p>
           <p className="mt-1 text-xs text-[var(--subtext-0)]">Try a different profile, turn off the availability filter, or use a shorter search.</p>

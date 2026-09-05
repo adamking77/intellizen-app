@@ -288,7 +288,7 @@ fn with_stderr(reason: String, tail: &StderrTail) -> String {
 }
 
 /// Spawn the adapter and complete the handshake.
-async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String) -> Result<Arc<Live>, String> {
+async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, restrictions: &crate::cli_capability_policy::Restrictions) -> Result<Arc<Live>, String> {
     let binary = resolve_binary(&agent.command).ok_or_else(|| {
         format!(
             "{} is not installed (looked on PATH and in the usual bin folders)",
@@ -299,6 +299,7 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String) -
 
     let mut child = Command::new(&binary)
         .args(&agent.args)
+        .args(&restrictions.args)
         .current_dir(&cwd)
         .env("PATH", child_path())
         .env("NO_COLOR", "1")
@@ -388,7 +389,8 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String) -
         )
         .await?;
         live.notify("initialized", json!({})).await?;
-        let params = session_params(agent, &cwd);
+        let mut params = session_params(agent, &cwd);
+        restrictions.apply(&mut params);
         let session = match live.request("session/new", params.clone(), HANDSHAKE_TIMEOUT).await {
             Ok(session) => session,
             // Claude's npm ACP bridge can return one generic initialization
@@ -579,7 +581,8 @@ pub async fn agent_options(app: &AppHandle, engine: &str, agent_id: Option<&str>
     // conversation validates and applies the chosen model when it starts.
     spec.model = None;
     let sink: Sink = Arc::new(|_, _| {});
-    let probe = connect(&spec, sink, format!("options:{}", spec.id)).await?;
+    let restrictions = crate::cli_capability_policy::for_app(app, &spec.engine)?;
+    let probe = connect(&spec, sink, format!("options:{}", spec.id), &restrictions).await?;
     let options = probe.options.lock().unwrap_or_else(|e| e.into_inner()).clone();
     probe.kill();
     Ok(options)
@@ -611,7 +614,8 @@ pub async fn acp_start(
             pid: existing.pid,
         });
     }
-    let ready = connect(&spec, app_sink(app), key.clone()).await?;
+    let restrictions = crate::cli_capability_policy::for_app(&app, &spec.engine)?;
+    let ready = connect(&spec, app_sink(app), key.clone(), &restrictions).await?;
     let started = AcpStarted {
         agent_id: agent_id.clone(),
         session_id: key.clone(),
@@ -707,7 +711,7 @@ mod tests {
         assert!(!probes[1].available);
     }
 
-    fn fake_agent(dir: &Path, body: &str) -> PathBuf {
+    pub(super) fn fake_agent(dir: &Path, body: &str) -> PathBuf {
         fs::create_dir_all(dir).unwrap();
         let path = dir.join("fake-acp.sh");
         let mut f = OpenOptions::new()
@@ -723,7 +727,7 @@ mod tests {
 
     /// A shell agent that completes the handshake, streams one chunk, asks a
     /// permission, and ends the turn once the permission is answered.
-    const FAKE_AGENT: &str = r#"#!/bin/bash
+    pub(super) const FAKE_AGENT: &str = r#"#!/bin/bash
 while IFS= read -r line; do
   case "$line" in
     *'"method":"initialize"'*) echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
@@ -773,7 +777,7 @@ done
             identity: None,
             context: vec![],
         };
-        let live = connect(&spec, Arc::new(|_, _| {}), "model-test".into()).await.unwrap();
+        let live = connect(&spec, Arc::new(|_, _| {}), "model-test".into(), &Default::default()).await.unwrap();
         assert_eq!(live.options.lock().unwrap().current_model.as_deref(), Some("new"));
 
         sync_model(&live, Some("old")).await.unwrap();
@@ -796,7 +800,7 @@ done
             identity: None,
             context: vec![],
         };
-        let live = connect(&spec, Arc::new(|_, _| {}), "retry-test".into())
+        let live = connect(&spec, Arc::new(|_, _| {}), "retry-test".into(), &Default::default())
             .await
             .expect("the second session/new should connect");
         assert_eq!(live.session_id.get().map(String::as_str), Some("sess-retried"));
@@ -821,7 +825,7 @@ done
             identity: None,
             context: vec![],
         };
-        let live = connect(&spec, sink, "turn-test".into()).await.expect("handshake");
+        let live = connect(&spec, sink, "turn-test".into(), &Default::default()).await.expect("handshake");
         assert_eq!(live.session_id.get().map(String::as_str), Some("sess-1"));
 
         prompt(&live, "reply with pong").await.unwrap();
@@ -884,7 +888,7 @@ done
             identity: None,
             context: vec![],
         };
-        let err = connect(&spec, sink, "missing-test".into()).await.err().unwrap();
+        let err = connect(&spec, sink, "missing-test".into(), &Default::default()).await.err().unwrap();
         assert!(err.contains("/definitely/not/here"), "{err}");
     }
 
@@ -903,7 +907,7 @@ done
             identity: None,
             context: vec![],
         };
-        let err = connect(&spec, sink, "silent-test".into()).await.err().unwrap();
+        let err = connect(&spec, sink, "silent-test".into(), &Default::default()).await.err().unwrap();
         assert!(err.contains("not logged in"), "{err}");
         let _ = fs::remove_dir_all(dir);
     }
@@ -924,7 +928,7 @@ done
             identity: None,
             context: vec![],
         };
-        let live = connect(&spec, sink, "live-test".into())
+        let live = connect(&spec, sink, "live-test".into(), &Default::default())
             .await
             .expect("codex-acp handshake");
 
@@ -959,3 +963,7 @@ done
         live.kill();
     }
 }
+
+#[cfg(test)]
+#[path = "acp_capability_tests.rs"]
+mod capability_tests;

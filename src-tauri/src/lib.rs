@@ -10,6 +10,8 @@ mod acp_discovery;
 mod acp_paths;
 mod acp_wire;
 mod agent_models;
+mod cli_capabilities;
+mod cli_capability_policy;
 mod engine;
 mod panel_window;
 mod project_files;
@@ -521,6 +523,8 @@ pub fn run() {
             acp::acp_probe,
             acp::acp_respond_permission,
             acp_discovery::acp_discover,
+            cli_capabilities::cli_capabilities,
+            cli_capability_policy::cli_capability_set,
             engine::engine_start,
             engine::engine_reset,
             engine::engine_stop,

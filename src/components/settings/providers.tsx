@@ -121,7 +121,8 @@ export function ProvidersSettings() {
         detail={hermesReady && info ? `${info.version ?? "running"} · 127.0.0.1:${info.port}` : engineError || "The app starts Hermes automatically."}
         path="hermes serve · gateway + REST"
         connections={hermesReady ? ["Gateway", "REST"] : []}
-        capabilities="Profiles, sessions, tools"
+        capabilities="Local skills and plugins"
+        onCapabilities={() => navigate("/settings?section=capabilities&provider=hermes")}
         invocation="hermes serve"
         bad={Boolean(engineError)}
         onConnect={() => void connectEngine()}
@@ -167,7 +168,8 @@ export function ProvidersSettings() {
             path={provider.path}
             bad={Boolean(problem) || !provider.available}
             connections={live.length ? live.map((status) => status.sessionId || status.agentId) : provider.configured ? [`${provider.configured} agent${provider.configured === 1 ? "" : "s"}`] : []}
-            capabilities="Inherited from the provider CLI"
+            capabilities="Skills, commands, plugins, MCP connections"
+            onCapabilities={() => navigate(`/settings?section=capabilities&provider=${encodeURIComponent(provider.engine)}`)}
             invocation={[provider.command, ...provider.args].join(" ")}
             connecting={busyProvider === provider.engine}
             onConnect={provider.available ? () => void connectProvider(provider) : undefined}
@@ -205,6 +207,7 @@ function ProviderLine({
   onConnect,
   onDisconnect,
   onManage,
+  onCapabilities,
 }: {
   name: string;
   icon?: string;
@@ -223,6 +226,7 @@ function ProviderLine({
   onConnect?: () => void;
   onDisconnect?: () => void;
   onManage?: () => void;
+  onCapabilities: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -277,7 +281,7 @@ function ProviderLine({
               {connections.length ? connections.map((connection) => <span key={connection} className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-1 text-[var(--subtext-0)]">{connection}</span>) : <span className="text-[var(--overlay-1)]">None configured.</span>}
             </div>
           </div>
-          <div className="flex items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Capabilities</span><span className="font-mono text-[var(--subtext-0)]">{capabilities}</span></div>
+          <div className="flex flex-wrap items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Capabilities</span><button type="button" className="text-left text-[var(--subtext-0)] hover:text-[var(--text)] hover:underline" onClick={onCapabilities}>View {capabilities.toLowerCase()}</button></div>
           <div className="flex items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Invoked as</span><span className="font-mono text-[var(--subtext-0)]">{invocation}</span></div>
           <p className="max-w-[62ch] leading-[1.45] text-[var(--overlay-1)]">Credentials and connection configuration stay with Hermes or the provider CLI; IntelliZen never stores them here.</p>
         </div>

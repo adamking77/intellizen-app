@@ -101,3 +101,7 @@ The bounded theme audit found gaps in primary-button and selected-control text c
 ## Accent states and HUD voice visibility — 2026-09-05
 
 The preceding shared-token contrast findings are now repaired. All seven themes use the chosen accent in hover/selection; Appearance labels the slider Accent Strength. Detached panel/HUD leaves no placeholder strip, and HUD voice icons remain visible with disabled-state reasons. Final evidence: `design/features/app-refinement/evidence/accent-states/VERIFICATION.md`. The expanded source matrix passes 40,964 foreground/state checks; representative native visuals passed. The final direct-HUD target-continuity check was interrupted by active user input and is explicitly limited in the native report.
+
+## Settings follow-up — 2026-09-05
+
+The earlier Hermes Settings parity acceptance missed provider-wide CLI capabilities: the donor included plugins and commands, while IntelliZen's implementation only exposed Hermes skills/tools/connections and frontend extensions. The Activity delivery also incorrectly moved the user's Settings destination and introduced bespoke rail controls. These findings supersede the earlier acceptance for those behaviors. Repair and current coverage: `design/features/hermes-settings-parity/CLI-INVENTORY-VERIFICATION.md`.
