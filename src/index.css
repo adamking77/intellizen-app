@@ -1338,6 +1338,18 @@ textarea:focus-visible,
   box-shadow: none !important;
 }
 
+/* Select fields use the shared neutral editing border, without an outer accent ring. */
+select[data-select-chevron="custom"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Native keyboard traversal can focus the modal surface; it is not a control. */
+dialog.app-dialog:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* ============================================================
    Sogo Parity Layer — ported from sogo-ext webview styles
    ============================================================ */

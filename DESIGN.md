@@ -278,9 +278,10 @@ page-specific content composes them rather than creating new variants.
 | Skeleton | In-place raised bars; 1.4s sheen stops under Reduce Motion. |
 | Empty state | Left-aligned teaching sentence and at most one Control; no box. |
 
-All non-text-entry controls use one 1px accent `:focus-visible` outline at a 2px
-offset. There is no focus shadow. Fields and textareas use the caret plus their
-line-strong editing edge.
+Buttons and other non-field controls use one 1px accent `:focus-visible` outline
+at a 2px offset. There is no focus shadow. Fields and textareas use the caret plus
+their line-strong editing edge. Shared select fields use only their neutral
+line-strong focus border, without an outer accent outline.
 
 ### Procedural Avatar
 

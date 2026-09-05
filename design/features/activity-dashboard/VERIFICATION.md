@@ -6,6 +6,12 @@ Adam rejected the oversized Outcomes bars after the preceding review. That revie
 
 Fresh independent native review passed standard, wide and narrow proportions for both bar charts, category-label alignment and tooltip values/placement. The user’s current Bar/Bar selection, filters, pane sizes and empty draft were restored. Local evidence: `evidence/BAR-WIDTH-REVIEW.md`; private captures remain outside Git. Full frontend suite: 712 passed, one existing skip. Check, safe production build, bundle-secret scan and diff check passed.
 
+## Pin destination focus correction — reverified
+
+Adam identified the rejected accent outline around the Dashboard select in the Pin widget dialog. The shared select already supplied its neutral line-strong editing border, but the global keyboard-focus rule added a second accent outline. Shared select fields now suppress that outer outline and shadow. Native keyboard traversal also exposed the same global outline on the dialog container itself; that non-control surface now suppresses it while Cancel, Pin widget and other actionable controls retain their focus indicators.
+
+Independent native review passed the full Pin Outcomes tab cycle: the Dashboard select remained neutral, the HTML and dialog surfaces showed no whole-modal outline, and both buttons retained their accent focus cue. A temporary Sogo selection was discarded. Escape and visible Cancel each restored exact focus to the invoking pin button, and no pin was saved. The current Activity filters, Bar/Bar display choice, pane sizes and empty draft were restored. Check, safe production build, bundle-secret scan and diff check passed. Local report: `evidence/SELECT-FOCUS-REVIEW.md`; private captures remain outside Git.
+
 ## Previous full visual verification — sparse-bar defect missed
 
 Adam authorized a fresh independent native pass after edits, followed by a GitHub commit. This checkpoint supersedes the partial Activity and Capabilities native acceptance recorded below and in the CLI inventory receipt.
