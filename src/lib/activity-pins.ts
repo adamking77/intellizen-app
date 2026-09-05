@@ -13,6 +13,11 @@ import {
   type HomePin,
 } from "./home-pins";
 
+export type ActivityChartStyle = "line" | "bar" | "ring";
+export function activityChartStyle(card: ActivityCardId, value: unknown): ActivityChartStyle {
+  return value === "bar" ? "bar" : card === "outcomes" ? "ring" : "line";
+}
+
 export function activityPinFilter(pin: HomeInstrumentPin): ActivityFilter {
   const filter = activityFilter(pin.config?.activity);
   const scope = dashboardScope(pin);
@@ -24,6 +29,7 @@ export function pinActivityCard(
   title: string,
   filter: ActivityFilter,
   scope: DashboardScope,
+  chartStyle?: ActivityChartStyle,
 ): HomePin[] {
   const scopedFilter =
     scope === "home" ? filter : { ...filter, workspace: scope.slice(10) };
@@ -34,7 +40,8 @@ export function pinActivityCard(
         isInstrumentHomePin(pin) &&
         pin.instrumentId === instrumentId &&
         dashboardScope(pin) === scope &&
-        JSON.stringify(activityPinFilter(pin)) === JSON.stringify(scopedFilter),
+        JSON.stringify(activityPinFilter(pin)) === JSON.stringify(scopedFilter) &&
+        activityChartStyle(card, pin.config?.chartStyle) === activityChartStyle(card, chartStyle),
     )
   )
     return pins;
@@ -48,7 +55,7 @@ export function pinActivityCard(
       y: Math.max(0, ...siblings.map((p) => p.y + p.h)),
       w: 6,
       h: 14,
-      config: configForDashboard({ activity: scopedFilter }, scope),
+      config: configForDashboard({ activity: scopedFilter, ...(chartStyle === "bar" ? { chartStyle } : {}) }, scope),
     },
   ];
 }

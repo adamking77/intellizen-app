@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
-import { BarChart } from "@/components/charts/bar-chart";
-import { Bar } from "@/components/charts/bar";
-import { BarXAxis } from "@/components/charts/bar-x-axis";
-import { LineChart } from "@/components/charts/line-chart";
-import { Line } from "@/components/charts/line";
-import { XAxis } from "@/components/charts/x-axis";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { AppDialog } from "@/components/ui/app-dialog";
+import { UsageChart, OutcomesChart } from "./activity-charts";
+import type { ActivityChartStyle } from "@/lib/activity-pins";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
 import { formatDuration } from "@/lib/activity";
@@ -51,10 +48,11 @@ export function SourceNote({ source }: { source: SourceRead<unknown> }) {
     </p>
   );
 }
-function ItemList({ items, empty }: { items: ActivityItem[]; empty: string }) {
+function ItemList({ items, empty, onOpen }: { items: ActivityItem[]; empty: string; onOpen?: () => void }) {
   const [all, setAll] = useState(false),
     navigate = useNavigate();
   function open(item: ActivityItem) {
+    onOpen?.();
     if (item.target.type === "run")
       navigate(`/workflows?run=${encodeURIComponent(item.target.id)}`);
     else if (item.target.type === "providers")
@@ -68,30 +66,21 @@ function ItemList({ items, empty }: { items: ActivityItem[]; empty: string }) {
   }
   if (!items.length) return <p className={`${META} py-5`}>{empty}</p>;
   return (
-    <div className="space-y-1">
-      {(all ? items : items.slice(0, 4)).map((item) => (
+    <div className="max-h-72 space-y-1 overflow-y-auto">
+      {(all ? items : items.slice(0, 3)).map((item) => (
         <button
           key={item.id}
           className="group flex w-full items-start gap-3 rounded-[var(--r-ctl)] px-2 py-2.5 text-left hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           onClick={() => open(item)}
         >
           <div className="min-w-0 flex-1">
-            <p className="line-clamp-2 font-ui text-[var(--t-ui)] text-[var(--text)]">
+            <p title={item.title} className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
               {item.title}
             </p>
             <p className={META}>
               {item.owner} · {item.state}
-              {item.since
-                ? ` · ${formatDuration(Date.now() - item.since)}`
-                : ""}
+              {item.updated ? ` · updated ${formatDuration(Date.now() - item.updated)} ago` : ""}
             </p>
-            {item.target.type !== "providers" ? (
-              <p className="text-[var(--t-count)] text-[var(--overlay-1)]">
-                {item.updated
-                  ? `Last activity ${formatDuration(Date.now() - item.updated)} ago`
-                  : "Last activity not reported"}
-              </p>
-            ) : null}
           </div>
           <ArrowUpRight
             aria-hidden
@@ -99,7 +88,7 @@ function ItemList({ items, empty }: { items: ActivityItem[]; empty: string }) {
           />
         </button>
       ))}
-      {items.length > 4 ? (
+      {items.length > 3 ? (
         <button
           className="action mt-2"
           aria-expanded={all}
@@ -117,12 +106,16 @@ export function ActivityCardBody({
   id,
   model,
   sources,
+  chartStyle = id === "outcomes" ? "ring" : "line",
 }: {
   id: ActivityCardId;
   model: ActivityDashboardModel;
   sources: ActivitySources;
+  chartStyle?: ActivityChartStyle;
 }) {
   const navigate = useNavigate();
+  const [review, setReview] = useState<"current" | "workflows" | null>(null);
+  const reviewAction = `${META} flex w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] py-1 text-left hover:text-[var(--text)]`;
   if (id === "attention" || id === "progress")
     return (
       <>
@@ -134,21 +127,30 @@ export function ActivityCardBody({
             {id === "attention" ? "to review" : "active now"}
           </span>
         </div>
-        <ItemList
-          items={id === "attention" ? model.attention : model.progress}
-          empty={
-            id === "attention"
-              ? "Nothing waiting in the available sources."
-              : "No active work in the available sources."
-          }
-        />
-        {model.workspaceScoped ? (
-          <p className={META}>
-            Only conversations with a known project folder. Team and workflow
-            ownership is not yet reported by workspace.
-          </p>
-        ) : null}
-        <SourceNote source={sources.runs} />
+        <div className="mt-3 space-y-1">
+          <button className={reviewAction} onClick={() => setReview("current")}>
+            {id === "attention" ? "Review decisions & issues" : "View live conversations"}
+            <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
+          </button>
+          {id === "progress" && model.openWorkflows.length > 0 ? (
+            <button className={reviewAction} onClick={() => setReview("workflows")}>
+              {model.openWorkflows.length} open workflow records
+              <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
+            </button>
+          ) : null}
+        </div>
+        <AppDialog open={review !== null}
+          title={review === "workflows" ? "Open workflow records" : id === "attention" ? "Needs attention" : "Live conversations"}
+          onOpenChange={(open) => { if (!open) setReview(null); }}
+          initialFocus="title"
+          footer={<button className="action" onClick={() => setReview(null)}>Close</button>}>
+          {review === "workflows" ? <p className={`${META} mb-3`}>Stored queued / in-progress states. These do not confirm a live process.</p> : null}
+          <ItemList key={review} items={review === "workflows" ? model.openWorkflows : id === "attention" ? model.attention : model.progress}
+            empty={id === "attention" ? "Nothing waiting in the available sources." : "No live conversations running."}
+            onOpen={() => setReview(null)} />
+          {model.workspaceScoped ? <p className={`${META} mt-3`}>Only conversations with a known project folder. Team and workflow ownership is not yet reported by workspace.</p> : null}
+          {id === "attention" || review === "workflows" ? <SourceNote source={sources.runs} /> : null}
+        </AppDialog>
       </>
     );
   if (id === "outcomes")
@@ -173,27 +175,7 @@ export function ActivityCardBody({
               </span>
               <span className={META}>completed</span>
             </div>
-            <div
-              role="img"
-              aria-label={model.outcomes
-                .map((o) => `${o.name}: ${o.count}`)
-                .join(", ")}
-            >
-              <BarChart
-                data={model.outcomes.filter((o) => o.count > 0)}
-                xDataKey="name"
-                aspectRatio="2.8 / 1"
-                margin={{ top: 12, bottom: 28, left: 8, right: 8 }}
-                animationDuration={0}
-              >
-                <Bar
-                  dataKey="count"
-                  animate={false}
-                  fill="var(--chart-line-primary)"
-                />
-                <BarXAxis />
-              </BarChart>
-            </div>
+            <OutcomesChart model={model} style={chartStyle} />
             <details className={META}>
               <summary className="cursor-pointer rounded-[var(--r-ctl)] py-2 hover:bg-[var(--hover)]">
                 Counts and coverage
@@ -235,14 +217,14 @@ export function ActivityCardBody({
             ? "Period totals cannot yet be attributed to a workspace."
             : "Costs for Hermes sessions started in this period · USD"}
         </p>
-        <div className="my-3 flex flex-wrap gap-x-6 gap-y-3">
+        <div className="my-4 flex flex-wrap items-baseline gap-x-6 gap-y-3">
           <div>
-            <p className="font-mono text-2xl font-light tabular-nums">
-              {money(model.reported)}
+            <p className="font-mono text-3xl font-light tabular-nums">
+              {money(model.reported ?? model.estimated)}
             </p>
-            <p className={META}>Reported subtotal</p>
+            <p className={META}>{model.reported !== null ? "Reported subtotal" : model.estimated !== null ? "Estimated subtotal · reported cost unavailable" : "Cost unavailable"}</p>
           </div>
-          {model.estimated !== null ? (
+          {model.estimated !== null && model.reported !== null ? (
             <div>
               <p className="font-mono text-2xl font-light tabular-nums">
                 {money(model.estimated)}
@@ -251,44 +233,14 @@ export function ActivityCardBody({
             </div>
           ) : null}
         </div>
-        {model.usageDays.filter(
-          (d) => d.reported !== null || d.estimated !== null,
-        ).length > 1 ? (
-          <div
-            role="img"
-            aria-label="Session cost by start day; reported and estimated values are separate, missing days have gaps"
-          >
-            <LineChart
-              data={model.usageDays}
-              aspectRatio="2.8 / 1"
-              margin={{ top: 12, left: 8, right: 8, bottom: 28 }}
-              animationDuration={0}
-            >
-              <Line
-                dataKey="reported"
-                animate={false}
-                showHighlight={false}
-                fadeEdges={false}
-              />
-              <Line
-                dataKey="estimated"
-                stroke="var(--chart-line-secondary)"
-                animate={false}
-                showHighlight={false}
-                fadeEdges={false}
-              />
-              <XAxis numTicks={3} />
-            </LineChart>
-          </div>
-        ) : (
-          <p className={`${META} py-2`}>
-            Not enough daily reports for a trend.
-          </p>
-        )}
+        {model.usageDays.some((d) => d.reported !== null || d.estimated !== null) ? (
+          <UsageChart model={model} style={chartStyle} />
+        ) : <div className={`${META} flex min-h-36 items-center justify-center rounded-[var(--r-ctl)] bg-[var(--base)] px-5 text-center`}>
+          {model.workspaceScoped ? "Cost history has no workspace attribution yet." : "Daily cost reports will appear here when a connected source supplies them."}
+        </div>}
         {!model.workspaceScoped ? (
           <p className={META}>
-            {model.usageReporting} of {model.usageExpected} Hermes profiles
-            reported cost. CLI lifetime usage is separate below.
+            {model.usageReporting} of {model.usageExpected} Hermes profiles reporting · USD
           </p>
         ) : null}
         <details className={`${META} mt-2`}>
@@ -379,13 +331,22 @@ export function ActivityCardBody({
     );
   return (
     <>
-      <p className={`${META} mb-2`}>
-        Runtime availability · global configuration
-      </p>
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="font-mono text-3xl font-light tabular-nums">{sources.connections.data ? model.connections.filter((c) => c.state !== "Unavailable").length : "—"}</span>
+        <span className={META}>{sources.connections.data ? `of ${model.connections.length} ready` : "Not reported"}</span>
+      </div>
+      <button className={`${reviewAction} mt-3`} onClick={() => setReview("current")}>
+        View runtimes <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
+      </button>
+      <AppDialog open={review !== null} title="Runtime availability" initialFocus="title"
+        onOpenChange={(open) => { if (!open) setReview(null); }}
+        footer={<button className="action" onClick={() => setReview(null)}>Close</button>}>
+        <p className={`${META} mb-3`}>Global configuration · available runtimes connect on demand.</p>
+
       {model.connections.map((c) => (
         <button
           key={c.id}
-          onClick={() => navigate("/settings?section=providers")}
+          onClick={() => { setReview(null); navigate("/settings?section=providers"); }}
           className="flex w-full items-center gap-3 rounded-[var(--r-ctl)] px-2 py-2.5 text-left hover:bg-[var(--hover)]"
         >
           <span className="min-w-0 flex-1">
@@ -403,6 +364,8 @@ export function ActivityCardBody({
         </p>
       ) : null}
       <SourceNote source={sources.connections} />
+      </AppDialog>
+      {sources.connections.error ? <SourceNote source={sources.connections} /> : null}
     </>
   );
 }

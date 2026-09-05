@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, RefreshCw } from "lucide-react";
+import { Pin, RefreshCw } from "lucide-react";
+import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { AppDialog } from "@/components/ui/app-dialog";
 import { ActivityCardBody } from "./activity-card";
@@ -11,7 +12,7 @@ import {
   activityFilter,
   type ActivityCardId,
 } from "@/lib/activity-dashboard";
-import { pinActivityCard, activityPinFilter } from "@/lib/activity-pins";
+import { pinActivityCard, activityPinFilter, activityChartStyle } from "@/lib/activity-pins";
 import { listHomePinsFromWorkspace, saveHomePinsToWorkspace } from "@/lib/data";
 import { mutateAuthoritativeHomePins } from "@/lib/home-pin-mutations";
 import type { DashboardScope, HomeInstrumentPin } from "@/lib/home-pins";
@@ -19,6 +20,9 @@ import { usePreference } from "@/lib/settings-preferences";
 import { toast } from "@/lib/toast";
 
 export function ActivityDashboard() {
+  const [chartRaw, saveCharts] = usePreference("intelizen:activity-charts", "{}");
+  let charts: Record<string, unknown> = {};
+  try { const parsed = JSON.parse(chartRaw); if (parsed && typeof parsed === "object") charts = parsed; } catch { /* Use the default views. */ }
   const [raw, saveFilter] = usePreference("intelizen:activity-filter", "{}");
   let stored: unknown;
   try {
@@ -55,6 +59,7 @@ export function ActivityDashboard() {
             ACTIVITY_TITLES[pinning],
             filter,
             destination,
+            activityChartStyle(pinning, charts[pinning]),
           ),
       });
       client.setQueryData(["home-pins"], result.authoritative);
@@ -64,6 +69,7 @@ export function ActivityDashboard() {
         ACTIVITY_TITLES[pinning],
         filter,
         destination,
+        activityChartStyle(pinning, charts[pinning]),
       ).at(-1);
       if (
         expected &&
@@ -100,16 +106,17 @@ export function ActivityDashboard() {
       ].filter((s) => s.error)
     : [];
   return (
-    <div className="@container space-y-4 pb-5">
+    <div className="@container space-y-5 pb-5">
       <header className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 grow">
           <h1 className="font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
             Activity
           </h1>
           <p className="mt-1 text-[var(--t-meta)] text-[var(--text-muted)]">
-            What needs you, what is running, and what finished.
+            Decisions, live work, and usage across your agents.
           </p>
         </div>
+        <div className="flex max-w-full flex-wrap items-center gap-2">
         <Select
           aria-label="Activity period"
           value={filter.days}
@@ -145,6 +152,7 @@ export function ActivityDashboard() {
         >
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
+        </div>
       </header>
       <details className="text-[var(--t-meta)] text-[var(--text-muted)]">
         <summary className="w-fit cursor-pointer rounded-[var(--r-ctl)] py-1 hover:bg-[var(--hover)]">
@@ -196,20 +204,26 @@ export function ActivityDashboard() {
           ))}
         </div>
       ) : query.model && query.data ? (
-        <div className="grid items-start gap-4 @[640px]:grid-cols-2">
-          {ACTIVITY_CARDS.map((id) => (
+        <div className="grid items-stretch gap-3 @[560px]:grid-cols-6">
+          {(["attention", "progress", "connections", "usage", "outcomes"] as const).map((id) => (
             <section
               key={id}
               aria-labelledby={`activity-${id}`}
-              className="min-w-0 rounded-[var(--r-plane)] bg-[var(--mantle)] p-4"
+              className={`min-w-0 rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 ${id === "usage" || id === "outcomes" ? "@[560px]:col-span-6 @[1000px]:col-span-3" : "@[560px]:col-span-2"}`}
             >
-              <header className="mb-3 flex items-center justify-between gap-3">
+              <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2
                   id={`activity-${id}`}
-                  className="font-ui text-[var(--t-body)] text-[var(--text)]"
+                  className="mr-auto font-ui text-[var(--t-ui)] text-[var(--text-muted)]"
                 >
                   {ACTIVITY_TITLES[id]}
                 </h2>
+                {id === "usage" || id === "outcomes" ? <Segmented kind="choice"
+                  label={`${ACTIVITY_TITLES[id]} chart display`}
+                  value={activityChartStyle(id, charts[id])}
+                  options={(id === "usage" ? ["line", "bar"] : ["ring", "bar"]).map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))}
+                  onValueChange={(style) => saveCharts(JSON.stringify({ ...charts, [id]: style }))}
+                /> : null}
                 <button
                   className="action p-1.5"
                   aria-label={`Pin ${ACTIVITY_TITLES[id]} to a dashboard`}
@@ -223,13 +237,14 @@ export function ActivityDashboard() {
                     );
                   }}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <Pin className="h-3.5 w-3.5" />
                 </button>
               </header>
               <ActivityCardBody
                 id={id}
                 model={query.model!}
                 sources={query.data}
+                chartStyle={activityChartStyle(id, charts[id])}
               />
             </section>
           ))}
@@ -265,7 +280,7 @@ export function ActivityDashboard() {
             </Select>
           </label>
           <p className="text-[var(--t-meta)] text-[var(--text-muted)]">
-            Saves the current period and agent filter.
+            Saves the chart display, current period and agent filter.
             {destination !== "home"
               ? " This widget will show only activity attributable to this workspace. Connections remain labeled as global configuration."
               : " The current workspace filter is preserved."}
@@ -310,7 +325,7 @@ export function ActivityWidget({
           : ""}
       </p>
       {query.model && query.data ? (
-        <ActivityCardBody id={card} model={query.model!} sources={query.data} />
+        <ActivityCardBody id={card} model={query.model!} sources={query.data} chartStyle={activityChartStyle(card, pin.config?.chartStyle)} />
       ) : (
         <p role="status">
           {query.isPending ? "Loading activity…" : "Activity unavailable"}

@@ -16,7 +16,7 @@ export const ACTIVITY_CARDS = [
 export type ActivityCardId = (typeof ACTIVITY_CARDS)[number];
 export const ACTIVITY_TITLES: Record<ActivityCardId, string> = {
   attention: "Needs attention",
-  progress: "In progress",
+  progress: "Running",
   outcomes: "Outcomes",
   usage: "Usage",
   connections: "Connections",
@@ -155,7 +155,8 @@ export function buildActivityDashboard(
   now = Date.now(),
 ) {
   const attention: ActivityItem[] = [],
-    progress: ActivityItem[] = [];
+    progress: ActivityItem[] = [],
+    openWorkflows: ActivityItem[] = [];
   const names = new Map(
     (sources.profiles.data ?? []).map((p) => [p.name, p.displayName || p.name]),
   );
@@ -310,7 +311,7 @@ export function buildActivityDashboard(
     )
       attention.push({ ...item, since: timestamp(run.updated_at) });
     if (run.status === "In progress" || run.status === "Queued")
-      progress.push(item);
+      openWorkflows.push(item);
   }
   const usageReports = Object.entries(sources.usage).filter(([id]) =>
     profileMatch(id),
@@ -365,8 +366,9 @@ export function buildActivityDashboard(
         target: { type: "providers", id: c.id },
       });
   return {
-    attention: attention.sort((a, b) => (a.since ?? now) - (b.since ?? now)),
+    attention: attention.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)),
     progress,
+    openWorkflows: openWorkflows.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)),
     outcomes,
     periodRuns,
     usageDays,

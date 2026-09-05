@@ -1,5 +1,26 @@
 # Activity and panel delivery verification — 2026-09-05
 
+## Current Activity visual revision — partial native acceptance
+
+Adam rejected the earlier Activity design. All prior Activity visual passes below are historical and are superseded by this revision; panel and navigation results retain their separate scope.
+
+Implemented a compact summary row with focused review dialogs, a prominent Bklit usage chart and outcome ring/bar chart, compatible persistent display selectors, grouped responsive filters, and explicit separation between live conversations and stored open workflow states. Reported and estimated costs remain distinct; missing dates remain gaps. Pinned chart displays use existing instrument configuration, with backward-compatible defaults. No new dependency, telemetry store or schema was added.
+
+Final checks for this revision:
+
+- `pnpm test`: 707 passed, one existing skip, across 141 passing files.
+- Activity regressions: 14 passed, including old workflow states excluded from live Running, approval retention/order, chart-selection remount and pin serialization, pin write retry, and review-dialog close followed by exact workflow navigation.
+- `pnpm run check`: file size, product contracts, TypeScript, design-system rules and 40,964 foreground/state contrast pairs passed.
+- Placeholder-environment production build and `scripts/check-bundle-secrets.sh dist` passed. No native Rust or MCP implementation changed in this revision.
+- React review: direct chart imports, existing query/preference subscriptions, event-driven selection, typed optional chart config, shared accessible Segmented/AppDialog controls; no additional data-fetching path or global event listener.
+
+Independent native review: `evidence/ACTIVITY-REDESIGN-REVIEW.md`. The reviewer inspected the supplied Hermes reference images and assembled app. Corrected and reverified filter wrapping and point-marker emphasis; verified chart display switching with keyboard arrows, axes/legends, honest live counts, and the larger-pane layout. The review found that expanded lists stretched summary cards; those lists were subsequently moved to the shared dialog and covered by mounted interaction tests. This final dialog change has **not** received fresh native visual acceptance.
+
+Native gestures stopped when automatic approval review rejected selecting Last 30 days because of active user interaction. Tooltip hover, period application, pin-dialog cancellation, 200%/narrow reflow and the final detail dialogs remain unverified in this new native pass. The last observed state was Activity visible, Last 7 days, All workspaces, Line/Ring defaults, empty Wave 1 ACP composer, and Settings rail collapsed from the wider-pane check; no attempt was made to overwrite active user state. No live pin writes, agent messages, workflow runs, recordings or provider changes were used for verification.
+
+## Historical delivery below
+
+
 ## Delivered
 
 GitHub checkpoint 34adf6b and team panel repair b93a7a2 were pushed in the requested order to `codex/refinement-and-activity`. Activity adds the five-card dashboard, shared chart rendering, progressive filters, Home/workspace card pins and collapsible Settings navigation. Activity remains under Settings after the navigation correction below; the transitional Agents Activity route redirects back. Backend ACP usage preserves optional cumulative cost and unknown context values. No database migration was required.

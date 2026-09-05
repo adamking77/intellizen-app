@@ -59,7 +59,7 @@ export function SettingsView() {
       <main className="subpane relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
         <CollapsedRailTrigger visible={collapsed === "true"} onExpand={() => setCollapsed("false")} label="Expand settings menu" />
         <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5", collapsed === "true" && "pl-14")}>
-          <div id="settings-panel" role="tabpanel" aria-label={`${SECTIONS.find((item) => item.id === section)?.label} settings`} className="flex max-w-[880px] flex-col gap-2">
+          <div id="settings-panel" role="tabpanel" aria-label={`${SECTIONS.find((item) => item.id === section)?.label} settings`} className={`flex flex-col gap-2 ${section === "activity" ? "" : "max-w-[880px]"}`}>
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
           {section === "plugins" ? <PluginsSettings /> : null}

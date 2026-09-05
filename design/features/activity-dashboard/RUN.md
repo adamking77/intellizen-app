@@ -8,7 +8,7 @@ Owner: Keel. Adam approved the proposal and implementation sequence on 2026-09-0
 
 No schema migration or generalized telemetry platform was added. Existing source attribution limits are displayed in the app and documented in SPEC.md. No runs, sends, voice recordings, deploys or main merges were used for acceptance.
 
-Delivery verification complete. Current receipt: VERIFICATION.md.
+Earlier delivery verification was recorded here; the later Activity visual rejection and partial revised acceptance supersede that pass. Current receipt: VERIFICATION.md.
 
 4. Adam added team-chat visual reconciliation across all panel modes. Activity
    and the native snapshot repair were pushed first (69aa703). The follow-up
@@ -21,3 +21,7 @@ Delivery verification complete. Current receipt: VERIFICATION.md.
    destination and shared rail controls. Backlog/donor review also exposed the
    missing provider capability inventory. Repair verification is recorded in
    `design/features/hermes-settings-parity/CLI-INVENTORY-VERIFICATION.md`.
+
+6. Adam rejected Activity's visual design. The earlier visual acceptance is superseded. Reopened the feature in update mode, compared supplied Hermes reference images and donor source, and inspected the existing Bklit components/database chart implementation plus upstream licensing. Removed the tall default lists, separated live conversations from stored open workflow records, and promoted usage/outcome charts with useful scales, hover values, compatible display selectors and persistent pin configuration. Independent native review requested after source freeze; verification below records the actual result, not the old pass.
+
+The revised detail-dialog fix passes mounted navigation/close tests; native verification remains partial after active-user interruption. No new visual-complete claim is made.

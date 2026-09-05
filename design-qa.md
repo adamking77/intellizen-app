@@ -105,3 +105,7 @@ The preceding shared-token contrast findings are now repaired. All seven themes 
 ## Settings follow-up — 2026-09-05
 
 The earlier Hermes Settings parity acceptance missed provider-wide CLI capabilities: the donor included plugins and commands, while IntelliZen's implementation only exposed Hermes skills/tools/connections and frontend extensions. The Activity delivery also incorrectly moved the user's Settings destination and introduced bespoke rail controls. These findings supersede the earlier acceptance for those behaviors. Repair and current coverage: `design/features/hermes-settings-parity/CLI-INVENTORY-VERIFICATION.md`.
+
+## Activity visual rejection and revision — 2026-09-05
+
+Adam rejected the Activity cards despite earlier functional/token checks. Prior visual acceptance is superseded. Reference-led revision promotes charts, compacts summaries, uses shared chart selectors and separates stored open workflow states from live work. Independent native review verified revised chart hierarchy and two visual fixes, then identified expanding-row whitespace. Detail dialogs resolve that layout behavior in source and mounted tests; native acceptance of the final dialogs and remaining narrow/hover/filter checks was interrupted by user activity. Current scope and evidence: `design/features/activity-dashboard/VERIFICATION.md`.

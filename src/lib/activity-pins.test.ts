@@ -39,3 +39,11 @@ it("persists filters through the existing pin format and keeps workspace and Hom
   };
   expect(activityPinFilter(restored).workspace).toBe("client");
 });
+
+it("retains a chosen chart display through serialization and distinguishes different pinned displays", () => {
+  const pins = pinActivityCard([], "usage", "Usage", DEFAULT_ACTIVITY_FILTER, "home", "bar");
+  const restored = parseHomePin(JSON.parse(JSON.stringify(pins[0]))) as HomeInstrumentPin;
+  expect(restored.config?.chartStyle).toBe("bar");
+  expect(pinActivityCard(pins, "usage", "Usage", DEFAULT_ACTIVITY_FILTER, "home", "bar")).toHaveLength(1);
+  expect(pinActivityCard(pins, "usage", "Usage", DEFAULT_ACTIVITY_FILTER, "home", "line")).toHaveLength(2);
+});

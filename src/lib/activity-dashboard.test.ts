@@ -209,3 +209,14 @@ describe("Activity reporting", () => {
     });
   });
 });
+
+it("keeps old queued and in-progress records accessible without counting them as live work", () => {
+  const input = sources();
+  input.runs.data = [run("old-running", "In progress", "2026-07-01T00:00:00Z"), run("queued", "Queued"), run("old-approval", "Needs approval", "2026-07-01T00:00:00Z"), run("new-approval", "Needs approval")];
+  const thread = emptyThread("acp:codex");
+  thread.transcript.turnStartedAt = now - 1000;
+  const model = buildActivityDashboard(input, DEFAULT_ACTIVITY_FILTER, { cli: thread }, {}, {}, now);
+  expect(model.progress.map((i) => i.id)).toEqual(["session:acp:codex"]);
+  expect(model.openWorkflows.map((i) => i.id)).toEqual(["run:queued", "run:old-running"]);
+  expect(model.attention.map((i) => i.id)).toEqual(["run:new-approval", "run:old-approval"]);
+});
