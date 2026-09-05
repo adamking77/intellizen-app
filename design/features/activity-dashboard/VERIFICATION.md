@@ -1,6 +1,12 @@
 # Activity and panel delivery verification — 2026-09-05
 
-## Current full visual verification — passed
+## Sparse bar-width correction — reverified
+
+Adam rejected the oversized Outcomes bars after the preceding review. That review missed the sparse-data width problem; its bar-proportion acceptance is superseded. Activity now caps Outcomes bars at 28 CSS pixels and Usage bars at 16, centered within unchanged category slots so labels and hover targets remain aligned. Dense charts can shrink below the cap. Other chart consumers retain their existing default widths. A focused rendered-SVG regression checks sparse and dense widths, group centering and horizontal/stacked thickness.
+
+Fresh independent native review passed standard, wide and narrow proportions for both bar charts, category-label alignment and tooltip values/placement. The user’s current Bar/Bar selection, filters, pane sizes and empty draft were restored. Local evidence: `evidence/BAR-WIDTH-REVIEW.md`; private captures remain outside Git. Full frontend suite: 712 passed, one existing skip. Check, safe production build, bundle-secret scan and diff check passed.
+
+## Previous full visual verification — sparse-bar defect missed
 
 Adam authorized a fresh independent native pass after edits, followed by a GitHub commit. This checkpoint supersedes the partial Activity and Capabilities native acceptance recorded below and in the CLI inventory receipt.
 

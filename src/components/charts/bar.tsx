@@ -35,6 +35,8 @@ export interface BarProps {
   stackGap?: number;
   /** Gap between grouped bars in pixels. Default: 4 */
   groupGap?: number;
+  /** Maximum bar thickness in pixels; bars remain centered in their category. */
+  maxWidth?: number;
 }
 
 interface BarInnerProps extends BarProps {
@@ -138,6 +140,7 @@ const BarInner = memo(function BarInner({
   staggerDelay,
   stackGap = 0,
   groupGap = 4,
+  maxWidth = Infinity,
   barScale,
   bandWidth,
   barXAccessor,
@@ -183,12 +186,12 @@ const BarInner = memo(function BarInner({
     }
     if (stacked) {
       // Stacked bars use full band width
-      return bandWidth;
+      return Math.min(bandWidth, maxWidth);
     }
     // Leave a gap between grouped bars (controlled by groupGap prop)
     const effectiveGroupGap = seriesCount > 1 ? groupGap : 0;
-    return (bandWidth - effectiveGroupGap * (seriesCount - 1)) / seriesCount;
-  }, [bandWidth, seriesCount, stacked, groupGap]);
+    return Math.max(0, Math.min(maxWidth, (bandWidth - effectiveGroupGap * (seriesCount - 1)) / seriesCount));
+  }, [bandWidth, seriesCount, stacked, groupGap, maxWidth]);
 
   // Calculate corner radius based on lineCap
   const cornerRadius = useMemo(() => {
@@ -211,7 +214,8 @@ const BarInner = memo(function BarInner({
         const resolvedFill = typeof fill === "function" ? fill(d, i) : fill;
 
         const categoryValue = barXAccessor(d);
-        const bandPos = barScale(categoryValue) ?? 0;
+        const groupWidth = stacked ? barWidth : barWidth * seriesCount + groupGap * Math.max(0, seriesCount - 1);
+        const bandPos = (barScale(categoryValue) ?? 0) + (bandWidth - groupWidth) / 2;
 
         let x: number;
         let y: number;

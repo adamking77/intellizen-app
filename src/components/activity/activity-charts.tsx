@@ -37,7 +37,7 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
     <div className="h-[200px]" role="img" aria-label="Daily session cost in USD. Missing reports remain gaps. Exact values available in daily reports below.">
       {style === "bar" ? <BarChart data={data} xDataKey="label" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={0}>
         <Grid horizontal fadeHorizontal={false} />
-        {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={s.color} animate={false} lineCap={3} />)}
+        {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={s.color} animate={false} lineCap={3} maxWidth={16} />)}
         <YAxis numTicks={4} formatValue={(v) => cost(v)} />
         <BarXAxis maxLabels={4} tickerHalfWidth={30} />
         <ChartTooltip rows={rows} showDots={false} showDatePill={false} />
@@ -58,7 +58,7 @@ export function OutcomesChart({ model, style }: { model: ActivityDashboardModel;
     <div role="img" aria-label={model.outcomes.map((o) => `${o.name}: ${o.count}`).join(", ")} className={style === "bar" ? "h-[220px]" : "flex flex-wrap items-center justify-center gap-x-6 gap-y-2"}>
       {style === "bar" ? <BarChart data={data} xDataKey="name" aspectRatio="auto" className="h-full" margin={{ top: 16, bottom: 32, left: 32, right: 20 }} animationDuration={0}>
         <Grid horizontal fadeHorizontal={false} />
-        <Bar dataKey="count" animate={false} fill={(d) => COLORS[String(d.name)]} lineCap={4} />
+        <Bar dataKey="count" animate={false} fill={(d) => COLORS[String(d.name)]} lineCap={4} maxWidth={28} />
         <YAxis numTicks={4} integerOnly />
         <BarXAxis tickerHalfWidth={32} />
         <ChartTooltip rows={(p) => [{ label: String(p.name), value: Number(p.count), color: COLORS[String(p.name)] }]} showDots={false} showDatePill={false} />
