@@ -303,6 +303,15 @@ tool runs collapse to a summary. Run status sits directly above the bottom
 composer. Its outer surface uses the shared `--r-ctl` (8px) radius in docked,
 ejected and HUD views.
 
+Team conversations use the same Composer component and panel spacing. The room
+body inherits its panel surface; it does not add a nested background or a second
+inset form. Team identity stays in the shared picker, member names sit behind a
+compact disclosure, and team turn status stays above the composer. Mentions
+extend the shared input without replacing its send shortcut, voice controls,
+or Send/Stop affordance. User messages use the shared `--user-bubble` token.
+In HUD mode, voice actions live once in the pill; the expanded composer does not
+repeat them, for either an individual or a team.
+
 The log follows the live edge only while the reader is within 32px of it. When
 the reader has moved away, position holds and a “New reply” action appears.
 

@@ -9,3 +9,9 @@ Owner: Keel. Adam approved the proposal and implementation sequence on 2026-09-0
 No schema migration or generalized telemetry platform was added. Existing source attribution limits are displayed in the app and documented in SPEC.md. No runs, sends, voice recordings, deploys or main merges were used for acceptance.
 
 Delivery verification complete. Current receipt: VERIFICATION.md.
+
+4. Adam added team-chat visual reconciliation across all panel modes. Activity
+   and the native snapshot repair were pushed first (69aa703). The follow-up
+   reuses the shared Composer and panel surfaces while preserving mentions,
+   team identity, per-room drafts and main-window execution ownership. Native
+   cross-mode design acceptance is recorded in the team panel verification.

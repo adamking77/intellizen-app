@@ -67,6 +67,13 @@ function render(open: HudOpen, talking: string | null = null, run: RunState = { 
 }
 
 describe("HUD controls", () => {
+  it("keeps voice actions in one place when the conversation is expanded", () => {
+    const element = document.createElement("div");
+    element.innerHTML = render("chat");
+    expect(element.querySelectorAll('[aria-label="Speak instead of typing"]')).toHaveLength(1);
+    expect(element.querySelectorAll('[aria-label="Start voice chat"]')).toHaveLength(1);
+  });
+
   it("keeps unavailable voice controls visible with their setup reasons", () => {
     const element = document.createElement("div");
     element.innerHTML = render("none", null, { kind: "idle" }, { dictationOn: false, canConverse: false, why: "Turn on speaking in Settings" });
@@ -109,5 +116,8 @@ describe("HUD controls", () => {
     expect(hudGroundCanDrag(log, 95)).toBe(false);
     expect(hudGroundCanDrag(message, 50)).toBe(false);
     expect(hudGroundCanDrag(button, 50)).toBe(false);
+    for (const tag of ["summary", "select", "a"]) {
+      expect(hudGroundCanDrag(document.createElement(tag), 50)).toBe(false);
+    }
   });
 });

@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { CornerDownLeft, Square } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Composer } from "@/components/agent/agent-composer";
+import { SEND_ON_ENTER_KEY, usePreference } from "@/lib/settings-preferences";
+import { joinVoiceText, useVoice, type VoiceHandle } from "@/voice/use-voice";
+import { VoiceButton } from "@/voice/voice-button";
 import { cn } from "@/lib/utils";
 
 import { botHandle, displayName } from "./group-membership";
@@ -48,6 +48,10 @@ export function RoomComposer({
   disabled = false,
   draft,
   onDraft,
+  name = "the team",
+  onEject,
+  voice: sharedVoice,
+  showVoiceControls = true,
 }: {
   members: GroupMember[];
   running: boolean;
@@ -57,6 +61,10 @@ export function RoomComposer({
   disabled?: boolean;
   draft?: string;
   onDraft?: (text: string) => void;
+  name?: string;
+  onEject?: () => void;
+  voice?: VoiceHandle;
+  showVoiceControls?: boolean;
 }) {
   const [localText, setLocalText] = useState("");
   const text = draft ?? localText;
@@ -65,6 +73,16 @@ export function RoomComposer({
   const [active, setActive] = useState(0);
   const [sending, setSending] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [sendOnEnter] = usePreference(SEND_ON_ENTER_KEY, "1");
+  const ownVoice = useVoice({
+    profile: null,
+    messages: [],
+    sending: running,
+    onSend: () => undefined,
+    onTranscript: (heard) => setText(joinVoiceText(text, heard)),
+  });
+  const voice = sharedVoice ?? ownVoice;
+  const teamVoice = { ...voice, canConverse: false, why: "Conversation works with one agent at a time." };
 
   const matches = useMemo(
     () => (mention ? mentionMatches(members, mention.query).slice(0, 8) : []),
@@ -95,7 +113,7 @@ export function RoomComposer({
 
   const send = async () => {
     const trimmed = text.trim();
-    if (!trimmed || disabled || sending) return;
+    if (!trimmed || disabled || sending || running || voice.mine || voice.hearing) return;
     setSending(true);
     try {
       await onSend(trimmed);
@@ -107,6 +125,7 @@ export function RoomComposer({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return;
     if (open) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -129,19 +148,15 @@ export function RoomComposer({
         return;
       }
     }
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void send();
-    }
   };
 
   return (
-    <div className="relative shrink-0 border-t border-[var(--border)] bg-[var(--mantle)] px-4 py-3">
+    <div className="relative shrink-0">
       {open ? (
         <ul
           role="listbox"
           aria-label="Mention a member"
-          className="absolute bottom-full left-4 z-30 mb-1 max-h-48 w-64 overflow-y-auto rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] py-1"
+          className="absolute bottom-full left-0 z-30 mb-1 max-h-48 w-64 max-w-full overflow-y-auto rounded-[var(--r-plane)] bg-[var(--raised)] p-1"
           style={{ boxShadow: "var(--shadow-elevated)" }}
         >
           {matches.map((option, index) => (
@@ -170,28 +185,25 @@ export function RoomComposer({
         </ul>
       ) : null}
 
-      <div className="flex items-end gap-2">
-        <Textarea
-          ref={ref}
-          rows={1}
-          value={text}
-          disabled={disabled || sending}
-          placeholder={placeholder ?? "Message the room. @name to address someone."}
-          onChange={(event) => sync(event.target.value, event.target.selectionStart ?? 0)}
-          onKeyDown={onKeyDown}
-          className="max-h-40 min-h-9 flex-1 resize-none"
-        />
-        {running ? (
-          <Button size="sm" variant="ghost" onClick={() => void onStop()} title="Stop the room">
-            <Square className="h-3.5 w-3.5" />
-            Stop
-          </Button>
-        ) : (
-          <Button size="sm" onClick={() => void send()} disabled={disabled || sending || !text.trim()} title="Send (Enter)">
-            <CornerDownLeft className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
+      <Composer
+        ref={ref}
+        draft={voice.interim ? joinVoiceText(text, voice.interim) : text}
+        onDraft={(value) => sync(value, ref.current?.selectionStart ?? value.length)}
+        onKeyDown={onKeyDown}
+        onSend={() => void send().catch(() => undefined)}
+        onStop={() => void onStop()}
+        onEject={onEject}
+        placeholder={placeholder ?? `Message ${name}…`}
+        ready={!disabled && !sending && !voice.mine && !voice.hearing}
+        running={running}
+        agent={name}
+        permission={null}
+        note={voice.note}
+        dictating={voice.mine || voice.hearing}
+        sendOnEnter={sendOnEnter !== "0"}
+        dictate={showVoiceControls ? <VoiceButton mode="dictate" voice={voice} onTranscript={() => undefined} /> : undefined}
+        converse={showVoiceControls ? <VoiceButton mode="converse" voice={teamVoice} onTranscript={() => undefined} /> : undefined}
+      />
     </div>
   );
 }

@@ -89,6 +89,8 @@ export interface ComposerProps {
   dictating?: boolean;
   /** Enter sends when true; otherwise ⌘/Ctrl+Enter sends. */
   sendOnEnter?: boolean;
+  /** Optional completion-menu handling runs before the shared send shortcut. */
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
 /** The composer uses the shared field radius and base plane. Enter sends, Shift+Enter
@@ -113,10 +115,13 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
     note,
     dictating = false,
     sendOnEnter = true,
+    onKeyDown: onInputKeyDown,
   },
   ref,
 ) {
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    onInputKeyDown?.(e);
+    if (e.defaultPrevented || e.nativeEvent.isComposing) return;
     const sendKey = sendOnEnter
       ? e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey
       : e.key === "Enter" && !e.shiftKey && (e.metaKey || e.ctrlKey);

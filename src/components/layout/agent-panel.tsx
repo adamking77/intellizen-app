@@ -465,7 +465,7 @@ export function AgentPanel({
           ) : null}
         </div>
 
-        {selectedRoomId ? <RoomView roomId={selectedRoomId} panel hideHeader snapshot={remote ? remoteRoom ?? undefined : undefined} panelDirectory={profileDirectory} /> : <>
+        {selectedRoomId ? <RoomView roomId={selectedRoomId} panel hideHeader onEject={onEject} snapshot={remote ? remoteRoom ?? undefined : undefined} panelDirectory={profileDirectory} /> : <>
         <MaterialContext />
         <div
           ref={log}

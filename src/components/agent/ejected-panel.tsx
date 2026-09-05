@@ -180,7 +180,7 @@ function HudWindow({
 
   return (
     <Hud
-      chatContent={room ? <RoomView roomId={room.id} panel hideHeader snapshot={room} panelDirectory={frame?.profileDirectory} /> : undefined}
+      chatContent={room ? <div className="flex min-h-0 flex-1 flex-col p-3"><RoomView roomId={room.id} panel hideHeader voice={voice} showVoiceControls={false} snapshot={room} panelDirectory={frame?.profileDirectory} /></div> : undefined}
       agent={room ? { name: `room:${room.id}`, displayName: room.room?.name ?? "Team", description: "Team", model: null, provider: null, isDefault: false, gatewayRunning: true, avatarStyle: "sphere" } : identity}
       profiles={[...profiles, ...teamProfiles]}
       target={room ? `team:${teamForRoom(teamsQuery.data ?? [], room.room)?.id ?? room.id}` : profile}

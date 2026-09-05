@@ -11,18 +11,20 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
-import { ChevronRight, ChevronUp, Maximize2, Mic, PanelRight, Square } from "lucide-react";
+import { ChevronUp, Maximize2, Mic, PanelRight, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { VoiceButton } from "@/voice/voice-button";
 import { Waveform } from "@/voice/waveform";
-import type { VoiceHandle } from "@/voice/use-voice";
+import { joinVoiceText, type VoiceHandle } from "@/voice/use-voice";
 import type { Message } from "@/engine/transcript";
 import { cn } from "@/lib/utils";
 import { isTauri } from "./panel-window";
 import type { RunState } from "./run-state";
 import type { HermesProfile } from "@/engine/profiles";
 import { Avatar, identityColor } from "@/components/agents/avatar";
+import { Composer, RunStatus } from "./agent-composer";
+import { SEND_ON_ENTER_KEY, usePreference } from "@/lib/settings-preferences";
 
 /** What the HUD has open above its bar. */
 export type HudOpen = "none" | "roster" | "chat";
@@ -141,6 +143,7 @@ export function Hud({
   sending,
   ready,
 }: HudProps) {
+  const [sendOnEnter] = usePreference(SEND_ON_ENTER_KEY, "1");
   const log = useRef<HTMLDivElement | null>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -182,7 +185,7 @@ export function Hud({
   // Only the main window clears the shared draft after an accepted send.
   const submit = () => {
     const text = draft.trim();
-    if (!text || sending || !ready) return;
+    if (!text || sending || !ready || voice.mine || voice.hearing) return;
     onSend(text);
   };
 
@@ -252,7 +255,7 @@ export function Hud({
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)]"
           style={SURFACE}
         >
-          {chatContent ?? <>
+          {chatContent ?? <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <div
             ref={log}
             data-hud-log
@@ -262,12 +265,13 @@ export function Hud({
               atBottom.current = near;
               if (near) setBehind(false);
             }}
-            className="flex min-h-0 flex-1 flex-col gap-[9px] overflow-y-auto overscroll-contain px-3 pb-2 pt-[11px]"
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain pt-1"
           >
             {messages.length === 0 ? (
-              <span className="m-auto font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
-                {ready ? `Ask ${name} something.` : "No agent to ask."}
-              </span>
+              <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5">
+                <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">{ready ? `Ready — ${name} can answer.` : "No agent selected."}</p>
+                <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{ready ? "Send a message to begin." : "Choose an agent from the pill below."}</p>
+              </div>
             ) : null}
             {messages.slice(-24).map((m) =>
               m.from === "you" ? (
@@ -320,25 +324,23 @@ export function Hud({
             </div>
           ) : null}
 
-          {voice.note ? (
-            <p role="status" className="px-3 pt-1 font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
-              {voice.note}
-            </p>
-          ) : null}
-
-          <HudComposer
-            draft={draft}
+          <RunStatus run={run} agent={name} />
+          <Composer
+            draft={voice.interim ? joinVoiceText(draft, voice.interim) : draft}
             onDraft={onDraft}
-            onSubmit={submit}
-            voice={voice}
-            speaking={speaking}
-            name={name}
-            agentColor={hue}
-            sending={sending}
-            ready={ready}
+            onSend={submit}
+            onStop={onStop}
+            agent={ready ? name : null}
+            permission={null}
+            placeholder={ready ? `Message ${name}…` : "Choose an agent"}
+            running={sending}
+            ready={ready && !voice.mine && !voice.hearing}
+            dictating={voice.mine || voice.hearing}
+            note={voice.note}
+            sendOnEnter={sendOnEnter !== "0"}
           />
 
-          </>}
+          </div>}
           <div
             aria-hidden
             className="flex h-2 shrink-0 cursor-ns-resize items-center justify-center"
@@ -399,6 +401,11 @@ export function Hud({
           )}
         </div>
         <div className="-mr-1.5 flex shrink-0 items-center gap-0.5">
+          {speaking === "you" ? (
+            <button type="button" onClick={voice.abandon} aria-label="Discard the recording" title="Discard the recording" className={ICON}>
+              <X className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
+            </button>
+          ) : null}
           {run.kind === "working" && open === "none" ? (
             <button type="button" onClick={onStop} aria-label="Stop this turn" title="Stop" className={ICON}>
               <Square className="h-[7px] w-[7px]" strokeWidth={0} fill="currentColor" aria-hidden />
@@ -478,7 +485,7 @@ export function Hud({
 /** Controls, message text and the scrollbar keep their own pointer gesture;
  *  the transcript's empty plane and every other empty HUD surface drag. */
 export function hudGroundCanDrag(target: HTMLElement, clientX: number) {
-  if (target.closest("button, input, textarea")) return false;
+  if (target.closest("button, input, textarea, select, summary, a")) return false;
   const transcript = target.closest<HTMLElement>("[data-hud-log]");
   if (!transcript) return true;
   return target === transcript && clientX < transcript.getBoundingClientRect().right - 12;
@@ -507,121 +514,5 @@ function HudRun({ run, agent }: { run: RunState; agent: string }) {
     >
       {run.kind === "working" && !run.label ? `${agent} ${text}` : text}
     </span>
-  );
-}
-
-function HudComposer({
-  draft,
-  onDraft,
-  onSubmit,
-  voice,
-  speaking,
-  name,
-  agentColor,
-  sending,
-  ready,
-}: {
-  draft: string;
-  onDraft: (v: string) => void;
-  onSubmit: () => void;
-  voice: VoiceHandle;
-  speaking: "you" | "agent" | null;
-  name: string;
-  agentColor: string;
-  sending: boolean;
-  ready: boolean;
-}) {
-  const row = "flex shrink-0 items-center gap-2 rounded-[var(--r-ctl)] border-t border-[var(--hair)] bg-[var(--base)] px-3 py-2";
-
-  if (speaking === "agent") {
-    return (
-      <div className={row}>
-        <div className="min-w-0 flex-1">
-          <Waveform color={agentColor} height={14} bars={16} levels={voice.saidLevels} />
-        </div>
-        <span className="font-ui text-[var(--t-section)] uppercase tracking-[0.14em] text-[var(--text-muted)]">speaking</span>
-        <button type="button" onClick={voice.interrupt} aria-label="Stop" title="Stop" className={ICON}>
-          <Square className="h-2 w-2" strokeWidth={0} fill="currentColor" aria-hidden />
-        </button>
-      </div>
-    );
-  }
-
-  if (speaking === "you") {
-    return (
-      <div className={row}>
-        <button
-          type="button"
-          onClick={voice.abandon}
-          aria-label="Discard the recording"
-          title="Discard the recording"
-          className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 font-ui text-[12.5px] text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-        >
-          Cancel
-        </button>
-        {voice.interim ? (
-          <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">{voice.interim}</span>
-        ) : (
-          <div className="min-w-0 flex-1">
-            <Waveform color="var(--accent)" height={14} bars={16} levels={voice.levels} />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => void voice.dictate()}
-          aria-label="Stop listening and use what was said"
-          title="Stop"
-          className={cn(ICON, "text-[var(--accent-text)]")}
-        >
-          <Square className="h-2 w-2" strokeWidth={0} fill="currentColor" aria-hidden />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className={row}>
-      <input
-        value={draft}
-        onChange={(e) => onDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSubmit();
-          }
-        }}
-        placeholder={sending ? "Working…" : ready ? `Message ${name}…` : "No agent to ask"}
-        aria-label={`Message ${name}`}
-        className="min-w-0 flex-1 bg-transparent font-ui text-[var(--t-ui)] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-      />
-      {voice.dictationOn ? (
-        <button
-          type="button"
-          onClick={() => void voice.dictate()}
-          disabled={voice.hearing}
-          aria-label={voice.hearing ? "Typing what was said" : "Speak instead of typing"}
-          title={voice.hearing ? "Typing what was said…" : "Speak"}
-          className={ICON}
-        >
-          <Mic className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
-        </button>
-      ) : null}
-      {/* One slot: the conversation toggle while the box is empty, Send once
-          there is something to send. */}
-      {!draft.trim() && (voice.canConverse || voice.convo) ? (
-        <VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} />
-      ) : (
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={sending || !ready || !draft.trim()}
-          aria-label={sending ? "Working — this turn cannot be stopped from here" : "Send"}
-          title="Send"
-          className="inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] shrink-0 items-center justify-center rounded-[var(--r-ctl)] bg-[var(--go-bg)] text-[var(--go-fg)] transition-opacity disabled:opacity-40"
-        >
-          <ChevronRight className="h-3 w-3" strokeWidth={2.4} aria-hidden />
-        </button>
-      )}
-    </div>
   );
 }
