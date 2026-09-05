@@ -188,7 +188,7 @@ export function Hud({
 
   return (
     <div
-      className="relative flex h-full flex-col justify-end gap-1.5 bg-transparent"
+      className="relative flex h-dvh min-h-0 flex-col justify-end gap-1.5 overflow-hidden bg-transparent"
       style={{ padding: `${CLEAR.top}px ${CLEAR.side}px ${CLEAR.bottom}px` }}
     >
       <ResizeFrame />

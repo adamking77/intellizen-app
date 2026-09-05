@@ -48,20 +48,23 @@ export function usePanelFrame(enabled = true): PanelFrame | null {
     if (!enabled) return;
     let active = true;
     let stop: (() => void) | undefined;
-    let retry: number | undefined;
-    void onFrame((next) => {
-      if (!active) return;
+    const receive = (next: PanelFrame | null) => {
+      if (!active || !next) return;
+      if (latestFrame?.revision && next.revision && next.revision < latestFrame.revision) return;
       latestFrame = next;
       setFrame(next);
-    }).then((un) => {
+    };
+    void onFrame(receive).then(async (un) => {
       if (!active) { un(); return; }
       stop = un;
-      requestFrame();
-      retry = window.setTimeout(requestFrame, 250);
-    });
+      // Listen first, then read: revisions keep a slower read from replacing a live update.
+      receive(await requestFrame());
+    }).catch(() => { /* Keep the waiting state; focus retries the native read. */ });
+    const refresh = () => { void requestFrame().then(receive).catch(() => undefined); };
+    window.addEventListener("focus", refresh);
     return () => {
       active = false;
-      window.clearTimeout(retry);
+      window.removeEventListener("focus", refresh);
       stop?.();
     };
   }, [enabled]);

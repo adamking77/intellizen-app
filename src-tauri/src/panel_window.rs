@@ -13,6 +13,8 @@
 //! the conversation home the same way.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::sync::Mutex;
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
@@ -22,6 +24,40 @@ use tauri::{
 const LABEL: &str = "agent-panel";
 /// Emitted when the panel window is destroyed. `PANEL_CLOSED_EVENT`, same file.
 const CLOSED: &str = "agent-panel:closed";
+
+/// One in-memory handoff, readable after a new webview has installed listeners.
+/// Events remain live updates; a new window must not depend on catching one.
+#[derive(Default)]
+pub struct PanelFrameState(Mutex<Option<Value>>);
+
+#[tauri::command]
+pub fn panel_store_frame(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, PanelFrameState>,
+    mut frame: Value,
+) -> Result<Value, String> {
+    if window.label() != "main" {
+        return Err("Only the main window owns panel state".into());
+    }
+    if !frame.is_object() {
+        return Err("Panel frame must be an object".into());
+    }
+    let mut current = state.0.lock().map_err(|e| e.to_string())?;
+    let revision = current
+        .as_ref()
+        .and_then(|value| value.get("revision"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        + 1;
+    frame["revision"] = revision.into();
+    *current = Some(frame.clone());
+    Ok(frame)
+}
+
+#[tauri::command]
+pub fn panel_read_frame(state: tauri::State<'_, PanelFrameState>) -> Result<Option<Value>, String> {
+    Ok(state.0.lock().map_err(|e| e.to_string())?.clone())
+}
 
 /// How far in from the top-right of the work area the panel first appears.
 const MARGIN: f64 = 24.0;

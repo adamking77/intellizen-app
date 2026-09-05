@@ -32,7 +32,7 @@ vi.mock("@/components/agent/panel-window", async (original) => ({
   ...await original<typeof import("@/components/agent/panel-window")>(),
   isPanelWindow: () => panelChannel.remote,
   onFrame: async (handler: (frame: PanelFrame) => void) => { panelChannel.handlers.add(handler); return () => { panelChannel.handlers.delete(handler); }; },
-  requestFrame: () => { if (panelChannel.respond && panelChannel.frame) for (const handler of panelChannel.handlers) handler(panelChannel.frame); },
+  requestFrame: async () => panelChannel.respond ? panelChannel.frame : null,
   requestAction: (action: PanelAction) => { panelChannel.actions.push(action); },
   resizePanelWindow: async () => undefined,
 }));

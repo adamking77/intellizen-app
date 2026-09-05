@@ -12,8 +12,8 @@ mod acp_wire;
 mod agent_models;
 mod engine;
 mod panel_window;
-mod proposals;
 mod project_files;
+mod proposals;
 mod supabase_proxy;
 mod voice;
 
@@ -503,6 +503,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(engine::EngineState::default())
+        .manage(panel_window::PanelFrameState::default())
         .register_uri_scheme_protocol("genui", |_ctx, _request| {
             tauri::http::Response::builder()
                 .header("Content-Type", "text/html; charset=utf-8")
@@ -524,6 +525,8 @@ pub fn run() {
             engine::engine_reset,
             engine::engine_stop,
             panel_window::panel_open,
+            panel_window::panel_store_frame,
+            panel_window::panel_read_frame,
             panel_window::panel_close,
             panel_window::panel_is_open,
             panel_window::panel_resize,

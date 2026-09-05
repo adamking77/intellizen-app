@@ -22,7 +22,6 @@ import {
   isTauri,
   leaveHudHandoff,
   onAction,
-  onFrameRequest,
   onPanelClosed,
   openPanelWindow,
   panelWindowIsOpen,
@@ -101,7 +100,7 @@ export function useEject(): EjectHandle {
     if (!isTauri) return;
     const frame = () => {
       const s = useSessionStore.getState();
-      publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) });
+      void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) }).catch((error) => toastError("Could not update the detached panel", error));
     };
     const stops: Array<() => void> = [];
     const roomChanged = () => { if (serving.current) frame(); };
@@ -109,7 +108,6 @@ export function useEject(): EjectHandle {
     const unsubscribe = useSessionStore.subscribe(() => {
       if (serving.current) frame();
     });
-    void onFrameRequest(frame).then((un) => stops.push(un));
     void onAction((action) => run(action)).then((un) => stops.push(un));
     return () => {
       unsubscribe();
@@ -123,7 +121,7 @@ export function useEject(): EjectHandle {
   useEffect(() => {
     if (!ejected || !isTauri) return;
     const s = useSessionStore.getState();
-    publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) });
+    void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) }).catch((error) => toastError("Could not update the detached panel", error));
   }, [ejected]);
 
   const selectedRoomId = useSessionStore((s) => s.selectedRoomId);
@@ -145,7 +143,9 @@ export function useEject(): EjectHandle {
     // Written before the window opens so it dresses itself at first paint
     // rather than flashing the full panel and then shrinking.
     leaveHudHandoff(asHud);
-    void openPanelWindow(asHud ? PANEL_SIZES.hud : PANEL_SIZES.panel)
+    const s = useSessionStore.getState();
+    void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) })
+      .then(() => openPanelWindow(asHud ? PANEL_SIZES.hud : PANEL_SIZES.panel))
       .then(() => dispatch({ type: "opened" }))
       .catch((error) => {
         dispatch({ type: "failed" });

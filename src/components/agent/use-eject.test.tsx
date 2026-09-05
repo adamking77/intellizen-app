@@ -20,9 +20,8 @@ vi.mock("./panel-window", async (original) => ({
   openPanelWindow: async () => undefined,
   closePanelWindow: async () => undefined,
   onPanelClosed: async (handler: () => void) => { channel.closed = handler; return () => { channel.closed = null; }; },
-  onFrameRequest: async () => () => undefined,
   onAction: async () => () => undefined,
-  publishFrame: vi.fn(),
+  publishFrame: vi.fn().mockResolvedValue(undefined),
 }));
 
 it("reveals the docked conversation after the detached window closes without changing target or draft", async () => {

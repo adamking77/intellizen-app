@@ -119,6 +119,7 @@ export function sizeFor(mode: PanelMode): { w: number; h: number } {
 
 /** What the panel renders from: the session store's data, nothing else. */
 export interface PanelFrame {
+  revision?: number;
   room?: PanelRoomSnapshot | null;
   selectedProfile: string | null;
   profileDirectory: Record<string, HermesProfile>;
@@ -138,7 +139,6 @@ export type PanelAction =
   | { type: "clarify"; profile: string; decision: ClarifyDecision; answers: Record<string, string[]> };
 
 const FRAME = "agent-panel:frame";
-const REQUEST = "agent-panel:request";
 const ACTION = "agent-panel:action";
 /** Emitted by `panel_window.rs` when the panel window is destroyed. */
 export const PANEL_CLOSED_EVENT = "agent-panel:closed";
@@ -158,8 +158,10 @@ function safeListen<T>(name: string, fn: (payload: T) => void): Promise<Unlisten
 }
 
 /** Main window: publish the state the panel renders from. */
-export function publishFrame(frame: PanelFrame) {
-  safeEmit(FRAME, frame);
+export async function publishFrame(frame: PanelFrame): Promise<void> {
+  if (!isTauri) return;
+  const stored = await invoke<PanelFrame>("panel_store_frame", { frame });
+  safeEmit(FRAME, stored);
 }
 
 /** Panel window: receive it. */
@@ -167,15 +169,9 @@ export function onFrame(fn: (frame: PanelFrame) => void) {
   return safeListen<PanelFrame>(FRAME, fn);
 }
 
-/** Panel window: ask for a frame, on open. Without this the panel shows
- *  nothing until the main window's state next changes. */
-export function requestFrame() {
-  safeEmit(REQUEST);
-}
-
-/** Main window: answer a request with the current frame. */
-export function onFrameRequest(fn: () => void) {
-  return safeListen<void>(REQUEST, () => fn());
+/** Pull the main-owned handoff even when the initial update event was missed. */
+export function requestFrame(): Promise<PanelFrame | null> {
+  return isTauri ? invoke<PanelFrame | null>("panel_read_frame") : Promise.resolve(null);
 }
 
 /** Panel window: ask the main window to act on the session. */
