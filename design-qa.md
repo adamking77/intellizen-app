@@ -109,3 +109,7 @@ The earlier Hermes Settings parity acceptance missed provider-wide CLI capabilit
 ## Activity visual rejection and revision — 2026-09-05
 
 Adam rejected the Activity cards despite earlier functional/token checks. Prior visual acceptance is superseded. Reference-led revision promotes charts, compacts summaries, uses shared chart selectors and separates stored open workflow states from live work. Independent native review verified revised chart hierarchy and two visual fixes, then identified expanding-row whitespace. Detail dialogs resolve that layout behavior in source and mounted tests; native acceptance of the final dialogs and remaining narrow/hover/filter checks was interrupted by user activity. Current scope and evidence: `design/features/activity-dashboard/VERIFICATION.md`.
+
+## Activity and Capabilities full visual follow-up — 2026-09-05
+
+Fresh independent native verification now passes both pages after fixes for date-axis crowding, Hermes description truncation, cramped Settings navigation and dismissal focus return. This supersedes the partial native acceptance above. Coverage includes light/dark, narrow/200%, filters, chart styles and hover, dialogs, provider scope, unsupported inventory and SDK-only Plugins. Original user preferences and empty draft restored. Frontend 708 passed/one existing skip; check, safe build and bundle-secret scan passed. Current receipt and exact limits: `design/features/activity-dashboard/VERIFICATION.md`. Private native evidence remains local.

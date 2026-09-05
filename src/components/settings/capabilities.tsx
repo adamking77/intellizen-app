@@ -115,8 +115,10 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
                     disabled={pending || !row.available}
                     onToggle={() => toggle.mutate({ id: row.id, kind: row.kind, enabled: !row.enabled })}
                   />
-                  <span className="min-w-0 flex-1 basis-48 truncate font-ui text-xs text-[var(--text)]">{row.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-[var(--t-section)] text-[var(--subtext-0)]">{row.description || "—"}</span>
+                  <details className="min-w-0 flex-1 basis-48">
+                    <summary className="cursor-pointer break-words font-ui text-xs text-[var(--text)]">{row.name}</summary>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">{row.description || "No description supplied."}</p>
+                  </details>
                   <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
                 </div>
               );

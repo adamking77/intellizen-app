@@ -1,6 +1,26 @@
 # Activity and panel delivery verification — 2026-09-05
 
-## Current Activity visual revision — partial native acceptance
+## Current full visual verification — passed
+
+Adam authorized a fresh independent native pass after edits, followed by a GitHub commit. This checkpoint supersedes the partial Activity and Capabilities native acceptance recorded below and in the CLI inventory receipt.
+
+The reviewer exercised both pages in the native V3 Dev app, compared the supplied Hermes references, and repeated the affected checks after fixes. Activity coverage includes compact summaries and bounded review dialogs, 7/30-day periods, workspace and agent filters, honest empty/unattributed states, line/bar usage and ring/bar outcomes, keyboard chart selection, hover values, exact counts, and Home/workspace pin-dialog cancellation. Capabilities coverage includes provider filters and deep links, search/empty results, grouped inventories, visible on/off/provider-managed states, Hermes shared-profile scope and descriptions, unsupported provider coverage, and the separate SDK-only Plugins page. Both pages passed representative Macchiato/Latte, narrow-pane and 200% checks.
+
+Findings repaired and reverified:
+
+- Thirty-day line charts now use spaced domain ticks instead of labeling every date.
+- Hermes descriptions expand independently of capability switches and remain readable at 200%.
+- Narrow Settings panes use the existing chevron and shared navigation drawer, preserving the saved rail preference and active section.
+- Activity review dialogs and the Settings drawer return focus to their exact invoking control on dismissal.
+- Connections displays its global scope directly in the summary when a workspace filter is active.
+
+Final checks: 708 frontend tests passed, one existing skip; product, TypeScript, file-size and design checks passed, including 40,964 theme/state contrast pairs. The placeholder-environment production build, bundle-secret scan and diff check passed. No dependency, native backend or schema change was needed for this follow-up.
+
+Independent local report: `evidence/FULL-VISUAL-VERIFICATION.md`. Final captures include `full-41-activity-light-wide.jpg` and `full-42-final-dark-restored.jpg`; exact capture paths are indexed by the report. Live screenshots remain outside Git because they can contain private workspace content. The reviewer restored the original theme/accent/strength, pane sizes, collapsed Settings rail, Activity filters and chart styles, and empty chat draft before releasing the UI.
+
+This passes the bounded visual gate for these two pages. No real capability switch, provider connection, pin save, message, workflow run or recording was used. Switch enforcement and pin save/retry remain covered by controlled tests rather than a new billable/live-provider exercise. This is not a release or main-branch merge.
+
+## Earlier Activity visual revision — partial native acceptance
 
 Adam rejected the earlier Activity design. All prior Activity visual passes below are historical and are superseded by this revision; panel and navigation results retain their separate scope.
 

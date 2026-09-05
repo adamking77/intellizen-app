@@ -40,3 +40,37 @@ it("keeps Activity selected while the shared rail collapses and restores", async
   expect(element.querySelector('#settings-tab-activity')?.getAttribute("aria-selected")).toBe("true");
   expect(localStorage.getItem("intelizen:settings-nav-collapsed")).toBe("false");
 });
+
+
+it("moves a cramped Settings rail into the shared overlay without changing the saved layout or current page", async () => {
+  let notify!: ResizeObserverCallback;
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { notify = callback; }
+    observe() {}
+    disconnect() {}
+  });
+  try {
+    await mount("/settings?section=activity");
+    const resize = async (width: number) => act(async () => notify([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver));
+    await resize(350);
+    expect(element.querySelector('[role="tablist"]')).toBeNull();
+    expect(element.querySelector('[role="tabpanel"]')?.textContent).toContain("Activity dashboard");
+    await click("Expand settings menu");
+    expect(element.querySelector('[role="dialog"][aria-label="Settings navigation"]')).toBeTruthy();
+    expect(element.querySelector('#settings-tab-activity')?.getAttribute("aria-selected")).toBe("true");
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Expand settings menu");
+    await click("Expand settings menu");
+    await click("Capabilities");
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    expect(element.querySelector('[role="tabpanel"]')?.textContent).toContain("Capabilities content");
+    expect(localStorage.getItem("intelizen:settings-nav-collapsed")).toBeNull();
+    await resize(800);
+    expect(element.querySelector('#settings-tab-capabilities')?.getAttribute("aria-selected")).toBe("true");
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+  } finally { vi.unstubAllGlobals(); }
+});

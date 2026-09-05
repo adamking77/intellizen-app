@@ -75,7 +75,16 @@ it("opens stored workflow records in a dismissible dialog and closes it before n
     await click("1 open workflow records");
     expect(host.querySelector('dialog[open]')?.getAttribute("aria-label")).toBe("Open workflow records");
     expect(host.querySelector('dialog[open]')?.textContent).toContain("do not confirm a live process");
+    await act(async () => {
+      host.querySelector("dialog[open]")!.dispatchEvent(new Event("cancel", { cancelable: true }));
+      await new Promise(requestAnimationFrame);
+    });
+    expect(host.querySelector("dialog[open]")).toBeNull();
+    expect(document.activeElement?.textContent).toContain("1 open workflow records");
+    await click("1 open workflow records");
     await click("Close");
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(document.activeElement?.textContent).toContain("1 open workflow records");
     expect(host.querySelector('dialog[open]')).toBeNull();
     await click("1 open workflow records");
     await click("Old queued workflow");

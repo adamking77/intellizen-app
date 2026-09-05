@@ -45,7 +45,7 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
         <Grid horizontal fadeHorizontal={false} />
         {series.map((s) => <Line key={s.key} dataKey={s.key} stroke={s.color} animate={false} curve={curveLinear} fadeEdges={false} showMarkers markers={{ radius: 2.5, strokeWidth: 0, ringGap: 0, inactiveBlur: 0, enterBlur: 0, showActiveHighlight: false }} strokeWidth={2} />)}
         <YAxis numTicks={4} formatValue={(v) => cost(v)} />
-        <XAxis numTicks={4} tickMode="data" tickerHalfWidth={30} />
+        <XAxis numTicks={4} tickMode="domain" tickerHalfWidth={30} />
         <ChartTooltip rows={rows} showDatePill={false} />
       </LineChart>}
     </div>

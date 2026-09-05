@@ -1,10 +1,11 @@
+import type { MouseEvent } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 interface CollapsedRailTriggerProps {
   visible: boolean;
-  onExpand: () => void;
+  onExpand: (event: MouseEvent<HTMLButtonElement>) => void;
   label: string;
   className?: string;
 }

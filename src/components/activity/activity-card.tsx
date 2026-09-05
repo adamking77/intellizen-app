@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { AppDialog } from "@/components/ui/app-dialog";
@@ -115,6 +115,15 @@ export function ActivityCardBody({
 }) {
   const navigate = useNavigate();
   const [review, setReview] = useState<"current" | "workflows" | null>(null);
+  const reviewTrigger = useRef<HTMLButtonElement | null>(null);
+  function openReview(next: "current" | "workflows", trigger: HTMLButtonElement) {
+    reviewTrigger.current = trigger;
+    setReview(next);
+  }
+  function closeReview() {
+    setReview(null);
+    requestAnimationFrame(() => reviewTrigger.current?.focus());
+  }
   const reviewAction = `${META} flex w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] py-1 text-left hover:text-[var(--text)]`;
   if (id === "attention" || id === "progress")
     return (
@@ -128,12 +137,12 @@ export function ActivityCardBody({
           </span>
         </div>
         <div className="mt-3 space-y-1">
-          <button className={reviewAction} onClick={() => setReview("current")}>
+          <button className={reviewAction} onClick={(event) => openReview("current", event.currentTarget)}>
             {id === "attention" ? "Review decisions & issues" : "View live conversations"}
             <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
           </button>
           {id === "progress" && model.openWorkflows.length > 0 ? (
-            <button className={reviewAction} onClick={() => setReview("workflows")}>
+            <button className={reviewAction} onClick={(event) => openReview("workflows", event.currentTarget)}>
               {model.openWorkflows.length} open workflow records
               <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
             </button>
@@ -141,13 +150,13 @@ export function ActivityCardBody({
         </div>
         <AppDialog open={review !== null}
           title={review === "workflows" ? "Open workflow records" : id === "attention" ? "Needs attention" : "Live conversations"}
-          onOpenChange={(open) => { if (!open) setReview(null); }}
+          onOpenChange={(open) => { if (!open) closeReview(); }}
           initialFocus="title"
-          footer={<button className="action" onClick={() => setReview(null)}>Close</button>}>
+          footer={<button className="action" onClick={closeReview}>Close</button>}>
           {review === "workflows" ? <p className={`${META} mb-3`}>Stored queued / in-progress states. These do not confirm a live process.</p> : null}
           <ItemList key={review} items={review === "workflows" ? model.openWorkflows : id === "attention" ? model.attention : model.progress}
             empty={id === "attention" ? "Nothing waiting in the available sources." : "No live conversations running."}
-            onOpen={() => setReview(null)} />
+            onOpen={closeReview} />
           {model.workspaceScoped ? <p className={`${META} mt-3`}>Only conversations with a known project folder. Team and workflow ownership is not yet reported by workspace.</p> : null}
           {id === "attention" || review === "workflows" ? <SourceNote source={sources.runs} /> : null}
         </AppDialog>
@@ -333,14 +342,14 @@ export function ActivityCardBody({
     <>
       <div className="mb-2 flex items-baseline gap-2">
         <span className="font-mono text-3xl font-light tabular-nums">{sources.connections.data ? model.connections.filter((c) => c.state !== "Unavailable").length : "—"}</span>
-        <span className={META}>{sources.connections.data ? `of ${model.connections.length} ready` : "Not reported"}</span>
+        <span className={META}>{sources.connections.data ? `of ${model.connections.length} ready${model.workspaceScoped ? " · global" : ""}` : "Not reported"}</span>
       </div>
-      <button className={`${reviewAction} mt-3`} onClick={() => setReview("current")}>
+      <button className={`${reviewAction} mt-3`} onClick={(event) => openReview("current", event.currentTarget)}>
         View runtimes <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
       </button>
       <AppDialog open={review !== null} title="Runtime availability" initialFocus="title"
-        onOpenChange={(open) => { if (!open) setReview(null); }}
-        footer={<button className="action" onClick={() => setReview(null)}>Close</button>}>
+        onOpenChange={(open) => { if (!open) closeReview(); }}
+        footer={<button className="action" onClick={closeReview}>Close</button>}>
         <p className={`${META} mb-3`}>Global configuration · available runtimes connect on demand.</p>
 
       {model.connections.map((c) => (
