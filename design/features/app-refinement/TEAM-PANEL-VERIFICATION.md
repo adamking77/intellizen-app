@@ -41,3 +41,19 @@ attempted. A subsequent read showed a loading/no-profile state during that
 user-change interval, so its cause and final restoration were not verified.
 No messages or recordings were sent. Exact QA text had already been cleared;
 the final comparison did not edit any drafts or preferences.
+
+## Composer whitespace regression
+
+Adam reported that Space did not work in chat. The panel rendered its controlled
+draft through `joinVoiceText` even with no interim speech; that helper trimmed
+trailing whitespace on every render. A regression first reproduced the loss of
+`Hello ` to `Hello`. With no speech to append, the helper now returns the exact
+draft. Active speech joining retains its existing behavior.
+
+The controlled Composer test types repeated spaces and newlines character by
+character, checks persisted drafts and remounts the input. All 58 focused
+voice/panel/team tests, product/design/type checks and build/credential scan
+passed. Independent native typing confirmed trailing Space, repeated spaces and
+Shift+Enter in the docked panel. Exact unsent QA text was cleared; no sends,
+recordings, mode or preference changes. Local captures 31–32 support the native
+review in `design/features/activity-dashboard/evidence/NATIVE-REVIEW.md`.

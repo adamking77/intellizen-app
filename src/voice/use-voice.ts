@@ -48,7 +48,9 @@ function reason(e: unknown, fallback: string): string {
 }
 
 export function joinVoiceText(committed: string, live: string) {
-  return [committed.trimEnd(), live.trim()].filter(Boolean).join(" ");
+  const heard = live.trim();
+  // This also renders controlled drafts: idle dictation must leave typing intact.
+  return heard ? [committed.trimEnd(), heard].filter(Boolean).join(" ") : committed;
 }
 
 export function useVoice({ profile, messages, sending, onSend, onTranscript, bars = 16 }: VoiceHost) {

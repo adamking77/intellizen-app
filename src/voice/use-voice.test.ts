@@ -19,6 +19,12 @@ describe("nextToSpeak", () => {
 });
 
 describe("joinVoiceText", () => {
+  it("preserves typed whitespace exactly when there is no speech to append", () => {
+    for (const draft of ["Hello ", "Hello  ", " ", "Line one\n", "Line one\n  ", "\t"]) {
+      expect(joinVoiceText(draft, "")).toBe(draft);
+      expect(joinVoiceText(draft, "  ")).toBe(draft);
+    }
+  });
   it("shows interim words after the existing draft without changing either source", () => {
     expect(joinVoiceText("Existing note  ", " live words ")).toBe("Existing note live words");
     expect(joinVoiceText("", "live words")).toBe("live words");
