@@ -2,6 +2,7 @@ import { curveLinear } from "d3-shape";
 import { BarChart } from "@/components/charts/bar-chart";
 import { Bar } from "@/components/charts/bar";
 import { BarXAxis } from "@/components/charts/bar-x-axis";
+import { BarYAxis } from "@/components/charts/bar-y-axis";
 import { LineChart } from "@/components/charts/line-chart";
 import { Line } from "@/components/charts/line";
 import { XAxis } from "@/components/charts/x-axis";
@@ -56,11 +57,10 @@ export function OutcomesChart({ model, style }: { model: ActivityDashboardModel;
   const data = model.outcomes.filter((o) => o.count > 0);
   return <div className="@container">
     <div role="img" aria-label={model.outcomes.map((o) => `${o.name}: ${o.count}`).join(", ")} className={style === "bar" ? "h-[220px]" : "flex flex-wrap items-center justify-center gap-x-6 gap-y-2"}>
-      {style === "bar" ? <BarChart data={data} xDataKey="name" aspectRatio="auto" className="h-full" margin={{ top: 16, bottom: 32, left: 32, right: 20 }} animationDuration={0}>
-        <Grid horizontal fadeHorizontal={false} />
+      {style === "bar" ? <BarChart data={data} xDataKey="name" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 12, left: 96, right: 24 }} animationDuration={0} orientation="horizontal">
+        <Grid horizontal={false} vertical numTicksColumns={4} fadeVertical={false} />
         <Bar dataKey="count" animate={false} fill={(d) => COLORS[String(d.name)]} lineCap={4} maxWidth={28} />
-        <YAxis numTicks={4} integerOnly />
-        <BarXAxis tickerHalfWidth={32} />
+        <BarYAxis maxLabels={6} />
         <ChartTooltip rows={(p) => [{ label: String(p.name), value: Number(p.count), color: COLORS[String(p.name)] }]} showDots={false} showDatePill={false} />
       </BarChart> : <>
         <PieChart data={data.map((o) => ({ label: o.name, value: o.count, color: COLORS[o.name] }))} size={210} innerRadius={76} padAngle={0.035} cornerRadius={3} hoverOffset={3} enterTransition={{ duration: 0 }} enterStaggerScale={0}>

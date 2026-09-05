@@ -12,6 +12,12 @@ Adam identified the rejected accent outline around the Dashboard select in the P
 
 Independent native review passed the full Pin Outcomes tab cycle: the Dashboard select remained neutral, the HTML and dialog surfaces showed no whole-modal outline, and both buttons retained their accent focus cue. A temporary Sogo selection was discarded. Escape and visible Cancel each restored exact focus to the invoking pin button, and no pin was saved. The current Activity filters, Bar/Bar display choice, pane sizes and empty draft were restored. Check, safe production build, bundle-secret scan and diff check passed. Local report: `evidence/SELECT-FOCUS-REVIEW.md`; private captures remain outside Git.
 
+## Horizontal Outcomes bars — reverified
+
+Outcomes now uses horizontal bars, which keeps the workflow-state labels readable and makes the comparison scan naturally as a status list. Only states with runs in the selected period are plotted; Counts and coverage continues to disclose the complete taxonomy and zero counts: Completed, Failed, Cancelled, Blocked, Deferred and Open.
+
+Independent native review passed the two-state sparse chart at standard and narrow widths in Macchiato, plus narrow Latte. Blocked and Open rendered as equal restrained rows, the four value guides remained readable, and the Blocked tooltip aligned to the correct bar endpoint with value 1. No clipping or overlap appeared. The reviewer restored the original theme, filters, Bar/Bar selection, pane sizes and empty draft. Full frontend suite: 712 passed, one existing skip. Check, safe production build, bundle-secret scan and diff check passed. Local report: `evidence/HORIZONTAL-OUTCOMES-REVIEW.md`; private captures remain outside Git.
+
 ## Previous full visual verification — sparse-bar defect missed
 
 Adam authorized a fresh independent native pass after edits, followed by a GitHub commit. This checkpoint supersedes the partial Activity and Capabilities native acceptance recorded below and in the CLI inventory receipt.
