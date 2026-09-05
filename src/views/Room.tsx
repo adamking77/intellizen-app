@@ -1,3 +1,6 @@
+import { requestAction } from "@/components/agent/panel-window";
+import { runRoomAction, type PanelRoomSnapshot } from "@/components/agent/panel-room";
+import { usePanelDraft } from "@/components/agent/panel-draft";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Trash2, Users, X } from "lucide-react";
@@ -21,8 +24,7 @@ import { clientFor } from "@/rooms/door";
 import { currentGroupActivity, groupActivityLabel, groupActivityTone } from "@/rooms/group-activity";
 import { $groupChats, $groupClarify, $groupNeedsYou, updateGroupChat } from "@/rooms/group-chat";
 import { displayName, groupMemberKey } from "@/rooms/group-membership";
-import { sendToGroupChat, stopGroupThread } from "@/rooms/group-rounds";
-import { approveHostedRoom, refreshHostedRoom, sendHostedRoom, stopHostedRoom } from "@/rooms/hermes-hosted";
+import { approveHostedRoom, refreshHostedRoom } from "@/rooms/hermes-hosted";
 import { clearGroupPrompt, respondGroupApproval } from "@/rooms/group-turns";
 import { NewRoomSheet } from "@/rooms/new-room-sheet";
 import { RoomComposer } from "@/rooms/room-composer";
@@ -105,15 +107,23 @@ export function RoomView({
   roomId,
   panel = false,
   onClose,
+  snapshot,
+  panelDirectory,
+  hideHeader = false,
 }: {
   roomId?: string;
   panel?: boolean;
   onClose?: () => void;
+  snapshot?: PanelRoomSnapshot;
+  panelDirectory?: Record<string, HermesProfile>;
+  hideHeader?: boolean;
 } = {}) {
   const { id: routeId = "" } = useParams();
   const id = roomId ?? routeId;
   const navigate = useNavigate();
+  const remote = snapshot !== undefined;
   const rooms = useValue($groupChats);
+  const { draft, setDraft } = usePanelDraft(id ? `room:${id}` : null);
   const clarify = useValue($groupClarify);
   const needsYou = useValue($groupNeedsYou);
   const [ready, setReady] = useState(false);
@@ -123,25 +133,27 @@ export function RoomView({
   const logRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
-  const directory = useSessionStore((state) => state.profileDirectory);
+  const localDirectory = useSessionStore((state) => state.profileDirectory);
+  const directory = panelDirectory ?? localDirectory;
 
   useEffect(() => {
-    void ensureRoomsLoaded().finally(() => setReady(true));
-  }, []);
+    if (!remote) void ensureRoomsLoaded().finally(() => setReady(true));
+  }, [remote]);
 
-  const room = rooms[id] && !rooms[id].tombstone ? rooms[id] : null;
+  const room = remote ? snapshot.room : rooms[id] && !rooms[id].tombstone ? rooms[id] : null;
   const members = useMemo(() => room?.members ?? [], [room]);
   const log = room?.log ?? [];
-  const activity = room ? currentGroupActivity(id) : [];
+  const activity = remote ? snapshot.activity : room ? currentGroupActivity(id) : [];
 
   // A member's blocking request, if this room has one.
   const pending = useMemo(
-    () => Object.values(clarify).find((p) => p.group === id) ?? null,
-    [clarify, id],
+    () => remote ? snapshot.pending : Object.values(clarify).find((p) => p.group === id) ?? null,
+    [remote, snapshot, clarify, id],
   );
   const pendingMember = pending ? members.find((m) => m.name === pending.member) ?? null : null;
 
   const syncHosted = async () => {
+    if (remote) { requestAction({ type: "room-refresh", roomId: id }); return; }
     if (!id || room?.owner !== "hermes") return;
     try {
       await refreshHostedRoom(id);
@@ -153,17 +165,17 @@ export function RoomView({
   };
 
   useEffect(() => {
-    if (!id || room?.owner !== "hermes") return;
+    if (panel || remote || !id || room?.owner !== "hermes") return;
     const timer = window.setInterval(() => void syncHosted().catch(() => undefined), 1_500);
     return () => window.clearInterval(timer);
     // refreshHostedRoom reads current atom state on every tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, room?.owner]);
+  }, [panel, remote, id, room?.owner]);
 
   // Reading the room clears its @user badge.
   useEffect(() => {
-    if (id && needsYou[id]) $groupNeedsYou.set({ ...$groupNeedsYou.get(), [id]: false });
-  }, [id, needsYou]);
+    if (!remote && id && needsYou[id]) $groupNeedsYou.set({ ...$groupNeedsYou.get(), [id]: false });
+  }, [remote, id, needsYou]);
 
   useEffect(() => {
     const el = logRef.current;
@@ -178,6 +190,7 @@ export function RoomView({
 
   const onApprove = async (decision: ApprovalDecision, choice: ApprovalChoice) => {
     if (!pending || !pendingMember) return;
+    if (remote) { requestAction({ type: "room-approve", roomId: id, requestId: decision.requestId, choice }); return; }
     setBusy(true);
     try {
       if (pending.hosted) await approveHostedRoom(id, pending, choice);
@@ -191,6 +204,7 @@ export function RoomView({
 
   const onClarify = async (decision: ClarifyDecision, answers: Record<string, string[]>) => {
     if (!pending || !pendingMember) return;
+    if (remote) { requestAction({ type: "room-clarify", roomId: id, requestId: decision.requestId, answers }); return; }
     setBusy(true);
     try {
       await answerClarify(clientFor(pendingMember), decision, answers);
@@ -202,13 +216,15 @@ export function RoomView({
     }
   };
 
-  if (!ready) {
+  if (!ready && !remote) {
     return (
       <div className="h-full bg-[var(--base)] p-6">
         <Skeleton lines={5} className="mx-auto max-w-2xl" />
       </div>
     );
   }
+
+  if (!room && remote) return <p role="status" className="p-4 text-[var(--text-muted)]">This room is unavailable. Choose another conversation above.</p>;
 
   if (!room) {
     const others = listRooms();
@@ -262,7 +278,7 @@ export function RoomView({
   return (
     <div className="flex h-full overflow-hidden bg-[var(--base)]" data-room-panel={panel || undefined}>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center gap-3 px-5 py-3">
+        {!hideHeader ? <header className="flex shrink-0 items-center gap-3 px-5 py-3">
           <div className="flex shrink-0 items-center" aria-label={`${members.length} room members`}>
             {members.slice(0, 6).map((member, index) => {
               const profile = profileForMember(directory, member);
@@ -306,7 +322,7 @@ export function RoomView({
               <X className="h-3.5 w-3.5" />
             </Button>
           ) : null}
-        </header>
+        </header> : <p className="px-4 py-1 text-[var(--t-meta)] text-[var(--text-muted)]">{room.turn ? `${displayName(members.find((member) => member.name === room.turn) ?? { name: room.turn })} is working…` : `${members.length} members`}</p>}
 
         <div
           ref={logRef}
@@ -379,13 +395,16 @@ export function RoomView({
           </div>
         ) : null}
         <RoomComposer
+          draft={draft}
+          onDraft={setDraft}
           members={members}
           running={room.running === true}
           disabled={room.owner === "hermes" && room.synced !== true}
           onSend={async (text) => {
             try {
-              if (room.owner === "hermes") await sendHostedRoom(id, text);
-              else sendToGroupChat(id, members, text);
+              const action = { type: "room-send" as const, roomId: id, text };
+              if (remote) requestAction(action);
+              else await runRoomAction(action);
             } catch (error) {
               toastError("Couldn't send to that room", error);
               throw error;
@@ -393,8 +412,9 @@ export function RoomView({
           }}
           onStop={async () => {
             try {
-              if (room.owner === "hermes") await stopHostedRoom(id);
-              else await stopGroupThread(id, null, members);
+              const action = { type: "room-stop" as const, roomId: id };
+              if (remote) requestAction(action);
+              else await runRoomAction(action);
             } catch (error) {
               toastError("Couldn't stop that room", error);
             }

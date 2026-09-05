@@ -1,3 +1,4 @@
+import type { PanelRoomAction, PanelRoomSnapshot } from "./panel-room";
 // The agent panel's own window: its label, its sizes, the eject state
 // machine, and the event channel the two webviews share. Ported from
 // hermes-app `shellState.ts` and the pure half of `useEject.ts`.
@@ -118,6 +119,7 @@ export function sizeFor(mode: PanelMode): { w: number; h: number } {
 
 /** What the panel renders from: the session store's data, nothing else. */
 export interface PanelFrame {
+  room?: PanelRoomSnapshot | null;
   selectedProfile: string | null;
   profileDirectory: Record<string, HermesProfile>;
   threads: Record<string, ProfileThread>;
@@ -126,6 +128,7 @@ export interface PanelFrame {
 /** What the panel asks the main window to do. Carried in the store's own
  *  vocabulary so the two windows cannot hold two contracts. */
 export type PanelAction =
+  | PanelRoomAction
   | { type: "select"; profile: string | null }
   | { type: "send"; profile: string; text: string; attachments?: SessionAttachment[] }
   | { type: "edit"; profile: string; messageId: string; text: string }

@@ -33,7 +33,8 @@ export function TargetPicker({
   const rows = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(() => {
     const at = profiles.findIndex((p) => p.name === target);
-    return at >= 0 ? at : 0;
+    const teamAt = teams.findIndex((team) => `team:${team.id}` === target);
+    return at >= 0 ? at : teamAt >= 0 ? profiles.length + teamAt : 0;
   });
   useEffect(() => {
     const key = (e: globalThis.KeyboardEvent) => {
@@ -174,14 +175,14 @@ export function TargetPicker({
             }}
             type="button"
             role="option"
-            aria-selected={false}
+            aria-selected={target === `team:${team.id}`}
             tabIndex={i === active ? 0 : -1}
             onFocus={() => setActive(i)}
             onClick={() => {
               onTeam?.(team);
               onClose();
             }}
-            className="flex min-h-[var(--h-row)] w-full items-center gap-2 rounded-[var(--r-ctl)] px-2 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
+            className={cn("flex min-h-[var(--h-row)] w-full items-center gap-2 rounded-[var(--r-ctl)] px-2 text-left font-ui text-[var(--t-ui)] text-[var(--text)] outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]", target === `team:${team.id}` && "bg-[var(--selected)] hover:bg-[var(--selected-hover)]")}
           >
             <span className="flex shrink-0 items-center">
               {faces.map((face, memberIndex) => (

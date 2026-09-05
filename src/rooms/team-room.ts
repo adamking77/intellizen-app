@@ -1,7 +1,7 @@
 import type { Team } from "@/components/agents/agent-model";
 import type { HermesProfile } from "@/engine/profiles";
 
-import { hasGroupChatNameBase } from "./group-chat";
+import { hasGroupChatNameBase, type GroupChatRoom } from "./group-chat";
 import { groupMemberKey } from "./group-membership";
 import { createRoom, ensureRoomsLoaded, listRooms } from "./rooms";
 import type { GroupMember } from "./types";
@@ -40,4 +40,11 @@ export async function openTeamRoom(
       (room.members || []).map(groupMemberKey).sort().join("|") === keys,
   );
   return existing?.roomId || createRoom(team.name, members);
+}
+
+/** Match the same roster/name contract used when reopening a team's room. */
+export function teamForRoom(teams: Team[], room: GroupChatRoom | null | undefined): Team | undefined {
+  if (!room) return undefined;
+  const members = (room.members ?? []).map((member) => `${member.door === "acp" ? "acp" : "hermes"}:${member.name}`).sort().join("|");
+  return teams.find((team) => hasGroupChatNameBase(room.name, team.name) && [...team.members].sort().join("|") === members);
 }

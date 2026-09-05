@@ -1,3 +1,8 @@
+import { teamForRoom } from "@/rooms/team-room";
+import { useQuery } from "@tanstack/react-query";
+import { loadTeams } from "@/components/agents/teams-store";
+import { RoomView } from "@/views/Room";
+import type { PanelFrame } from "./panel-window";
 /** The ejected panel's whole window: chrome, the panel, and the HUD it
  *  reduces to.
  *
@@ -94,6 +99,7 @@ export function EjectedPanel() {
   if (mode.hud) {
     return (
       <HudWindow
+        frame={frame}
         profile={selected}
         identity={identity}
         profiles={Object.values(frame?.profileDirectory ?? {})}
@@ -126,6 +132,7 @@ export function EjectedPanel() {
 /** The HUD needs a voice of its own: `useVoice` is per surface, and this one
  *  sends through the channel rather than through the store. */
 function HudWindow({
+  frame,
   profile,
   identity,
   profiles,
@@ -135,6 +142,7 @@ function HudWindow({
   onGrow,
   onRedock,
 }: {
+  frame: PanelFrame | null;
   profile: string | null;
   identity: HermesProfile | null;
   profiles: HermesProfile[];
@@ -144,21 +152,25 @@ function HudWindow({
   onGrow: () => void;
   onRedock: () => void;
 }) {
-  const messages = useMemo(() => thread?.transcript.messages ?? [], [thread]);
-  const run = runStateOf(thread);
+  const room = frame?.room;
+  const teamsQuery = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
+  const teamProfiles: HermesProfile[] = (teamsQuery.data ?? []).map((team) => ({ name: `team:${team.id}`, displayName: team.name, description: "Team", model: null, provider: null, isDefault: false, gatewayRunning: true, avatarStyle: "sphere" }));
+  const messages = useMemo(() => room ? [] : thread?.transcript.messages ?? [], [room, thread]);
+  const run = room ? room.pending ? { kind: "waiting" as const } : room.room?.running ? { kind: "working" as const, label: room.room.turn ?? null } : { kind: "idle" as const } : runStateOf(thread);
   const sending = run.kind === "working" || run.kind === "opening";
-  const { draft, setDraft, attachments } = usePanelDraft(profile);
+  const { draft, setDraft, attachments } = usePanelDraft(room ? `room:${room.id}` : profile);
 
   const send = useCallback(
     (text: string) => {
+      if (room) { requestAction({ type: "room-send", roomId: room.id, text }); return; }
       if (!profile) return;
       requestAction({ type: "send", profile, text, attachments: text.trim() === draft.trim() ? attachments : [] });
     },
-    [profile, draft, attachments],
+    [room, profile, draft, attachments],
   );
 
   const voice = useVoice({
-    profile,
+    profile: room ? null : profile,
     messages,
     sending,
     onSend: send,
@@ -168,23 +180,24 @@ function HudWindow({
 
   return (
     <Hud
-      agent={identity}
-      profiles={profiles}
-      target={profile}
+      chatContent={room ? <RoomView roomId={room.id} panel hideHeader snapshot={room} panelDirectory={frame?.profileDirectory} /> : undefined}
+      agent={room ? { name: `room:${room.id}`, displayName: room.room?.name ?? "Team", description: "Team", model: null, provider: null, isDefault: false, gatewayRunning: true, avatarStyle: "sphere" } : identity}
+      profiles={[...profiles, ...teamProfiles]}
+      target={room ? `team:${teamForRoom(teamsQuery.data ?? [], room.room)?.id ?? room.id}` : profile}
       messages={messages}
       run={run}
       voice={voice}
       open={open}
       onOpen={onOpen}
-      onTarget={(name) => requestAction({ type: "select", profile: name })}
+      onTarget={(name) => requestAction(name.startsWith("team:") ? { type: "select-team", teamId: name.slice(5) } : { type: "select", profile: name })}
       onSend={send}
       draft={draft}
       onDraft={setDraft}
-      onStop={() => profile && requestAction({ type: "stop", profile })}
+      onStop={() => room ? requestAction({ type: "room-stop", roomId: room.id }) : profile && requestAction({ type: "stop", profile })}
       onGrow={onGrow}
       onRedock={onRedock}
       sending={sending}
-      ready={Boolean(profile)}
+      ready={Boolean(room?.room || profile)}
     />
   );
 }

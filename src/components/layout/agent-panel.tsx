@@ -1,7 +1,9 @@
+import { $groupChats } from "@/rooms/group-chat";
+import { useValue } from "@/rooms/store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { open as pickFiles } from "@tauri-apps/plugin-dialog";
-import { ChevronsUpDown, PanelRightClose } from "lucide-react";
+import { ChevronsUpDown, PanelRightClose, Users } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
 import { MaterialContext } from "@/components/agent/material-context";
@@ -36,7 +38,7 @@ import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAction, type PanelFrame } from "@/components/agent/panel-window";
 import { loadTeams } from "@/components/agents/teams-store";
-import { openTeamRoom } from "@/rooms/team-room";
+import { openTeamRoom, teamForRoom } from "@/rooms/team-room";
 
 const ICON_BUTTON =
   "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
@@ -101,7 +103,7 @@ export function AgentPanel({
 
 
 
-  const { remote, frameReady, profileDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } = usePanelSession(panelFrame);
+  const { remote, room: remoteRoom, frameReady, profileDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } = usePanelSession(panelFrame);
   const connection = useEngineStore((s) => s.connection);
   const engineError = useEngineStore((s) => s.error);
   const engineOpen = connection === "open";
@@ -157,7 +159,10 @@ export function AgentPanel({
   }, [remote, profiles, setProfileDirectory]);
 
 
-  const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
+  const localRoomId = useSessionStore((state) => state.selectedRoomId);
+  const rooms = useValue($groupChats);
+  const selectedRoomId = remote ? remoteRoom?.id ?? null : localRoomId;
+  const selectedRoom = remote ? remoteRoom?.room : selectedRoomId ? rooms[selectedRoomId] : null;
   const selectRoom = useSessionStore((state) => state.selectRoom);
   const teamsQuery = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
   const teams = teamsQuery.data ?? [];
@@ -165,10 +170,10 @@ export function AgentPanel({
   // The first selection is the profile Hermes marks default; nothing is
   // hard-coded. An explicit choice is never overridden afterwards.
   useEffect(() => {
-    if (remote || selectedProfile || profiles.length === 0) return;
+    if (remote || selectedRoomId || selectedProfile || profiles.length === 0) return;
     const first = defaultProfile(hermesProfiles) ?? acpProfiles[0];
     if (first) selectProfile(first.name);
-  }, [remote, hermesProfiles, acpProfiles, selectedProfile, selectProfile]);
+  }, [remote, selectedRoomId, hermesProfiles, acpProfiles, selectedProfile, selectProfile]);
 
   const profile: HermesProfile | null =
     profiles.find((p) => p.name === selectedProfile) ??
@@ -381,17 +386,6 @@ export function AgentPanel({
     return null;
   }
 
-  if (!standalone && selectedRoomId) {
-    return (
-      <AgentPanelShell
-        standalone={overlay}
-        pane={pane}
-        onInteraction={() => undefined}
-      >
-        <RoomView roomId={selectedRoomId} panel onClose={() => selectRoom(null)} />
-      </AgentPanelShell>
-    );
-  }
 
   return (
     <AgentPanelShell
@@ -416,7 +410,7 @@ export function AgentPanel({
             title="Who to talk to"
             className="-ml-1 flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-[var(--r-ctl)] px-1.5 py-0.5 outline-none hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
           >
-            {profile ? (
+            {selectedRoomId ? <Users className="h-5 w-5 shrink-0" /> : profile ? (
               <span data-agent-avatar className="shrink-0">
                 <Avatar
                   agent={{
@@ -432,11 +426,11 @@ export function AgentPanel({
               </span>
             ) : null}
             <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
-              {agentName ?? (!frameReady ? "Connecting…" : !remote && profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
+              {(selectedRoomId ? selectedRoom?.name ?? "Team" : agentName) ?? (!frameReady ? "Connecting…" : !remote && profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
             </span>
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
-          {profile?.model && !headerActions ? (
+          {!selectedRoomId && profile?.model && !headerActions ? (
             <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
@@ -456,11 +450,12 @@ export function AgentPanel({
           {picking ? (
             <TargetPicker
               profiles={profiles}
-              target={selectedProfile}
+              target={selectedRoomId ? `team:${teamForRoom(teams, selectedRoom)?.id ?? selectedRoomId}` : selectedProfile}
               usable={usable}
               onTarget={selectProfile}
               teams={teams}
               onTeam={(team) => {
+                if (remote) { requestAction({ type: "select-team", teamId: team.id }); return; }
                 void openTeamRoom(team, useSessionStore.getState().profileDirectory)
                   .then(selectRoom)
                   .catch((error) => toastError("Couldn't open that team", error));
@@ -470,6 +465,7 @@ export function AgentPanel({
           ) : null}
         </div>
 
+        {selectedRoomId ? <RoomView roomId={selectedRoomId} panel hideHeader snapshot={remote ? remoteRoom ?? undefined : undefined} panelDirectory={profileDirectory} /> : <>
         <MaterialContext />
         <div
           ref={log}
@@ -577,6 +573,7 @@ export function AgentPanel({
           converse={<VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} />}
           sendOnEnter={sendOnEnter !== "0"}
         />
+        </>}
       </div>
     </AgentPanelShell>
   );

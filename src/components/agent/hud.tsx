@@ -99,6 +99,7 @@ function ResizeFrame() {
 }
 
 export interface HudProps {
+  chatContent?: import("react").ReactNode;
   agent: HermesProfile | null;
   profiles: HermesProfile[];
   target: string | null;
@@ -121,6 +122,7 @@ export interface HudProps {
 }
 
 export function Hud({
+  chatContent,
   agent,
   profiles,
   target,
@@ -217,8 +219,8 @@ export function Hud({
                 }}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-[var(--r-ctl)] px-1.5 py-1 text-left outline-none",
-                  "hover:bg-[var(--base)] focus-visible:bg-[var(--base)]",
-                  selected && "bg-[var(--base)]",
+                  "hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]",
+                  selected && "bg-[var(--selected)] hover:bg-[var(--selected-hover)]",
                 )}
               >
                 <Avatar
@@ -250,6 +252,7 @@ export function Hud({
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)]"
           style={SURFACE}
         >
+          {chatContent ?? <>
           <div
             ref={log}
             data-hud-log
@@ -335,6 +338,7 @@ export function Hud({
             ready={ready}
           />
 
+          </>}
           <div
             aria-hidden
             className="flex h-2 shrink-0 cursor-ns-resize items-center justify-center"

@@ -21,7 +21,6 @@ import { HomePinSync } from "@/components/home/home-pin-sync";
 import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
 import { AGENT_PANEL_COLLAPSED_KEY, AGENT_PANEL_OPEN_EVENT, readAgentPanelCollapsed } from "@/lib/agent-panel-persistence";
-import { useSessionStore } from "@/engine/session-store";
 import { useWindowSize } from "@/lib/use-window-size";
 import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-registry";
 import { readPreference, RECONNECT_ON_LAUNCH_KEY, SCAN_ON_LAUNCH_KEY } from "@/lib/settings-preferences";
@@ -71,7 +70,6 @@ export function AppShell() {
   const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
   const [agentPanelToggleRequest, setAgentPanelToggleRequest] = useState(0);
   const [agentPanelHidden, setAgentPanelHidden] = useState(readAgentPanelHidden);
-  const roomOpen = useSessionStore((state) => Boolean(state.selectedRoomId));
   const { isNarrow, width: windowWidth } = useWindowSize();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readFlag(SIDEBAR_COLLAPSED_KEY) || window.innerWidth < 1100);
   const sidebarPane = usePaneResize("intelizen:sidebar-width", 216, 160, Math.min(360, windowWidth - 680));
@@ -255,14 +253,14 @@ export function AppShell() {
                   <ChromeButton
                     label="Eject agent panel"
                     onClick={() => eject(false)}
-                    disabled={agentPanelEjecting || roomOpen}
+                    disabled={agentPanelEjecting}
                   >
                     <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </ChromeButton>
                   <ChromeButton
                     label="Reduce agent panel to HUD"
                     onClick={() => eject(true)}
-                    disabled={agentPanelEjecting || roomOpen}
+                    disabled={agentPanelEjecting}
                   >
                     <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </ChromeButton>

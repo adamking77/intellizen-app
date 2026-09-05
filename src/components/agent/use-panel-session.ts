@@ -20,6 +20,7 @@ export interface PanelSession {
   frameReady: boolean;
   profileDirectory: Record<string, HermesProfile>;
   selectedProfile: string | null;
+  room: import("./panel-room").PanelRoomSnapshot | null;
   thread: ProfileThread | null;
   selectProfile: (profile: string | null) => void;
   restore: (profile: string) => Promise<void>;
@@ -147,7 +148,7 @@ export function usePanelSession(parentFrame?: PanelFrame | null): PanelSession {
     [remote, storeClarify],
   );
 
-  return { remote, frameReady: !remote || frame !== null, profileDirectory: remote ? frame?.profileDirectory ?? EMPTY_DIRECTORY : storeDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
+  return { room: frame?.room ?? null, remote, frameReady: !remote || frame !== null, profileDirectory: remote ? frame?.profileDirectory ?? EMPTY_DIRECTORY : storeDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
 }
 
 const EMPTY: Record<string, ProfileThread> = {};

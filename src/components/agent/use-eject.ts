@@ -1,3 +1,7 @@
+import { roomSnapshot, runRoomAction } from "./panel-room";
+import { $groupChats, $groupClarify } from "@/rooms/group-chat";
+import { $groupActivity } from "@/rooms/group-activity";
+import { refreshHostedRoom } from "@/rooms/hermes-hosted";
 /** The main window's half of ejecting.
  *
  *  Ported from hermes-app `useEject.ts`. It runs the state machine in
@@ -97,9 +101,11 @@ export function useEject(): EjectHandle {
     if (!isTauri) return;
     const frame = () => {
       const s = useSessionStore.getState();
-      publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads });
+      publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) });
     };
     const stops: Array<() => void> = [];
+    const roomChanged = () => { if (serving.current) frame(); };
+    const roomStops = [$groupChats.listen(roomChanged), $groupClarify.listen(roomChanged), $groupActivity.listen(roomChanged)];
     const unsubscribe = useSessionStore.subscribe(() => {
       if (serving.current) frame();
     });
@@ -107,6 +113,7 @@ export function useEject(): EjectHandle {
     void onAction((action) => run(action)).then((un) => stops.push(un));
     return () => {
       unsubscribe();
+      roomStops.forEach((stop) => stop());
       for (const stop of stops) stop();
     };
   }, []);
@@ -116,8 +123,22 @@ export function useEject(): EjectHandle {
   useEffect(() => {
     if (!ejected || !isTauri) return;
     const s = useSessionStore.getState();
-    publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads });
+    publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) });
   }, [ejected]);
+
+  const selectedRoomId = useSessionStore((s) => s.selectedRoomId);
+  useEffect(() => {
+    if (!isTauri || !selectedRoomId) return;
+    let refreshing = false;
+    const refresh = () => {
+      if (refreshing || $groupChats.get()[selectedRoomId]?.owner !== "hermes") return;
+      refreshing = true;
+      void refreshHostedRoom(selectedRoomId).catch(() => undefined).finally(() => { refreshing = false; });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 1500);
+    return () => window.clearInterval(timer);
+  }, [selectedRoomId]);
 
   const eject = useCallback((asHud = false) => {
     dispatch({ type: "eject" });
@@ -142,6 +163,10 @@ export function useEject(): EjectHandle {
 
 /** Run what the ejected panel asked for, against the one store that owns it. */
 function run(action: PanelAction) {
+  if (action.type.startsWith("room-") || action.type === "select-team") {
+    void runRoomAction(action as Parameters<typeof runRoomAction>[0]).catch((error) => toastError("Room action failed", error));
+    return;
+  }
   const s = useSessionStore.getState();
   switch (action.type) {
     case "select":

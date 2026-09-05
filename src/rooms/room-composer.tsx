@@ -46,6 +46,8 @@ export function RoomComposer({
   onStop,
   placeholder,
   disabled = false,
+  draft,
+  onDraft,
 }: {
   members: GroupMember[];
   running: boolean;
@@ -53,8 +55,12 @@ export function RoomComposer({
   onStop: () => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
+  draft?: string;
+  onDraft?: (text: string) => void;
 }) {
-  const [text, setText] = useState("");
+  const [localText, setLocalText] = useState("");
+  const text = draft ?? localText;
+  const setText = onDraft ?? setLocalText;
   const [mention, setMention] = useState<null | { start: number; query: string }>(null);
   const [active, setActive] = useState(0);
   const [sending, setSending] = useState(false);
@@ -93,7 +99,7 @@ export function RoomComposer({
     setSending(true);
     try {
       await onSend(trimmed);
-      setText("");
+      if (draft === undefined) setText("");
       setMention(null);
     } finally {
       setSending(false);
