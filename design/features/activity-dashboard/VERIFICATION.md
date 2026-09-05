@@ -18,6 +18,12 @@ Outcomes now uses horizontal bars, which keeps the workflow-state labels readabl
 
 Independent native review passed the two-state sparse chart at standard and narrow widths in Macchiato, plus narrow Latte. Blocked and Open rendered as equal restrained rows, the four value guides remained readable, and the Blocked tooltip aligned to the correct bar endpoint with value 1. No clipping or overlap appeared. The reviewer restored the original theme, filters, Bar/Bar selection, pane sizes and empty draft. Full frontend suite: 712 passed, one existing skip. Check, safe production build, bundle-secret scan and diff check passed. Local report: `evidence/HORIZONTAL-OUTCOMES-REVIEW.md`; private captures remain outside Git.
 
+## Live dashboard pin persistence — passed
+
+Adam authorized the missing live end-to-end verification and separately confirmed removal when Computer Use required action-time approval. A Usage widget was saved to Home and a Connections widget to the Sogo workspace dashboard through the native Activity pin dialog. Usage remounted twice on Home with its seven-day, all-workspaces filter, Bar display, $0.23 estimated subtotal and coverage body. Connections remounted twice on Sogo with its enforced Sogo scope and `3 of 3 ready · global` summary.
+
+After verification, the exact two temporary widgets were removed through their own dashboard controls. Sogo returned to its empty baseline; Home returned to its original Tasks, Workflow Runs and Documents widgets in the same order. No pre-existing widget changed. The original Activity view, theme, layout, tree expansion, filters and chart choices were restored. Widget creation did not produce an observable success toast during this run, and Home removal disappeared immediately without an observable toast; Sogo removal showed `Widget removed from Sogo`. Persistence and cleanup were confirmed by destination remounts rather than toast presence. Local report: `evidence/LIVE-PIN-E2E-REVIEW.md`; private captures remain outside Git.
+
 ## Previous full visual verification — sparse-bar defect missed
 
 Adam authorized a fresh independent native pass after edits, followed by a GitHub commit. This checkpoint supersedes the partial Activity and Capabilities native acceptance recorded below and in the CLI inventory receipt.
