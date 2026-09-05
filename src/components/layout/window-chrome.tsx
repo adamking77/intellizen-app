@@ -210,11 +210,11 @@ function beginWindowResize(event: React.PointerEvent, dir: ResizeDirection) {
  * The transparent main window keeps native title-bar controls but still uses
  * these invisible edge and corner strips for reliable pane-edge resizing.
  */
-export function WindowResizeHandles() {
+export function WindowResizeHandles({ sides = true }: { sides?: boolean } = {}) {
   if (!isTauriRuntime) return null;
   return (
     <>
-      {RESIZE_ZONES.map((zone) => (
+      {RESIZE_ZONES.filter((zone) => sides || (zone.dir !== "West" && zone.dir !== "East")).map((zone) => (
         <div
           key={zone.dir}
           role="presentation"
@@ -226,56 +226,6 @@ export function WindowResizeHandles() {
           onPointerDown={(event) => void beginWindowResize(event, zone.dir)}
         />
       ))}
-    </>
-  );
-}
-
-/**
- * Because the panes float on a transparent window, their edges read as the
- * window boundary — so every pane edge doubles as a window-resize grip.
- * Vertical edges map to the nearest window side.
- */
-export function PaneResizeEdges({
-  west = false,
-  east = false,
-  hideLeft = false,
-}: {
-  west?: boolean;
-  east?: boolean;
-  /** Skip the left strip when the pane has its own internal resize handle there. */
-  hideLeft?: boolean;
-}) {
-  if (!isTauriRuntime) return null;
-  const strip = "absolute z-40";
-  const paint = { background: "rgba(0,0,0,0.001)" };
-  return (
-    <>
-      <div
-        role="presentation"
-        className={cn(strip, "left-2 right-2 top-0 h-[5px]")}
-        style={{ ...paint, cursor: "ns-resize" }}
-        onPointerDown={(event) => void beginWindowResize(event, "North")}
-      />
-      <div
-        role="presentation"
-        className={cn(strip, "bottom-0 left-2 right-2 h-[5px]")}
-        style={{ ...paint, cursor: "ns-resize" }}
-        onPointerDown={(event) => void beginWindowResize(event, "South")}
-      />
-      {!hideLeft ? (
-        <div
-          role="presentation"
-          className={cn(strip, "bottom-2 left-0 top-2 w-[5px]")}
-          style={{ ...paint, cursor: "ew-resize" }}
-          onPointerDown={(event) => void beginWindowResize(event, west ? "West" : "East")}
-        />
-      ) : null}
-      <div
-        role="presentation"
-        className={cn(strip, "bottom-2 right-0 top-2 w-[5px]")}
-        style={{ ...paint, cursor: "ew-resize" }}
-        onPointerDown={(event) => void beginWindowResize(event, east ? "East" : "West")}
-      />
     </>
   );
 }

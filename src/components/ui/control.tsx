@@ -12,7 +12,7 @@ export const controlVariants = cva(
       variant: {
         default: "bg-[var(--raised)] hover:shadow-[inset_0_0_0_999px_var(--hover)]",
         selected: "bg-[var(--selected)] font-[450] hover:bg-[var(--selected-hover)]",
-        primary: "bg-[var(--go-bg)] text-[var(--go-fg)] hover:shadow-[inset_0_0_0_999px_var(--hover)]",
+        primary: "bg-[var(--go-bg)] text-[var(--go-fg)] hover:bg-[var(--go-hover)]",
         quiet: "bg-transparent text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
         danger:
           "bg-[color-mix(in_srgb,var(--bad)_18%,transparent)] text-[var(--bad)] hover:shadow-[inset_0_0_0_999px_var(--hover)]",

@@ -430,7 +430,7 @@ export function RoomView({
                   {displayName(member)}
                 </span>
                 {room.turn === member.name ? (
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--accent)]">on turn</span>
+                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--accent-text)]">on turn</span>
                 ) : held ? (
                   <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">held</span>
                 ) : null}

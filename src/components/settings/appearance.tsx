@@ -37,7 +37,7 @@ const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.1
 const card =
   "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-[background-color,box-shadow] hover:bg-[var(--raised)]";
 const activeTag =
-  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[var(--t-section)] text-[var(--accent)]";
+  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[var(--t-section)] text-[var(--accent-text)]";
 
 /** The two arrangements, drawn rather than described: three panes at the
  *  shell's proportions, joined by a hairline or held apart over the window. */
@@ -144,8 +144,7 @@ function AccentPicker({
         </div>
 
         <p className="text-xs leading-[1.45] text-[var(--text-muted)]">
-          Moves primary actions, keyboard focus and links. It never touches neutral selection or the colours that carry
-          meaning — waiting, verified, failed.
+          Used for actions, links, keyboard focus, hover and selection. Status colors keep their meaning.
         </p>
 
         <div className="flex justify-end">
@@ -305,7 +304,7 @@ export function AppearanceSection() {
 
       <div className="flex flex-wrap items-center gap-3 pt-[18px]">
         <label htmlFor="selection-strength" className={cn(caps, "text-[var(--t-count)]")}>
-          Selection strength
+          Accent Strength
         </label>
         <input
           id="selection-strength"

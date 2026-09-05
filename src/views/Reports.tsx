@@ -1,39 +1,36 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { mergeVaultDocuments, recordVaultPath, visibleVaultFile } from "@/lib/docs-library";
 import { DocsRail } from "@/components/docs/docs-rail";
-import { DocumentHeader, type DocumentMode, type DocumentSaveStatus } from "@/components/docs/document-header";
-import { GraphEmbeds } from "@/components/docs/graph-embed";
+import { DocumentPage } from "@/components/docs/document-page";
+import { contextForRoute, publishConversationContext } from "@/lib/conversation-context";
+import { composeDocument, documentPage } from "@/lib/document-editing";
+import { documentSaveSessions } from "@/lib/document-save-session";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { MarkdownBody } from "@/components/ui/markdown-body";
 import { QueryState } from "@/components/ui/query-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   createRecordFromTemplate,
   deleteVaultFile,
   deleteWorkspaceRecord,
   DOCUMENTS_DB_FIELDS,
+  GENZEN_WORKSPACE_DATABASE_IDS,
   getDocumentsWorkspaceBundle,
-  getVaultFile,
   listAllVaultFiles,
+  listWorkflows,
   saveRecordAsTemplate,
   syncVaultFilesToDocumentRecords,
-  updateVaultFileContent,
   updateWorkspaceRecord,
 } from "@/lib/data";
 import { createPortableDocument } from "@/lib/document-persistence";
 import {
-  documentAttachmentLabel,
   documentDisplayTitle,
-  documentEditableBody,
   documentFieldString,
   documentVaultRelativePath,
   isAbsoluteDocumentPath,
   quickNoteTitle,
-  safeDocumentFolder,
   slugForDocumentTitle,
-  upsertDocumentFrontmatterId,
 } from "@/lib/documents";
 import { allProjects } from "@/lib/hierarchy";
 import { toast, toastError } from "@/lib/toast";
@@ -45,15 +42,9 @@ import type {
 import { useWindowSize } from "@/lib/use-window-size";
 import { cn } from "@/lib/utils";
 import { useHierarchy } from "@/lib/use-hierarchy";
-import { readVaultFile, removeVaultFile, writeVaultFile } from "@/lib/vault";
-import { ProposalStrip } from "@/proposals/proposal-strip";
+import { readVaultFile, removeVaultFile, writeVaultFile, listVaultDocuments, createVaultDirectory } from "@/lib/vault";
 import { useProposalCounts } from "@/proposals/use-proposals";
 import { useAppStore } from "@/store";
-
-const InlineMarkdownEditor = lazy(async () => {
-  const module = await import("@/components/reports/inline-markdown-editor");
-  return { default: module.InlineMarkdownEditor };
-});
 
 const DOCS_RAIL_STORAGE_KEY = "intelizen:docs-rail";
 
@@ -68,36 +59,16 @@ function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabas
   };
 }
 
-function EditorFallback() {
-  return <Skeleton lines={5} className="py-4" />;
-}
-
-function formatDocumentDate(value: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
-}
-
 async function getVaultFileByPath(path: string) {
   const files = await listAllVaultFiles();
   return files.find((file) => file.file_path === path) ?? null;
 }
 
 async function readDocumentContent(record: WorkspaceDatabaseRecordModel) {
-  const vaultPath = documentVaultRelativePath(record);
-  if (vaultPath) {
-    try {
-      const matchedFile = await getVaultFileByPath(vaultPath);
-      if (matchedFile) {
-        const file = await getVaultFile(matchedFile.id);
-        if (file.content !== null) return file.content;
-      }
-    } catch {
-      // A local file can still be healthy when its Supabase mirror is unavailable.
-    }
-    return readVaultFile(vaultPath);
-  }
+  const session = documentSaveSessions.get(record.id);
+  if (session) return session.getSnapshot().text;
+  const path = documentVaultRelativePath(record);
+  if (path) { try { return await readVaultFile(path); } catch { /* Use the workspace copy when the file is unavailable. */ } }
   return String(record._body ?? "");
 }
 
@@ -109,18 +80,16 @@ function creationTitle(template?: WorkspaceDatabaseRecordModel | null) {
 
 export function ReportsView() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { isCramped } = useWindowSize();
   const { tree } = useHierarchy();
   const entityFilter = useAppStore((state) => state.entityFilter);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFolder, setActiveFolder] = useState("");
   const projectParam = searchParams.get("project");
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => searchParams.get("record"));
+  const selectedRecordId = searchParams.get("record");
   const [pendingDelete, setPendingDelete] = useState<WorkspaceDatabaseRecordModel | null>(null);
-  const [content, setContent] = useState("");
-  const [persistedContent, setPersistedContent] = useState("");
-  const [saveStatus, setSaveStatus] = useState<DocumentSaveStatus>("idle");
-  const [mode, setMode] = useState<DocumentMode>("read");
   const [railHidden, setRailHidden] = useState(false);
   const [railWidth, setRailWidth] = useState(() => {
     try {
@@ -130,13 +99,17 @@ export function ReportsView() {
       return 300;
     }
   });
-  const [saveAttempt, setSaveAttempt] = useState(0);
-  const latestContentRef = useRef("");
   const vaultSyncStartedRef = useRef(false);
+  const editAfterCreateRef = useRef<string | null>(null);
 
   const docsQuery = useQuery({
     queryKey: ["docs-workspace-bundle", entityFilter],
     queryFn: () => getDocumentsWorkspaceBundle(),
+  });
+  const vaultQuery = useQuery({ queryKey: ["docs-vault-inventory"], queryFn: listVaultDocuments, refetchInterval: 30000 });
+  const workflowsQuery = useQuery({
+    queryKey: ["workflow-registry", "docs", entityFilter],
+    queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: true, limit: 100 }),
   });
 
   useEffect(() => {
@@ -148,71 +121,69 @@ export function ReportsView() {
   }, [queryClient]);
 
   const bundle = docsQuery.data ?? null;
-  const allRecords = useMemo(
+  const sopRecords = useMemo(() => (workflowsQuery.data ?? [])
+    .filter((workflow) => workflow.definition === null || workflow.definition === undefined)
+    .map((workflow): WorkspaceDatabaseRecordModel => ({
+      id: workflow.id,
+      _body: workflow.body_preview,
+      _createdAt: workflow.updated_at,
+      _updatedAt: workflow.updated_at,
+      [DOCUMENTS_DB_FIELDS.title]: workflow.name,
+      [DOCUMENTS_DB_FIELDS.stage]: "Documented",
+      [DOCUMENTS_DB_FIELDS.docType]: "workflow-sop",
+      [DOCUMENTS_DB_FIELDS.entity]: workflow.entity ?? "genzen",
+      [DOCUMENTS_DB_FIELDS.author]: workflow.owner_role ?? "",
+    })), [workflowsQuery.data]);
+  const sopRecordIds = useMemo(() => new Set(sopRecords.map((record) => record.id)), [sopRecords]);
+  const workspaceRecords = useMemo(
     () =>
-      (bundle?.records ?? [])
+      [...(bundle?.records ?? [])
         .filter((record) =>
           !entityFilter ||
           record.entity === entityFilter ||
           record.fields[DOCUMENTS_DB_FIELDS.entity] === entityFilter
         )
         .filter((record) => !projectParam || record.fields[DOCUMENTS_DB_FIELDS.project] === projectParam)
-        .map(normalizeModelRecord)
+        .map(normalizeModelRecord), ...(projectParam ? [] : sopRecords)]
         .sort((a, b) =>
           String(b[DOCUMENTS_DB_FIELDS.updatedAt] ?? b._updatedAt ?? "")
             .localeCompare(String(a[DOCUMENTS_DB_FIELDS.updatedAt] ?? a._updatedAt ?? ""))
         ),
-    [bundle?.records, entityFilter, projectParam],
+    [bundle?.records, entityFilter, projectParam, sopRecords],
   );
+  const allRecords = useMemo(() => mergeVaultDocuments(workspaceRecords, vaultQuery.data)
+    .filter(record => { const path = recordVaultPath(record); return !path || visibleVaultFile(path); })
+    .filter(record => {
+      if (!record._vaultOnly) return true;
+      if (projectParam) return false;
+      if (!entityFilter) return true;
+      const path = recordVaultPath(record) ?? "";
+      const owner = /^(?:work|initiatives)\/([^/]+)/.exec(path)?.[1]?.replaceAll("-", "_");
+      return !owner || owner === entityFilter;
+    }), [workspaceRecords, vaultQuery.data, projectParam, entityFilter]);
   const projects = useMemo(() => allProjects(tree).map(({ id, name }) => ({ id, name })), [tree]);
   const proposalPaths = useMemo(() => allRecords.map(documentVaultRelativePath).filter((path): path is string => Boolean(path)), [allRecords]);
   const proposalCounts = useProposalCounts(proposalPaths);
 
-  useEffect(() => {
-    if (selectedRecordId && allRecords.some((record) => record.id === selectedRecordId)) return;
-    if (isCramped) {
-      if (selectedRecordId) setSelectedRecordId(null);
-      return;
-    }
-    setSelectedRecordId(allRecords.find((record) => !record._isTemplate)?.id ?? allRecords[0]?.id ?? null);
-  }, [allRecords, selectedRecordId, isCramped]);
+  function selectDocument(id: string | null, replace = false) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (id) next.set("record", id); else next.delete("record");
+      return next;
+    }, { replace });
+  }
 
   const selectedRecord = useMemo(
     () => allRecords.find((record) => record.id === selectedRecordId) ?? null,
     [allRecords, selectedRecordId],
   );
-  const selectedVaultPath = documentVaultRelativePath(selectedRecord);
-  const selectedTitle = selectedRecord ? documentDisplayTitle(selectedRecord) : "Untitled document";
-  const selectedProject = projects.find((project) => project.id === documentFieldString(selectedRecord, DOCUMENTS_DB_FIELDS.project));
-
-  const vaultFileQuery = useQuery({
-    queryKey: ["docs-vault-content", selectedRecordId, selectedVaultPath],
-    queryFn: async () => selectedRecord
-      ? documentEditableBody(await readDocumentContent(selectedRecord))
-      : "",
-    enabled: !!selectedRecord,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (vaultFileQuery.data === undefined) return;
-    const nextContent = vaultFileQuery.data;
-    latestContentRef.current = nextContent;
-    setContent(nextContent);
-    setPersistedContent(nextContent);
-    setSaveStatus("idle");
-  }, [selectedRecordId, vaultFileQuery.data]);
-
   useEffect(() => {
     if (!selectedRecord) return;
-    const author = documentFieldString(selectedRecord, DOCUMENTS_DB_FIELDS.author);
-    setMode(/^(adam|you)$/i.test(author.trim()) ? "edit" : "read");
-  }, [selectedRecord]);
-
-  useEffect(() => {
-    latestContentRef.current = content;
-  }, [content]);
-
+    const context = contextForRoute({ pathname: "/docs", search: searchParams.toString() });
+    publishConversationContext({ ...context, selections: [selectedRecord._vaultOnly ? { kind: "vault_file", path: recordVaultPath(selectedRecord)!, label: documentDisplayTitle(selectedRecord) } : sopRecordIds.has(selectedRecord.id)
+      ? { kind: "workspace_record", databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry, recordId: selectedRecord.id, label: documentDisplayTitle(selectedRecord) }
+      : { kind: "document", documentId: selectedRecord.id, label: documentDisplayTitle(selectedRecord) }] });
+  }, [selectedRecord, searchParams, sopRecordIds]);
   useEffect(() => {
     try {
       window.localStorage.setItem(DOCS_RAIL_STORAGE_KEY, String(railWidth));
@@ -227,22 +198,19 @@ export function ReportsView() {
         event.preventDefault();
         setRailHidden((hidden) => !hidden);
       }
-      if (event.metaKey && event.key.toLowerCase() === "e" && selectedRecord) {
-        event.preventDefault();
-        setMode((current) => current === "edit" ? "read" : "edit");
-      }
     };
     window.addEventListener("keydown", shortcuts);
     return () => window.removeEventListener("keydown", shortcuts);
-  }, [selectedRecord]);
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: async (template?: WorkspaceDatabaseRecordModel | null) => {
       if (!bundle?.database.id) throw new Error("Documents database is not ready.");
       const title = creationTitle(template);
-      const initialContent = template ? await readDocumentContent(template) : `# ${title}\n`;
+      const templateContent = template ? await readDocumentContent(template) : "";
+      const initialContent = template ? composeDocument(templateContent, title, documentPage(templateContent, title).body, template.id) : `# ${title}\n`;
       const entity = entityFilter ?? (documentFieldString(template ?? null, DOCUMENTS_DB_FIELDS.entity) || "genzen");
-      const folder = safeDocumentFolder(documentFieldString(template ?? null, DOCUMENTS_DB_FIELDS.folder));
+      const folder = `vault:${activeFolder || `journal/${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, "0")}`}`;
       const fields = {
         ...(template ? Object.fromEntries(
           Object.entries(template).filter(([key]) => !key.startsWith("_") && key !== "id"),
@@ -279,9 +247,10 @@ export function ReportsView() {
             }
           : current,
       );
-      setSelectedRecordId(record.id);
-      setMode("edit");
+      selectDocument(record.id);
+      editAfterCreateRef.current = record.id;
       void queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
+      void queryClient.invalidateQueries({ queryKey: ["docs-vault-inventory"] });
       if (warning) toast.info("Document created in Supabase only", { description: warning });
       else toast.success("Document created", { description: "Its Supabase row and markdown file are linked." });
     },
@@ -304,8 +273,8 @@ export function ReportsView() {
         },
         body: sourceContent,
       });
-      const portableContent = upsertDocumentFrontmatterId(sourceContent, template.id);
-      const path = `documents/templates/${slugForDocumentTitle(title)}-${Date.now()}.md`;
+      const portableContent = composeDocument(sourceContent, title, documentPage(sourceContent, title).body, template.id);
+      const path = `vault:templates/${slugForDocumentTitle(title)}-${Date.now()}.md`;
       await writeVaultFile(path, portableContent);
       return updateWorkspaceRecord(template.id, {
         fields: { ...template.fields, [DOCUMENTS_DB_FIELDS.vaultPath]: path },
@@ -321,6 +290,8 @@ export function ReportsView() {
 
   const deleteMutation = useMutation({
     mutationFn: async (record: WorkspaceDatabaseRecordModel) => {
+      const session = documentSaveSessions.get(record.id);
+      if (session) await session.flush();
       const vaultPath = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath);
       const matchedFile = vaultPath ? await getVaultFileByPath(vaultPath) : null;
       // Remove the recoverable workspace row first. If local cleanup fails, a
@@ -341,7 +312,7 @@ export function ReportsView() {
     },
     onSuccess: async ({ keptExternalFile, cleanupWarning }) => {
       setPendingDelete(null);
-      setSelectedRecordId(null);
+      selectDocument(null);
       await queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
       if (cleanupWarning) {
         toast.info("Document row deleted; file cleanup needs attention", { description: cleanupWarning });
@@ -356,40 +327,7 @@ export function ReportsView() {
     onError: (error) => toastError("Couldn't delete document", error),
   });
 
-  useEffect(() => {
-    if (!selectedRecord || content === persistedContent || saveStatus !== "dirty") return;
-    const recordId = selectedRecord.id;
-    const vaultPath = selectedVaultPath;
-    const nextContent = upsertDocumentFrontmatterId(content, recordId);
-    const timer = window.setTimeout(async () => {
-      try {
-        setSaveStatus("saving");
-        const matchedFile = vaultPath ? await getVaultFileByPath(vaultPath) : null;
-        if (matchedFile) await updateVaultFileContent(matchedFile.id, nextContent);
-        if (vaultPath) await writeVaultFile(vaultPath, nextContent);
-        await updateWorkspaceRecord(recordId, {
-          body: nextContent,
-          fieldId: DOCUMENTS_DB_FIELDS.updatedAt,
-          value: new Date().toISOString(),
-        });
-        setPersistedContent(content);
-        setSaveStatus(latestContentRef.current !== content ? "dirty" : "saved");
-        await queryClient.invalidateQueries({ queryKey: ["docs-workspace-bundle"] });
-      } catch (error) {
-        setSaveStatus("error");
-        toastError("Couldn't save document", error);
-      }
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [content, persistedContent, queryClient, saveAttempt, saveStatus, selectedRecord, selectedVaultPath]);
-
-  useEffect(() => {
-    if (saveStatus !== "saved") return;
-    const timer = window.setTimeout(() => setSaveStatus("idle"), 1600);
-    return () => window.clearTimeout(timer);
-  }, [saveStatus]);
-
-  if (docsQuery.isLoading) {
+  if (docsQuery.isLoading && vaultQuery.isLoading) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--base)] p-6">
         <QueryState isLoading error={undefined} isEmpty={false} loadingLabel="Loading documents" onRetry={() => void docsQuery.refetch()}>
@@ -399,7 +337,7 @@ export function ReportsView() {
     );
   }
 
-  if (docsQuery.error) {
+  if (docsQuery.error && !docsQuery.data && !vaultQuery.data) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--base)] p-6">
         <QueryState isLoading={false} error={docsQuery.error} isEmpty={false} errorTitle="Docs unavailable" onRetry={() => void docsQuery.refetch()}>
@@ -411,7 +349,7 @@ export function ReportsView() {
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-[var(--base)]">
-      {(!railHidden || isCramped) ? (
+      {(isCramped ? !selectedRecordId : !railHidden) ? (
         <DocsRail
           records={allRecords}
           projects={projects}
@@ -420,8 +358,21 @@ export function ReportsView() {
           searchQuery={searchQuery}
           width={isCramped ? "100%" : railWidth}
           creating={createMutation.isPending}
+          inventory={vaultQuery.data}
+          loadingVault={vaultQuery.isLoading}
+          vaultError={vaultQuery.error}
+          workspaceError={docsQuery.error}
+          activeFolder={activeFolder}
+          onFolder={setActiveFolder}
+          onRefresh={() => { void vaultQuery.refetch(); void docsQuery.refetch(); }}
+          onCreateFolder={async name => {
+            const trimmed = name.trim();
+            if (!trimmed || /[\\/:]/.test(trimmed) || trimmed.startsWith(".")) throw new Error("Use a folder name without slashes or a leading dot.");
+            await createVaultDirectory([activeFolder, trimmed].filter(Boolean).join("/"), "vault");
+            await vaultQuery.refetch();
+          }}
           onSearch={setSearchQuery}
-          onSelect={setSelectedRecordId}
+          onSelect={selectDocument}
           onCreate={(template) => createMutation.mutate(template)}
           onResize={setRailWidth}
         />
@@ -430,65 +381,26 @@ export function ReportsView() {
           "relative min-w-0 flex-1 flex-col overflow-hidden",
           isCramped && !selectedRecordId ? "hidden" : "flex",
         )}>
-          {selectedRecord ? (
-            <>
-              <DocumentHeader
-                breadcrumb={selectedProject ? `Docs / ${selectedProject.name}` : "Docs / Unfiled"}
-                mode={mode}
-                saveStatus={saveStatus}
-                inVault={Boolean(selectedVaultPath)}
-                isTemplate={Boolean(selectedRecord._isTemplate)}
-                isCramped={isCramped}
-                savingTemplate={templateMutation.isPending}
-                onBack={() => setSelectedRecordId(null)}
-                onModeChange={setMode}
-                onRetry={() => { setSaveStatus("dirty"); setSaveAttempt((attempt) => attempt + 1); }}
-                onSaveTemplate={() => templateMutation.mutate(selectedRecord)}
-                onDelete={() => setPendingDelete(selectedRecord)}
-              />
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8">
-                <article className="mx-auto max-w-[65ch]">
-                  <h1 className="font-ui text-[var(--t-title)] font-semibold text-[var(--text)]">{selectedTitle}</h1>
-                  <DocumentProvenance record={selectedRecord} />
-                <QueryState
-                  isLoading={vaultFileQuery.isLoading}
-                  error={vaultFileQuery.error}
-                  isEmpty={false}
-                  errorTitle="Document couldn’t be opened"
-                  loadingLabel="Opening document"
-                  loadingFallback={<EditorFallback />}
-                  onRetry={() => void vaultFileQuery.refetch()}
-                >
-                  <ProposalStrip
-                    docPath={selectedVaultPath || null}
-                    onApplied={(text) => {
-                      const editable = documentEditableBody(text);
-                      setContent(editable);
-                      setSaveStatus(editable === persistedContent ? "idle" : "dirty");
-                    }}
-                  />
-                  <GraphEmbeds markdown={content} />
-                  {mode === "edit" ? (
-                    <Suspense fallback={<EditorFallback />}>
-                      <InlineMarkdownEditor
-                        key={`${selectedRecordId}:${vaultFileQuery.dataUpdatedAt}`}
-                        initialValue={content}
-                        onChange={(value) => {
-                          setContent(value);
-                          setSaveStatus(value === persistedContent ? "idle" : "dirty");
-                        }}
-                      />
-                    </Suspense>
-                  ) : <MarkdownBody content={content} vaultPath={selectedVaultPath || "documents/document.md"} />}
-                </QueryState>
-                </article>
-              </div>
-            </>
+          {selectedRecordId && !selectedRecord && !workflowsQuery.isLoading ? <QueryState className="p-6" isLoading={false} error="This document is unavailable in the current scope. Choose a document from the list." isEmpty={false} errorTitle="Document unavailable" onRetry={() => void Promise.all([docsQuery.refetch(), workflowsQuery.refetch()])}>{null}</QueryState> : selectedRecord ? (
+            <DocumentPage
+              key={selectedRecord.id}
+              record={selectedRecord}
+              workflow={sopRecordIds.has(selectedRecord.id) ? workflowsQuery.data?.find((item) => item.id === selectedRecord.id) : undefined}
+              projects={projects}
+              initialEdit={editAfterCreateRef.current === selectedRecord.id}
+              isCramped={isCramped}
+              savingTemplate={templateMutation.isPending}
+              onBack={() => isCramped ? selectDocument(null) : setRailHidden((hidden) => !hidden)}
+              onReturnToList={() => { selectDocument(null); setRailHidden(false); }}
+              onSaveTemplate={() => templateMutation.mutate(selectedRecord)}
+              onMakeRunnable={() => navigate(`/workflows?workflow=${encodeURIComponent(selectedRecord.id)}&view=steps`)}
+              onDelete={() => setPendingDelete(selectedRecord)}
+            />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
               <p className="text-label">{allRecords.length === 0 ? "No documents" : "Select a document"}</p>
               <p className="max-w-[440px] text-ui text-[var(--subtext-0)]">
-                This is the writing room for every markdown document tracked by the Supabase Documents database.
+                Your documents, notes, and workflow sources live here.
                 Choose a document, create one from a template, or capture a quick note.
               </p>
             </div>
@@ -507,18 +419,4 @@ export function ReportsView() {
       />
     </div>
   );
-}
-
-function DocumentProvenance({ record }: { record: WorkspaceDatabaseRecordModel }) {
-  const author = documentFieldString(record, DOCUMENTS_DB_FIELDS.author);
-  const attachment = documentAttachmentLabel(record);
-  const updated = formatDocumentDate(
-    documentFieldString(record, DOCUMENTS_DB_FIELDS.updatedAt) || String(record._updatedAt ?? ""),
-  );
-  const parts = [
-    author ? (/^(adam|you)$/i.test(author) ? "You wrote it" : `${author} wrote it`) : "",
-    updated ? `Updated ${updated}` : "",
-    attachment ? `linked to ${attachment}` : "",
-  ].filter(Boolean);
-  return <p className="mb-7 mt-1 text-[var(--t-meta)] text-[var(--text-muted)]" title={parts.join(" · ")}>{parts.join(" · ")}</p>;
 }

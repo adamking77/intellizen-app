@@ -1,9 +1,11 @@
 import { cn } from "@/lib/utils";
 
-type ToolState = "running" | "verified" | "failure";
+type ToolState = "running" | "recorded" | "completed" | "verified" | "failure";
 
 const dot: Record<ToolState, string> = {
   running: "var(--text-muted)",
+  recorded: "var(--text-muted)",
+  completed: "var(--text-muted)",
   verified: "var(--ok)",
   failure: "var(--bad)",
 };
@@ -34,9 +36,9 @@ interface ReceiptProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Receipt({ verb, object, className, ...props }: ReceiptProps) {
   return (
-    <div className={cn("ml-3.5 flex min-h-[var(--h-row)] items-center gap-1.5 font-mono text-[11px]", className)} {...props}>
+    <div className={cn("ml-3.5 flex min-h-[var(--h-row)] min-w-0 items-center gap-1.5 font-mono text-[11px]", className)} {...props}>
       <span className="text-[var(--text-muted)]">{verb}</span>
-      <span className="truncate text-[var(--overlay-1)]">{object}</span>
+      <span className="min-w-0 flex-1 truncate text-[var(--overlay-1)]">{object}</span>
     </div>
   );
 }

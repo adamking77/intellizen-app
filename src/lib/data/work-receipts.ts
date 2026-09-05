@@ -27,7 +27,7 @@ export function workEventsForSession(events: WorkEventItem[], sessionId: string,
   }).sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
-export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; since?: string; limit?: number }) {
+export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; sessionId?: string; sessionProfile?: string; since?: string; limit?: number }) {
   let query = supabase
     .schema("workspace").from("work_events")
     .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, created_at")
@@ -39,6 +39,10 @@ export async function listWorkEvents(input: { recordId?: string; workflowRunId?:
     query = query.eq("record_id", input.recordId);
   } else if (input.workflowRunId) {
     query = query.eq("workflow_run_id", input.workflowRunId);
+  }
+  if (input.sessionId) {
+    const values = [input.sessionId, ...(input.sessionProfile ? [`${input.sessionProfile}:${input.sessionId}`] : [])];
+    query = query.or(["session_id", "sessionId", "session_key", "sessionKey"].flatMap((key) => values.map((value) => `payload->>${key}.eq.${JSON.stringify(value)}`)).join(","));
   }
   if (input.since) query = query.gte("created_at", input.since);
   const { data, error } = await query;

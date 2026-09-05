@@ -34,12 +34,12 @@ Kept reference images: `design/references/pinterest-2026-09-04/`.
 2. **Two radii and a pill.** `--r-plane` 12px for the rail, work, panel,
    drawer, palette and dialogs. `--r-ctl` 8px for every control, field,
    select, button, card, board card, builder node, widget, message bubble and
-   decision field. `--r-pill` full round for state pills only. Nested
+   decision field. `--r-pill` full round for state pills and the HUD bar in every state. Nested
    elements step in by padding, never by a smaller radius.
 3. **One height.** Controls and fields are 28px. Tree and list rows are
    26px. Table lines are 32px. Nothing interactive is sized by its content
    alone.
-4. **One hover, one selection.** Hover is a 6% text wash. Selection is the
+4. **One hover, one selection.** Hover is a strength-controlled accent wash. Selection is the
    selected plane with 450 weight and full-strength text. A selected thing
    that is hovered lifts to the selected-hover plane, never back down to the
    wash.
@@ -48,8 +48,9 @@ Kept reference images: `design/references/pinterest-2026-09-04/`.
    hairline with a word. Nothing else has a border. Containers separate by
    plane, hairline gap, tint or space.
 6. **Nothing persistent has a shadow.** The drawer, the command palette,
-   dialogs, menus and the ejected HUD are transient and take the one
-   transient shadow. Everything else is flat.
+   dialogs and menus are transient and take the one transient shadow.
+   The ejected panel and HUD stay shadow-free with transparent surroundings.
+   Everything else is flat.
 7. **Colour is a word.** Every state pill, ring, dot and field carries its
    label in text. The accent never touches semantic colours.
 8. **The HUD is only the ejected panel reduced.** No docked strip inside the
@@ -100,59 +101,17 @@ the `size` prop keeps only horizontal padding variants (`sm` 10px, `default`
 12px, `icon` square). Select sizes `xs`, `sm`, `default`
 (`src/components/ui/select.tsx:15-17`) collapse to one.
 
-### 1.3 Selection, in lightness not percent
+### 1.3 Accent selection — revised by Adam, 2026-09-05
 
-Today `--selected: var(--raised)` and `--selected-hover` is a 4% text mix
-(`src/index.css:4829-4836`). Adam finds it washed out on dark flavors. The
-cause: a percentage mix of text into raised moves lightness a lot on light
-flavors and very little on dark ones, and almost none on OLED.
+All seven themes, including both light themes, use the selected accent in hover and selection. The former signed OKLCH lightness shift and 0.06 floor are superseded: they reduced text contrast at strong settings and ignored the accent in light selection.
 
-After: the selected plane is the raised plane shifted by a fixed step of
-perceptual lightness. The step is signed per flavor (lift on dark, sink on
-light), so the same number means the same thing everywhere.
-
-```css
-:root {
-  --sel-step: 0.08;               /* written by the Appearance slider, 0.04 to 0.14 */
-  --sel-dir: 1;                   /* dark flavors lift */
-  --sel-chroma: 0.02;             /* accent chroma added on dark only, scales with step */
-  --selected: oklch(from var(--raised)
-                calc(l + var(--sel-dir) * var(--sel-step))
-                calc(c + var(--sel-chroma) * (var(--sel-dir) + 1) / 2)
-                h);
-  --selected-hover: oklch(from var(--raised)
-                calc(l + var(--sel-dir) * (var(--sel-step) + 0.03))
-                calc(c + var(--sel-chroma) * (var(--sel-dir) + 1) / 2)
-                h);
-}
-:root[data-flavor="latte"],
-:root[data-flavor="flat"] { --sel-dir: -1; }
-```
-
-Notes for the implementer:
-
-- Relative colour syntax (`oklch(from …)`) is supported by the WKWebView the
-  app ships in on macOS 14 and later. Verify once in `pnpm tauri dev` on
-  Adam's Mac; if the footer reads a flavor correctly and a tree row selects,
-  it works. Do not add a JS fallback unless it fails.
-- The hue of the selected plane should be the accent's hue on dark flavors,
-  so the chroma reads as "yours". Implement by mixing: `--selected` on dark
-  is `color-mix(in oklch, <lifted raised> , var(--accent) calc(var(--sel-step) * 60%))`.
-  On light flavors add no accent. Keep the lifted-raised form above as the
-  base and apply the mix on top; the result must still pass the floor below.
-- **Floor per flavor.** The selected plane must sit at least 0.06 OKLCH
-  lightness from its ground (`--base` for rows and tables, `--raised` for
-  cards). OLED's raised plane is near black, so at the smallest slider value
-  clamp the step to the floor. Implement as `max(var(--sel-step), 0.06)`.
-- Muted text on the selected plane must still score at least 4.5:1. Check
-  every flavor at the slider's strongest value (0.14) with the script in
-  section 8.
+The selected ground is base 75% / raised 25%, tinted with accent at `--sel-accent-weight` (slider × 60%, or 2.4–8.4%). Selected hover adds 2%. Normal and muted text retain their palette tokens, with contrast checked across every accent and slider position. Exact formulas live in `src/index.css`; do not duplicate them in feature styles.
 
 ### 1.4 Hover and focus
 
 ```css
---hover: color-mix(in srgb, var(--text) 6%, transparent);        /* dark */
---hover: color-mix(in srgb, var(--text) 8%, transparent);        /* latte, flat */
+--hover: color-mix(in srgb, var(--accent) var(--sel-accent-weight), transparent);
+/* Same formula in light and dark themes. */
 ```
 
 Hover is applied as an inset `box-shadow` of the wash on elements whose
@@ -194,7 +153,7 @@ fade in 160ms with a 3px rise; both respect `prefers-reduced-motion`.
 File: `src/components/settings/appearance.tsx`. Beside the accent picker
 (the fourteen swatches, lines 45 to 120), add one row:
 
-- Label "Selection strength", section-caps style like the other labels.
+- Label "Accent Strength", section-caps style like the other labels.
 - A native `<input type="range">` styled to the kit (28px track height area,
   8px thumb radius, accent thumb), min 0.04, max 0.14, step 0.01, default
   0.08.
@@ -412,6 +371,8 @@ line and the graph-above-title arrangement are removed.
 
 ### 5.3 Workflows
 
+> **Superseded for Workflows, Adam 2026-09-05:** Adam rejected the runs-first composition and approved a card-based library opening into an editable visual composer, with manual and agent-assisted building on the same definition and contextual run history. See `design/features/app-refinement/PLAN.md`. The paragraph below records the earlier direction; it no longer controls this surface. Shared token and accessibility rules still apply.
+
 `src/views/Workflows.tsx` (903 lines), `src/components/workflows/*`. The
 page opens on one Table: workflow, runs as (Identity), last ran, result
 (Pill), next, and a Run Control. Draft rows say Finish and open the builder.
@@ -612,3 +573,32 @@ ends, build a two-step workflow by hand, then have an agent add a third step.
   after he has seen the client-case Brief in the built app.
 - The shipped slider and Follow-system defaults remain user-tunable; changing
   those defaults is a later preference decision, not an implementation gap.
+
+### Workflow expansion palette — Adam’s correction, 2026-09-05
+
+Expanded workflow cards use the active theme’s neutral blend of raised and base planes and a subtle border, with form fields on the base plane. Do not use the accent-derived selected fill across the expanded card. Expansion is an editing state, not a large accent selection wash. This scoped exception follows Adam’s explicit review of the live composer and applies in every theme.
+
+### Workflow Steps-view editing — Adam’s correction, 2026-09-05
+
+In Steps view, an insertion plus opens a blank card at that position, including either condition branch. Type selection belongs inside this card; choosing a type creates the expanded editor. The expanded card’s type label is editable in place. Type changes preserve the step’s identity/title and route, and use ordinary Undo/Redo. A condition with differing routes requires the user to choose the continuing route before conversion; other steps remain available. The former left-hand step palette is replaced by these contextual insertions. This changes Steps-view interaction, not canvas composition.
+
+### Workflow authoring parity — approved 2026-09-05
+
+Steps and Canvas are two views of one local workflow draft. Both expose the same title-first card, editable step type, task, role and readable route controls. Workflow inputs belong to Trigger. Supporting Inputs, Output and Controls disclose details; permissions and verification remain summarized while closed. Runs and test results stay in the lower tray. Workflow library cards prioritize purpose, owner, readiness and a concrete blocker.
+
+Canvas cards remain flat and neutral when expanded; no drag footer or accent-filled editing surface. Controls protect text editing while card surfaces and all three outcomes support direct dragging. Selection preserves graph scale and only pans enough to reveal content. Outline/search is optional; manual layout and viewport survive view changes. Validation selects the affected card and focuses the field, opening its disclosure. Save and agent proposal reviews lead with readable changes and authority; exact definitions live under Source. Reviews initially focus their heading and start at the top. A first local save is version 1 with no fabricated saved baseline.
+
+Approved implementation and native evidence: `design/features/app-refinement/evidence/editor-coherence/VERIFICATION.md`. This adds no new grouping semantics or automatic execution authority.
+
+### Ejected panel and composer — Adam’s correction, 2026-09-05
+
+The full panel title bar grows to contain wrapped text at 200% page zoom. Both floating modes have transparent native backgrounds and no outer CSS/native shadow. Growing the HUD or conversation keeps its controls within the current monitor. The composer surface uses the same `--r-ctl` (8px) radius in docked, ejected and HUD views. Final implementation, fresh native acceptance and limits: `design/features/app-refinement/evidence/final-polish/VERIFICATION.md`.
+
+### Pane controls and compact agent chrome — approved 2026-09-05
+
+Keep Settings in Places and plain connection status in the footer. The ejected panel’s single header row contains its agent picker and reduce/redock controls, with no Agent Panel heading. Internal dividers adjust the sidebar and agent-panel widths from the middle pane edges and either agent-panel edge; these preferences persist and support keyboard adjustment. The HUD bar always uses `--r-pill`, including while conversation or roster is open; expanded conversation uses `--r-plane`. This supersedes the preceding standalone wrapped-title treatment while preserving transparent exteriors and the shared composer radius. Current native evidence: `design/features/app-refinement/evidence/pane-controls/NATIVE-REVIEW.md`.
+
+
+### Accent and detached-space clarification — approved 2026-09-05
+
+Appearance labels the existing strength slider **Accent Strength**, preserving its stored value. The current interaction tokens and contrast matrix in DESIGN.md supersede earlier neutral hover/light selection and lightness-floor instructions in this historical stage. Solid accent controls use contrasting ink; text on neutral surfaces uses the readable accent derivative. Categorical/status colors stay independent. Detached agent panel/HUD leaves no placeholder strip; focus it with the existing top-bar panel button. Current evidence: `design/features/app-refinement/evidence/accent-states/VERIFICATION.md`.

@@ -1,40 +1,14 @@
 # GenZen Brain — Applied Migration Inventory
 
-The remote Supabase project (`jicrdrwtwubveyvzyyrh`) is the authoritative
-schema record. This repo's `supabase/migrations/` holds only the app-local
-subset and cannot rebuild the full database.
+The remote Supabase project (`jicrdrwtwubveyvzyyrh`) is the authoritative schema record. This repository holds only an app-local subset and cannot rebuild the full database.
 
-Regenerate this file with the Supabase MCP `list_migrations` tool after
-applying new migrations.
+Snapshot: 2026-09-05 — 160 remote-applied migrations, verified through Supabase MCP `list_migrations`. Regenerate after applying migrations.
 
-Snapshot: 2026-07-27 — 89 remote-applied migrations, 9 schemas.
+The vault sync repair adds `sync_vault_document_v1`, a service-role-only transaction that checks document versions and updates content and derived embeddings together. Local migration `20260905080216_vault_sync_atomic_document.sql` matches its remote version.
 
-Applied 2026-09-02: `20260901000045_add_hierarchy_nodes` adds the workspace
-hierarchy nodes (`department → workspace → project → session`) that back the
-sidebar tree.
+The previously listed pending receipt-hardening migrations were applied remotely on 2026-08-06; the hierarchy migration was applied as `20260901200717`. Remote versions below take precedence over historical local filenames.
 
-Local pending hardening as of 2026-07-28 (not applied remotely):
-
-- `20260728114149_harden_append_only_receipt_permissions` revokes default
-  PUBLIC/authenticated execute on `append_record_section`, hardens its
-  `search_path`, explicitly preserves `anon`/`service_role` execution, and
-  removes service-role DELETE from `record_revisions`.
-- `20260728115305_transactional_consequential_work_receipts` adds the atomic
-  record-section + work-event RPC used for approval, verification, and
-  external-action receipts, executable only by `anon` and `service_role`.
-
-Post-apply authority verification is defined in
-`supabase/tests/v2_audit_receipt_contract.sql`.
-
-The local filenames for the two already-applied July contracts now match the
-authoritative remote versions: `20260703090922` and `20260727092636`. Credential
-hash material is intentionally not migration source and must be provisioned
-through a reviewed machine-local administration path.
-
-The superseded local migration remains in existing git history and contains the
-previous access-key hash. Rotate that key before release; history rewriting, if
-required, is a separate destructive operation and is not part of this pending
-migration set.
+Post-apply authority verification is defined in `supabase/tests/v2_audit_receipt_contract.sql`. Credential hash material is not migration source and must be provisioned through a reviewed machine-local administration path. A superseded migration in Git history contains an old access-key hash; the pre-existing rotation follow-up remains separate from this repair.
 
 | Version | Name |
 |---|---|
@@ -127,4 +101,74 @@ migration set.
 | 20260705093638 | structural_entities_internal_search_relation_rpc |
 | 20260709133307 | add_to_agent_to_fiona_inbox |
 | 20260727092636 | intellizen_v2_gate1_control_contracts |
-| 20260901000045 | add_hierarchy_nodes |
+| 20260805111235 | agent_identity_lifecycle |
+| 20260805111404 | departments_durable_conversations |
+| 20260805111546 | transactional_agent_creation |
+| 20260805111609 | scoped_worker_note_receipt |
+| 20260805111630 | transactional_workflow_creation |
+| 20260805111658 | portable_configuration_import |
+| 20260806060250 | harden_append_only_receipt_permissions |
+| 20260806060708 | transactional_consequential_work_receipts |
+| 20260806060732 | add_workflow_definition_identity |
+| 20260806154202 | standalone_graph_upsert_identity |
+| 20260808075624 | add_napmem_navigation_layer |
+| 20260808083035 | correct_napmem_scope_and_evidence_contract |
+| 20260808143150 | v2_authority_links |
+| 20260808153000 | v2_connection_registry |
+| 20260808160000 | search_workspace_canonical_targets |
+| 20260809081228 | add_memory_curation_health |
+| 20260809081344 | fix_memory_curation_eval_run_id |
+| 20260809081534 | tune_memory_curation_eval_cases |
+| 20260809081717 | harden_memory_curation_access_and_indexes |
+| 20260809082253 | curate_postgres_cycle_error_recovery |
+| 20260809111639 | enforce_skill_registry_consistency |
+| 20260809120000 | canonical_work_hierarchy |
+| 20260809130547 | seed_shared_skill_registry_closure |
+| 20260809143000 | document_authority_versions |
+| 20260809170000 | canonical_graph_authority |
+| 20260809190000 | canvas_authority |
+| 20260809210000 | graph_agent_proposals |
+| 20260809223000 | workflow_operator_controls |
+| 20260809231500 | genzen_os_map_read_model_v2 |
+| 20260810220000 | transactional_workflow_start |
+| 20260811062450 | anon_system_schema_usage_for_guard |
+| 20260811174900 | universal_consequential_action_repository |
+| 20260812052839 | plugin_package_apply_authority |
+| 20260812065154 | attention_action_authority |
+| 20260812081441 | workflow_trigger_runtime_authority |
+| 20260812230000 | workflow_continuation_ledger |
+| 20260813000000 | workflow_resource_governance_limits |
+| 20260813121000 | workflow_approval_attention_authority |
+| 20260813130000 | graph_artifact_review_redirect |
+| 20260813140000 | workspace_activity_v2 |
+| 20260813141000 | canvas_artifact_review_provider |
+| 20260813150000 | workflow_live_edit_authority |
+| 20260813151000 | canvas_artifact_attention_projection |
+| 20260813153000 | organization_client_authority |
+| 20260813154000 | graph_ecosystem_association_authority |
+| 20260813155000 | structured_connector_authority |
+| 20260813160000 | starter_team_role_authority |
+| 20260813161000 | blueprint_package_apply_authority |
+| 20260813162000 | context_pack_delivery_ledger |
+| 20260813163000 | voice_command_activity_authority |
+| 20260813164000 | work_output_artifact_review_provider |
+| 20260813165000 | pending_feature_activation_gates |
+| 20260813170000 | harden_workspace_function_search_paths |
+| 20260813171000 | graph_artifact_attention_projection |
+| 20260813172000 | harden_remaining_workspace_function_search_paths |
+| 20260813173000 | restore_work_event_constraint_validator_execute |
+| 20260816194225 | task_transition_contract |
+| 20260816202116 | task_transition_contract_v2 |
+| 20260816202520 | task_hierarchy_extension |
+| 20260816204813 | grant_context_pack_delivery_execute |
+| 20260817164607 | native_human_intent_receipt_nonce_ledger |
+| 20260817164659 | native_human_intent_receipt_verifier |
+| 20260817164737 | native_human_intent_decision_intake_v2 |
+| 20260817164823 | native_human_intent_nonce_registration_and_grants |
+| 20260817173743 | human_intent_nonces_revoke_direct_dml |
+| 20260817183518 | grant_work_output_review_execute_to_app_role |
+| 20260817185320 | native_executor_attestation_nonce_ledger |
+| 20260817185404 | native_executor_attestation_verifier_and_registration |
+| 20260817185458 | native_executor_claim_and_receipt_v2 |
+| 20260901200717 | add_hierarchy_nodes |
+| 20260905080216 | vault_sync_atomic_document |

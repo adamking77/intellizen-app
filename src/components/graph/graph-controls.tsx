@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+
+export function GraphLoadingOverlay() {
+  return <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--base)]/80"><div className="flex items-center gap-2 font-ui text-[var(--t-ui)] text-[var(--subtext-0)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading graph</div></div>;
+}
 
 interface ButtonProps {
   children: ReactNode;
@@ -172,7 +177,7 @@ export function GraphStatChip({
       <span
         className={cn(
           "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]",
-          accent ? "text-[var(--accent)]" : "text-[var(--overlay-1)]",
+          accent ? "text-[var(--accent-text)]" : "text-[var(--overlay-1)]",
         )}
       >
         {label}
@@ -180,7 +185,7 @@ export function GraphStatChip({
       <span
         className={cn(
           "font-mono text-[var(--t-section)] tabular-nums",
-          accent ? "text-[var(--accent)]" : "text-[var(--text)]",
+          accent ? "text-[var(--accent-text)]" : "text-[var(--text)]",
         )}
       >
         {value}

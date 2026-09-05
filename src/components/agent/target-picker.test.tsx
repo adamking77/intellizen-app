@@ -9,7 +9,7 @@ import { TargetPicker } from "./target-picker";
 afterEach(() => document.body.replaceChildren());
 
 describe("TargetPicker", () => {
-  it("keeps every agent avatar and includes rooms and unopened teams", async () => {
+  it("lists agents and teams only", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -22,8 +22,6 @@ describe("TargetPicker", () => {
         target="fable"
         usable={() => true}
         onTarget={vi.fn()}
-        rooms={[{ roomId: "r1", name: "Review", owner: "hermes", members: [{ name: "fable", door: "gateway" }, { name: "keel", door: "gateway" }], log: [], watermarks: {} }]}
-        onRoom={vi.fn()}
         teams={[{ id: "t1", name: "Build team", members: ["hermes:fable", "hermes:keel"], projects: [] }]}
         onTeam={vi.fn()}
         onClose={vi.fn()}
@@ -34,9 +32,10 @@ describe("TargetPicker", () => {
     expect(options.map((option) => option.textContent)).toEqual([
       "Fablem1default›",
       "Keelm2",
-      "Review2",
       "Build team2",
     ]);
+    expect(host.textContent).toContain("Teams");
+    expect(host.textContent).not.toContain("Rooms");
     expect(host.querySelectorAll("[data-agent-avatar]")).toHaveLength(2);
 
     await act(async () => root.unmount());

@@ -198,7 +198,7 @@ export function RecordPickerDropdown({
                   className={cn(
                     "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                     selected
-                      ? "border-[var(--accent-border)] bg-[var(--accent)] text-[var(--crust)]"
+                      ? "border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-fg)]"
                       : "border-[var(--border)] text-transparent",
                   )}
                 >
@@ -219,7 +219,7 @@ export function RecordPickerDropdown({
             onClick={handleCreate}
             className="mt-1 flex w-full items-center gap-1.5 rounded-xl bg-[var(--base)] px-2.5 py-2 text-left text-[12px] text-[var(--subtext-0)] transition-colors hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
-            <Plus className="h-3.5 w-3.5 text-[var(--accent)]" />
+            <Plus className="h-3.5 w-3.5 text-[var(--accent-text)]" />
             <span>Create</span>
             <span className="truncate font-medium text-[var(--text)]">&ldquo;{trimmedSearch}&rdquo;</span>
           </button>
@@ -252,7 +252,7 @@ export function RecordPickerDropdown({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--crust)] transition-opacity hover:opacity-90"
+            className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[12px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)]"
           >
             Done
           </button>

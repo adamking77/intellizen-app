@@ -53,7 +53,7 @@ export function RecordActivitySection({ recordId, isWorkflowRun }: { recordId: s
           {events.map((event) => (
             <li key={event.id} className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">{event.event_kind.replace(/_/g, " ")}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--accent-text)]">{event.event_kind.replace(/_/g, " ")}</span>
                 <span className="shrink-0 font-mono text-[10px] text-[var(--overlay-1)]">{formatDateTime(event.created_at)}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 font-ui text-[11px] text-[var(--subtext-0)]">

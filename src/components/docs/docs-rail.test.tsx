@@ -1,30 +1,31 @@
-import { describe, expect, it } from "vitest";
-
-import { groupDocuments } from "./docs-rail";
-
-const record = (id: string, project?: string, template = false) => ({
-  id,
-  doc_title: id,
-  doc_project: project,
-  doc_vault_path: `documents/${id}.md`,
-  _isTemplate: template,
+// @vitest-environment happy-dom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, expect, it, vi } from 'vitest';
+import { DocsRail } from './docs-rail';
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+let root: ReturnType<typeof createRoot>;
+afterEach(async () => { await act(async () => root?.unmount()); document.body.replaceChildren(); localStorage.clear(); });
+async function render(search = '') {
+ const host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+ await act(async () => root.render(<DocsRail records={[{id:'a',doc_title:'Client report',doc_vault_path:'vault:work/client/report.md'}, {id:'remote',doc_title:'Remote draft'}]} projects={[]} proposalCounts={{}} selectedRecordId={null} searchQuery={search} width={300} creating={false} activeFolder="" onFolder={vi.fn()} onRefresh={vi.fn()} onSearch={vi.fn()} onSelect={vi.fn()} onCreate={vi.fn()} onCreateFolder={vi.fn()} onResize={vi.fn()} />)); return host;
+}
+it('starts with collapsed folders and exposes nested files only on disclosure', async () => {
+ const host = await render(); expect(host.textContent).not.toContain('Client report');
+ const work = host.querySelector<HTMLButtonElement>('[title="work"]')!;
+ expect(work.getAttribute('aria-expanded')).toBe('false');
+ await act(async () => work.click());
+ await act(async () => host.querySelector<HTMLButtonElement>('[title="work/client"]')!.click());
+ expect(host.textContent).toContain('Client report');
+ expect(host.textContent).not.toContain('Remote draft');
 });
-
-describe("groupDocuments", () => {
-  it("puts waiting documents first and does not repeat them in project groups", () => {
-    const groups = groupDocuments(
-      [record("waiting", "p1"), record("project", "p1"), record("loose"), record("template", undefined, true)],
-      [{ id: "p1", name: "Client case" }],
-      { "documents/waiting.md": 2 },
-    );
-
-    expect(groups.map(({ label }) => label)).toEqual(["Waiting on you", "Client case", "Unfiled", "Templates"]);
-    expect(groups.flatMap(({ items }) => items.map(({ id }) => id))).toEqual(["waiting", "project", "loose", "template"]);
-  });
-
-  it("treats records whose project is absent from the hierarchy as unfiled", () => {
-    const groups = groupDocuments([record("orphan", "missing")], [], {});
-    expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe("Unfiled");
-  });
+it('search reveals matching branches without requiring folder expansion', async () => {
+ const host = await render('Client report'); expect(host.textContent).toContain('Client report');
+ expect(host.querySelector('[title="work"]')?.getAttribute('aria-expanded')).toBe('true');
+});
+it('favorites point to the same document across views', async () => {
+ const host = await render('Client report');
+ await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Star Client report"]')!.click());
+ expect(JSON.parse(localStorage.getItem('intelizen:docs-favorites')!)).toEqual(['a']);
+ expect(host.querySelector('[aria-label="Unstar Client report"]')?.getAttribute('aria-pressed')).toBe('true');
 });

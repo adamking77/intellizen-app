@@ -1,6 +1,8 @@
 // Tauri fs plugin integration for vault operations
-import { readDir, readTextFile, exists, mkdir, remove, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
+import { readDir, stat, readFile, readTextFile, exists, mkdir, remove, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, homeDir, join } from "@tauri-apps/api/path";
+
+import { canonicalDocumentPath, visibleVaultFile, visibleVaultFolder, type VaultDocumentInventory } from "./docs-library";
 
 export type VaultRoot = "vault" | "intelligence";
 
@@ -9,17 +11,7 @@ const VAULT_SEGMENTS: Record<VaultRoot, readonly string[]> = {
   intelligence: ["vault", "intelligence"],
 };
 
-const IGNORED_ROOT_ENTRY_NAMES = new Set([".DS_Store"]);
-const IGNORED_VAULT_DIRECTORY_NAMES = new Set(["node_modules"]);
-
 const vaultBasePathPromises: Partial<Record<VaultRoot, Promise<string>>> = {};
-
-export interface VaultEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  children?: VaultEntry[];
-}
 
 async function getVaultBasePath(root: VaultRoot = "intelligence"): Promise<string> {
   if (!vaultBasePathPromises[root]) {
@@ -48,6 +40,16 @@ async function resolveVaultPath(
   subpath = "",
   root: VaultRoot = "intelligence",
 ): Promise<string> {
+  if (subpath.startsWith("vault:")) { subpath = subpath.slice(6); root = "vault"; }
+  if (subpath.startsWith("/")) {
+    const vaultBase = await getVaultBasePath("vault");
+    if (subpath === vaultBase) return vaultBase;
+    const prefix = `${vaultBase.replace(/\/$/, "")}/`;
+    if (!subpath.startsWith(prefix)) throw new Error("Document paths must stay inside this Mac's vault.");
+    const relativePath = subpath.slice(prefix.length);
+    assertSafeVaultSubpath(relativePath);
+    return join(vaultBase, relativePath);
+  }
   assertSafeVaultSubpath(subpath);
   const base = await getVaultBasePath(root);
   return subpath ? join(base, subpath) : base;
@@ -75,71 +77,6 @@ export async function createVaultDirectory(
   }
 }
 
-function shouldIgnoreVaultEntry(
-  entryName: string,
-  isDirectory: boolean,
-  root: VaultRoot,
-): boolean {
-  if (IGNORED_ROOT_ENTRY_NAMES.has(entryName)) {
-    return true;
-  }
-
-  if (root === "vault" && isDirectory && IGNORED_VAULT_DIRECTORY_NAMES.has(entryName)) {
-    return true;
-  }
-
-  return false;
-}
-
-async function readVaultDirectoryRecursive(
-  subpath = "",
-  root: VaultRoot = "intelligence",
-): Promise<VaultEntry[]> {
-  const basePath = await resolveVaultPath(subpath, root);
-  const entries = (await readDir(basePath)).filter(
-    (entry) => !shouldIgnoreVaultEntry(entry.name, entry.isDirectory, root),
-  );
-
-  const results = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = subpath ? await join(subpath, entry.name) : entry.name;
-
-      const children = entry.isDirectory
-        ? await readVaultDirectoryRecursive(entryPath, root).catch(() => [])
-        : undefined;
-
-      return {
-        name: entry.name,
-        path: entryPath,
-        isDirectory: entry.isDirectory,
-        ...(children ? { children } : {}),
-      };
-    }),
-  );
-
-  // Sort: directories first, then files
-  return results.sort((a, b) => {
-    if (a.isDirectory && !b.isDirectory) return -1;
-    if (!a.isDirectory && b.isDirectory) return 1;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-/**
- * Read vault directory structure
- */
-export async function readVaultDirectory(
-  subpath: string = "",
-  root: VaultRoot = "intelligence",
-): Promise<VaultEntry[]> {
-  try {
-    return await readVaultDirectoryRecursive(subpath, root);
-  } catch (error) {
-    console.error("Failed to read vault directory:", error);
-    return [];
-  }
-}
-
 /**
  * Read a vault file as text
  */
@@ -154,6 +91,10 @@ export async function readVaultFile(
     console.error("Failed to read vault file:", error);
     throw error;
   }
+}
+
+export async function readVaultBinaryFile(filepath: string): Promise<Uint8Array> {
+  return readFile(await resolveVaultPath(filepath));
 }
 
 /**
@@ -278,27 +219,47 @@ export async function getVaultAbsolutePath(
   return resolveVaultPath(filepath, root);
 }
 
-/**
- * Organize vault files by type
- */
-export function organizeVaultFiles(entries: VaultEntry[]): {
-  investigations: VaultEntry[];
-  sweeps: VaultEntry[];
-  assessments: VaultEntry[];
-  briefs: VaultEntry[];
-} {
-  return {
-    investigations: entries.filter(
-      (e) => e.isDirectory && e.name === "investigations"
-    ),
-    sweeps: entries.filter(
-      (e) => !e.isDirectory && e.name.includes("sweep")
-    ),
-    assessments: entries.filter(
-      (e) => !e.isDirectory && e.name.includes("assessment")
-    ),
-    briefs: entries.filter(
-      (e) => !e.isDirectory && e.name.includes("brief")
-    ),
-  };
+/** Resolve document-relative assets through the same vault boundary as the file. */
+export async function resolveVaultReference(reference: string, documentPath: string) {
+  const source = canonicalDocumentPath(documentPath);
+  if (!source) throw new Error("The document has no vault location.");
+  const target = decodeURIComponent(reference.split("#")[0]);
+  if (/^(?:[a-z]+:|\/)/i.test(target)) throw new Error("Only relative vault references can be opened here.");
+  const parts = source.split("/").slice(0, -1);
+  for (const part of target.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") { if (!parts.length) throw new Error("This reference leaves the vault."); parts.pop(); }
+    else parts.push(part);
+  }
+  return resolveVaultPath(parts.join("/"), "vault");
+}
+export async function openVaultReference(reference: string, documentPath: string) {
+  const { openPath } = await import("@tauri-apps/plugin-opener");
+  await openPath(await resolveVaultReference(reference, documentPath));
+}
+
+/** Docs scans user documents only; never follows aliases or scans runtime trees. */
+export async function listVaultDocuments(): Promise<VaultDocumentInventory> {
+  const inventory: VaultDocumentInventory = { files: [], folders: [], errors: [] };
+  async function visit(path: string) {
+    let entries;
+    try { entries = await readDir(await resolveVaultPath(path, "vault")); }
+    catch (error) { if (!path) throw error; inventory.errors.push({ path, message: String(error) }); return; }
+    for (const entry of entries) {
+      const relative = path ? `${path}/${entry.name}` : entry.name;
+      if (entry.isSymlink) continue;
+      if (entry.isDirectory && visibleVaultFolder(relative)) { inventory.folders.push(relative); await visit(relative); }
+      else if (entry.isFile && visibleVaultFile(relative)) {
+        let modifiedAt: string | undefined;
+        try { modifiedAt = (await stat(await resolveVaultPath(relative, "vault"))).mtime?.toISOString(); } catch { /* File remains findable when metadata cannot be read. */ }
+        inventory.files.push({ path: relative, name: entry.name, modifiedAt });
+      }
+    }
+  }
+  await visit(""); return inventory;
+}
+
+export async function openVaultFile(path: string) {
+  const { openPath } = await import('@tauri-apps/plugin-opener');
+  await openPath(await resolveVaultPath(path));
 }

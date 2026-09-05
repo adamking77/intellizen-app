@@ -43,7 +43,7 @@ export function Checkbox({
               : "border-[var(--surface-1)] bg-[var(--mantle)] hover:border-[var(--line-strong)]"
         )}
       >
-        {checked ? <Check className="h-3 w-3 text-[var(--crust)]" strokeWidth={3} /> : null}
+        {checked ? <Check className="h-3 w-3 text-[var(--accent-fg)]" strokeWidth={3} /> : null}
         {!checked && indeterminate ? <div className="h-[2px] w-2 rounded-[var(--r-pill)] bg-[var(--accent)]" /> : null}
       </div>
     </label>

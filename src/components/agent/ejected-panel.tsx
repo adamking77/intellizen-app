@@ -13,7 +13,7 @@
  *  preference about how the app opens.
  */
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { Minimize2, PanelRight } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -25,18 +25,17 @@ import { Hud, type HudOpen } from "./hud";
 import {
   closePanelWindow,
   leaveHudHandoff,
-  onFrame,
   panelModeReducer,
   requestAction,
-  requestFrame,
   resizePanelWindow,
   sizeFor,
   takeHudHandoff,
   writePanelDetached,
-  type PanelFrame,
   type PanelMode,
 } from "./panel-window";
 import { runStateOf } from "./run-state";
+import { usePanelFrame } from "./use-panel-session";
+import { usePanelDraft } from "./panel-draft";
 import type { HermesProfile } from "@/engine/profiles";
 
 const ICON =
@@ -46,26 +45,11 @@ const ICON =
 const NO_THREADS: Record<string, ProfileThread> = {};
 
 export function EjectedPanel() {
-  const [frame, setFrame] = useState<PanelFrame | null>(null);
+  const frame = usePanelFrame();
   const [mode, dispatch] = useReducer(panelModeReducer, undefined, (): PanelMode => ({
     hud: takeHudHandoff(),
     open: "none",
   }));
-
-  // Subscribe, then ask — and ask again shortly after, because this webview
-  // can be listening before the main window is.
-  useEffect(() => {
-    let stop: (() => void) | undefined;
-    void onFrame(setFrame).then((un) => {
-      stop = un;
-    });
-    requestFrame();
-    const retry = window.setTimeout(requestFrame, 250);
-    return () => {
-      window.clearTimeout(retry);
-      stop?.();
-    };
-  }, []);
 
   // Size once on open as well as at creation: a HUD restored from a previous
   // session otherwise opens at whatever the window was built at.
@@ -124,39 +108,15 @@ export function EjectedPanel() {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--hud-bg)] shadow-[var(--hud-shadow)]">
-        {/* Frameless floating window: this strip is its title bar. There is
-            no close button — Redock is the way home. */}
-        <div
-          onMouseDown={dragWindow}
-          className="flex h-[30px] shrink-0 cursor-default items-center gap-2 pl-3 pr-1.5"
-        >
-          <span className="font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]">
-            Agent Panel
-          </span>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => setMode({ type: "reduce" })}
-            aria-label="Reduce to the HUD"
-            title="Reduce to the HUD"
-            className={ICON}
-          >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--hud-bg)]">
+        <AgentPanel mode="standalone" panelFrame={frame} onHeaderMouseDown={dragWindow} headerActions={<>
+          <button type="button" onClick={() => setMode({ type: "reduce" })} aria-label="Reduce to the HUD" title="Reduce to the HUD" className={`${ICON} shrink-0`}>
             <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
-          <button
-            type="button"
-            onClick={redock}
-            aria-label="Put the panel back in the main window"
-            title="Redock"
-            className={ICON}
-          >
+          <button type="button" onClick={redock} aria-label="Put the panel back in the main window" title="Redock" className={`${ICON} shrink-0`}>
             <PanelRight className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <AgentPanel mode="standalone" />
-        </div>
+        </>} />
       </div>
       <WindowResizeHandles />
     </div>
@@ -187,14 +147,14 @@ function HudWindow({
   const messages = useMemo(() => thread?.transcript.messages ?? [], [thread]);
   const run = runStateOf(thread);
   const sending = run.kind === "working" || run.kind === "opening";
-  const [draft, setDraft] = useState("");
+  const { draft, setDraft, attachments } = usePanelDraft(profile);
 
   const send = useCallback(
     (text: string) => {
       if (!profile) return;
-      requestAction({ type: "send", profile, text });
+      requestAction({ type: "send", profile, text, attachments: text.trim() === draft.trim() ? attachments : [] });
     },
-    [profile],
+    [profile, draft, attachments],
   );
 
   const voice = useVoice({

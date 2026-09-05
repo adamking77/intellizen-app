@@ -1,3 +1,4 @@
+import { validateWorkflowDefinition } from "@/lib/workflow-schema";
 import type {
   WorkflowDefinitionV1,
   WorkflowStep,
@@ -45,21 +46,11 @@ function nextStepId(definition: WorkflowDefinitionV1) {
   return `step_${index}`;
 }
 
-function attachStep(previous: WorkflowStep, target: string): WorkflowStep {
-  if (previous.kind === "condition") {
-    return { ...previous, then: target };
-  }
-  return { ...previous, next: target };
-}
+export type WorkflowInsertion = { afterStepId: string | null; branch?: "then" | "else" };
 
-export function addWorkflowDesignerStep(
-  definition: WorkflowDefinitionV1,
-  kind: DesignerStepKind,
-): WorkflowDefinitionV1 {
-  const id = nextStepId(definition);
-  const previous = definition.steps[definition.steps.length - 1];
-  const priorResult = previous?.id ?? "step_1";
+function createWorkflowDesignerStep(id: string, kind: DesignerStepKind, priorResult: string | null): WorkflowStep {
   let step: WorkflowStep;
+  if (!priorResult && (kind === "condition" || kind === "approval")) throw new Error(`${kind === "condition" ? "A condition" : "An approval"} requires a prior step. Add a step before this one.`);
   if (kind === "role-assign") {
     step = {
       id,
@@ -102,7 +93,7 @@ export function addWorkflowDesignerStep(
       title: "Create artifact",
       action: "create-doc",
       template: "internal-note",
-      payloadRef: `steps.${priorResult}.result`,
+      ...(priorResult ? { payloadRef: `steps.${priorResult}.result` } : {}),
       next: null,
     };
   } else {
@@ -114,14 +105,50 @@ export function addWorkflowDesignerStep(
       next: null,
     };
   }
-  return {
-    ...definition,
-    steps: [
-      ...definition.steps.slice(0, -1),
-      ...(previous ? [attachStep(previous, id)] : []),
-      step,
-    ],
-  };
+  return step;
+}
+
+export function addWorkflowDesignerStep(
+  definition: WorkflowDefinitionV1,
+  kind: DesignerStepKind,
+  insertion?: WorkflowInsertion,
+): WorkflowDefinitionV1 {
+  const id = nextStepId(definition);
+  const afterId = insertion ? insertion.afterStepId : definition.steps.at(-1)?.id;
+  const previous = definition.steps.find((candidate) => candidate.id === afterId);
+  if (afterId && !previous) return definition;
+  const branch = insertion?.branch ?? "then";
+  const successor = previous ? (previous.kind === "condition" ? previous[branch] : previous.next) : definition.steps[0]?.id ?? null;
+  let step = createWorkflowDesignerStep(id, kind, previous?.id ?? null);
+  step = step.kind === "condition" ? { ...step, then: successor ?? "complete" } : { ...step, next: successor };
+  const steps = definition.steps.map((candidate) => {
+    if (candidate.id !== previous?.id) return candidate;
+    return candidate.kind === "condition" ? { ...candidate, [branch]: id } : { ...candidate, next: id };
+  });
+  const index = previous ? steps.findIndex((candidate) => candidate.id === previous.id) + 1 : 0;
+  steps.splice(index, 0, step);
+  return { ...definition, steps };
+}
+
+/** Change kind in place; choosing between divergent branches is always explicit. */
+export function changeWorkflowDesignerStepKind(
+  definition: WorkflowDefinitionV1,
+  stepId: string,
+  kind: DesignerStepKind,
+  branch?: "then" | "else",
+): WorkflowDefinitionV1 {
+  const original = definition.steps.find((step) => step.id === stepId);
+  if (!original || original.kind === kind) return definition;
+  if (original.kind === "condition" && original.then !== original.else && !branch) {
+    throw new Error("Choose the Yes or No branch to keep before changing this condition's type.");
+  }
+  const successor = original.kind === "condition" ? original[branch ?? "then"] : original.next;
+  const predecessor = definition.steps[0]?.id === stepId ? null : definition.steps.find((step) => step.id !== stepId && (step.kind === "condition" ? step.then === stepId || step.else === stepId : step.next === stepId));
+  const defaults = createWorkflowDesignerStep(stepId, kind, predecessor?.id ?? null);
+  const replacement: WorkflowStep = defaults.kind === "condition"
+    ? { ...defaults, title: original.title, then: successor ?? "complete" }
+    : { ...defaults, title: original.title, next: successor };
+  return { ...definition, steps: definition.steps.map((step) => step.id === stepId ? replacement : step) };
 }
 
 export function updateWorkflowDesignerStep(
@@ -202,4 +229,52 @@ export function workflowAuthorityDiff(
       (before === null || AUTHORITY.indexOf(after) > AUTHORITY.indexOf(before)),
     addedApprovalGates,
   };
+}
+
+export type WorkflowDesignerRecovery = { definition: WorkflowDefinitionV1; baseUpdatedAt: string; positionsVersion?: number; positions?: Record<string, { x: number; y: number }> };
+const RECOVERY_PREFIX = "workflow-designer:";
+function recoveryValue(raw: string | null): WorkflowDesignerRecovery | null {
+  try {
+    const value = JSON.parse(raw ?? "null") as WorkflowDesignerRecovery | null;
+    if (!value || typeof value.baseUpdatedAt !== "string") return null;
+    const definition = value.definition;
+    const valid = validateWorkflowDefinition(definition).valid;
+    // Preserve incomplete field edits, while rejecting values the editor cannot safely render.
+    if (!valid && !(definition?.schema === "intellizen.workflow/1" && typeof definition.id === "string" && typeof definition.name === "string" && typeof definition.version === "number" && ["manual", "panel-message"].includes(definition.trigger?.kind) && Array.isArray(definition.inputs) && definition.inputs.every((input) => input && typeof input.key === "string" && typeof input.type === "string") && Array.isArray(definition.steps) && definition.steps.every((step) => {
+      if (!step || typeof step.id !== "string" || typeof step.title !== "string") return false;
+      if (step.kind === "role-assign") return typeof step.role === "string" && typeof step.instructions === "string" && typeof step.verification?.required === "boolean";
+      if (step.kind === "condition") return typeof step.expr === "string" && typeof step.then === "string" && typeof step.else === "string";
+      if (step.kind === "approval") return typeof step.gate === "string" && typeof step.payloadRef === "string";
+      if (step.kind === "artifact") return typeof step.action === "string" && typeof step.template === "string";
+      return step.kind === "decision" && typeof step.rationale === "string";
+    }))) return null;
+    const positions = Object.fromEntries(Object.entries(value.positionsVersion === 2 ? value.positions ?? {} : {}).filter(([, position]) => position && Number.isFinite(position.x) && Number.isFinite(position.y)));
+    return { definition, baseUpdatedAt: value.baseUpdatedAt, positionsVersion: 2, positions };
+  } catch { return null; }
+}
+export function recoverWorkflowDesignerDraft(recordId: string): WorkflowDesignerRecovery | null {
+  const key = `${RECOVERY_PREFIX}${recordId || "new"}`;
+  try { const local = recoveryValue(localStorage.getItem(key)); if (local) return local; } catch { /* Try the prior session-only storage. */ }
+  try {
+    const prior = recoveryValue(sessionStorage.getItem(key));
+    if (prior) { try { localStorage.setItem(key, JSON.stringify(prior)); sessionStorage.removeItem(key); } catch { /* The session fallback remains usable. */ } }
+    return prior;
+  } catch { return null; }
+}
+export function storeWorkflowDesignerDraft(recordId: string, value: WorkflowDesignerRecovery) {
+  const key = `${RECOVERY_PREFIX}${recordId || "new"}`;
+  try { localStorage.setItem(key, JSON.stringify(value)); return; } catch { /* Fall back when persistent storage is unavailable. */ }
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* The in-memory draft remains available. */ }
+}
+export function clearWorkflowDesignerDraft(recordId: string) {
+  const key = `${RECOVERY_PREFIX}${recordId || "new"}`;
+  try { localStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
+  try { sessionStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
+}
+export function listRecoveredWorkflowDesignerDrafts() {
+  const keys = new Set<string>();
+  for (const provider of [() => localStorage, () => sessionStorage]) {
+    try { const storage = provider(); for (let index = 0; index < storage.length; index++) { const key = storage.key(index); if (key?.startsWith(RECOVERY_PREFIX)) keys.add(key.slice(RECOVERY_PREFIX.length)); } } catch { /* Skip unavailable storage. */ }
+  }
+  return [...keys].flatMap((recordId) => { const value = recoverWorkflowDesignerDraft(recordId); return value ? [{ recordId, ...value }] : []; });
 }

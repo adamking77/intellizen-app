@@ -26,6 +26,7 @@ interface QueryStateProps {
   errorTitle?: string;
   className?: string;
   loadingFallback?: ReactNode;
+  retainContentOnError?: boolean;
 }
 
 /**
@@ -45,10 +46,11 @@ export function QueryState({
   errorTitle = "Couldn’t load this content",
   className,
   loadingFallback,
+  retainContentOnError = false,
 }: QueryStateProps) {
   if (error) {
     return (
-      <div
+      <><div
         role="alert"
         className={cn(
           "py-3 text-left text-[var(--bad)]",
@@ -69,7 +71,7 @@ export function QueryState({
             ) : null}
           </div>
         </div>
-      </div>
+      </div>{retainContentOnError ? children : null}</>
     );
   }
 

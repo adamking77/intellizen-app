@@ -9,6 +9,7 @@ import { CollapsedRailTrigger } from "@/components/layout/collapsed-rail-trigger
 import { CollapsibleRail } from "@/components/layout/collapsible-rail";
 import { Control } from "@/components/ui/control";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryState } from "@/components/ui/query-state";
 import {
   createCanvasDocument,
   deleteCanvasDocument,
@@ -18,6 +19,8 @@ import {
   updateCanvasDocumentContent,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
+import { CANVAS_DRAFT_PREFIX, canvasSaveSessions, canvasSaveText, getCanvasSaveSession } from "@/lib/canvas-save-session";
+import type { DocumentSaveSession } from "@/lib/document-save-session";
 import type { CanvasDocumentData, CanvasDocumentSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -91,162 +94,126 @@ function stableCanvasValue(value: unknown): unknown {
 
 export function CanvasView() {
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedCanvas = searchParams.get("canvas");
-  const requestedId = requestedCanvas && Number.isFinite(Number(requestedCanvas))
+  const requestedId = requestedCanvas && /^\d+$/.test(requestedCanvas) && Number.isSafeInteger(Number(requestedCanvas)) && Number(requestedCanvas) > 0
     ? Number(requestedCanvas)
     : null;
-  const selectedIdRef = useRef<number | null>(null);
+  const selectedIdRef = useRef<number | null>(requestedId);
   const loadedCanvasIdRef = useRef<number | null>(null);
   const draftCanvasIdRef = useRef<number | null>(null);
   const draftFingerprintRef = useRef<string | null>(null);
-  const lastPersistedFingerprintRef = useRef<string | null>(null);
+  const saveSessionRef = useRef<DocumentSaveSession | null>(null);
   const lastPersistedTitleRef = useRef<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(requestedId);
   const [draftCanvasId, setDraftCanvasId] = useState<number | null>(null);
   const [draftDocument, setDraftDocument] = useState<CanvasDocumentData | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { data: canvases = [], isLoading: loadingCanvases } = useQuery({
+  const canvasesQuery = useQuery({
     queryKey: ["canvas-documents"],
     queryFn: listCanvasDocuments,
   });
+  const canvases = useMemo(() => canvasesQuery.data ?? [], [canvasesQuery.data]);
 
   function resetLoadedDraft() {
     loadedCanvasIdRef.current = null;
     draftCanvasIdRef.current = null;
     draftFingerprintRef.current = null;
-    lastPersistedFingerprintRef.current = null;
+    saveSessionRef.current = null;
     lastPersistedTitleRef.current = null;
     setDraftCanvasId(null);
     setDraftDocument(null);
     setTitleDraft("");
     setSaveStatus("idle");
+    setSaveError(null);
   }
 
-  function selectCanvas(canvasId: number) {
-    if (canvasId === selectedIdRef.current) return;
-    selectedIdRef.current = canvasId;
-    resetLoadedDraft();
-    setSelectedId(canvasId);
+  function selectCanvas(canvasId: number | null, replace = false) {
+    const next = new URLSearchParams(searchParams);
+    if (canvasId == null) next.delete("canvas");
+    else next.set("canvas", String(canvasId));
+    setSearchParams(next, { replace });
   }
 
   useEffect(() => {
-    selectedIdRef.current = selectedId;
-  }, [selectedId]);
-
-  useEffect(() => {
-    if (canvases.length === 0) {
+    // An explicit identity is fetched directly, even outside the loaded list.
+    // Missing or invalid requests must never display an unrelated canvas.
+    if (requestedCanvas !== null) {
+      if (selectedIdRef.current !== requestedId) {
+        selectedIdRef.current = requestedId;
+        resetLoadedDraft();
+        setSelectedId(requestedId);
+      }
+      return;
+    }
+    if (!canvasesQuery.isSuccess) return;
+    if (canvases.length > 0) {
+      const next = new URLSearchParams(searchParams);
+      next.set("canvas", String(canvases[0].id));
+      setSearchParams(next, { replace: true });
+    } else if (selectedIdRef.current !== null) {
       selectedIdRef.current = null;
       resetLoadedDraft();
       setSelectedId(null);
-      return;
     }
+  }, [canvases, canvasesQuery.isSuccess, requestedCanvas, requestedId, searchParams, setSearchParams]);
 
-    if (requestedId != null && canvases.some((canvas) => canvas.id === requestedId)) {
-      selectCanvas(requestedId);
-    } else if (selectedId == null || !canvases.some((canvas) => canvas.id === selectedId)) {
-      selectCanvas(canvases[0].id);
-    }
-  }, [canvases, requestedId, selectedId]);
-
-  const { data: selectedCanvas, isLoading: loadingCanvas } = useQuery({
+  const canvasQuery = useQuery({
     queryKey: ["canvas-document", selectedId],
     queryFn: () => getCanvasDocument(selectedId as number),
     enabled: selectedId != null,
   });
+  const selectedCanvas = canvasQuery.data;
+  const loadingCanvas = selectedId != null && canvasQuery.isPending;
 
   useEffect(() => {
-    if (!selectedId || !selectedCanvas || selectedCanvas.id !== selectedId) {
-      resetLoadedDraft();
-      return;
-    }
-
+    if (!selectedId || !selectedCanvas || selectedCanvas.id !== selectedId) return;
     const nextDocument = selectedCanvas.content_json ?? createEmptyCanvasDocument();
-    const nextFingerprint = canvasDocumentFingerprint(nextDocument);
-    const previousPersistedFingerprint = lastPersistedFingerprintRef.current;
     const previousPersistedTitle = lastPersistedTitleRef.current;
     const isNewSelection = loadedCanvasIdRef.current !== selectedCanvas.id;
-    const hasLocalDocumentChanges =
-      !isNewSelection &&
-      draftFingerprintRef.current != null &&
-      previousPersistedFingerprint != null &&
-      draftFingerprintRef.current !== previousPersistedFingerprint;
-
     loadedCanvasIdRef.current = selectedCanvas.id;
-    lastPersistedFingerprintRef.current = nextFingerprint;
+    draftCanvasIdRef.current = selectedCanvas.id;
     lastPersistedTitleRef.current = selectedCanvas.name;
+    setDraftCanvasId(selectedCanvas.id);
 
-    if (isNewSelection || !hasLocalDocumentChanges) {
-      draftCanvasIdRef.current = selectedCanvas.id;
-      setDraftCanvasId(selectedCanvas.id);
-      draftFingerprintRef.current = nextFingerprint;
-      setDraftDocument(nextDocument);
-      setSaveStatus("idle");
-    } else {
-      setSaveStatus(draftFingerprintRef.current === nextFingerprint ? "idle" : "dirty");
-    }
-
-    setTitleDraft((current) => {
-      if (isNewSelection || current === previousPersistedTitle || current.trim() === selectedCanvas.name) {
-        return selectedCanvas.name;
-      }
-
-      return current;
+    const session = getCanvasSaveSession(selectedCanvas.id, nextDocument, async (document) => {
+      const updated = await updateCanvasDocumentContent(selectedCanvas.id, document);
+      queryClient.setQueryData(["canvas-document", selectedCanvas.id], updated);
+      queryClient.setQueryData(["canvas-documents"], (prev: CanvasDocumentSummary[] | undefined) =>
+        prev?.map((item) => item.id === updated.id ? { ...item, updated_at: updated.updated_at, name: updated.name } : item),
+      );
     });
-  }, [selectedCanvas]);
+    saveSessionRef.current = session;
+    // Never replace local edits with a refresh; the shared writer only adopts
+    // server content while clean, after the initial refetch has settled.
+    if (!canvasQuery.isFetching) session.adopt(canvasSaveText(nextDocument));
+    const syncDraft = () => {
+      const snapshot = session.getSnapshot();
+      const document = JSON.parse(snapshot.text) as CanvasDocumentData;
+      draftFingerprintRef.current = canvasDocumentFingerprint(document);
+      setDraftDocument(document);
+      setSaveStatus(snapshot.status === "saved" ? "idle" : snapshot.status);
+      setSaveError(snapshot.error);
+    };
+    syncDraft();
+    const unsubscribe = session.subscribe(syncDraft);
+    setTitleDraft((current) => isNewSelection || current === previousPersistedTitle || current.trim() === selectedCanvas.name ? selectedCanvas.name : current);
+    return unsubscribe;
+  }, [selectedCanvas, selectedId, canvasQuery.isFetching, queryClient]);
 
+  // Route switches and component unmounts flush the captured canvas rather
+  // than cancelling its debounce. Further edits queue behind an active write.
   useEffect(() => {
-    if (
-      !selectedId ||
-      !draftDocument ||
-      saveStatus !== "dirty" ||
-      draftCanvasId !== selectedId ||
-      draftCanvasIdRef.current !== selectedId ||
-      loadedCanvasIdRef.current !== selectedId
-    ) {
-      return;
-    }
-
     const canvasId = selectedId;
-    const documentToSave = draftDocument;
-    const timer = window.setTimeout(async () => {
-      try {
-        setSaveStatus("saving");
-        const updated = await updateCanvasDocumentContent(canvasId, documentToSave);
-        const updatedFingerprint = canvasDocumentFingerprint(updated.content_json);
-        if (selectedIdRef.current === canvasId) {
-          lastPersistedFingerprintRef.current = updatedFingerprint;
-        }
-        queryClient.setQueryData(["canvas-document", canvasId], updated);
-        queryClient.setQueryData(["canvas-documents"], (prev: CanvasDocumentSummary[] | undefined) =>
-          prev?.map((item) =>
-            item.id === updated.id ? { ...item, updated_at: updated.updated_at, name: updated.name } : item,
-          ) ?? prev,
-        );
-        if (selectedIdRef.current === canvasId) {
-          setSaveStatus(draftFingerprintRef.current === updatedFingerprint ? "idle" : "dirty");
-        }
-      } catch (error) {
-        if (selectedIdRef.current === canvasId) {
-          setSaveStatus("error");
-        }
-        toastError("Canvas save failed", error);
-      }
-    }, 500);
-
-    return () => window.clearTimeout(timer);
-  }, [draftCanvasId, draftDocument, queryClient, saveStatus, selectedId]);
-
-  const currentSummary = useMemo(
-    () => canvases.find((canvas) => canvas.id === selectedId) ?? null,
-    [canvases, selectedId],
-  );
+    return () => { if (canvasId != null) void canvasSaveSessions.get(canvasId)?.flush(); };
+  }, [selectedId]);
 
   async function handleCreateCanvas() {
     if (isCreating) return;
@@ -314,7 +281,12 @@ export function CanvasView() {
 
     try {
       setIsDeleting(true);
+      // Settle its writer before deleting so an older pending request cannot
+      // race the deletion or recreate a stale cache entry afterwards.
+      await canvasSaveSessions.get(canvasId)?.flush();
       await deleteCanvasDocument(canvasId);
+      canvasSaveSessions.delete(canvasId);
+      try { window.localStorage.removeItem(`${CANVAS_DRAFT_PREFIX}${canvasId}`); } catch { /* session cleanup remains effective */ }
       queryClient.setQueryData(["canvas-documents"], (prev: CanvasDocumentSummary[] | undefined) =>
         prev?.filter((item) => item.id !== canvasId) ?? prev,
       );
@@ -324,9 +296,7 @@ export function CanvasView() {
         if (next) {
           selectCanvas(next.id);
         } else {
-          selectedIdRef.current = null;
-          resetLoadedDraft();
-          setSelectedId(null);
+          selectCanvas(null);
         }
       }
       toast.success("Canvas deleted");
@@ -352,19 +322,18 @@ export function CanvasView() {
     }
 
     draftFingerprintRef.current = nextFingerprint;
-    setDraftDocument(next);
-    setSaveStatus(nextFingerprint === lastPersistedFingerprintRef.current ? "idle" : "dirty");
+    saveSessionRef.current?.edit(canvasSaveText(next));
   }, []);
 
   return (
     <div className="flex h-full min-h-0 bg-[var(--base)]">
       <CollapsibleRail
         title="Canvas"
-        width={284}
+        width={264}
         collapsed={!sidebarOpen}
         onCollapse={() => setSidebarOpen(false)}
         collapseLabel="Collapse canvas sidebar"
-        bodyClassName="w-[284px]"
+        bodyClassName="w-[264px]"
         actions={(
           <Control
             type="button"
@@ -380,9 +349,10 @@ export function CanvasView() {
         )}
       >
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {loadingCanvases ? (
-              <Skeleton lines={4} className="p-2" />
-            ) : canvases.length === 0 ? (
+            {canvasesQuery.error ? <QueryState isLoading={false} isEmpty={false} error={canvasesQuery.error} errorTitle="Canvas list unavailable" onRetry={() => void canvasesQuery.refetch()} className="px-2">{null}</QueryState> : null}
+            {canvasesQuery.isPending ? (
+              <div><span className="sr-only">Loading canvases</span><Skeleton lines={4} className="p-2" /></div>
+            ) : canvases.length === 0 && !canvasesQuery.error ? (
               <p className="px-2 py-2 text-[var(--t-section)] text-[var(--overlay-1)]">No canvases yet.</p>
             ) : (
               <div className="space-y-0.5">
@@ -392,7 +362,7 @@ export function CanvasView() {
                     <div
                       key={canvas.id}
                       className={cn(
-                        "group relative flex items-center gap-1 rounded-[var(--r-ctl)] py-1.5 pl-2 pr-1 transition-colors",
+                        "group relative flex min-h-[var(--h-row)] items-center gap-1 rounded-[var(--r-ctl)] pl-2 pr-1 transition-colors",
                         isActive
                           ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]"
                           : "hover:bg-[var(--surface-wash)]",
@@ -401,19 +371,21 @@ export function CanvasView() {
                       <button
                         type="button"
                         onClick={() => selectCanvas(canvas.id)}
-                        className="min-w-0 flex-1 text-left"
+                        aria-current={isActive ? "page" : undefined}
+                        className="flex min-h-[var(--h-row)] min-w-0 flex-1 items-center gap-2 text-left"
                       >
-                        <div className={cn("truncate text-[var(--t-meta)]", isActive ? "font-medium text-[var(--text)]" : "text-[var(--subtext-1)]")}>
+                        <span className={cn("min-w-0 flex-1 truncate text-[var(--t-meta)]", isActive ? "font-medium text-[var(--text)]" : "text-[var(--subtext-1)]")}>
                           {canvas.name}
-                        </div>
-                        <div className="mt-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
-                          {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(canvas.updated_at))}
-                        </div>
+                        </span>
+                        <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+                          {Number.isNaN(Date.parse(canvas.updated_at)) ? "" : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(canvas.updated_at))}
+                        </span>
+                        {isActive ? <span aria-hidden>›</span> : null}
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleDeleteCanvas(canvas.id)}
-                        className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors hover:text-[var(--danger)] group-hover:flex"
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] opacity-0 transition-opacity hover:text-[var(--danger)] group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         title="Delete canvas"
                         aria-label={`Delete ${canvas.name}`}
                       >
@@ -438,6 +410,7 @@ export function CanvasView() {
           <div className={cn("flex min-w-0 flex-1 items-center", !sidebarOpen && "pl-11")}>
             {selectedCanvas ? (
               <input
+                aria-label="Canvas title"
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
                 onBlur={() => void commitRename()}
@@ -458,13 +431,15 @@ export function CanvasView() {
           </div>
           {loadingCanvas ? (
             <Skeleton lines={1} className="w-20" />
-          ) : currentSummary ? (
+          ) : selectedCanvas && draftDocument ? (
             <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}
             </span>
           ) : null}
         </div>
 
+        {saveError ? <div role="alert" className="flex shrink-0 items-center gap-3 px-4 py-2 text-[var(--t-meta)] text-[var(--bad)]"><span>Canvas save failed. Your draft is retained. {saveError}</span><Control size="sm" onClick={() => void saveSessionRef.current?.flush()}>Retry save</Control></div> : null}
+        {canvasQuery.error && selectedCanvas ? <QueryState isLoading={false} isEmpty={false} error={canvasQuery.error} errorTitle="Canvas refresh failed" onRetry={() => void canvasQuery.refetch()} className="px-4">{null}</QueryState> : null}
         <div className="min-h-0 flex-1">
           {selectedCanvas && selectedCanvas.id === selectedId && draftCanvasId === selectedId && draftDocument ? (
             <CanvasEditor
@@ -473,9 +448,17 @@ export function CanvasView() {
               onChange={handleDocumentChange}
             />
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-sm text-[var(--subtext-0)]">
-              Select a canvas or create a new one.
-            </div>
+            <QueryState
+              isLoading={loadingCanvas || (requestedCanvas === null && canvasesQuery.isPending)}
+              error={canvasQuery.error || (requestedCanvas === null ? canvasesQuery.error : null)}
+              errorTitle="Canvas unavailable"
+              onRetry={() => void (selectedId != null ? canvasQuery.refetch() : canvasesQuery.refetch())}
+              isEmpty
+              loadingLabel="Loading canvas"
+              emptyTitle={requestedCanvas !== null ? "Canvas unavailable" : "Select a canvas"}
+              emptyDescription={requestedCanvas !== null ? "This canvas could not be found. Choose another canvas from the list." : "Choose a canvas from the list or create a new one."}
+              className="px-6 py-8"
+            >{null}</QueryState>
           )}
         </div>
       </section>

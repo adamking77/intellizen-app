@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { PaneResizeEdges, useWindowDrag } from "@/components/layout/window-chrome";
+import { useWindowDrag } from "@/components/layout/window-chrome";
 import { WorkspaceTree } from "@/components/layout/workspace-tree";
 import { describeEngine, deriveEngineTag, useEngineStore, type EngineTag } from "@/engine/engine-store";
 import { useWindowSize } from "@/lib/use-window-size";
@@ -57,7 +57,6 @@ const ENGINE_DOT_CLASS: Record<EngineTag, string> = {
   offline: "bg-[var(--danger)]",
 };
 const STORAGE_KEY = "intelizen:sidebar-collapsed";
-const WIDTH_EXPANDED = 216;
 const WIDTH_COLLAPSED = 56;
 
 function AppMark({ size }: { size: number }) {
@@ -77,7 +76,7 @@ function readCollapsed(): boolean | null {
   }
 }
 
-export function Sidebar() {
+export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; onCollapsedChange?: (collapsed: boolean) => void }) {
   const navigate = useNavigate();
   const dragWindow = useWindowDrag();
   const entityFilter = useAppStore((state) => state.entityFilter);
@@ -92,6 +91,7 @@ export function Sidebar() {
   const engineTitle = `${describeEngine({ connection: engineConnection, info: engineInfo, error: engineError, pinCompatible })} · IntelliZen ${APP_VERSION}`;
   // Explicit user choice wins; otherwise auto-collapse when cramped.
   const collapsed = userCollapsed ?? isCramped;
+  useEffect(() => { onCollapsedChange?.(collapsed); }, [collapsed, onCollapsedChange]);
 
   useEffect(() => {
     if (userCollapsed === null) return;
@@ -119,12 +119,11 @@ export function Sidebar() {
   return (
     <aside
       style={{
-        width: collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED,
+        width: collapsed ? WIDTH_COLLAPSED : width,
         background: "var(--crust)",
       }}
       className={cn(
         "pane relative z-10 flex shrink-0 flex-col overflow-hidden",
-        "transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out)]",
         collapsed ? "sidebar-collapsed" : "h-full",
       )}
     >
@@ -158,7 +157,7 @@ export function Sidebar() {
         ) : (
           <div className="flex items-center gap-2">
             <AppMark size={24} />
-            <span className="font-ui text-[var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent)]">
+            <span className="font-ui text-[var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent-text)]">
               InteliZen
             </span>
           </div>
@@ -243,49 +242,14 @@ export function Sidebar() {
         )}
       >
         {collapsed ? (
-          <NavLink
-            to="/settings?section=providers"
-            aria-label="Open settings"
-            title={engineTitle}
-            className="relative inline-flex h-8 w-8 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-          >
-            <Settings className="h-4 w-4" />
-            <span
-              aria-hidden
-              className={cn(
-                "absolute right-1 top-1 h-1.5 w-1.5 rounded-[var(--r-pill)] shadow-[0_0_0_2px_var(--crust)]",
-                ENGINE_DOT_CLASS[engineTag],
-              )}
-            />
-          </NavLink>
+          <span title={engineTitle} aria-label={engineTag} className={cn("h-1.5 w-1.5 rounded-[var(--r-pill)]", ENGINE_DOT_CLASS[engineTag])} />
         ) : (
-          <>
-            <NavLink
-              to="/settings?section=providers"
-              aria-label="Open settings"
-              title={engineTitle}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[var(--r-ctl)] px-0.5 py-1 text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-            >
-              <span
-                className={cn(
-                  "shrink-0 whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4",
-                  ENGINE_TAG_CLASS[engineTag],
-                )}
-              >
-                {engineTag}
-              </span>
-              {(engineTag === "connected" || engineTag === "pin mismatch") && engineInfo ? (
-                <span className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
-                  {engineInfo.version} · :{engineInfo.port}
-                </span>
-              ) : null}
-              <span className="flex-1" />
-              <Settings className="h-4 w-4 shrink-0" aria-hidden />
-            </NavLink>
-          </>
+          <div title={engineTitle} className="flex min-w-0 items-center gap-2">
+            <span className={cn("shrink-0 whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4", ENGINE_TAG_CLASS[engineTag])}>{engineTag}</span>
+            {engineInfo ? <span className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{engineInfo.version}</span> : null}
+          </div>
         )}
       </div>
-      <PaneResizeEdges west />
     </aside>
   );
 }

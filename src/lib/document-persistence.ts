@@ -86,7 +86,7 @@ export async function createPortableDocument(
     [DOCUMENTS_DB_FIELDS.entity]: input.entity,
     [DOCUMENTS_DB_FIELDS.author]: input.author,
     [DOCUMENTS_DB_FIELDS.vaultPath]: null,
-    [DOCUMENTS_DB_FIELDS.folder]: folder,
+    [DOCUMENTS_DB_FIELDS.folder]: folder.replace(/^vault:/, ""),
     [DOCUMENTS_DB_FIELDS.createdAt]: nowIso,
     [DOCUMENTS_DB_FIELDS.updatedAt]: nowIso,
   };

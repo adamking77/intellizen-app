@@ -5,6 +5,7 @@ import { NodePicker } from "@/components/graph/node-picker";
 import { ObsidianGraph, type ObsidianGraphRef } from "@/components/graph/obsidian-graph";
 import {
   GraphOverflowItem as OverflowItem,
+  GraphLoadingOverlay,
   GraphRailTab as RailTab,
   GraphSettingToggle as SettingToggleRow,
   GraphSlider as SliderRow,
@@ -272,8 +273,8 @@ export function GraphView() {
       event: styles.getPropertyValue("--entity-event").trim(),
     };
   }, []);
-  const [graphMode, setGraphMode] = useState<GraphMode>("standalone");
-  const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("construct");
+  const [graphMode, setGraphMode] = useState<GraphMode>("project");
+  const [interactionMode, setInteractionMode] = useState<GraphInteractionMode>("insight");
   const [addToDocumentOpen, setAddToDocumentOpen] = useState(false);
   const [graphProjectId, setGraphProjectId] = useState<number | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
@@ -387,7 +388,7 @@ export function GraphView() {
   const insightNodePositionSeedRef = useRef<Record<string, Point>>({});
   const worldContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: projects } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["projects", entityFilter],
     queryFn: () => listProjects({ entity: entityFilter }),
   });
@@ -443,6 +444,9 @@ export function GraphView() {
     queryFn: () => listGraphEdges(effectiveProjectId),
     enabled: graphMode === "standalone" || graphProjectId !== null,
   });
+
+  const graphIsLoading = projectsLoading || nodesQuery.isLoading || edgesQuery.isLoading
+    || (graphMode === "project" && graphProjectId === null && (projects?.length ?? 0) > 0);
 
   // Query project signals for auto-generation (only in project mode)
   const projectSignalsQuery = useQuery({
@@ -1403,7 +1407,7 @@ export function GraphView() {
         return;
       }
 
-      if (event.key === "0") {
+      if (event.key === "0" && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault();
         setViewport(DEFAULT_VIEW);
         return;
@@ -2190,10 +2194,11 @@ export function GraphView() {
                 clearPathAnalysis();
               }}
             />
-            {isInsightMode && visualNodes.length === 0 ? (
+            {isInsightMode && graphIsLoading ? <GraphLoadingOverlay /> : null}
+            {isInsightMode && !graphIsLoading && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
-                  <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent)]" />
+                  <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent-text)]" />
                   <p className="text-heading">
                     {caseScopeNeedsEvidencePile ? "This case needs an evidence pile" : scopedCase ? "This case graph is empty" : "This graph is empty"}
                   </p>
@@ -2582,7 +2587,8 @@ export function GraphView() {
               })}
             </div>
 
-            {visualNodes.length === 0 ? (
+            {graphIsLoading ? <GraphLoadingOverlay /> : null}
+            {!graphIsLoading && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
                 <div className="w-full max-w-[480px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
                   <p className="text-heading">

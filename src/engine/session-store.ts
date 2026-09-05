@@ -2,6 +2,8 @@
 // In memory only: Hermes keeps the durable history.
 
 import { create } from "zustand";
+import { promptWithConversationContext, readConversationContext } from "@/lib/conversation-context";
+import { readPanelDraft, panelDraftMatches, clearPanelDraft } from "@/components/agent/panel-draft";
 
 import {
   createAcpSession,
@@ -305,6 +307,9 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
 
     send: async (profile, text, attachments = []) => {
       const trimmed = text.trim();
+      const prompt = promptWithConversationContext(trimmed, readConversationContext());
+      const draftSnapshot = readPanelDraft(profile);
+      const accepted = () => { if (panelDraftMatches(draftSnapshot, trimmed, attachments)) clearPanelDraft(profile, draftSnapshot); };
       if (!trimmed && attachments.length === 0) throw new Error("Nothing to send.");
       await restore(profile);
       const current = get().threads[profile];
@@ -323,18 +328,20 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
         let sessionId = await ensureSession(profile);
         const agentId = acpId(profile);
         if (agentId) {
-          await submitAcpPrompt(sessionId, acpAttachmentPrompt(trimmed, attachments));
+          await submitAcpPrompt(sessionId, acpAttachmentPrompt(prompt, attachments));
+          accepted();
           return;
         }
         try {
-          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, trimmed, attachments));
+          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, prompt, attachments));
         } catch (error) {
           if (!isSessionNotFound(error)) throw error;
           // The gateway restarted under us: resume the durable session once.
           update(profile, (t) => ({ ...t, sessionId: null, restored: false }));
           sessionId = await ensureSession(profile);
-          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, trimmed, attachments));
+          await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, prompt, attachments));
         }
+        accepted();
       } catch (error) {
         const reason = errorText(error);
         update(profile, (t) => ({

@@ -13,7 +13,7 @@ import {
 import { listGraphEdges, listGraphNodes } from "@/lib/data/graph";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
+export function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
   const projectId = parseGraphId(spec.id);
   const query = useQuery({
     queryKey: ["document-graph-embed", spec.id],
@@ -35,7 +35,7 @@ function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
         <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">
           Relationship graph · {spec.mode}
         </span>
-        <Link className="inline-flex items-center gap-1 font-ui text-[var(--t-count)] text-[var(--accent)] hover:underline" to={href}>
+        <Link className="inline-flex items-center gap-1 font-ui text-[var(--t-count)] text-[var(--accent-text)] hover:underline" to={href}>
           Open graph <ArrowUpRight className="h-3 w-3" />
         </Link>
       </figcaption>

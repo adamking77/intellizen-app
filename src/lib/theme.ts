@@ -1,5 +1,6 @@
 /** Flavor and accent, applied to the document and remembered. */
 import { readPreference, writePreference } from "@/lib/settings-preferences";
+import { accentForeground } from "../../shared/theme-contrast.mjs";
 
 export interface Flavor {
   id: string;
@@ -189,6 +190,9 @@ export function applyTheme(flavorId: string, accentHex: string, syncNative = tru
   // Every accent use in the app reads --accent, so setting it here moves
   // selection, focus, active nav, links and primary actions together.
   document.documentElement.style.setProperty("--accent", accentHex);
+  const foreground = accentForeground(accentHex);
+  document.documentElement.style.setProperty("--accent-fg", foreground);
+  document.documentElement.style.setProperty("--accent-contrast", foreground === "#000000" ? "#ffffff" : "#000000");
   window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
 
   // Tell macOS which appearance the window is wearing so the native vibrancy

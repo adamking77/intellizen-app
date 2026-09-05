@@ -47,7 +47,7 @@
   background: var(--base);
   color: var(--text);
   padding: 11px 12px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .workflow-topology-node.workflow-topology-static-node {
@@ -155,7 +155,7 @@
 
 .workflow-node-state-running {
   border-color: var(--accent-border);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  box-shadow: none;
 }
 
 .workflow-node-state-blocked,
@@ -186,3 +186,22 @@
   background: var(--mantle);
   color: var(--text);
 }
+
+.workflow-composer { height: 100%; min-height: 0; background: var(--base); }
+.workflow-composer-node { cursor: grab; position: relative; width: 280px; border-radius: var(--r-ctl); background: var(--raised); box-shadow: none; }
+.workflow-composer-node.is-expanded { width: 380px; background: color-mix(in srgb, var(--raised) 50%, var(--base)); --input: var(--base); outline: 1px solid var(--border); }
+.workflow-composer-node.is-terminal { width: 160px; box-shadow: none; }
+.workflow-composer-node-detail { margin: 0; padding: 0 11px 10px; font-size: var(--t-count); line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
+.workflow-composer .react-flow__handle { width: 12px; height: 12px; border: 2px solid var(--base); background: var(--accent); }
+.workflow-composer-port-label { position: absolute; right: 10px; font-size: var(--t-meta); color: var(--text-muted); pointer-events: none; }
+.workflow-composer-port-label.yes { bottom: -22px; left: 25%; right: auto; }
+.workflow-composer-port-label.no { bottom: -22px; left: 70%; right: auto; }
+.workflow-composer .react-flow__controls { border: 1px solid var(--border); box-shadow: none; }
+.workflow-composer .react-flow__controls-button { border-color: var(--border); background: var(--mantle); color: var(--text); }
+
+/* Form fields use the same neutral editing edge as Input and Textarea. */
+.workflow-designer select:focus-visible,
+.workflow-designer input[type="number"]:focus-visible { outline: none !important; }
+
+.react-flow__node.dragging .workflow-composer-node { cursor: grabbing; }
+.workflow-composer-node.is-terminal.is-selected { outline: 1px solid var(--border-strong); }

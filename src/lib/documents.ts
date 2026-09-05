@@ -109,13 +109,16 @@ export function isAbsoluteDocumentPath(path: string) {
 
 export function documentVaultRelativePath(record: WorkspaceDatabaseRecordModel | null | undefined) {
   const path = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath).trim();
-  return path && !isAbsoluteDocumentPath(path) ? path : null;
+  // Legacy records use intelligence-relative paths. Reconciled records may
+  // name their canonical vault file; the filesystem boundary checks HOME.
+  const canonicalVault = /^\/Users\/[^/]+\/vault\/.+/.test(path);
+  return path && (!isAbsoluteDocumentPath(path) || canonicalVault) ? path : null;
 }
 
 export function documentSourceLabel(record: WorkspaceDatabaseRecordModel) {
   const path = documentFieldString(record, DOCUMENTS_DB_FIELDS.vaultPath);
   if (!path) return "Supabase Documents row";
-  if (isAbsoluteDocumentPath(path)) return "Workspace copy · external file unchanged";
+  if (isAbsoluteDocumentPath(path) && !documentVaultRelativePath(record)) return "Workspace copy · external file unchanged";
   return "Supabase Documents row + GenZen OS vault file";
 }
 

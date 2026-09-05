@@ -53,6 +53,7 @@ const workflow = {
   id: "workflow-record",
   workflow_id: "weekly-review",
   name: "Weekly review",
+  status: "Active",
   definition_version: 1,
 } as WorkflowTemplateItem;
 
@@ -85,7 +86,7 @@ async function settle() {
   });
 }
 
-async function mount() {
+async function mount(selectedWorkflow = workflow) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -94,7 +95,7 @@ async function mount() {
   await act(async () => {
     root.render(
       <QueryClientProvider client={query}>
-        <ScheduleSheet definition={definition} onOpenChange={() => undefined} open workflow={workflow} />
+        <ScheduleSheet definition={definition} onOpenChange={() => undefined} open workflow={selectedWorkflow} />
       </QueryClientProvider>,
     );
   });
@@ -185,4 +186,15 @@ describe("ScheduleSheet", () => {
     await settle();
     expect(services.resumeCronJob).toHaveBeenCalledWith("fiona", "cron-1");
   });
+  it("blocks scheduling and resuming a saved draft until activation", async () => {
+    services.listCronJobs.mockResolvedValue([{ id: "cron-1", name: "IntelliZen · Weekly review", scheduleDisplay: "Weekdays", profile: "fiona", state: "paused", enabled: false, lastStatus: null, nextRunAt: null, prompt: "" }]);
+    const body = await mount({ ...workflow, status: "Draft" });
+    const create = [...body.querySelectorAll("button")].find((button) => button.textContent?.includes("Create schedule"))!;
+    const resume = body.querySelector<HTMLButtonElement>('button[aria-label="Resume Weekdays"]')!;
+    const run = body.querySelector<HTMLButtonElement>('button[aria-label="Run Weekdays now"]')!;
+    expect(create.disabled).toBe(true); expect(resume.disabled).toBe(true); expect(run.disabled).toBe(true);
+    await act(async () => { create.click(); resume.click(); run.click(); });
+    expect(services.createCronJob).not.toHaveBeenCalled(); expect(services.resumeCronJob).not.toHaveBeenCalled(); expect(services.runCronJobNow).not.toHaveBeenCalled();
+  });
+
 });

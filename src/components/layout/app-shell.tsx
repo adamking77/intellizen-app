@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useHierarchy } from "@/lib/use-hierarchy";
+import { locate } from "@/lib/hierarchy";
 import { Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { Maximize2, Minimize2, PanelLeftClose, PanelRight, PictureInPicture2 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AgentPanel } from "./agent-panel";
+import { Drawer } from "@/components/ui/drawer";
 import { EjectedPanel } from "@/components/agent/ejected-panel";
 import { useEject } from "@/components/agent/use-eject";
-import { isTauriRuntime, PANE_BG, PANE_BG_RAISED, PaneResizeEdges, useWindowDrag, WindowResizeHandles } from "./window-chrome";
+import { isTauriRuntime, PANE_BG, useWindowDrag, WindowResizeHandles } from "./window-chrome";
 import { Sidebar } from "./sidebar";
+import { PaneDivider, usePaneResize } from "./pane-resize";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
 import { toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
+import { contextForRoute, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
 import { useEngineBoot } from "@/engine/use-engine";
 import { recoverInterruptedLocalWorkflowsOnLaunch } from "@/services/workflow-recovery";
-import { AGENT_PANEL_OPEN_EVENT, readAgentPanelCollapsed } from "@/lib/agent-panel-persistence";
+import { AGENT_PANEL_COLLAPSED_KEY, AGENT_PANEL_OPEN_EVENT, readAgentPanelCollapsed } from "@/lib/agent-panel-persistence";
 import { useSessionStore } from "@/engine/session-store";
 import { useWindowSize } from "@/lib/use-window-size";
 import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-registry";
@@ -60,6 +64,7 @@ export function AppShell() {
   useEngineBoot();
   const queryClient = useQueryClient();
   const location = useLocation();
+  const { tree: contextTree } = useHierarchy();
   const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject();
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
@@ -67,7 +72,10 @@ export function AppShell() {
   const [agentPanelToggleRequest, setAgentPanelToggleRequest] = useState(0);
   const [agentPanelHidden, setAgentPanelHidden] = useState(readAgentPanelHidden);
   const roomOpen = useSessionStore((state) => Boolean(state.selectedRoomId));
-  const { isNarrow } = useWindowSize();
+  const { isNarrow, width: windowWidth } = useWindowSize();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readFlag(SIDEBAR_COLLAPSED_KEY) || window.innerWidth < 1100);
+  const sidebarPane = usePaneResize("intelizen:sidebar-width", 216, 160, Math.min(360, windowWidth - 680));
+  const panelPane = usePaneResize("intelizen:agent-panel-width", 336, 300, Math.min(560, windowWidth - (sidebarCollapsed ? 56 : sidebarPane.width) - 352));
 
   useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
 
@@ -104,6 +112,18 @@ export function AppShell() {
     return () => window.removeEventListener(AGENT_PANEL_OPEN_EVENT, open);
   }, [agentPanelDetached, redock]);
 
+  const closeNarrowPanel = useCallback(() => {
+    setAgentPanelHidden(true);
+    writeFlag(AGENT_PANEL_COLLAPSED_KEY, true);
+  }, []);
+  const toggleAgentPanel = useCallback(() => {
+    if (!isNarrow) { setAgentPanelToggleRequest((request) => request + 1); return; }
+    if (!agentPanelHidden) { closeNarrowPanel(); return; }
+    setAgentPanelHidden(false);
+    setFocusMode(false);
+    setAgentPanelOpenRequest((request) => request + 1);
+  }, [isNarrow, agentPanelHidden, closeNarrowPanel]);
+
   const toggleFocusMode = useCallback(() => setFocusMode((on) => !on), []);
   const toggleSidebar = useCallback(() => {
     let collapsed = false;
@@ -136,9 +156,10 @@ export function AppShell() {
         event.preventDefault();
         run("toggle-sidebar");
       } else if (mod && event.shiftKey && event.key.toLowerCase() === "a") {
-        // The agent panel is unmounted in focus mode, so its own ⌘⇧A
-        // handler is not listening; leave focus mode so the next press lands.
+        event.preventDefault();
         setFocusMode(false);
+        setAgentPanelHidden(false);
+        setAgentPanelOpenRequest((request) => request + 1);
       } else if (event.key === "Escape") {
         setFocusMode(false);
       }
@@ -152,8 +173,11 @@ export function AppShell() {
   }, [toggleFocusMode, toggleSidebar]);
 
   useEffect(() => {
-    publishConversationContext(createRouteConversationContext(location));
-  }, [location.hash, location.pathname, location.search]);
+    const snapshot = contextForRoute(location);
+    const match = location.pathname.match(/^\/(project|unit)\/([^/]+)$/);
+    const scoped = match ? locate(contextTree, { kind: match[1] === "project" ? "project" : "workspace", id: match[2] }) : null;
+    publishConversationContext(scoped ? { ...snapshot, label: scoped.name } : snapshot);
+  }, [location.hash, location.pathname, location.search, contextTree]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -189,7 +213,7 @@ export function AppShell() {
         // without painting a visible outline around the window.
         style={isTauriRuntime ? { background: "rgba(0,0,0,0.001)" } : undefined}
       >
-        {!focusMode && <Sidebar key={sidebarKey} />}
+        {!focusMode && <Sidebar key={sidebarKey} width={sidebarPane.width} onCollapsedChange={setSidebarCollapsed} />}
         <main
           className="pane relative flex min-w-0 flex-1 flex-col overflow-hidden"
           style={{ background: PANE_BG }}
@@ -220,10 +244,9 @@ export function AppShell() {
                 <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
               </ChromeButton>
               <ChromeButton
-                label={agentPanelHidden ? "Show agent panel" : "Hide agent panel"}
+                label={agentPanelDetached ? "Focus ejected agent panel" : agentPanelHidden ? "Show agent panel" : "Hide agent panel"}
                 pressed={!agentPanelHidden}
-                onClick={() => setAgentPanelToggleRequest((request) => request + 1)}
-                disabled={agentPanelDetached}
+                onClick={agentPanelDetached ? () => eject() : toggleAgentPanel}
               >
                 <PanelRight className="h-3.5 w-3.5" strokeWidth={1.5} />
               </ChromeButton>
@@ -250,24 +273,16 @@ export function AppShell() {
           <div className="min-h-0 flex-1">
             <Outlet />
           </div>
-          <PaneResizeEdges west east />
+          {!focusMode && !sidebarCollapsed ? <PaneDivider pane={sidebarPane} edge="left" direction={1} label="Resize sidebar and content" /> : null}
+          {!focusMode && !agentPanelHidden && !agentPanelDetached && !isNarrow ? <PaneDivider pane={panelPane} edge="right" direction={-1} label="Resize content and agent panel" /> : null}
         </main>
-        {focusMode || isNarrow ? null : agentPanelDetached ? (
-          <button
-            type="button"
-            onClick={() => eject()}
-            aria-label="Focus ejected agent panel"
-            title="Focus ejected agent panel"
-            className={cn(
-              "pane flex h-auto w-12 shrink-0 flex-col items-center self-start rounded-[var(--r-pill)] py-3",
-              "text-[var(--overlay-1)] transition-colors hover:text-[var(--text)]",
-            )}
-            style={{ background: PANE_BG_RAISED }}
-          >
-            <PictureInPicture2 className="h-4 w-4" />
-          </button>
+        {focusMode || agentPanelDetached ? null : isNarrow ? (
+          <Drawer open={!agentPanelHidden} onClose={closeNarrowPanel} label="Agent conversation" className="w-[390px] max-w-[calc(100vw-16px)] overflow-hidden">
+            <AgentPanel overlay onOverlayClose={closeNarrowPanel} onEject={() => eject()} openRequest={agentPanelOpenRequest} />
+          </Drawer>
         ) : (
           <AgentPanel
+            pane={panelPane}
             onEject={() => eject()}
             onCollapsedChange={setAgentPanelHidden}
             openRequest={agentPanelOpenRequest}
@@ -275,7 +290,7 @@ export function AppShell() {
           />
         )}
       </div>
-      <WindowResizeHandles />
+      <WindowResizeHandles sides={agentPanelHidden || agentPanelDetached || focusMode || isNarrow} />
       <Toaster
         position="bottom-right"
         theme="dark"

@@ -218,4 +218,6 @@ Source: `mcp-server/src/index.ts`. Build: `cd mcp-server && pnpm build`. The `di
 
 ## Out of scope (still not built)
 
-Vercel webhook receivers · Exa Monitor API push delivery · unattended background graph generation · multi-user auth · cross-platform targets · vault-sync to the Brain Supabase project (manual export only).
+Vercel webhook receivers · Exa Monitor API push delivery · unattended background graph generation · multi-user auth · cross-platform targets.
+
+Vault content sync is active through `~/vault/session/scripts/vault-watch.mjs`: eligible text documents reconcile with `knowledge.documents` and derived chunks in both directions. It preserves conflicts and does not propagate deletions. Docs folder creation writes to the local vault; workspace records, relations, binaries and published artifacts retain separate storage contracts. Repair evidence: `~/knowledge-inventory-2026-09-05/repair/REPAIR-REPORT.md`.

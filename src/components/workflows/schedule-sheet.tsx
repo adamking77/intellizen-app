@@ -29,6 +29,7 @@ import { createKanbanCard, listKanbanBoards } from "@/services/hermes-kanban";
 
 interface ScheduleSheetProps {
   open: boolean;
+  inline?: boolean;
   workflow: WorkflowTemplateItem;
   definition: WorkflowDefinitionV1;
   onOpenChange: (open: boolean) => void;
@@ -50,7 +51,7 @@ function stepBody(workflow: WorkflowTemplateItem, step: WorkflowStep, schedule: 
   ].join("\n\n");
 }
 
-export function ScheduleSheet({ open, workflow, definition, onOpenChange }: ScheduleSheetProps) {
+export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline = false }: ScheduleSheetProps) {
   const [schedule, setSchedule] = useState("");
   const [profile, setProfile] = useState("");
   const [board, setBoard] = useState("");
@@ -88,6 +89,8 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
   useEffect(() => {
     if (!open) return;
     setFailure(null);
+    setSchedule("");
+    setBoard("");
     setConfirmDelete(null);
     setOperationId(crypto.randomUUID());
   }, [open, workflow.id]);
@@ -119,7 +122,8 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     refetchInterval: open ? 15_000 : false,
   });
   const validSchedule = schedule.trim().split(/\s+/).length === 5;
-  const canCreate = Boolean(profile && validSchedule && !saving);
+  const canExecute = Boolean(workflow.id && workflow.status === "Active");
+  const canCreate = Boolean(canExecute && profile && validSchedule && !saving);
 
   async function save() {
     if (!canCreate) return;
@@ -168,6 +172,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
   }
 
   async function runNow(jobId: string, jobProfile: string) {
+    if (!canExecute) return;
     setActionId(jobId);
     setFailure(null);
     try {
@@ -182,6 +187,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
   }
 
   async function toggle(jobId: string, jobProfile: string, enabled: boolean) {
+    if (!enabled && !canExecute) return;
     setActionId(jobId);
     setFailure(null);
     try {
@@ -214,25 +220,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
     }
   }
 
-  return (
-    <AppDialog
-      className="w-[min(680px,calc(100vw-2rem))] max-w-[680px]"
-      description="Choose when Hermes runs this definition and whether its steps also appear as ordinary kanban cards."
-      onOpenChange={(next) => {
-        if (!saving) onOpenChange(next);
-      }}
-      open={open}
-      title={`Schedule ${workflow.name}`}
-      footer={
-        <>
-          <Control disabled={saving} onClick={() => onOpenChange(false)} variant="quiet">Close</Control>
-          <Control disabled={!canCreate} loading={saving} onClick={() => void save()} variant="primary">
-            {!saving ? <CalendarClock className="h-3.5 w-3.5" /> : null}
-            {saving ? "Creating…" : "Create schedule"}
-          </Control>
-        </>
-      }
-    >
+  const content = (
       <div className="space-y-5">
         <section>
           <div className="mb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">When</div>
@@ -312,10 +300,10 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
                     <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
                     {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].outcome}{runsQuery.data[job.id][0].preview ? ` · ${runsQuery.data[job.id][0].preview}` : ""}</p> : null}
                   </div>
-                  <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
+                  <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id || (!job.enabled && !canExecute)} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
                     {job.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                   </Control>
-                  <Control aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="quiet">
+                  <Control aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id || !canExecute} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="quiet">
                     <Play className="h-3.5 w-3.5" />
                   </Control>
                   <Control
@@ -336,6 +324,8 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange }: Sche
           )}
         </section>
       </div>
-    </AppDialog>
   );
+  const createControl = <Control disabled={!canCreate} loading={saving} onClick={() => void save()} variant="primary">{!saving ? <CalendarClock className="h-3.5 w-3.5" /> : null}{saving ? "Creating…" : "Create schedule"}</Control>;
+  if (inline) return <div className="max-w-2xl">{content}<div className="mt-5">{createControl}</div></div>;
+  return <AppDialog className="w-[min(680px,calc(100vw-2rem))] max-w-[680px]" description="Choose when Hermes runs this definition and whether its steps also appear as ordinary kanban cards." onOpenChange={(next) => { if (!saving) onOpenChange(next); }} open={open} title={`Schedule ${workflow.name}`} footer={<><Control disabled={saving} onClick={() => onOpenChange(false)} variant="quiet">Close</Control>{createControl}</>}>{content}</AppDialog>;
 }

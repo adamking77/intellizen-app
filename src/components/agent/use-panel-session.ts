@@ -10,11 +10,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ApprovalChoice } from "@/engine/contract";
 import type { SessionAttachment } from "@/engine/session";
+import type { HermesProfile } from "@/engine/profiles";
 import { emptyThread, useSessionStore, type ProfileThread } from "@/engine/session-store";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
 import { isPanelWindow, onFrame, requestAction, requestFrame, type PanelFrame } from "./panel-window";
 
 export interface PanelSession {
+  remote: boolean;
+  frameReady: boolean;
+  profileDirectory: Record<string, HermesProfile>;
   selectedProfile: string | null;
   thread: ProfileThread | null;
   selectProfile: (profile: string | null) => void;
@@ -34,28 +38,40 @@ export interface PanelSession {
   ) => Promise<void>;
 }
 
-/** The frame the ejected window renders from. Null until the first arrives. */
-function useFrame(): PanelFrame | null {
-  const [frame, setFrame] = useState<PanelFrame | null>(null);
+// Retain the latest main-owned frame when full panel and HUD exchange their
+// child trees. Neither surface may invent a default while waiting for it.
+let latestFrame: PanelFrame | null = null;
+export function usePanelFrame(enabled = true): PanelFrame | null {
+  const [frame, setFrame] = useState<PanelFrame | null>(() => latestFrame);
   useEffect(() => {
+    if (!enabled) return;
+    let active = true;
     let stop: (() => void) | undefined;
-    void onFrame(setFrame).then((un) => {
+    let retry: number | undefined;
+    void onFrame((next) => {
+      if (!active) return;
+      latestFrame = next;
+      setFrame(next);
+    }).then((un) => {
+      if (!active) { un(); return; }
       stop = un;
+      requestFrame();
+      retry = window.setTimeout(requestFrame, 250);
     });
-    requestFrame();
-    const retry = window.setTimeout(requestFrame, 250);
     return () => {
+      active = false;
       window.clearTimeout(retry);
       stop?.();
     };
-  }, []);
+  }, [enabled]);
   return frame;
 }
 
-export function usePanelSession(): PanelSession {
-  const remote = isPanelWindow();
-
-  const frame = useFrame();
+export function usePanelSession(parentFrame?: PanelFrame | null): PanelSession {
+  const remote = parentFrame !== undefined || isPanelWindow();
+  const observedFrame = usePanelFrame(remote && parentFrame === undefined);
+  const frame = parentFrame === undefined ? observedFrame : parentFrame;
+  const storeDirectory = useSessionStore((s) => s.profileDirectory);
   const storeSelected = useSessionStore((s) => s.selectedProfile);
   const storeThreads = useSessionStore((s) => s.threads);
   const storeSelect = useSessionStore((s) => s.selectProfile);
@@ -131,7 +147,8 @@ export function usePanelSession(): PanelSession {
     [remote, storeClarify],
   );
 
-  return { selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
+  return { remote, frameReady: !remote || frame !== null, profileDirectory: remote ? frame?.profileDirectory ?? EMPTY_DIRECTORY : storeDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
 }
 
 const EMPTY: Record<string, ProfileThread> = {};
+const EMPTY_DIRECTORY: Record<string, HermesProfile> = {};

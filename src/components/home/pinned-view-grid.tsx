@@ -315,7 +315,7 @@ function PinnedWidgetCard({
                       if (!field) return;
                       setFilterDraft((current) => [...current, { fieldId: field.id, op: "contains", value: "" }]);
                     }}
-                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-1 font-ui text-[var(--t-count)] text-[var(--accent)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-1 font-ui text-[var(--t-count)] text-[var(--accent-text)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
                   >
                     <Plus className="h-3 w-3" />
                     Add filter
@@ -391,7 +391,7 @@ function PinnedWidgetCard({
             <button
               type="button"
               onClick={saveMetadata}
-              className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent)]"
+              className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent-text)]"
             >
               Save
             </button>

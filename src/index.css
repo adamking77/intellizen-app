@@ -237,19 +237,22 @@
   /* User preference. Selection, focus, active nav, links. Set by
      applyTheme(); this is only the pre-JS fallback (Mocha blue). */
   --accent: #7fa6e6;
-  --accent-hover: color-mix(in srgb, var(--accent) 85%, var(--text));
+  --accent-fg: #000;
+  --accent-contrast: #fff;
+  --accent-hover: color-mix(in srgb, var(--accent) 92%, var(--accent-contrast));
+  --accent-text: color-mix(in srgb, var(--accent) 60%, white);
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --user-bubble: color-mix(in srgb, var(--accent) 15%, var(--raised));
 
-  /* Hover: one wash everywhere something is clickable. Mixed against --text
-     so it lightens on dark and darkens on light. */
-  --hover: color-mix(in srgb, var(--text) 6%, transparent);
-  --hover-strong: color-mix(in srgb, var(--text) 8%, transparent);
+  /* Accent wash shared by interaction states; status colors stay independent. */
+  --hover: color-mix(in srgb, var(--accent) var(--sel-accent-weight), transparent);
+  --hover-strong: color-mix(in srgb, var(--accent) calc(var(--sel-accent-weight) + 2%), transparent);
   /* The hairline between two planes that cannot separate by value. */
   --edge: color-mix(in srgb, var(--text) 10%, transparent);
   /* The primary action: a tint on dark, a filled accent on light. */
-  --go-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --go-bg: var(--selected);
+  --go-hover: var(--selected-hover);
   --go-fg: var(--text);
 
   /* Catppuccin-shaped surface and text ramps, derived from the flavor planes
@@ -379,10 +382,10 @@
   --ok: #4a7c4e;
   --bad: #b04a5f;
   --runtime: #3f6ba8;
-  --hover: color-mix(in srgb, var(--text) 8%, transparent);
-  --hover-strong: color-mix(in srgb, var(--text) 11%, transparent);
   --go-bg: var(--accent);
-  --go-fg: #fff;
+  --go-fg: var(--accent-fg);
+  --go-hover: var(--accent-hover);
+  --accent-text: color-mix(in srgb, var(--accent) 50%, black);
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.14);
   --user-bubble: color-mix(in srgb, var(--accent) 9%, #fff);
   --hud-bg: var(--base);
@@ -621,7 +624,7 @@ pre {
 
 .intelizen-live-markdown .bn-side-menu,
 .intelizen-live-markdown .bn-side-menu * {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .intelizen-live-markdown .bn-side-menu .bn-button:hover,
@@ -800,7 +803,7 @@ pre {
 }
 
 .intelizen-live-markdown .bn-editor a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .intelizen-live-markdown .bn-editor code,
@@ -857,6 +860,12 @@ pre {
 }
 
 .intelizen-doc-markdown .md-paragraph,
+.intelizen-doc-markdown > .md-paragraph + .md-paragraph,
+.intelizen-doc-markdown > .md-paragraph + .md-list,
+.intelizen-doc-markdown > .md-list + .md-paragraph {
+  margin-top: 1rem;
+}
+
 .intelizen-doc-markdown .md-list {
   margin: 0;
   color: var(--subtext-1);
@@ -1291,7 +1300,7 @@ pre {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: var(--accent) !important;
+  color: var(--accent-text) !important;
   opacity: 0.7;
   transition: opacity 120ms ease;
 }
@@ -1334,15 +1343,6 @@ textarea:focus-visible,
    ============================================================ */
 
 /* ─── Root editor chrome ────────────────────────────────── */
-.db-surface {
-  --hover: color-mix(in srgb, var(--text) 5%, transparent);
-}
-
-:root[data-flavor="latte"] .db-surface,
-:root[data-flavor="flat"] .db-surface {
-  --hover: color-mix(in srgb, var(--text) 7%, transparent);
-}
-
 dialog.db-app-dialog::backdrop {
   background: color-mix(in srgb, var(--crust) 72%, transparent);
 }
@@ -1446,7 +1446,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 
 .db-btn-primary {
   background: var(--accent);
-  color: var(--crust);
+  color: var(--accent-fg);
   border-color: transparent;
 }
 
@@ -1456,9 +1456,9 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .db-btn-active {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface-1) 86%);
+  background: var(--selected);
   border-color: var(--accent-border);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .db-btn-danger {
@@ -2210,7 +2210,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 
 .db-sync-status--syncing {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .db-sync-status--synced {
@@ -2641,7 +2641,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
@@ -4423,7 +4423,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .db-timeline-minor-segment--today .db-timeline-minor-label {
-  color: var(--base);
+  color: var(--accent-fg);
   font-weight: 700;
 }
 
@@ -4432,7 +4432,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .db-timeline-major-segment--current .db-timeline-major-label {
-  color: var(--base);
+  color: var(--accent-fg);
 }
 
 .db-timeline-grid-line {
@@ -4635,7 +4635,7 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 .db-calendar-day-today .db-calendar-day-number {
   opacity: 1;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .db-calendar-event {
@@ -4722,12 +4722,12 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .peek-markdown a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: underline;
 }
 
 .peek-markdown a:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .peek-markdown hr {
@@ -4867,38 +4867,14 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
   border-radius: 6px;
 }
 
-/* ============================================================
-   Selection and hover, ported from hermes-app tokens.css (.nav-node,
-   .rail-node, .pill). Selection is a fill and full-strength text — never a
-   bar, a ring, or a chevron. Ordinary selection is the neutral raised plane;
-   accent remains reserved for actions, focus and semantic colour choices.
-   ============================================================ */
+/* Accent-tinted selection on a calm neutral ground, shared by every flavor.
+   Keep both normal and muted text readable at every supported strength. */
 :root {
   --sel-step: 0.08;
-  --sel-dir: 1;
-  --sel-chroma: 0.02;
   --sel-accent-weight: 4.8%;
-  --selected-muted: oklch(from var(--text-muted) 0.98 c h);
-  --selected-base: oklch(from var(--raised)
-    calc(l + max(var(--sel-step), 0.06))
-    calc(c + var(--sel-chroma))
-    h);
-  --selected-hover-base: oklch(from var(--raised)
-    calc(l + max(var(--sel-step), 0.06) + 0.03)
-    calc(c + var(--sel-chroma))
-    h);
-  --selected: color-mix(in oklch, var(--selected-base), var(--accent) var(--sel-accent-weight));
-  --selected-hover: color-mix(in oklch, var(--selected-hover-base), var(--accent) var(--sel-accent-weight));
-}
-
-:root[data-flavor="latte"],
-:root[data-flavor="flat"] {
-  --sel-dir: -1;
-  --selected-muted: oklch(from var(--text-muted) 0.28 c h);
-  --selected: oklch(from var(--raised)
-    calc(l - max(var(--sel-step), 0.06)) c h);
-  --selected-hover: oklch(from var(--raised)
-    calc(l - max(var(--sel-step), 0.06) - 0.03) c h);
+  --selected-base: color-mix(in srgb, var(--base) 75%, var(--raised));
+  --selected: color-mix(in srgb, var(--selected-base), var(--accent) var(--sel-accent-weight));
+  --selected-hover: color-mix(in srgb, var(--selected-base), var(--accent) calc(var(--sel-accent-weight) + 2%));
 }
 
 .nav-node {
@@ -5007,8 +4983,6 @@ dialog.app-dialog::backdrop {
 
 .nav-node[aria-selected="true"],
 .nav-node[aria-current="page"] {
-  --text-muted: var(--selected-muted);
-  --subtext-0: var(--selected-muted);
   background: var(--selected);
   color: var(--text);
   font-weight: 450;
@@ -5139,7 +5113,7 @@ dialog.app-dialog::backdrop {
 }
 
 .action:hover {
-  background: color-mix(in srgb, var(--text) 14%, transparent);
+  background: var(--hover-strong);
 }
 
 .action-tinted {
@@ -5153,12 +5127,12 @@ dialog.app-dialog::backdrop {
 
 .action-primary {
   background: var(--accent);
-  color: var(--base);
+  color: var(--accent-fg);
   font-weight: 550;
 }
 
 .action-primary:hover {
-  filter: brightness(1.08);
+  background: var(--accent-hover);
 }
 
 .action-primary:disabled:hover {
@@ -5179,14 +5153,6 @@ dialog.app-dialog::backdrop {
   opacity: 0.45;
 }
 
-button:not(.pill):not(.action):not(.nav-node):not(.rail-node):not(.icon-button):not(.swatch):not(.swatch-button):not(:disabled):hover {
-  box-shadow: inset 0 0 0 999px var(--hover);
-}
-
-.db-surface button:not(:disabled):hover,
-dialog.db-app-dialog button:not(:disabled):hover {
-  box-shadow: none;
-}
 
 .swatch {
   transition: transform var(--t-fast) var(--ease);

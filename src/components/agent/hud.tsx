@@ -4,10 +4,8 @@
  *  opens upward from it and closes again, so what sits over another app is a
  *  strip rather than a window.
  *
- *  Two things the donor paid for and this keeps. The window is transparent
- *  and larger than the bar: `--hud-clear-*` is the shadow's own blur, measured,
- *  so the one sanctioned shadow in the system is not clipped into a visible
- *  rectangle. And the eight resize edges are direct children of the positioned
+ *  The window is transparent and larger than the bar, leaving clear space
+ *  around its visible surface. The eight resize edges are direct children of the positioned
  *  root, on the *visible* perimeter — WebKit keeps a `pointer-events: none`
  *  ancestor out of hit testing even when its children opt back in.
  */
@@ -47,11 +45,9 @@ const ICON =
   "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] " +
   "transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-45 disabled:hover:bg-transparent";
 
-/** The bar's ground and the one sanctioned shadow: separation from a desktop
- *  the app does not control, not depth between two of its own planes. */
+/** Only the HUD's surface paints; its surrounding window stays clear. */
 const SURFACE: CSSProperties = {
   background: "var(--hud-bg)",
-  boxShadow: "var(--hud-shadow)",
 };
 
 function startResize(dir: ResizeDirection) {
@@ -181,13 +177,11 @@ export function Hud({
     void getCurrentWindow().startDragging().catch(() => undefined);
   };
 
-  // The guard comes before the draft is cleared: the donor's own bug was a
-  // turn typed mid-run that emptied the box and delivered nothing.
+  // Only the main window clears the shared draft after an accepted send.
   const submit = () => {
     const text = draft.trim();
     if (!text || sending || !ready) return;
     onSend(text);
-    onDraft("");
   };
 
   return (
@@ -200,7 +194,7 @@ export function Hud({
       {open === "roster" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[22px] px-3 py-[9px]"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[var(--r-plane)] px-3 py-[9px]"
           style={SURFACE}
           role="listbox"
           aria-label="Agents"
@@ -253,7 +247,7 @@ export function Hud({
       {open === "chat" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px]"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)]"
           style={SURFACE}
         >
           <div
@@ -358,7 +352,7 @@ export function Hud({
       <div
         onMouseDown={drag}
         onDoubleClick={onRedock}
-        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-[var(--r-plane)] px-[18px]"
+        className="flex h-12 shrink-0 cursor-default items-center gap-[9px] rounded-[var(--r-pill)] px-[18px]"
         style={SURFACE}
         data-run-state={run.kind}
       >
@@ -366,7 +360,7 @@ export function Hud({
           {speaking && open === "none" ? (
             <>
               {speaking === "you" ? (
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--go-fg)]">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-pill)] bg-[var(--accent)] text-[var(--accent-fg)]">
                   <Mic className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
                 </span>
               ) : (
@@ -421,19 +415,19 @@ export function Hud({
             >
               <Square className="h-[7px] w-[7px]" strokeWidth={0} fill="currentColor" aria-hidden />
             </button>
-          ) : voice.dictationOn ? (
+          ) : (
             <button
               type="button"
               onClick={() => void voice.dictate()}
-              disabled={voice.hearing}
-              aria-label={voice.hearing ? "Typing what was said" : "Speak instead of typing"}
-              title={voice.hearing ? "Typing what was said…" : "Speak"}
+              disabled={!voice.dictationOn || voice.hearing}
+              aria-label={!voice.dictationOn ? "Dictation is switched off in Settings" : voice.hearing ? "Typing what was said" : "Speak instead of typing"}
+              title={!voice.dictationOn ? "Dictation is switched off in Settings" : voice.hearing ? "Typing what was said…" : "Speak"}
               className={ICON}
             >
               <Mic className="h-[13px] w-[13px]" strokeWidth={1.5} aria-hidden />
             </button>
-          ) : null}
-          {(voice.canConverse || voice.convo) && !speaking ? (
+          )}
+          {!speaking ? (
             <VoiceButton mode="converse" voice={voice} onTranscript={() => undefined} className={ICON} />
           ) : null}
           <button
@@ -533,7 +527,7 @@ function HudComposer({
   sending: boolean;
   ready: boolean;
 }) {
-  const row = "flex shrink-0 items-center gap-2 border-t border-[var(--hair)] bg-[var(--base)] px-3 py-2";
+  const row = "flex shrink-0 items-center gap-2 rounded-[var(--r-ctl)] border-t border-[var(--hair)] bg-[var(--base)] px-3 py-2";
 
   if (speaking === "agent") {
     return (
@@ -573,7 +567,7 @@ function HudComposer({
           onClick={() => void voice.dictate()}
           aria-label="Stop listening and use what was said"
           title="Stop"
-          className={cn(ICON, "text-[var(--accent)]")}
+          className={cn(ICON, "text-[var(--accent-text)]")}
         >
           <Square className="h-2 w-2" strokeWidth={0} fill="currentColor" aria-hidden />
         </button>

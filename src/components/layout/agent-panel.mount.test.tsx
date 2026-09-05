@@ -26,6 +26,18 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: async () => acpDisk.text,
 }));
 
+import type { PanelAction, PanelFrame } from "@/components/agent/panel-window";
+const panelChannel = vi.hoisted(() => ({ remote: false, respond: false, frame: null as PanelFrame | null, handlers: new Set<(frame: PanelFrame) => void>(), actions: [] as PanelAction[] }));
+vi.mock("@/components/agent/panel-window", async (original) => ({
+  ...await original<typeof import("@/components/agent/panel-window")>(),
+  isPanelWindow: () => panelChannel.remote,
+  onFrame: async (handler: (frame: PanelFrame) => void) => { panelChannel.handlers.add(handler); return () => { panelChannel.handlers.delete(handler); }; },
+  requestFrame: () => { if (panelChannel.respond && panelChannel.frame) for (const handler of panelChannel.handlers) handler(panelChannel.frame); },
+  requestAction: (action: PanelAction) => { panelChannel.actions.push(action); },
+  resizePanelWindow: async () => undefined,
+}));
+import { EjectedPanel } from "@/components/agent/ejected-panel";
+import { writePanelDraft } from "@/components/agent/panel-draft";
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { resetAcpSubscription, setAcpBridge, type AcpEnvelope } from "@/engine/acp-session";
 import { useEngineStore } from "@/engine/engine-store";
@@ -40,6 +52,7 @@ interface Mounted {
   container: HTMLDivElement;
   root: Root;
   unmount: () => Promise<void>;
+  updateToggle?: (request: number) => Promise<void>;
 }
 
 async function settle() {
@@ -49,7 +62,7 @@ async function settle() {
 }
 
 async function mountPanel(
-  mode: "docked" | "standalone" = "docked",
+  mode: "docked" | "standalone" | "ejected" = "docked",
   openRequest = 0,
   toggleRequest = 0,
 ): Promise<Mounted> {
@@ -59,23 +72,25 @@ async function mountPanel(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
   });
-  await act(async () => {
+  const render = (request: number) => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <AgentPanel
+        {mode === "ejected" ? <EjectedPanel /> : <AgentPanel
           mode={mode}
           onEject={() => undefined}
           openRequest={openRequest}
-          toggleRequest={toggleRequest}
-        />
+          toggleRequest={request}
+        />}
       </QueryClientProvider>,
     );
-  });
+  };
+  await act(async () => render(toggleRequest));
   await settle();
   await settle();
   return {
     container,
     root,
+    updateToggle: async (request: number) => { await act(async () => render(request)); },
     unmount: async () => {
       await act(async () => root.unmount());
       container.remove();
@@ -120,6 +135,7 @@ describe("AgentPanel on the gateway", () => {
     useEngineStore.setState({ connection: "open", info: null, error: null });
     acpDisk.text = "";
     pickedFiles.value = null;
+    panelChannel.remote = false; panelChannel.respond = false; panelChannel.frame = null; panelChannel.handlers.clear(); panelChannel.actions = [];
   });
 
   afterEach(() => {
@@ -149,10 +165,18 @@ describe("AgentPanel on the gateway", () => {
   });
 
   it("toggles the docked panel through the shell toolbar request", async () => {
-    const panel = await mountPanel("docked", 0, 1);
+    const panel = await mountPanel("docked");
+    await panel.updateToggle!(1);
     await settle();
     expect(panel.container.childElementCount).toBe(0);
     expect(window.localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY)).toBe("1");
+    await panel.unmount();
+  });
+
+  it("does not replay an old shell toggle when the docked panel remounts", async () => {
+    const panel = await mountPanel("docked", 0, 4);
+    expect(panel.container.childElementCount).toBeGreaterThan(0);
+    expect(window.localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY)).toBe("0");
     await panel.unmount();
   });
 
@@ -209,6 +233,50 @@ describe("AgentPanel on the gateway", () => {
     });
     expect(panel.container.querySelector('[aria-label="Attachments"]')).toBeNull();
     await panel.unmount();
+  });
+
+  it("restores each target's unsent text and attachment references after a panel remount", async () => {
+    pickedFiles.value = ["/tmp/Review notes.md"];
+    const panel = await mountPanel();
+    await type(panel, "Review these notes");
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Attach files"]')!.click());
+    await settle();
+    await act(async () => useSessionStore.getState().selectProfile("fiona"));
+    expect(textarea(panel).value).toBe("");
+    expect(panel.container.querySelector('[aria-label="Attachments"]')).toBeNull();
+    await type(panel, "A separate question");
+    await act(async () => useSessionStore.getState().selectProfile("default"));
+    expect(textarea(panel).value).toBe("Review these notes");
+    expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("Review notes.md");
+    await panel.unmount();
+    const reopened = await mountPanel("standalone");
+    expect(textarea(reopened).value).toBe("Review these notes");
+    expect(reopened.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("Review notes.md");
+    await act(async () => useSessionStore.getState().selectProfile("fiona"));
+    expect(textarea(reopened).value).toBe("A separate question");
+    expect(client.callsTo("prompt.submit")).toHaveLength(0);
+    await reopened.unmount();
+  });
+
+  it("keeps text and attachments recoverable when the engine rejects a send", async () => {
+    pickedFiles.value = ["/tmp/retry.md"];
+    client.respondWith((call) => {
+      if (call.method === "session.create") return { session_id: "failed-send" };
+      if (call.method === "file.attach") throw new Error("Attachment unavailable");
+      return undefined;
+    });
+    const panel = await mountPanel();
+    await type(panel, "Keep this until accepted");
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Attach files"]')!.click());
+    await settle();
+    await pressEnter(panel);
+    expect(textarea(panel).value).toBe("Keep this until accepted");
+    expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("retry.md");
+    await panel.unmount();
+    const reopened = await mountPanel();
+    expect(textarea(reopened).value).toBe("Keep this until accepted");
+    expect(reopened.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("retry.md");
+    await reopened.unmount();
   });
 
   it("shows streamed reasoning while the turn is still live", async () => {
@@ -322,7 +390,8 @@ describe("AgentPanel on the gateway", () => {
     const text = panel.container.textContent ?? "";
     expect(text).toContain("The current date is");
     expect(text).toContain("197 ms");
-    expect(text).toContain("verified");
+    expect(text).toContain("completed");
+    expect(text).not.toContain("verified");
     expect(panel.container.querySelector('[data-run-state="done"]')?.textContent).toMatch(/Done in \d+ s/);
     expect(panel.container.querySelector('button[aria-label="Speaking is switched off in Settings"]')).not.toBeNull();
     expect(text).toContain("Ask first");
@@ -400,15 +469,19 @@ describe("AgentPanel on the gateway", () => {
     await panel.unmount();
   });
 
-  it("disables the composer with honest copy while the engine is offline", async () => {
+  it("retains an editable draft for the selected agent while sending is offline", async () => {
+    useSessionStore.setState({ selectedProfile: "default" });
     useEngineStore.setState({ connection: "error", info: null, error: "hermes serve exited (code 1)" });
     const panel = await mountPanel();
     const el = textarea(panel);
-    expect(el.disabled).toBe(true);
+    expect(el.disabled).toBe(false);
     expect(el.placeholder).toBe("Hermes is offline");
     const empty = panel.container.querySelector('[data-panel-state="error"]');
     expect(empty?.textContent).toContain("Hermes is offline.");
     expect(empty?.textContent).toContain("hermes serve exited (code 1)");
+    await type(panel, "Keep this offline draft");
+    expect(textarea(panel).value).toBe("Keep this offline draft");
+    expect(client.callsTo("prompt.submit")).toHaveLength(0);
     expect(client.callsTo("profiles.list")).toHaveLength(0);
     await panel.unmount();
   });
@@ -563,6 +636,32 @@ describe("AgentPanel on the gateway", () => {
     await act(async () => root.unmount());
     container.remove();
     queryClient.clear();
+  });
+
+  it("keeps the main target, roster and unsent draft through ejected full → HUD → full with delayed frames", async () => {
+    // The parent frame is authoritative even before Tauri window metadata is ready.
+    panelChannel.remote = false;
+    writePanelDraft("acp:wave", { text: "Independent QA unsent continuity check", attachments: [{ path: "/tmp/qa.md", name: "qa.md" }] });
+    const panel = await mountPanel("ejected");
+    expect(panelChannel.actions).toEqual([]);
+    expect(client.callsTo("profiles.list")).toHaveLength(0);
+    const profile = { name: "acp:wave", displayName: "Wave 1 ACP", isDefault: false, description: "", model: "fixture", provider: "ACP", gatewayRunning: true, avatarStyle: "sphere" as const };
+    panelChannel.frame = { selectedProfile: profile.name, profileDirectory: { [profile.name]: profile, default: { ...profile, name: "default", displayName: "Default", isDefault: true } }, threads: {} };
+    await act(async () => { for (const handler of panelChannel.handlers) handler(panelChannel.frame!); });
+    expect(textarea(panel).value).toBe("Independent QA unsent continuity check");
+    expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("qa.md");
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Reduce to the HUD"]')!.click());
+    expect(panel.container.textContent).toContain("Wave 1 ACP");
+    // No further frame arrives: growing must use the last main-owned frame,
+    // never emit select(default) from a freshly mounted empty child.
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Back to the full panel"]')!.click());
+    expect(panel.container.querySelector('button[aria-haspopup="listbox"]')?.textContent).toContain("Wave 1 ACP");
+    expect(textarea(panel).value).toBe("Independent QA unsent continuity check");
+    expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("qa.md");
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+    expect(panel.container.querySelector('[role="listbox"]')?.textContent).toContain("Wave 1 ACP");
+    expect(panelChannel.actions).toEqual([]);
+    await panel.unmount();
   });
 
   it("mounts the same panel in the standalone window", async () => {

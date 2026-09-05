@@ -61,17 +61,20 @@ pub async fn panel_open(app: AppHandle, size: Option<PanelSize>) -> Result<bool,
     }
 
     let size = size.unwrap_or_default().or_default();
-    let mut builder = WebviewWindowBuilder::new(&app, LABEL, WebviewUrl::App("/agent-panel".into()))
-        .title("Agent Panel")
-        .inner_size(size.width, size.height)
-        .min_inner_size(320.0, 96.0)
-        .resizable(true)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
-        .always_on_top(true)
-        .focused(true)
-        .skip_taskbar(false);
+    let mut builder =
+        WebviewWindowBuilder::new(&app, LABEL, WebviewUrl::App("/agent-panel".into()))
+            .title("Agent Panel")
+            .inner_size(size.width, size.height)
+            .min_inner_size(320.0, 96.0)
+            .resizable(true)
+            .zoom_hotkeys_enabled(true)
+            .decorations(false)
+            .transparent(true)
+            .background_color(tauri::window::Color(0, 0, 0, 0))
+            .shadow(false)
+            .always_on_top(true)
+            .focused(true)
+            .skip_taskbar(false);
 
     // Top-right of whatever monitor the main window is on, so the panel lands
     // beside the app rather than centred over it.
@@ -113,7 +116,7 @@ pub async fn panel_is_open(app: AppHandle) -> bool {
 }
 
 /// Resize the panel in place — panel to HUD and back. The window keeps its
-/// top-left corner so the bar does not walk across the screen as it grows.
+/// top-left corner unless growing would put its controls off-screen.
 #[tauri::command]
 pub async fn panel_resize(app: AppHandle, size: PanelSize) -> Result<(), String> {
     let window = app
@@ -122,7 +125,37 @@ pub async fn panel_resize(app: AppHandle, size: PanelSize) -> Result<(), String>
     let size = size.or_default();
     window
         .set_size(LogicalSize::new(size.width, size.height))
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if let Some(monitor) = window.current_monitor().map_err(|e| e.to_string())? {
+        let scale = monitor.scale_factor();
+        let position = window
+            .outer_position()
+            .map_err(|e| e.to_string())?
+            .to_logical::<f64>(scale);
+        let origin = monitor.position().to_logical::<f64>(scale);
+        let area = monitor.size().to_logical::<f64>(scale);
+        let visible = visible_position(position, size, origin, area);
+        if visible != position {
+            window.set_position(visible).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn visible_position(
+    position: LogicalPosition<f64>,
+    size: PanelSize,
+    origin: LogicalPosition<f64>,
+    area: LogicalSize<f64>,
+) -> LogicalPosition<f64> {
+    LogicalPosition::new(
+        position
+            .x
+            .clamp(origin.x, origin.x + (area.width - size.width).max(0.0)),
+        position
+            .y
+            .clamp(origin.y, origin.y + (area.height - size.height).max(0.0)),
+    )
 }
 
 /// Where a freshly ejected panel goes: inset from the top-right of the monitor
@@ -142,7 +175,39 @@ fn top_right(app: &AppHandle, size: PanelSize) -> Option<LogicalPosition<f64>> {
 
 #[cfg(test)]
 mod tests {
-    use super::PanelSize;
+    use super::{visible_position, PanelSize};
+    use tauri::{LogicalPosition, LogicalSize};
+
+    #[test]
+    fn growing_near_the_edge_keeps_hud_controls_on_screen() {
+        let moved = visible_position(
+            LogicalPosition::new(1036.0, 24.0),
+            PanelSize {
+                width: 468.0,
+                height: 126.0,
+            },
+            LogicalPosition::new(0.0, 0.0),
+            LogicalSize::new(1440.0, 900.0),
+        );
+        assert_eq!(moved, LogicalPosition::new(972.0, 24.0));
+    }
+
+    #[test]
+    fn resizing_inside_a_secondary_monitor_keeps_the_position() {
+        let position = LogicalPosition::new(-1000.0, 100.0);
+        assert_eq!(
+            visible_position(
+                position,
+                PanelSize {
+                    width: 380.0,
+                    height: 620.0
+                },
+                LogicalPosition::new(-1440.0, 0.0),
+                LogicalSize::new(1440.0, 900.0),
+            ),
+            position
+        );
+    }
 
     #[test]
     fn a_missing_or_absurd_size_falls_back_to_the_panel_shape() {

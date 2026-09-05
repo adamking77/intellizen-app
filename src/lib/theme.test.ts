@@ -53,6 +53,15 @@ describe("selection strength", () => {
     expect(document.documentElement.style.getPropertyValue("--sel-step")).toBe("0.13");
     expect(document.documentElement.style.getPropertyValue("--sel-accent-weight")).toBe("7.8%");
   });
+
+  it("updates contrasting ink when changing between light palette accents", () => {
+    applyTheme("latte", "#a8817a", false);
+    expect(document.documentElement.style.getPropertyValue("--accent-fg")).toBe("#000000");
+    expect(document.documentElement.style.getPropertyValue("--accent-contrast")).toBe("#ffffff");
+    applyTheme("latte", "#3a5fa8", false);
+    expect(document.documentElement.style.getPropertyValue("--accent-fg")).toBe("#ffffff");
+    expect(document.documentElement.style.getPropertyValue("--accent-contrast")).toBe("#000000");
+  });
 });
 
 describe("system appearance", () => {

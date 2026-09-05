@@ -11,7 +11,7 @@ const databaseButtonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-[var(--accent)] text-[var(--crust)] hover:bg-[var(--accent-hover)]",
+        primary: "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]",
         secondary:
           "bg-[var(--mantle)] text-[var(--text)] border border-[var(--border)] " +
           "hover:border-[var(--border-strong)] hover:bg-[var(--base)]",
@@ -22,14 +22,14 @@ const databaseButtonVariants = cva(
           "bg-transparent text-[var(--subtext-0)] border border-transparent " +
           "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
         selected:
-          "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
+          "bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent-border)] " +
           "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
         destructive: "bg-[var(--danger)] text-[var(--crust)] hover:opacity-90",
         "accent-soft":
-          "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] " +
+          "bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent-border)] " +
           "hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]",
         "accent-outline":
-          "bg-transparent text-[var(--accent)] border border-[var(--accent-border)] " +
+          "bg-transparent text-[var(--accent-text)] border border-[var(--accent-border)] " +
           "hover:bg-[var(--accent-soft)] hover:border-[var(--accent)]",
       },
       size: {

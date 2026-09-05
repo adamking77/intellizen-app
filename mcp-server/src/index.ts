@@ -33,6 +33,7 @@ import {
 } from "./control-plane.js";
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
+import { proposeWorkflowDraftCall, proposeWorkflowDraftTool } from "./workflow-draft-proposal.js";
 import { listHierarchy } from "./hierarchy.js";
 import { callHierarchyWriteTool, hierarchyWriteTools } from "./hierarchy-writes.js";
 import { callPromisedTool, HOME_PIN_FIELDS, promisedTools } from "./promised-tools.js";
@@ -2837,6 +2838,7 @@ async function startWorkflow(input: {
 }) {
   const workflow = await getWorkflowByWorkflowId(input.workflow_id);
   const workflowItem = toWorkflowTemplateItem(workflow);
+  if (workflowItem.status !== "Active") throw new Error("Activate this workflow before starting a run.");
   const definition = workflowItem.definition;
   if (definition != null) {
     const validation = validateWorkflowDefinition(definition);
@@ -4124,6 +4126,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
     },
     proposeDocumentEditTool,
+    proposeWorkflowDraftTool,
     {
       name: "read_vault_file",
       description: "Read an existing vault file for an investigation.",
@@ -4810,6 +4813,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   if (name === "propose_document_edit") return proposeDocumentEditCall(args, VAULT_BASE);
+  if (name === "propose_workflow_draft") return proposeWorkflowDraftCall(args);
   // ── read_vault_file ────────────────────────────────────────────────────────
   if (name === "read_vault_file") {
     const { case_id, file_name } = args as { case_id: string; file_name: string };

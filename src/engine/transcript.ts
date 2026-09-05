@@ -24,8 +24,9 @@ export interface ToolRow {
   name: string;
   /** What to show on the row: the argument preview when there is one. */
   title: string;
-  /** Undefined while the tool runs. */
+  /** Undefined while the tool runs or when stored history has no outcome. */
   ok?: boolean;
+  historical?: boolean;
   resultText?: string;
   durationMs?: number;
   risk?: string;

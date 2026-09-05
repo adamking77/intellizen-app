@@ -246,7 +246,7 @@ export function DatabasesView() {
                           currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                         )}
                       />
-                      <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent)]">
+                      <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent-text)]">
                         {database.name}
                       </p>
                     </button>

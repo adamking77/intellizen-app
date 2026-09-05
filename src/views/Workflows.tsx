@@ -1,182 +1,82 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
-
-import { WorkflowDesigner } from "@/components/workflows/workflow-designer";
-import { WorkflowDetail, type WorkflowView } from "@/components/workflows/workflow-detail";
-import { WorkflowTable } from "@/components/workflows/workflow-table";
-import { ScheduleSheet } from "@/components/workflows/schedule-sheet";
-import { DecisionField } from "@/components/ui/decision-field";
+import { useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useSearchParams } from "react-router-dom";
+import { Plus } from "lucide-react";
+import { WorkflowLibrary } from "@/components/workflows/workflow-library";
+import { WorkflowWorkspace } from "@/components/workflows/workflow-workspace";
+import { WorkflowRunDrawer } from "@/components/workflows/workflow-run-drawer";
+import { Control } from "@/components/ui/control";
 import { PageHeader } from "@/components/ui/page-header";
 import { QueryState } from "@/components/ui/query-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, listWorkflows, resolveWorkflowApproval } from "@/lib/data";
-import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
-import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
+import { GENZEN_WORKSPACE_DATABASE_IDS, getWorkspaceRecord, listWorkflows, toWorkflowTemplateItem } from "@/lib/data";
 import { listAgentPanelRoleTargets } from "@/services/agent-panel-roles";
-import { buildWorkflowCatalog, type WorkflowCatalogItem } from "@/lib/workflow-catalog";
-import { useStartWorkflow } from "@/lib/use-start-workflow";
-import type { WorkspaceDatabaseFieldValue } from "@/lib/types";
+import { buildWorkflowCatalog, classifyWorkflow } from "@/lib/workflow-catalog";
+import { createWorkflowDesignerDraft, listRecoveredWorkflowDesignerDrafts, storeWorkflowDesignerDraft } from "@/lib/workflow-designer";
+import type { WorkflowTemplateItem } from "@/lib/types";
 import { useAppStore } from "@/store";
 
-function firstRecordId(value: WorkspaceDatabaseFieldValue) {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
-  return null;
+export function newWorkflowTemplate(id: string): WorkflowTemplateItem {
+  const definition = createWorkflowDesignerDraft({ id, name: "Untitled workflow" });
+  return { id: "", workflow_id: id, name: definition.name, status: "Draft", entity: null, owner_role: null, default_actor: null, source_document_id: null, source_path: null, trigger: "manual", required_inputs: null, default_routing: null, approval_gates: null, expected_output: null, related_databases: [], receipt_template: null, success_criteria: null, failure_behavior: null, definition, definition_version: 1, run_ids: [], body_preview: "", updated_at: "" };
 }
 
 export function WorkflowsView() {
-  const navigate = useNavigate();
   const entityFilter = useAppStore((state) => state.entityFilter);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("workflow"));
-  const [view, setView] = useState<WorkflowView>("runs");
-  const [designerOpen, setDesignerOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-
-  const workflowQuery = useQuery({
-    queryKey: ["workflow-registry", "screen", entityFilter],
-    queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: true, limit: 100 }),
-    refetchInterval: 60_000,
+  const queryClient = useQueryClient();
+  const selectedId = searchParams.get("workflow");
+  const draftId = searchParams.get("draft");
+  const runId = searchParams.get("run");
+  const newDraft = useMemo(() => draftId && /^workflow-[a-f0-9-]{36}$/i.test(draftId) ? newWorkflowTemplate(draftId) : null, [draftId]);
+  const workflowQuery = useQuery({ queryKey: ["workflow-registry", "screen", entityFilter], queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: true, limit: 100 }), refetchInterval: 60_000 });
+  const rolesQuery = useQuery({ queryKey: ["workflow-designer", "role-targets"], queryFn: listAgentPanelRoleTargets, staleTime: 30_000 });
+  const selectedQuery = useQuery({
+    queryKey: ["workflow-detail", selectedId],
+    queryFn: async () => {
+      const record = await getWorkspaceRecord(selectedId!);
+      if (record.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry) throw new Error("This record is not a workflow.");
+      return toWorkflowTemplateItem(record);
+    },
+    enabled: Boolean(selectedId && !newDraft), refetchInterval: 60_000,
   });
-  const rolesQuery = useQuery({
-    queryKey: ["workflow-designer", "role-targets"],
-    queryFn: listAgentPanelRoleTargets,
-    staleTime: 30_000,
-  });
-  const runsQuery = useQuery({
-    queryKey: ["active-work", "workflow-screen"],
-    queryFn: () => listWorkflowRuns({ includeCompleted: true, limit: 100 }),
-    refetchInterval: 15_000,
-  });
-  const starter = useStartWorkflow({ onStarted: () => runsQuery.refetch() });
-  const approval = useMutation({
-    mutationFn: ({ runId, decision }: { runId: string; decision: "approved" | "rejected" | "changes_requested" }) => resolveWorkflowApproval({
-      workflowRunId: runId,
-      decision,
-      decisionSummary: decision === "approved" ? "Approved in Workflows." : decision === "rejected" ? "Rejected in Workflows." : "Changes requested in Workflows.",
-      decidedBy: "Adam",
-      confirmWrite: true,
-    }),
-    onSuccess: () => runsQuery.refetch(),
-  });
-
-  const catalog = useMemo(() => buildWorkflowCatalog(workflowQuery.data ?? [], rolesQuery.data ?? []), [rolesQuery.data, workflowQuery.data]);
-  const runs = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
-  const requestedRun = runs.find((run) => run.id === searchParams.get("run"));
-
-  useEffect(() => {
-    if (requestedRun?.workflow_record_id) {
-      setSelectedId(requestedRun.workflow_record_id);
-      setView("runs");
-      return;
-    }
-    if (selectedId && catalog.some((item) => item.workflow.id === selectedId)) return;
-    setSelectedId(catalog[0]?.workflow.id ?? null);
-  }, [catalog, requestedRun, selectedId]);
-
-  const selectedItem = catalog.find((item) => item.workflow.id === selectedId) ?? null;
-  const waitingRuns = runs.filter((run) => run.status?.toLowerCase() === "needs approval");
-  const waitingRun = waitingRuns[0];
-
-  function select(item: WorkflowCatalogItem) {
-    setSelectedId(item.workflow.id);
-    setDesignerOpen(false);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set("workflow", item.workflow.id);
-      next.delete("run");
-      return next;
-    }, { replace: true });
+  const fullCatalog = useMemo(() => buildWorkflowCatalog(workflowQuery.data ?? [], rolesQuery.data ?? []), [rolesQuery.data, workflowQuery.data]);
+  const catalog = useMemo(() => fullCatalog.filter((item) => item.state !== "sop-only"), [fullCatalog]);
+  const localDrafts = listRecoveredWorkflowDesignerDrafts().filter((entry) => /^workflow-[a-f0-9-]{36}$/i.test(entry.recordId)).map((entry) => classifyWorkflow({ ...newWorkflowTemplate(entry.recordId), name: entry.definition.name, definition: entry.definition }, rolesQuery.data ?? []));
+  const selectedItem = useMemo(() => {
+    const workflow = newDraft ?? selectedQuery.data;
+    return workflow ? classifyWorkflow(workflow, rolesQuery.data ?? []) : null;
+  }, [newDraft, selectedQuery.data, rolesQuery.data]);
+  const backToLibrary = useCallback(() => setSearchParams((current) => {
+    const next = new URLSearchParams(current); next.delete("workflow"); next.delete("draft"); next.delete("view"); next.delete("run"); return next;
+  }), [setSearchParams]);
+  const closeRun = useCallback(() => setSearchParams((current) => { const next = new URLSearchParams(current); next.delete("run"); return next; }, { replace: true }), [setSearchParams]);
+  function newWorkflow() {
+    const id = `workflow-${crypto.randomUUID()}`;
+    storeWorkflowDesignerDraft(id, { definition: createWorkflowDesignerDraft({ id, name: "Untitled workflow" }), baseUpdatedAt: "" });
+    setSearchParams({ draft: id });
   }
-
-  function openDesigner(item: WorkflowCatalogItem) {
-    select(item);
-    setView("steps");
-    setDesignerOpen(true);
+  function saved(created?: WorkflowTemplateItem) {
+    if (created) { queryClient.setQueryData(["workflow-detail", created.id], created); setSearchParams({ workflow: created.id }, { replace: true }); }
+    else void selectedQuery.refetch();
+    void workflowQuery.refetch();
   }
-
-  function draftWithAgent(item: WorkflowCatalogItem) {
-    const search = `?workflow=${encodeURIComponent(item.workflow.id)}&view=steps`;
-    publishConversationContext({
-      ...createRouteConversationContext({ pathname: "/workflows", search }),
-      selections: [{
-        kind: "workspace_record",
-        databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry,
-        recordId: item.workflow.id,
-        label: item.workflow.name,
-      }],
-    });
-    requestAgentPanelOpen();
-  }
-
-  if (workflowQuery.error) {
-    return <div className="p-6"><QueryState isLoading={false} error={workflowQuery.error} isEmpty={false} errorTitle="Workflows unavailable" onRetry={() => void workflowQuery.refetch()}>{null}</QueryState></div>;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-[var(--base)] p-5">
-      <PageHeader title="Workflows" state={`${catalog.length} definitions`} waiting={waitingRun ? `${waitingRuns.length} ${waitingRuns.length === 1 ? "run waits" : "runs wait"} on you` : undefined} />
-      <div className="mt-4 grid gap-4">
-        {waitingRun ? (
-          <DecisionField
-            question={waitingRun.current_step || "This workflow run needs a decision."}
-            why={`${waitingRun.name} is paused until you answer.`}
-            choices={[
-              { id: "approved", label: "Approve", disabled: approval.isPending },
-              { id: "changes_requested", label: "Request changes", disabled: approval.isPending },
-              { id: "rejected", label: "Reject", disabled: approval.isPending },
-            ]}
-            onChoose={(decision) => approval.mutate({ runId: waitingRun.id, decision: decision as "approved" | "rejected" | "changes_requested" })}
-          />
-        ) : null}
-        {workflowQuery.isLoading || rolesQuery.isLoading ? <Skeleton lines={5} /> : (
-          <WorkflowTable
-            items={catalog}
-            runs={runs}
-            selectedId={selectedId}
-            search={search}
-            running={starter.isStartingWorkflow}
-            onSearch={setSearch}
-            onSelect={select}
-            onFinish={openDesigner}
-            onRun={(item) => void starter.start({ workflowId: item.workflow.workflow_id, triggerSource: "ui" })}
-            onMakeRunnable={(item) => {
-              const record = firstRecordId(item.workflow.source_document_id);
-              navigate(record ? `/docs?record=${encodeURIComponent(record)}` : "/docs");
-            }}
-          />
-        )}
-        {selectedItem ? designerOpen && selectedItem.executable ? (
-          <div className="min-h-[620px] overflow-hidden rounded-[var(--r-plane)] bg-[var(--mantle)]">
-            <WorkflowDesigner
-              workflow={selectedItem.workflow}
-              roleTargets={rolesQuery.data ?? []}
-              onClose={() => setDesignerOpen(false)}
-              onDraftWithAgent={() => draftWithAgent(selectedItem)}
-              onSaved={() => { setDesignerOpen(false); void workflowQuery.refetch(); }}
-            />
-          </div>
-        ) : (
-          <>
-            <WorkflowDetail
-              item={selectedItem}
-              runs={runs}
-              roles={rolesQuery.data ?? []}
-              view={view}
-              onView={(next) => {
-                setView(next);
-                if (next === "steps" && selectedItem.executable) setDesignerOpen(true);
-                if (next === "schedule" && selectedItem.definition) setScheduleOpen(true);
-              }}
-              onDesign={() => setDesignerOpen(true)}
-              onSchedule={() => setScheduleOpen(true)}
-            />
-          </>
-        ) : null}
+  const editing = Boolean(selectedId || draftId);
+  return <div className="relative flex h-full min-h-0 flex-col overflow-y-auto bg-[var(--base)] p-5">
+    {editing ? <>
+      {!selectedItem ? <Control size="sm" variant="quiet" className="mb-3 shrink-0 self-start" onClick={backToLibrary}>Back to workflows</Control> : null}
+      {selectedItem ? <WorkflowWorkspace key={selectedItem.workflow.id || selectedItem.workflow.workflow_id} item={selectedItem} onBack={backToLibrary} roleTargets={rolesQuery.data ?? []} rolesUnavailable={Boolean(rolesQuery.error)} onRetryRoles={() => void rolesQuery.refetch()} onSaved={saved} onOpenRun={(run) => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("run", run.id); return next; })} /> : selectedQuery.isLoading ? <Skeleton lines={8} /> : <QueryState isLoading={false} error={selectedQuery.error ?? new Error("The requested draft is unavailable.")} isEmpty={false} errorTitle="Workflow unavailable" onRetry={() => void selectedQuery.refetch()}>{null}</QueryState>}
+      {selectedQuery.error && selectedItem ? <p role="alert" className="mt-2 text-[var(--danger)]">Could not refresh this workflow. Your draft is retained. <Control size="sm" onClick={() => void selectedQuery.refetch()}>Retry</Control></p> : null}
+    </> : <>
+      <PageHeader title="Workflows" state="Design how your agents work together." action={<Control size="sm" variant="primary" onClick={newWorkflow}><Plus size={14} aria-hidden />New workflow</Control>} />
+      <div className="mt-5">
+        <QueryState isLoading={workflowQuery.isLoading && !localDrafts.length} error={workflowQuery.error} isEmpty={false} retainContentOnError={Boolean(workflowQuery.data || localDrafts.length)} errorTitle="Workflows unavailable" onRetry={() => void workflowQuery.refetch()}>
+          {rolesQuery.error ? <p role="alert" className="mb-3 text-[var(--warning)]">Role availability could not be checked. <Control size="sm" onClick={() => void rolesQuery.refetch()}>Retry</Control></p> : null}
+          <WorkflowLibrary items={[...localDrafts, ...catalog]} onOpen={(item) => setSearchParams(item.workflow.id ? { workflow: item.workflow.id } : { draft: item.workflow.workflow_id })} onCreate={newWorkflow} />
+          {fullCatalog.length > catalog.length ? <p className="mt-5 text-[var(--t-meta)] text-[var(--text-muted)]">{fullCatalog.length - catalog.length} written procedures in <Link to="/docs" className="text-[var(--accent-text)] hover:underline">Docs</Link> can become workflows.</p> : null}
+        </QueryState>
       </div>
-      {selectedItem?.definition ? <ScheduleSheet open={scheduleOpen} workflow={selectedItem.workflow} definition={selectedItem.definition} onOpenChange={setScheduleOpen} /> : null}
-    </div>
-  );
+    </>}
+    {runId ? <WorkflowRunDrawer runId={runId} item={selectedItem} onClose={closeRun} /> : null}
+  </div>;
 }

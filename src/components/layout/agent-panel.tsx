@@ -4,6 +4,8 @@ import { open as pickFiles } from "@tauri-apps/plugin-dialog";
 import { ChevronsUpDown, PanelRightClose } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
+import { MaterialContext } from "@/components/agent/material-context";
+import type { PaneResize } from "@/components/layout/pane-resize";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
 import { AgentTurn, UserTurn, type TurnActions } from "@/components/agent/agent-turn";
 import { DecisionCard } from "@/components/agent/decision-card";
@@ -12,21 +14,15 @@ import { Avatar } from "@/components/agents/avatar";
 import { Control } from "@/components/ui/control";
 import { Receipt } from "@/components/ui/receipt";
 import { usePanelSession } from "@/components/agent/use-panel-session";
-import {
-  AGENT_PANEL_MAX_WIDTH,
-  AGENT_PANEL_MIN_WIDTH,
-  useAgentPanelResize,
-} from "@/components/agent/use-agent-panel-resize";
+import { usePanelDraft } from "@/components/agent/panel-draft";
 import { useEngineStore } from "@/engine/engine-store";
 import type { SessionUsage } from "@/engine/contract";
 import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
-import type { SessionAttachment } from "@/engine/session";
 import { defaultProfile, listProfiles, loadProfileAvatar, type HermesProfile } from "@/engine/profiles";
 import { transcriptBusy, type Decision, type Message } from "@/engine/transcript";
 import {
   AGENT_PANEL_COLLAPSED_KEY,
-  AGENT_PANEL_WIDTH_KEY,
   readAgentPanelCollapsed,
 } from "@/lib/agent-panel-persistence";
 import { SEND_ON_ENTER_KEY, SHOW_REASONING_KEY, usePreference } from "@/lib/settings-preferences";
@@ -38,11 +34,8 @@ import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { VoiceButton } from "@/voice/voice-button";
 import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
-import { requestAction } from "@/components/agent/panel-window";
+import { requestAction, type PanelFrame } from "@/components/agent/panel-window";
 import { loadTeams } from "@/components/agents/teams-store";
-import { $groupChats, hasGroupChatNameBase } from "@/rooms/group-chat";
-import { ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
-import { useValue } from "@/rooms/store";
 import { openTeamRoom } from "@/rooms/team-room";
 
 const ICON_BUTTON =
@@ -58,7 +51,13 @@ function panelStorage() {
 }
 
 interface AgentPanelProps {
+  pane?: PaneResize;
+  headerActions?: React.ReactNode;
+  onHeaderMouseDown?: React.MouseEventHandler<HTMLDivElement>;
   mode?: "docked" | "standalone";
+  panelFrame?: PanelFrame | null;
+  overlay?: boolean;
+  onOverlayClose?: () => void;
   onEject?: () => void;
   onCollapsedChange?: (collapsed: boolean) => void;
   openRequest?: number;
@@ -77,7 +76,11 @@ const PERMISSION_WORD = {
  *  decisions: a target picker on the name, the thread, run status directly
  *  above the composer, the composer. */
 export function AgentPanel({
+  pane, headerActions, onHeaderMouseDown,
   mode = "docked",
+  panelFrame,
+  overlay = false,
+  onOverlayClose,
   onEject,
   onCollapsedChange,
   openRequest = 0,
@@ -90,24 +93,15 @@ export function AgentPanel({
   );
   const [showReasoning] = usePreference(SHOW_REASONING_KEY, "1");
   const [sendOnEnter] = usePreference(SEND_ON_ENTER_KEY, "1");
-  const collapsed = userCollapsed ?? isCramped;
+  const collapsed = overlay ? false : userCollapsed ?? isCramped;
 
   useEffect(() => {
-    if (!standalone) onCollapsedChange?.(collapsed);
-  }, [collapsed, onCollapsedChange, standalone]);
+    if (!standalone && !overlay) onCollapsedChange?.(collapsed);
+  }, [collapsed, onCollapsedChange, standalone, overlay]);
 
-  const [panelWidth, setPanelWidth] = useState(() => {
-    try {
-      const stored = Number(window.localStorage.getItem(AGENT_PANEL_WIDTH_KEY));
-      return Number.isFinite(stored) && stored >= AGENT_PANEL_MIN_WIDTH
-        ? Math.min(stored, AGENT_PANEL_MAX_WIDTH)
-        : 336;
-    } catch {
-      return 336;
-    }
-  });
-  const startPanelResize = useAgentPanelResize(setPanelWidth);
 
+
+  const { remote, frameReady, profileDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } = usePanelSession(panelFrame);
   const connection = useEngineStore((s) => s.connection);
   const engineError = useEngineStore((s) => s.error);
   const engineOpen = connection === "open";
@@ -115,14 +109,15 @@ export function AgentPanel({
   const profilesQuery = useQuery({
     queryKey: ["engine", "profiles"],
     queryFn: () => listProfiles(getGatewayClient()),
-    enabled: engineOpen,
+    enabled: engineOpen && !remote,
     staleTime: 30_000,
     retry: false,
   });
-  const acpQuery = useQuery({ queryKey: ["acp", "agents"], queryFn: listAcpAgents, staleTime: 15_000 });
+  const acpQuery = useQuery({ queryKey: ["acp", "agents"], queryFn: listAcpAgents, enabled: !remote, staleTime: 15_000 });
   const hermesProfiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
   const [avatarImages, setAvatarImages] = useState<Record<string, string | null>>({});
   useEffect(() => {
+    if (remote) return;
     for (const candidate of hermesProfiles) {
       if (!candidate.hasAvatar || candidate.name in avatarImages) continue;
       setAvatarImages((current) => ({ ...current, [candidate.name]: null }));
@@ -130,7 +125,7 @@ export function AgentPanel({
         .then((image) => setAvatarImages((current) => ({ ...current, [candidate.name]: image })))
         .catch(() => undefined);
     }
-  }, [hermesProfiles, avatarImages]);
+  }, [remote, hermesProfiles, avatarImages]);
   const acpProfiles: HermesProfile[] = useMemo(
     () =>
       (acpQuery.data ?? []).map((agent) => ({
@@ -147,48 +142,40 @@ export function AgentPanel({
       })),
     [acpQuery.data],
   );
+  const remoteProfiles = remote ? profileDirectory : null;
   const profiles = useMemo(
-    () => [
+    () => remoteProfiles ? Object.values(remoteProfiles) : [
       ...hermesProfiles.map((candidate) => ({ ...candidate, avatarImage: avatarImages[candidate.name] })),
       ...acpProfiles,
     ],
-    [hermesProfiles, acpProfiles, avatarImages],
+    [remoteProfiles, hermesProfiles, acpProfiles, avatarImages],
   );
   const setProfileDirectory = useSessionStore((state) => state.setProfileDirectory);
 
   useEffect(() => {
-    setProfileDirectory(profiles);
-  }, [profiles, setProfileDirectory]);
+    if (!remote) setProfileDirectory(profiles);
+  }, [remote, profiles, setProfileDirectory]);
 
-  const { selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } =
-    usePanelSession();
+
   const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
   const selectRoom = useSessionStore((state) => state.selectRoom);
-  useValue($groupChats);
-  const rooms = listRooms();
   const teamsQuery = useQuery({ queryKey: ["agents", "teams"], queryFn: loadTeams, staleTime: Infinity });
-  const teams = (teamsQuery.data || []).filter(
-    (team) => !rooms.some((room) => hasGroupChatNameBase(room.name, team.name)),
-  );
-
-  useEffect(() => {
-    void ensureRoomsLoaded();
-  }, []);
+  const teams = teamsQuery.data ?? [];
 
   // The first selection is the profile Hermes marks default; nothing is
   // hard-coded. An explicit choice is never overridden afterwards.
   useEffect(() => {
-    if (selectedProfile || profiles.length === 0) return;
+    if (remote || selectedProfile || profiles.length === 0) return;
     const first = defaultProfile(hermesProfiles) ?? acpProfiles[0];
     if (first) selectProfile(first.name);
-  }, [hermesProfiles, acpProfiles, selectedProfile, selectProfile]);
+  }, [remote, hermesProfiles, acpProfiles, selectedProfile, selectProfile]);
 
   const profile: HermesProfile | null =
     profiles.find((p) => p.name === selectedProfile) ??
     (selectedProfile ? { name: selectedProfile, isDefault: false, model: null, provider: null, gatewayRunning: engineOpen, description: "", displayName: "", avatarStyle: "sphere" } : null);
   const agentName = profile?.displayName || profile?.name || null;
   const isAcp = selectedProfile?.startsWith("acp:") ?? false;
-  const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || (engineOpen && p.gatewayRunning), [engineOpen]);
+  const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || ((remote || engineOpen) && p.gatewayRunning), [remote, engineOpen]);
   const targetReady = Boolean(profile && usable(profile));
 
   useEffect(() => {
@@ -202,8 +189,7 @@ export function AgentPanel({
     setPicking(false);
     window.requestAnimationFrame(() => targetButton.current?.focus());
   }, []);
-  const [draft, setDraft] = useState("");
-  const [attachments, setAttachments] = useState<SessionAttachment[]>([]);
+  const { draft, setDraft, attachments, setAttachments } = usePanelDraft(selectedProfile);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const focusComposerWhenOpen = useRef(false);
   const log = useRef<HTMLDivElement | null>(null);
@@ -275,6 +261,7 @@ export function AgentPanel({
   }, [open, openRequest]);
 
   const toggleCollapsed = useCallback(() => {
+    if (overlay) { onOverlayClose?.(); return; }
     if (standalone) return;
     setUserCollapsed(() => {
       const next = !collapsed;
@@ -285,9 +272,10 @@ export function AgentPanel({
       }
       return next;
     });
-  }, [collapsed, standalone]);
+  }, [collapsed, standalone, overlay, onOverlayClose]);
 
-  const handledToggleRequest = useRef(0);
+  // A remount must not replay a shell toggle that the previous panel handled.
+  const handledToggleRequest = useRef(toggleRequest);
   useEffect(() => {
     if (toggleRequest <= 0 || toggleRequest === handledToggleRequest.current) return;
     handledToggleRequest.current = toggleRequest;
@@ -299,8 +287,6 @@ export function AgentPanel({
     const trimmed = (text ?? draft).trim();
     const picked = usingDraft ? attachments : [];
     if ((!trimmed && picked.length === 0) || !selectedProfile || !targetReady || running) return;
-    setDraft("");
-    if (usingDraft) setAttachments([]);
     atBottom.current = true;
     send(selectedProfile, trimmed, picked).catch((error) => toastError("Could not send", error));
   };
@@ -342,7 +328,6 @@ export function AgentPanel({
       onAskAgain: (prompt: string) => submit(prompt),
       onEdit: (message: Message, text: string) => {
         if (!selectedProfile) return;
-        setDraft("");
         atBottom.current = true;
         editAndSend(selectedProfile, message.id, text).catch((error) => toastError("Could not send", error));
       },
@@ -377,7 +362,7 @@ export function AgentPanel({
     return { kind: "idle" };
   }, [transcript, thread?.opening, pending.length, running, messages]);
 
-  const placeholder = isAcp && agentName
+  const placeholder = !frameReady ? "Connecting to the main window…" : isAcp && agentName
     ? `Message ${agentName}…  ↵ to send`
     : !engineOpen
     ? connection === "connecting" || (connection === "idle" && !engineError)
@@ -399,9 +384,8 @@ export function AgentPanel({
   if (!standalone && selectedRoomId) {
     return (
       <AgentPanelShell
-        standalone={false}
-        width={panelWidth}
-        onResizeStart={startPanelResize}
+        standalone={overlay}
+        pane={pane}
         onInteraction={() => undefined}
       >
         <RoomView roomId={selectedRoomId} panel onClose={() => selectRoom(null)} />
@@ -411,9 +395,8 @@ export function AgentPanel({
 
   return (
     <AgentPanelShell
-      standalone={standalone}
-      width={panelWidth}
-      onResizeStart={startPanelResize}
+      standalone={standalone || overlay}
+      pane={pane}
       onInteraction={() => undefined}
     >
       <div
@@ -423,7 +406,7 @@ export function AgentPanel({
       >
         {/* The name is the control: it states the target every turn, so it
             is also the way to change it. */}
-        <div className="relative flex h-[34px] shrink-0 items-center gap-2">
+        <div onMouseDown={onHeaderMouseDown} className="relative flex min-h-[34px] shrink-0 items-center gap-2">
           <button
             ref={targetButton}
             type="button"
@@ -449,14 +432,15 @@ export function AgentPanel({
               </span>
             ) : null}
             <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
-              {agentName ?? (profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
+              {agentName ?? (!frameReady ? "Connecting…" : !remote && profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
             </span>
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
-          {profile?.model ? (
+          {profile?.model && !headerActions ? (
             <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
+          {headerActions}
           {!standalone ? (
             <Control
               variant="quiet"
@@ -475,8 +459,6 @@ export function AgentPanel({
               target={selectedProfile}
               usable={usable}
               onTarget={selectProfile}
-              rooms={rooms}
-              onRoom={selectRoom}
               teams={teams}
               onTeam={(team) => {
                 void openTeamRoom(team, useSessionStore.getState().profileDirectory)
@@ -488,6 +470,7 @@ export function AgentPanel({
           ) : null}
         </div>
 
+        <MaterialContext />
         <div
           ref={log}
           onScroll={(e) => {
@@ -498,11 +481,11 @@ export function AgentPanel({
           }}
           className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-contain pt-1"
         >
-          {messages.length === 0 ? (
+          {messages.length === 0 ? !frameReady ? <p role="status" className="px-1 text-[var(--t-meta)] text-[var(--text-muted)]">Connecting to the main window…</p> : (
             <EmptyState
               connection={isAcp ? "open" : connection}
               engineError={isAcp ? null : engineError}
-              profilesPending={!isAcp && profilesQuery.isPending && engineOpen}
+              profilesPending={!remote && !isAcp && profilesQuery.isPending && engineOpen}
               profilesError={!isAcp && profilesQuery.error ? String((profilesQuery.error as Error).message ?? profilesQuery.error) : null}
               agentName={agentName}
             />

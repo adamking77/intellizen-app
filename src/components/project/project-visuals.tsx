@@ -40,7 +40,7 @@ export function ProjectGraph({ projectId, nodes }: { projectId: number; nodes: G
   return (
     <ProjectTabFrame>
       <Card className="flex items-center gap-4 p-5">
-        <Network className="h-5 w-5 shrink-0 text-[var(--accent)]" />
+        <Network className="h-5 w-5 shrink-0 text-[var(--accent-text)]" />
         <span className="min-w-0 flex-1">
           <span className="block font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">Relationship graph</span>
           <span className="mt-1 block font-ui text-[var(--t-section)] text-[var(--subtext-0)]">{nodes.length} linked entities</span>

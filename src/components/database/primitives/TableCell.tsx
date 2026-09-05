@@ -81,7 +81,7 @@ export function TableCell({ record, field, database, catalog, onToggleCheckbox }
         <a
           href={displayValue}
           className="underline"
-          style={{ color: "var(--accent)" }}
+          style={{ color: "var(--accent-text)" }}
           onClick={(e) => e.stopPropagation()}
         >
           {displayValue}

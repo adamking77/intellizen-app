@@ -9,7 +9,6 @@ import {
   fadeGradientStops,
   resolveFadeSides,
 } from "./fade-edges";
-import { useProfitLossLegendHover } from "./profit-loss-legend-hover";
 import { splitProfitLossSegments } from "@/lib/profit-loss-segments";
 
 // CurveFactory type - simplified version compatible with visx
@@ -61,7 +60,6 @@ export function ProfitLossLine({
   fadeEdges = false,
 }: ProfitLossLineProps) {
   const { tooltipData } = useChart();
-  const { hoveredIndex } = useProfitLossLegendHover();
   const { renderData, xScale, yScale, xAccessor, innerWidth } =
     useChartStable();
   const reactId = useId();
@@ -71,9 +69,6 @@ export function ProfitLossLine({
   const negativeGradientId = `profit-loss-gradient-neg-${dataKey}-${reactId}`;
 
   const focusedLegendIndex = useMemo(() => {
-    if (hoveredIndex !== null) {
-      return hoveredIndex;
-    }
     if (!tooltipData) {
       return null;
     }
@@ -82,7 +77,7 @@ export function ProfitLossLine({
       return null;
     }
     return segmentLegendIndex(value >= 0);
-  }, [dataKey, hoveredIndex, tooltipData]);
+  }, [dataKey, tooltipData]);
 
   const segments = useMemo(
     () =>

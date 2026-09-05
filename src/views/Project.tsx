@@ -166,7 +166,7 @@ export function ProjectView() {
         </div>
       ) : view === "brief" || view === "case" ? (
         <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || investigations.isLoading} error={docs.error ?? catalog.error ?? investigations.error} isEmpty={false} loadingLabel="Loading brief" errorTitle="Brief unavailable" onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), investigations.refetch()])}>
-          <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.data?.length ?? 0} investigation={investigation} />
+          <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.error || graphNodes.isLoading ? null : graphNodes.data?.length ?? 0} investigation={investigation} />
         </QueryState>
       ) : view === "table" || view === "evidence" ? (
         <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading || investigationSignals.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error ?? investigationSignals.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) + (investigationSignals.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Signals, workspace documents, linked records, and files in this project's folder appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch(), investigationSignals.refetch()])}>
@@ -181,9 +181,9 @@ export function ProjectView() {
       ) : view === "session" ? (
         <ProjectSessions folders={node.folders} projectId={id} selectedSessionKey={selectedSessionKey} transcriptOnly={Boolean(selectedSessionKey)} />
       ) : view === "canvas" ? (
-        <ProjectCanvases canvases={projectCanvases} />
+        <QueryState className="m-5" isLoading={canvases.isLoading} retainContentOnError={Boolean(canvases.data)} error={canvases.error} isEmpty={false} errorTitle="Canvases unavailable" onRetry={() => void canvases.refetch()}><ProjectCanvases canvases={projectCanvases} /></QueryState>
       ) : view === "graph" && legacyProjectId != null ? (
-        <ProjectGraph projectId={legacyProjectId} nodes={graphNodes.data ?? []} />
+        <QueryState className="m-5" isLoading={graphNodes.isLoading} retainContentOnError={Boolean(graphNodes.data)} error={graphNodes.error} isEmpty={false} errorTitle="Graph unavailable" onRetry={() => void graphNodes.refetch()}><ProjectGraph projectId={legacyProjectId} nodes={graphNodes.data ?? []} /></QueryState>
       ) : view === "timeline" ? (
         <ProjectTimeline files={files} investigation={investigation} onOpenDocument={(record) => setSelected({ kind: "document", record })} />
       ) : (
@@ -216,7 +216,7 @@ export function ProjectView() {
             </div>
             {selected.kind === "document" ? (
               <>
-                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
                 <Pill>{value(selected.record, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill>
               </>
             ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}

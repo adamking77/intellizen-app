@@ -26,7 +26,7 @@ export const PANEL_HUD_HANDOFF_KEY = "intelizen:agent-panel-hud";
 
 /** How big the window is in each shape. One table so the size the window is
  *  created at and the size the panel resizes to can never disagree. The HUD
- *  sizes include clearance for the bar's shadow (see `hud.tsx`). */
+ *  sizes include breathing room and native resize edges (see `hud.tsx`). */
 export const PANEL_SIZES = {
   panel: { w: 380, h: 620 },
   hud: { w: 468, h: 126 },

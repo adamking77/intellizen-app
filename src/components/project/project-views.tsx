@@ -28,7 +28,7 @@ function date(value: string) {
 
 function Attribution({ name }: { name: string }) {
   const you = /^(adam|you)$/i.test(name);
-  return <Identity name={you ? "you" : name} kind={you ? "you" : "hermes"} runtime={you ? undefined : "hermes"} />;
+  return <Identity name={you ? "you" : name} kind={you ? "you" : undefined} />;
 }
 
 export function ProjectBrief({
@@ -41,7 +41,7 @@ export function ProjectBrief({
   clientCase: boolean;
   files: WorkspaceDatabaseRecord[];
   linkedRecords: ProjectLinkedRecord[];
-  graphCount: number;
+  graphCount: number | null;
   investigation: Investigation | null;
 }) {
   const phase = Math.max(1, Math.min(5, investigation?.current_phase ?? 1));
@@ -50,9 +50,9 @@ export function ProjectBrief({
   const opened = investigation?.created_at ? date(investigation.created_at) : "";
 
   return (
-    <div className="mx-auto grid max-w-4xl gap-5 px-5 py-4">
+    <div className="mx-auto grid w-full max-w-4xl gap-5 px-5 py-4">
       <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-        {clientCase ? `Client case${opened ? ` · opened ${opened}` : ""}` : "Research project"}
+        {clientCase ? `Client case${opened ? ` · opened ${opened}` : ""}` : "Project"}
       </div>
       {clientCase ? (
         <ol className="flex flex-wrap gap-1.5" aria-label="Case stage">
@@ -80,14 +80,14 @@ export function ProjectBrief({
             <BriefLine term="Notes">{investigation?.scope_notes || "—"}</BriefLine>
           </>
         ) : null}
-        <BriefLine term="Held by agents">
+        <BriefLine term="Latest document by">
           {author ? <Attribution name={author} /> : "—"}
         </BriefLine>
-        <BriefLine term="Evidence">{linkedRecords.length} records · {files.length} documents · {graphCount} entities</BriefLine>
+        <BriefLine term="Evidence">{linkedRecords.length} records · {files.length} documents · {graphCount === null ? "Entities unavailable" : `${graphCount} entities`}</BriefLine>
         <BriefLine term="Last movement">
           {latest ? <Receipt className="ml-0" verb="wrote" object={`${title(latest)} · ${date(latest.updated_at)}`} /> : "—"}
         </BriefLine>
-        <BriefLine term="Next">—</BriefLine>
+        <BriefLine term="Next">No next action recorded</BriefLine>
         <BriefLine term="Files">{files.length ? files.slice(0, 4).map(title).join(" · ") + (files.length > 4 ? ` · +${files.length - 4}` : "") : "—"}</BriefLine>
       </dl>
     </div>

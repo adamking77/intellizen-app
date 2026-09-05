@@ -28,7 +28,6 @@ import {
   computeSeriesBarRevealClipPadding,
   computeSeriesBarWidth,
 } from "./series-bar-layout";
-import { useStaticChartPreview } from "./static-chart-preview-context";
 import { useChartInteraction } from "./use-chart-interaction";
 
 function collectNumericExtents(
@@ -166,8 +165,7 @@ const TimeSeriesChartCore = memo(function TimeSeriesChartCore({
   composedStackGap,
   yScaleDomainMax,
 }: TimeSeriesChartInnerProps) {
-  const staticPreview = useStaticChartPreview();
-  const [isLoaded, setIsLoaded] = useState(staticPreview);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [revealEpoch, setRevealEpoch] = useState(0);
 
   const innerWidth = Math.max(width - margin.left - margin.right, 0);
@@ -234,18 +232,13 @@ const TimeSeriesChartCore = memo(function TimeSeriesChartCore({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: revealSignature
   useEffect(() => {
-    if (staticPreview) {
-      setIsLoaded(true);
-      return;
-    }
-
     setRevealEpoch((n) => n + 1);
     setIsLoaded(false);
     const timer = setTimeout(() => {
       setIsLoaded(true);
     }, animationDuration);
     return () => clearTimeout(timer);
-  }, [animationDuration, revealSignature, staticPreview]);
+  }, [animationDuration, revealSignature]);
 
   const canInteract = isLoaded;
 
@@ -365,7 +358,6 @@ const TimeSeriesChartCore = memo(function TimeSeriesChartCore({
   // animationDuration === 0 truly disables the reveal (no clipPath wrapper),
   // so consumers can opt out without having to also pass enterTransition.
   const showReveal =
-    !staticPreview &&
     renderData.length > 1 &&
     innerWidth > 0 &&
     animationDuration > 0;

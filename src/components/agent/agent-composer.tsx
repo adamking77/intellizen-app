@@ -91,8 +91,7 @@ export interface ComposerProps {
   sendOnEnter?: boolean;
 }
 
-/** The composer separates from the panel by a hairline, not by fill: on the
- *  dark flavors no fill value reads as a plane. Enter sends, Shift+Enter
+/** The composer uses the shared field radius and base plane. Enter sends, Shift+Enter
  *  breaks a line, Send becomes Stop while a turn runs. */
 export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer(
   {
@@ -128,7 +127,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && (draft.trim().length > 0 || attachments.length > 0);
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 rounded-[var(--r-ctl)] border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
       {note ? (
         <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
           {note}

@@ -76,6 +76,9 @@ describe("document model", () => {
     expect(documentVaultRelativePath(record({
       [DOCUMENTS_DB_FIELDS.vaultPath]: "/Users/adam/Desktop/brief.md",
     }))).toBeNull();
+    expect(documentVaultRelativePath(record({
+      [DOCUMENTS_DB_FIELDS.vaultPath]: "/Users/adam/vault/initiatives/report.md",
+    }))).toBe("/Users/adam/vault/initiatives/report.md");
   });
 
   it("adds or replaces a stable frontmatter id without touching markdown", () => {

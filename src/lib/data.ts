@@ -1,3 +1,4 @@
+import { canonicalDocumentPath } from "./docs-library";
 import {
   runExaSearch,
   signalDraftFromDeepResearch,
@@ -106,7 +107,7 @@ const AGENT_BIZ_OPS_FIELDS = {
   workflowRuns: "initiative_workflow_runs",
 } as const;
 
-const WORKFLOW_REGISTRY_FIELDS = {
+export const WORKFLOW_REGISTRY_FIELDS = {
   name: "workflow_name",
   workflowId: "workflow_id",
   status: "workflow_status",
@@ -2312,10 +2313,15 @@ async function syncVaultFilesToDocumentRecordsInner() {
   ]);
   const existingByPath = new Set(
     bundle.records
-      .map((record) => record.fields[DOCUMENTS_DB_FIELDS.vaultPath])
+      .map((record) => { const path = record.fields[DOCUMENTS_DB_FIELDS.vaultPath]; return typeof path === "string" ? canonicalDocumentPath(path) ?? path : path; })
       .filter((value): value is string => typeof value === "string" && value.length > 0),
   );
-  const missing = vaultFiles.filter((file) => file.file_path && !existingByPath.has(file.file_path));
+  const missing = vaultFiles.filter((file) => {
+    const path = canonicalDocumentPath(file.file_path) ?? file.file_path;
+    if (!path || existingByPath.has(path)) return false;
+    existingByPath.add(path);
+    return true;
+  });
   if (missing.length === 0) return { database, created: 0 };
 
   await createWorkspaceRecords(
@@ -3191,7 +3197,7 @@ function toAgentWorkItem(
   };
 }
 
-async function getWorkspaceRecord(id: string) {
+export async function getWorkspaceRecord(id: string) {
   const { data, error } = await supabase
     .schema("workspace").from("records")
     .select("id, database_id, entity, fields, body, taxonomy, created_at, updated_at")
@@ -3216,7 +3222,7 @@ async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, 
     true,
   );
 }
-function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTemplateItem {
+export function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTemplateItem {
   return {
     id: record.id,
     workflow_id: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.workflowId]) ?? record.id,
@@ -3245,7 +3251,7 @@ function toWorkflowTemplateItem(record: WorkspaceDatabaseRecord): WorkflowTempla
     updated_at: record.updated_at,
   };
 }
-function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
+export function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunItem {
   return {
     id: record.id,
     name: fieldString(record.fields[WORKFLOW_RUN_FIELDS.name]) ?? "Untitled workflow run",
@@ -3288,16 +3294,17 @@ export async function listWorkflowRuns(input: {
   limit?: number;
 } = {}) {
   const rowLimit = Math.max(input.limit ?? 50, 1);
+  const workflowRecordId = input.workflowId ? await resolveWorkflowRecordId(input.workflowId) : null;
   let query = supabase
     .schema("workspace").from("records")
     .select("id, database_id, entity, fields, body, taxonomy, created_at, updated_at")
     .eq("database_id", GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns)
-    .order("updated_at", { ascending: false })
+    .order("fields->>run_started_at", { ascending: false, nullsFirst: false })
     .range(0, workspaceFilteredReadEnd(rowLimit));
+  if (workflowRecordId) query = query.contains("fields", { [WORKFLOW_RUN_FIELDS.workflow]: [workflowRecordId] });
   const { data, error } = await query;
 
   if (error) throw error;
-  const workflowRecordId = input.workflowId ? await resolveWorkflowRecordId(input.workflowId) : null;
   const records = ((data ?? []) as WorkspaceDatabaseRecordRow[]).map(toWorkspaceDatabaseRecord);
   return records
     .filter((record) => {
@@ -3561,6 +3568,7 @@ export async function saveWorkflowDefinition(input: {
   definition: WorkflowDefinitionV1;
   activate: boolean;
   confirmWrite?: boolean;
+  expectedUpdatedAt?: string;
 }) {
   const validation = validateWorkflowDefinition(input.definition);
   if (!validation.valid) {
@@ -3571,6 +3579,7 @@ export async function saveWorkflowDefinition(input: {
     );
   }
   const record = await getWorkspaceRecord(input.workflowRecordId);
+  if (input.expectedUpdatedAt && record.updated_at !== input.expectedUpdatedAt) throw new Error("This workflow changed elsewhere. Reload before saving.");
   if (record.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.workflowRegistry) {
     throw new Error("Workflow definition target is not a Registry record.");
   }
@@ -3584,7 +3593,9 @@ export async function saveWorkflowDefinition(input: {
     [WORKFLOW_REGISTRY_FIELDS.definitionVersion]: input.definition.version,
     ...(input.activate
       ? { [WORKFLOW_REGISTRY_FIELDS.status]: "Active" }
-      : {}),
+      : !validateWorkflowDefinition(fieldJson(record.fields[WORKFLOW_REGISTRY_FIELDS.definition])).valid
+        ? { [WORKFLOW_REGISTRY_FIELDS.status]: "Draft" }
+        : {}),
   };
   if (!input.confirmWrite) {
     return {
@@ -3655,6 +3666,7 @@ ${details.join("\n")}`;
 export async function startWorkflow(input: StartWorkflowInput) {
   const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
   const workflowItem = toWorkflowTemplateItem(workflow);
+  if (workflowItem.status !== "Active") throw new Error("Activate this workflow before starting a run.");
   let definition: WorkflowDefinitionV1 | null = null;
   if (workflowItem.definition != null) {
     const validation = validateWorkflowDefinition(workflowItem.definition);

@@ -68,7 +68,7 @@ export function Segmented<T extends string>({
             disabled={option.disabled}
             variant="quiet"
             size="sm"
-            className={cn("relative h-full", selected && "font-[450] text-[var(--text)]")}
+            className={cn("group relative h-full", selected && "font-[450] text-[var(--text)]")}
             onClick={() => select(option.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowLeft" || event.key === "ArrowUp") move(index, -1);
@@ -79,7 +79,7 @@ export function Segmented<T extends string>({
               event.preventDefault();
             }}
           >
-            {selected ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[var(--r-ctl)] bg-[var(--selected)]" style={{ viewTransitionName: transitionName }} /> : null}
+            {selected ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[var(--r-ctl)] bg-[var(--selected)] group-hover:bg-[var(--selected-hover)]" style={{ viewTransitionName: transitionName }} /> : null}
             <span className="relative z-[1]">{option.label}</span>
           </Control>
         );

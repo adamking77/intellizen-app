@@ -42,7 +42,7 @@ function voice(talking: string | null = null): VoiceHandle {
   };
 }
 
-function render(open: HudOpen, talking: string | null = null, run: RunState = { kind: "idle" }) {
+function render(open: HudOpen, talking: string | null = null, run: RunState = { kind: "idle" }, voiceOverrides: Partial<VoiceHandle> = {}) {
   return renderToStaticMarkup(
     <Hud
       agent={profile}
@@ -50,7 +50,7 @@ function render(open: HudOpen, talking: string | null = null, run: RunState = { 
       target={profile.name}
       messages={[]}
       run={run}
-      voice={voice(talking)}
+      voice={{ ...voice(talking), ...voiceOverrides }}
       open={open}
       onOpen={vi.fn()}
       onTarget={vi.fn()}
@@ -67,6 +67,17 @@ function render(open: HudOpen, talking: string | null = null, run: RunState = { 
 }
 
 describe("HUD controls", () => {
+  it("keeps unavailable voice controls visible with their setup reasons", () => {
+    const element = document.createElement("div");
+    element.innerHTML = render("none", null, { kind: "idle" }, { dictationOn: false, canConverse: false, why: "Turn on speaking in Settings" });
+    for (const label of ["Dictation is switched off in Settings", "Turn on speaking in Settings"]) {
+      const control = element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+      expect(control).toBeTruthy();
+      expect(control?.disabled).toBe(true);
+      expect(control?.title).toBe(label);
+    }
+  });
+
   it("keeps the essential controls in both resting and speaking states", () => {
     for (const markup of [render("none"), render("none", "message-1")]) {
       expect(markup).toContain("Open the conversation");

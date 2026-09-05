@@ -11,6 +11,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 
 import { useSessionStore } from "@/engine/session-store";
 import { toastError } from "@/lib/toast";
+import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
 import {
   closePanelWindow,
   ejectReducer,
@@ -47,6 +48,16 @@ export function useEject(): EjectHandle {
 
   useEffect(() => {
     writePanelDetached(ejected);
+  }, [ejected]);
+
+  const wasEjected = useRef(ejected);
+  useEffect(() => {
+    if (wasEjected.current && !ejected) {
+      // Let the shell finish observing the docked state before asking it to
+      // reveal the conversation; otherwise its old listener may redock twice.
+      queueMicrotask(requestAgentPanelOpen);
+    }
+    wasEjected.current = ejected;
   }, [ejected]);
 
   // The app relaunched with the flag set, or the window died without its

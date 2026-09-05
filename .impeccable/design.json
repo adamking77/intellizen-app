@@ -14,7 +14,7 @@
     },
     "shadows": [
       { "name": "transient", "value": "0 8px 24px rgba(0, 0, 0, 0.4)", "purpose": "Dialogs and popovers only; light flavors use 0.14 alpha." },
-      { "name": "hud", "value": "0 8px 28px rgba(0, 0, 0, 0.44)", "purpose": "Detached HUD only; light flavors use 0.22 alpha." }
+      { "name": "hud", "value": "none", "purpose": "Detached panel and HUD leave their surroundings fully clear; no exterior shadow." }
     ],
     "motion": [
       { "name": "fast", "value": "90ms cubic-bezier(0.22, 0.61, 0.36, 1)", "purpose": "Immediate control feedback." },
@@ -40,7 +40,7 @@
       "name": "Selected Navigation Row",
       "kind": "nav",
       "refersTo": "navigation-selected",
-      "description": "A raised whole-row selection without stripe or ring.",
+      "description": "An accent-tinted whole-row selection without stripe or ring.",
       "html": "<button class=\"ds-nav-row\" aria-current=\"page\">Home</button>",
       "css": ".ds-nav-row{width:100%;height:26px;border:0;border-radius:8px;padding:0 10px;background:var(--selected);color:var(--text);font:450 13px/1.35 var(--font-ui);text-align:left}.ds-nav-row:hover{background:var(--selected-hover)}.ds-nav-row:focus-visible{outline:1px solid var(--accent);outline-offset:2px;box-shadow:none}"
     },
@@ -73,9 +73,9 @@
     "keyCharacteristics": ["Three stable planes: rail, panel, and work.", "Editorial hierarchy from space and type rather than decoration.", "Dense desktop controls with complete keyboard parity.", "Agent identity carried consistently by avatar, bubble, voice, and HUD.", "Explicit loading, content, empty, error, and recovery states."],
     "rules": [
       { "name": "Three-Plane Rule", "body": "Depth comes from the relationship among rail, panel, and work, not borders around each pane.", "section": "colors" },
-      { "name": "Selection in Lightness", "body": "Selection shifts the raised plane by one signed OKLCH lightness step with a 0.06 floor.", "section": "colors" },
+      { "name": "Accent in Interaction States", "body": "All themes tint a base/raised selection ground with the selected accent; hover uses the same accent. Check actual text contrast across every palette and strength.", "section": "colors" },
       { "name": "Borders Mean Two Things", "body": "A border marks active editing or an explicitly named failure; swatches and live tree drop targets are the operational exceptions.", "section": "shapes" },
-      { "name": "Selection Strength", "body": "Settings Appearance is the only writer of --sel-step, and every selected surface reads it.", "section": "colors" },
+      { "name": "Accent Strength", "body": "Settings Appearance is the only writer of --sel-step, and every selected surface reads it.", "section": "colors" },
       { "name": "Database Preservation Rule", "body": "The installed production app, represented by commit 904a456, is the visual authority for Databases. Keep its Sogo-parity controls, compact row radius, accent-soft selected rows with a 2px accent rail, colored property badges, every database view, and resizable full-page record panel until Adam explicitly revisits it.", "section": "components" },
       { "name": "Closed Scale Rule", "body": "Chrome uses only 16, 14, 13, 12, 11, and 10px.", "section": "typography" },
       { "name": "No Ghost Card Rule", "body": "Do not combine a structural border, rounded container, and wide shadow on the same persistent surface.", "section": "elevation" }

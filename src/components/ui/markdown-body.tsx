@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 
+import { GraphEmbedPreview } from "@/components/docs/graph-embed";
+import { parseGraphEmbedBlocks, type GraphEmbedSpec } from "@/components/graph/export";
+import { markdownInline, markdownTableCells } from "./markdown-inline";
 import { cn } from "@/lib/utils";
 
 type MdBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "list"; items: string[]; ordered: boolean }
+  | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "code"; text: string }
+  | { type: "graph"; spec: GraphEmbedSpec }
   | { type: "image"; alt: string; source: string }
   | { type: "para"; text: string };
 
@@ -31,16 +36,22 @@ function parseMarkdownish(content: string): MdBlock[] {
 
   let inFence = false;
   let fenceBuffer: string[] = [];
-  for (const raw of lines) {
+  let fenceHeader = "";
+  for (let index = 0; index < lines.length; index++) {
+    const raw = lines[index];
     const line = raw.trimEnd();
     if (line.trim().startsWith("```")) {
       if (inFence) {
-        blocks.push({ type: "code", text: fenceBuffer.join("\n") });
+        const fenced = `\`\`\`${fenceHeader}\n${fenceBuffer.join("\n")}\n\`\`\``;
+        const graph = fenceHeader.trimStart().startsWith("graph") ? parseGraphEmbedBlocks(fenced)[0] : null;
+        blocks.push(graph ? { type: "graph", spec: graph } : { type: "code", text: fenceBuffer.join("\n") });
         fenceBuffer = [];
+        fenceHeader = "";
         inFence = false;
       } else {
         flushPara();
         flushList();
+        fenceHeader = line.trim().slice(3);
         inFence = true;
       }
       continue;
@@ -52,6 +63,15 @@ function parseMarkdownish(content: string): MdBlock[] {
     if (line.trim() === "") {
       flushPara();
       flushList();
+      continue;
+    }
+    const divider = lines[index + 1];
+    if (line.includes("|") && divider && markdownTableCells(divider).every((cell) => /^:?-{3,}:?$/.test(cell)) && divider.includes("|")) {
+      flushPara(); flushList();
+      const headers = markdownTableCells(line); const rows: string[][] = [];
+      index += 1;
+      while (index + 1 < lines.length && lines[index + 1].includes("|") && lines[index + 1].trim()) rows.push(markdownTableCells(lines[++index]));
+      blocks.push({ type: "table", headers, rows });
       continue;
     }
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
@@ -108,20 +128,20 @@ export function MarkdownBody({ content, className, vaultPath }: MarkdownBodyProp
           if (block.level === 1) {
             return (
               <h2 key={i} className="md-heading-1">
-                {block.text}
+                {markdownInline(block.text, vaultPath)}
               </h2>
             );
           }
           if (block.level === 2) {
             return (
               <h3 key={i} className="md-heading-2">
-                {block.text}
+                {markdownInline(block.text, vaultPath)}
               </h3>
             );
           }
           return (
             <h4 key={i} className="md-heading-3">
-              {block.text}
+              {markdownInline(block.text, vaultPath)}
             </h4>
           );
         }
@@ -132,6 +152,8 @@ export function MarkdownBody({ content, className, vaultPath }: MarkdownBodyProp
             </pre>
           );
         }
+        if (block.type === "table") return <div key={i} className="my-4 max-w-full overflow-x-auto"><table className="w-full border-collapse text-left text-[var(--t-meta)] leading-relaxed"><thead><tr>{block.headers.map((cell, column) => <th key={column} className="border-b border-[var(--border)] px-3 py-2 font-medium">{markdownInline(cell, vaultPath)}</th>)}</tr></thead><tbody>{block.rows.map((row, index) => <tr key={index}>{block.headers.map((_, column) => <td key={column} className="border-b border-[var(--border)] px-3 py-2 align-top">{markdownInline(row[column] ?? "", vaultPath)}</td>)}</tr>)}</tbody></table></div>;
+        if (block.type === "graph") return <GraphEmbedPreview key={i} spec={block.spec} />;
         if (block.type === "image") {
           return <MarkdownImage key={i} alt={block.alt} source={block.source} vaultPath={vaultPath} />;
         }
@@ -146,14 +168,14 @@ export function MarkdownBody({ content, className, vaultPath }: MarkdownBodyProp
               )}
             >
               {block.items.map((item, j) => (
-                <li key={j}>{item}</li>
+                <li key={j}>{markdownInline(item, vaultPath)}</li>
               ))}
             </ListTag>
           );
         }
         return (
           <p key={i} className="md-paragraph">
-            {block.text}
+            {markdownInline(block.text, vaultPath)}
           </p>
         );
       })}
@@ -174,10 +196,9 @@ function MarkdownImage({ alt, source, vaultPath }: { alt: string; source: string
     let objectUrl: string | null = null;
     setLocalSource(null);
     setFailed(false);
-    void Promise.all([import("@tauri-apps/plugin-fs"), import("@tauri-apps/api/path")])
-      .then(async ([fs, path]) => {
-        const base = vaultPath ? await path.dirname(vaultPath) : "documents";
-        const absolute = source.startsWith("/") ? source : await path.join(await path.homeDir(), "vault", "intelligence", base, source);
+    void Promise.all([import("@tauri-apps/plugin-fs"), import("@/lib/vault")])
+      .then(async ([fs, vault]) => {
+        const absolute = source.startsWith("/") ? await vault.getVaultAbsolutePath(source) : await vault.resolveVaultReference(source, vaultPath ?? "documents/untitled.md");
         const bytes = await fs.readFile(absolute);
         if (!active) return;
         objectUrl = URL.createObjectURL(new Blob([bytes], { type: imageMime(source) }));

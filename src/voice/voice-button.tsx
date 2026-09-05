@@ -53,7 +53,7 @@ function DictateButton({ onTranscript, voice, size = 14, className }: VoiceButto
           onClick={() => void v.dictate()}
           aria-label="Stop recording"
           title="Stop"
-          className={cn(icon, "text-[var(--accent)]")}
+          className={cn(icon, "text-[var(--accent-text)]")}
         >
           <Square style={{ width: size - 3, height: size - 3 }} strokeWidth={0} fill="currentColor" aria-hidden />
         </button>

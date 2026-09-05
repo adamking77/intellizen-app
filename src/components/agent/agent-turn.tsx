@@ -125,7 +125,7 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
           tool={tool.name}
           detail={tool.title === tool.name ? undefined : tool.title}
           duration={tool.durationMs === undefined ? undefined : tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
-          state={tool.ok === undefined ? "running" : tool.ok ? "verified" : "failure"}
+          state={tool.ok === undefined ? tool.historical ? "recorded" : "running" : tool.ok ? "completed" : "failure"}
         />
       </button>
       {tool.risk ? (
@@ -365,7 +365,7 @@ export function AgentTurn({
                   className={cn(
                     "h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 font-ui text-[12.5px] transition-colors",
                     action.id === "retry"
-                      ? "bg-[var(--go-bg)] text-[var(--go-fg)] hover:brightness-110"
+                      ? "bg-[var(--go-bg)] text-[var(--go-fg)] hover:bg-[var(--go-hover)]"
                       : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",
                   )}
                 >

@@ -29,7 +29,7 @@ describe("panel session continuity", () => {
     const transcript = transcriptFromHistory("fiona", [
       { role: "user", text: "Question", timestamp: 10 },
       { role: "assistant", text: "Answer", reasoning: "Because" },
-      { role: "tool", name: "terminal", context: "pwd" },
+      { role: "tool", name: "terminal", context: "pwd", text: "Error: permission denied" },
       { role: "system", text: "A durable note" },
     ]);
     expect(transcript.messages.map((message) => [message.from, message.text])).toEqual([
@@ -38,7 +38,8 @@ describe("panel session continuity", () => {
       ["fiona", "A durable note"],
     ]);
     expect(transcript.messages[1].thought).toBe("Because");
-    expect(transcript.messages[1].tools?.[0]).toMatchObject({ name: "terminal", title: "pwd", ok: true });
+    expect(transcript.messages[1].tools?.[0]).toMatchObject({ name: "terminal", title: "pwd", historical: true, resultText: "Error: permission denied" });
+    expect(transcript.messages[1].tools?.[0].ok).toBeUndefined();
     expect(transcript.messages[0].at).toBe(10_000);
     expect(transcript.turnStartedAt).toBeNull();
   });

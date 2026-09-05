@@ -110,7 +110,8 @@ export function transcriptFromHistory(
           id: `${owner.id}-tool-${(owner.tools?.length ?? 0) + 1}`,
           name,
           title: typeof row.context === "string" && row.context ? row.context : name,
-          ok: true,
+          historical: true,
+          ...(typeof row.text === "string" && row.text ? { resultText: row.text } : {}),
         },
       ];
       continue;

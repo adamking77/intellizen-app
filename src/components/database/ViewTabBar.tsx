@@ -550,7 +550,7 @@ function SortableViewTab({
           {...attributes}
           {...listeners}
         >
-          <span className={cn("shrink-0", view.id === activeViewId ? "text-[var(--accent)]" : "text-[var(--overlay-1)]")}>
+          <span className={cn("shrink-0", view.id === activeViewId ? "text-[var(--accent-text)]" : "text-[var(--overlay-1)]")}>
             {VIEW_ICONS[view.type]}
           </span>
           <span className="truncate">{getViewTabLabel(view)}</span>
