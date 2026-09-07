@@ -38,6 +38,15 @@ function stepTargets(step) {
   return step.next == null ? [] : [step.next];
 }
 
+function graphTargets(step) {
+  return [
+    ...stepTargets(step),
+    ...(step.kind === "approval" && Array.isArray(step.meanwhile)
+      ? step.meanwhile
+      : []),
+  ];
+}
+
 function validateCommonStep(step, index, errors) {
   const path = `steps[${index}]`;
   if (!isRecord(step)) {
@@ -121,6 +130,22 @@ function validateApproval(step, index, errors) {
   }
   if (!PAYLOAD_REF.test(step.payloadRef ?? "")) {
     add(errors, `${path}.payloadRef`, "invalid_payload_ref", "Approval payloadRef must target a prior step result.");
+  }
+  if (step.meanwhile != null && !Array.isArray(step.meanwhile)) {
+    add(errors, `${path}.meanwhile`, "invalid_meanwhile", "Meanwhile must list explicit step ids.");
+  } else {
+    const seen = new Set();
+    for (const [meanwhileIndex, stepId] of (step.meanwhile ?? []).entries()) {
+      if (!STEP_ID.test(stepId ?? "")) {
+        add(errors, `${path}.meanwhile[${meanwhileIndex}]`, "invalid_meanwhile_step", "Meanwhile step id is invalid.");
+      } else if (seen.has(stepId)) {
+        add(errors, `${path}.meanwhile[${meanwhileIndex}]`, "duplicate_meanwhile_step", `Meanwhile step "${stepId}" is listed more than once.`);
+      }
+      seen.add(stepId);
+    }
+  }
+  if (step.reminder != null && step.reminder !== "never") {
+    add(errors, `${path}.reminder`, "unsupported_reminder", "Workflow reminders default to never and no other reminder mode is supported.");
   }
 }
 
@@ -219,6 +244,11 @@ export function validateWorkflowDefinition(definition) {
       if (payloadStep && !byId.has(payloadStep)) {
         add(errors, `steps[${index}].payloadRef`, "unknown_payload_step", `Approval references unknown step "${payloadStep}".`);
       }
+      for (const [meanwhileIndex, meanwhileId] of (Array.isArray(step.meanwhile) ? step.meanwhile : []).entries()) {
+        if (!byId.has(meanwhileId)) {
+          add(errors, `steps[${index}].meanwhile[${meanwhileIndex}]`, "unknown_meanwhile_step", `Unknown meanwhile step "${meanwhileId}".`);
+        }
+      }
     }
     if (step.kind === "role-assign" && step.verification?.required) {
       const verifierId = /^verifier-step:([a-z][a-z0-9_-]*)$/.exec(step.verification.method ?? "")?.[1];
@@ -230,6 +260,62 @@ export function validateWorkflowDefinition(definition) {
           "unreachable_verification",
           "Verification method must name a verifier role step.",
         );
+      }
+    }
+  }
+
+  const normalIncoming = new Map([...byId.keys()].map((stepId) => [stepId, new Set()]));
+  for (const step of byId.values()) {
+    for (const target of stepTargets(step)) {
+      if (byId.has(target)) normalIncoming.get(target).add(step.id);
+    }
+  }
+  const meanwhileOwner = new Map();
+  const normalAncestors = (targetId) => {
+    const ancestors = new Set();
+    const pending = [...(normalIncoming.get(targetId) ?? [])];
+    while (pending.length) {
+      const predecessor = pending.pop();
+      if (ancestors.has(predecessor)) continue;
+      ancestors.add(predecessor);
+      pending.push(...(normalIncoming.get(predecessor) ?? []));
+    }
+    return ancestors;
+  };
+  for (const [index, approval] of definition.steps.entries()) {
+    if (!isRecord(approval) || approval.kind !== "approval" || !Array.isArray(approval.meanwhile)) continue;
+    const ancestors = normalAncestors(approval.id);
+    for (const [meanwhileIndex, meanwhileId] of approval.meanwhile.entries()) {
+      const path = `steps[${index}].meanwhile[${meanwhileIndex}]`;
+      const candidate = byId.get(meanwhileId);
+      if (!candidate) continue;
+      if (meanwhileOwner.has(meanwhileId)) {
+        add(errors, path, "shared_meanwhile_step", `Meanwhile step "${meanwhileId}" belongs to more than one approval.`);
+      } else {
+        meanwhileOwner.set(meanwhileId, approval.id);
+      }
+      if (candidate.kind !== "role-assign") {
+        add(errors, path, "unsupported_meanwhile_kind", "Meanwhile currently supports role-assignment steps only.");
+        continue;
+      }
+      if ((normalIncoming.get(meanwhileId)?.size ?? 0) > 0) {
+        add(errors, path, "meanwhile_control_dependency", `Meanwhile step "${meanwhileId}" must not have a normal control-flow predecessor.`);
+      }
+      if (candidate.next != null && !TERMINALS.has(candidate.next)) {
+        add(errors, path, "meanwhile_not_leaf", `Meanwhile step "${meanwhileId}" must end at a terminal target.`);
+      }
+      if (!["read-only", "draft-only"].includes(candidate.mediatedAuthority)) {
+        add(errors, path, "unsafe_meanwhile_authority", `Meanwhile step "${meanwhileId}" must explicitly use read-only or draft-only authority.`);
+      }
+      if (candidate.verification?.required) {
+        add(errors, path, "meanwhile_verification_dependency", `Meanwhile step "${meanwhileId}" cannot schedule an implicit verifier.`);
+      }
+      for (const reference of candidate.contextRefs ?? []) {
+        const referencedStep = PAYLOAD_REF.exec(reference)?.[1];
+        if (!referencedStep) continue;
+        if (!ancestors.has(referencedStep)) {
+          add(errors, path, "meanwhile_result_dependency", `Meanwhile step "${meanwhileId}" may reference results only from steps before approval "${approval.id}".`);
+        }
       }
     }
   }
@@ -256,7 +342,7 @@ export function validateWorkflowDefinition(definition) {
     if (visited.has(stepId)) return;
     visiting.add(stepId);
     const step = byId.get(stepId);
-    const targets = stepTargets(step);
+    const targets = graphTargets(step);
     if (targets.length === 0) terminalReachable = true;
     for (const target of targets) visit(target);
     visiting.delete(stepId);

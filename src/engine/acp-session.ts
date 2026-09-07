@@ -110,14 +110,19 @@ export function resetAcpSubscription() {
 
 /** Spawn the adapter for a registry entry (or reuse the running one) and
  *  complete the ACP handshake. */
-export async function startAcpAgent(agentId: string, caller = "panel", cwd?: string | null): Promise<AcpStarted> {
+export async function startAcpAgent(agentId: string, caller = "panel", cwd?: string | null, mode?: "read-only"): Promise<AcpStarted> {
   await ensureListening();
-  return bridge.invoke<AcpStarted>("acp_start", cwd ? { agentId, caller, cwd } : { agentId, caller });
+  return bridge.invoke<AcpStarted>("acp_start", {
+    agentId,
+    caller,
+    ...(cwd ? { cwd } : {}),
+    ...(mode ? { mode } : {}),
+  });
 }
 
 /** The session id, like `createSession` for the gateway. */
-export async function createAcpSession(agentId: string, caller = "panel", cwd?: string | null): Promise<string> {
-  const started = await startAcpAgent(agentId, caller, cwd);
+export async function createAcpSession(agentId: string, caller = "panel", cwd?: string | null, mode?: "read-only"): Promise<string> {
+  const started = await startAcpAgent(agentId, caller, cwd, mode);
   if (!started.sessionId) throw new Error("acp_start returned no session id");
   return started.sessionId;
 }
@@ -221,9 +226,12 @@ export interface RunAcpPromptInput {
   text: string;
   caller?: string;
   cwd?: string | null;
+  /** A short-lived, read-only caller whose adapter exits after this turn. */
+  isolated?: boolean;
   signal?: AbortSignal;
   /** Whole-turn deadline. Default ten minutes. */
   timeoutMs?: number;
+  mode?: "read-only";
 }
 
 /** One prompt, one reply, like `runPrompt` for the gateway: starts the
@@ -233,9 +241,18 @@ export interface RunAcpPromptInput {
 export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionId: string; text: string }> {
   const timeoutMs = input.timeoutMs ?? 10 * 60_000;
   if (input.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  const sessionId = await createAcpSession(input.agentId, input.caller ?? "workflow", input.cwd);
+  if (input.isolated && (!input.caller?.trim() || input.mode !== "read-only")) throw new Error("Isolated ACP prompts require an explicit caller and read-only mode.");
+  let sessionId: string;
+  try {
+    sessionId = await createAcpSession(input.agentId, input.caller ?? "workflow", input.cwd, input.mode);
+  } catch (error) {
+    throw error instanceof Error
+      ? error
+      : new Error(typeof error === "string" && error.trim() ? error.trim() : "The ACP session could not start.");
+  }
 
-  return new Promise((resolve, reject) => {
+  try {
+    return await new Promise<{ sessionId: string; text: string }>((resolve, reject) => {
     let settled = false;
     let text = "";
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -280,6 +297,10 @@ export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionI
     });
 
     input.signal?.addEventListener("abort", onAbort, { once: true });
+    if (input.signal?.aborted) {
+      onAbort();
+      return;
+    }
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         void interruptAcpSession(sessionId).catch(() => undefined);
@@ -291,5 +312,8 @@ export async function runAcpPrompt(input: RunAcpPromptInput): Promise<{ sessionI
     submitAcpPrompt(sessionId, input.text).catch((error: unknown) => {
       finish(() => reject(error instanceof Error ? error : new Error(String(error))));
     });
-  });
+    });
+  } finally {
+    if (input.isolated) await stopAcpAgent(sessionId).catch(() => undefined);
+  }
 }

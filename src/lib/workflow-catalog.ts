@@ -43,6 +43,7 @@ function displayRole(roleKey: string) {
 function resolveRoleStep(
   step: WorkflowRoleAssignStep,
   roleTargets: AgentPanelRoleTarget[],
+  requireMeanwhileBinding = false,
 ): WorkflowBlocker[] {
   const role = roleTargets.find((target) => target.roleKey === step.role);
   if (!role) {
@@ -82,6 +83,13 @@ function resolveRoleStep(
       kind: "runtime",
       stepId: step.id,
       message: `${step.title}: ${runtimeTarget.bindingRef} cannot provide ${step.execution} execution.`,
+    }];
+  }
+  if (requireMeanwhileBinding && (runtimeTarget.adapterId !== "acp" || runtimeTarget.engine !== "codex")) {
+    return [{
+      kind: "binding",
+      stepId: step.id,
+      message: `${step.title}: Meanwhile work requires a Codex ACP binding with enforced read-only mode.`,
     }];
   }
   return [];
@@ -131,9 +139,12 @@ export function classifyWorkflow(
   }
 
   const blockers: WorkflowBlocker[] = [];
+  const meanwhileIds = new Set(
+    definition.steps.flatMap((step) => step.kind === "approval" ? step.meanwhile ?? [] : []),
+  );
   for (const step of definition.steps) {
     if (step.kind === "role-assign") {
-      blockers.push(...resolveRoleStep(step, roleTargets));
+      blockers.push(...resolveRoleStep(step, roleTargets, meanwhileIds.has(step.id)));
     }
     if (
       step.kind === "approval" &&

@@ -47,6 +47,7 @@ import { writeSessionPointer } from "@/engine/session-continuity";
 import { resetSessionStoreSubscription, useSessionStore } from "@/engine/session-store";
 import { FakeGatewayClient, loadProfilesList, loadTurn, turnEvents } from "@/engine/test-support";
 import { AGENT_PANEL_COLLAPSED_KEY } from "@/lib/agent-panel-persistence";
+import type { DocumentProposalReview } from "@/proposals/document-review-context";
 
 interface Mounted {
   container: HTMLDivElement;
@@ -65,6 +66,7 @@ async function mountPanel(
   mode: "docked" | "standalone" | "ejected" = "docked",
   openRequest = 0,
   toggleRequest = 0,
+  documentReview?: DocumentProposalReview,
 ): Promise<Mounted> {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -80,6 +82,7 @@ async function mountPanel(
           onEject={() => undefined}
           openRequest={openRequest}
           toggleRequest={request}
+          documentReview={documentReview}
         />}
       </QueryClientProvider>,
     );
@@ -149,6 +152,16 @@ describe("AgentPanel on the gateway", () => {
     window.localStorage.setItem(AGENT_PANEL_COLLAPSED_KEY, "1");
     const panel = await mountPanel();
     expect(panel.container.childElementCount).toBe(0);
+    await panel.unmount();
+  });
+
+  it("keeps document suggestions inside the conversation scroll area", async () => {
+    const panel = await mountPanel("docked", 0, 0, { revision: 1, documentId: "doc", docPath: "Note.md", title: "Note", busy: false, error: null, proposals: [{ id: "proposal", docPath: "Note.md", author: "Keel", at: 1, note: "Review", hunks: [{ id: 0, at: 0, old: ["Before"], new: ["After"] }] }] });
+    const review = panel.container.querySelector('[data-testid="inline-proposals"]');
+    const scroll = review?.closest(".overflow-y-auto");
+    expect(scroll?.classList.contains("flex-1")).toBe(true);
+    expect(scroll?.contains(textarea(panel))).toBe(false);
+    expect(panel.container.querySelector('[class*="max-h-[45%]"]')).toBeNull();
     await panel.unmount();
   });
 
@@ -294,14 +307,17 @@ describe("AgentPanel on the gateway", () => {
   });
 
   it("rehydrates the last panel thread and its usage receipt after relaunch", async () => {
+    let approvalMode = "manual";
     writeSessionPointer("default", {
       runtimeSessionId: "runtime-old",
       storedSessionId: "stored-old",
       usage: { total: 321, input: 200, output: 121 },
       approvalMode: "manual",
     });
-    client.respondWith((call) =>
-      call.method === "session.history"
+    client.respondWith((call) => {
+      if (call.method === "config.get") return { value: approvalMode };
+      if (call.method === "config.set") { approvalMode = String(call.params.value); return { key: "approvals.mode", value: approvalMode }; }
+      return call.method === "session.history"
         ? {
             count: 2,
             messages: [
@@ -311,8 +327,8 @@ describe("AgentPanel on the gateway", () => {
           }
         : call.method === "session.events.since"
           ? { events: [], latest_seq: 12, truncated: false }
-          : undefined,
-    );
+          : undefined;
+    });
 
     const panel = await mountPanel();
     await settle();
@@ -324,6 +340,14 @@ describe("AgentPanel on the gateway", () => {
       session_id: "runtime-old",
       last_seen: 0,
     });
+    await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Approval settings"]')!.click());
+    await settle();
+    expect(client.callsTo("config.set")).toHaveLength(0);
+    expect(client.callsTo("config.get")[0]?.params).toEqual({ key: "approvals.mode", profile: "default", session_id: "runtime-old" });
+    await act(async () => panel.container.querySelector<HTMLInputElement>('input[value="smart"]')!.click());
+    await act(async () => Array.from(panel.container.querySelectorAll("button")).find((button) => button.textContent === "Save")!.click());
+    await settle();
+    expect(client.callsTo("config.set")[0]?.params).toEqual({ key: "approvals.mode", profile: "default", session_id: "runtime-old", value: "smart" });
     await panel.unmount();
   });
 
@@ -389,10 +413,10 @@ describe("AgentPanel on the gateway", () => {
     });
     const text = panel.container.textContent ?? "";
     expect(text).toContain("The current date is");
-    expect(text).toContain("197 ms");
+    expect(text).not.toContain("197 ms");
     expect(text).toContain("completed");
     expect(text).not.toContain("verified");
-    expect(panel.container.querySelector('[data-run-state="done"]')?.textContent).toMatch(/Done in \d+ s/);
+    expect(panel.container.querySelector('[data-run-state="done"]')?.textContent).toBe("Done");
     expect(panel.container.querySelector('button[aria-label="Speaking is switched off in Settings"]')).not.toBeNull();
     expect(text).toContain("Ask first");
     // Inline markdown in the reply renders as elements, not literal marks.
@@ -444,12 +468,12 @@ describe("AgentPanel on the gateway", () => {
     });
     const card = panel.container.querySelector('[data-decision="approval"]')!;
     expect(card).not.toBeNull();
-    expect(card.textContent).toContain("This step needs your confirmation");
+    expect(card.textContent).toContain("May this step continue?");
     expect(card.textContent).toContain("cd /tmp && rm -rf iz-approval-dir");
     expect(card.textContent).toContain("recursive delete");
     const buttons = Array.from(card.querySelectorAll("button")).map((b) => b.textContent);
     expect(buttons).toEqual(["Allow once", "Allow this session", "Always allow", "Deny"]);
-    expect(panel.container.querySelector('[data-run-state="waiting"]')?.textContent).toContain("waiting on you");
+    expect(panel.container.querySelector('[data-run-state="waiting"]')?.textContent).toContain("a question for you");
 
     await act(async () => card.querySelector<HTMLButtonElement>("button")!.click());
     await settle();
@@ -645,13 +669,16 @@ describe("AgentPanel on the gateway", () => {
     const panel = await mountPanel("ejected");
     expect(panelChannel.actions).toEqual([]);
     expect(client.callsTo("profiles.list")).toHaveLength(0);
-    const profile = { name: "acp:wave", displayName: "Wave 1 ACP", isDefault: false, description: "", model: "fixture", provider: "ACP", gatewayRunning: true, avatarStyle: "sphere" as const };
+    const profile = { name: "acp:wave", displayName: "Wave 1 ACP", isDefault: false, description: "", model: "fixture", provider: "ACP", gatewayRunning: true, avatarStyle: "trace" as const, avatarSeed: 73 };
     panelChannel.frame = { selectedProfile: profile.name, profileDirectory: { [profile.name]: profile, default: { ...profile, name: "default", displayName: "Default", isDefault: true } }, threads: {} };
     await act(async () => { for (const handler of panelChannel.handlers) handler(panelChannel.frame!); });
+    expect(textarea(panel).placeholder).toContain("Message Wave 1 ACP");
+    expect(panel.container.querySelector('[data-avatar-style="trace"][data-avatar-seed="73"]')).not.toBeNull();
     expect(textarea(panel).value).toBe("Independent QA unsent continuity check");
     expect(panel.container.querySelector('[aria-label="Attachments"]')?.textContent).toContain("qa.md");
     await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Reduce to the HUD"]')!.click());
     expect(panel.container.textContent).toContain("Wave 1 ACP");
+    expect(panel.container.querySelector('[data-avatar-style="trace"][data-avatar-seed="73"]')).not.toBeNull();
     // No further frame arrives: growing must use the last main-owned frame,
     // never emit select(default) from a freshly mounted empty child.
     await act(async () => panel.container.querySelector<HTMLButtonElement>('button[aria-label="Back to the full panel"]')!.click());

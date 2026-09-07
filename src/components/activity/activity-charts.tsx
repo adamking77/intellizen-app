@@ -16,24 +16,25 @@ import type { ActivityDashboardModel } from "@/lib/activity-dashboard";
 import type { ActivityChartStyle } from "@/lib/activity-pins";
 
 const COLORS: Record<string, string> = {
-  Completed: "var(--accent)", Failed: "var(--red)", Cancelled: "var(--overlay-1)",
-  Blocked: "var(--yellow)", Deferred: "var(--mauve)", Open: "var(--sapphire)",
+  Completed: "var(--accent)", Failed: "color-mix(in srgb,var(--accent) 85%,var(--ground))", Cancelled: "color-mix(in srgb,var(--accent) 70%,var(--ground))",
+  Blocked: "color-mix(in srgb,var(--accent) 55%,var(--ground))", Deferred: "color-mix(in srgb,var(--accent) 40%,var(--ground))", Open: "color-mix(in srgb,var(--accent) 25%,var(--ground))",
 };
 const cost = (n: unknown) => typeof n === "number" ? new Intl.NumberFormat(undefined, {
   style: "currency", currency: "USD", maximumFractionDigits: 4,
 }).format(n) : "Not reported";
 const SERIES = [
   { key: "reported", label: "Reported", color: "var(--chart-line-primary)" },
-  { key: "estimated", label: "Estimated", color: "var(--chart-line-secondary)" },
+  { key: "estimated", label: "Estimated", color: "var(--chart-line-primary)" },
 ];
 
 export function UsageChart({ model, style }: { model: ActivityDashboardModel; style: ActivityChartStyle }) {
-  const series = SERIES.filter((s) => model.usageDays.some((d) => d[s.key as "reported" | "estimated"] !== null));
+  const series = SERIES.filter((s) => model.usageDays.some((d) => d[s.key as "reported" | "estimated"] !== null))
+    .map((s) => ({ ...s, color: style === "bar" && s.key === "estimated" ? "var(--chart-line-secondary)" : s.color }));
   const rows = (point: Record<string, unknown>) => series.map((s) => ({ color: s.color, label: s.label, value: cost(point[s.key]) }));
   const data = model.usageDays.map((d) => ({ ...d, label: d.date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) }));
   return <>
-    <div className="mb-3 flex gap-4 text-[var(--t-meta)] text-[var(--text-muted)]">
-      {series.map((s) => <span key={s.key} className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} />{s.label}</span>)}
+    <div className="mb-3 flex gap-4 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">
+      {series.map((s) => <span key={s.key} className="inline-flex items-center gap-2"><svg aria-hidden width="18" height="6"><path d="M0 3H18" stroke={s.color} strokeWidth={style === "bar" ? 6 : 2} strokeDasharray={style !== "bar" && s.key === "estimated" ? "4 3" : undefined} /></svg>{s.label}</span>)}
     </div>
     <div className="h-[200px]" role="img" aria-label="Daily session cost in USD. Missing reports remain gaps. Exact values available in daily reports below.">
       {style === "bar" ? <BarChart data={data} xDataKey="label" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={0}>
@@ -44,7 +45,7 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
         <ChartTooltip rows={rows} showDots={false} showDatePill={false} />
       </BarChart> : <LineChart data={data} aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={0}>
         <Grid horizontal fadeHorizontal={false} />
-        {series.map((s) => <Line key={s.key} dataKey={s.key} stroke={s.color} animate={false} curve={curveLinear} fadeEdges={false} showMarkers markers={{ radius: 2.5, strokeWidth: 0, ringGap: 0, inactiveBlur: 0, enterBlur: 0, showActiveHighlight: false }} strokeWidth={2} />)}
+        {series.map((s) => <Line key={s.key} dataKey={s.key} stroke={s.color} dashFromIndex={s.key === "estimated" ? 0 : undefined} showHighlight={false} animate={false} curve={curveLinear} fadeEdges={false} showMarkers markers={{ radius: 2.5, strokeWidth: 0, ringGap: 0, inactiveBlur: 0, enterBlur: 0, showActiveHighlight: false }} strokeWidth={2} />)}
         <YAxis numTicks={4} formatValue={(v) => cost(v)} />
         <XAxis numTicks={4} tickMode="domain" tickerHalfWidth={30} />
         <ChartTooltip rows={rows} showDatePill={false} />

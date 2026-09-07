@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { ChevronDown, MessageSquareText } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Control } from "@/components/ui/control";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Surface } from "@/components/ui/surface";
 import type { AgentPanelRoleTarget } from "@/lib/agent-panel-roles";
 import type { WorkflowDefinitionV1, WorkflowStep, WorkflowRoleAssignStep } from "@/lib/workflow-schema";
+import { eligibleMeanwhileSteps, meanwhileBindingBlocker } from "./workflow-meanwhile";
 
 const STEP_LABELS = { "role-assign": "Role assignment", condition: "Condition", approval: "Approval", artifact: "Artifact", decision: "Decision" };
 const OUTCOMES = { complete: "Complete", blocked: "Blocked", escalate: "Escalate" };
@@ -21,8 +22,8 @@ function Disclosure({ label, summary, children }: { label: string; summary: stri
   </details>;
 }
 
-export function WorkflowStepCard({ step, index, definition, selected, roleTargets, onSelect, onChange, onAskRole, actions, typeEditor, autoFocusTitle = false }: {
-  step: WorkflowStep; index: number; definition: WorkflowDefinitionV1; selected: boolean; roleTargets: AgentPanelRoleTarget[]; onSelect: (id: string) => void; onChange: (step: WorkflowStep) => void; onAskRole: (role: string) => void; actions?: ReactNode; typeEditor?: ReactNode; autoFocusTitle?: boolean;
+export function WorkflowStepCard({ step, index, definition, selected, expanded = selected, roleTargets, onSelect, onChange, onAskRole, actions, typeEditor, autoFocusTitle = false }: {
+  step: WorkflowStep; index: number; definition: WorkflowDefinitionV1; selected: boolean; expanded?: boolean; roleTargets: AgentPanelRoleTarget[]; onSelect: (id: string) => void; onChange: (step: WorkflowStep) => void; onAskRole: (role: string) => void; actions?: ReactNode; typeEditor?: ReactNode; autoFocusTitle?: boolean;
 }) {
   const destination = (id: string) => definition.steps.find((candidate) => candidate.id === id)?.title ?? OUTCOMES[id as keyof typeof OUTCOMES] ?? id;
   const targetOptions = [...definition.steps.map((candidate) => candidate.id), ...Object.keys(OUTCOMES)].filter((id) => id !== step.id);
@@ -36,18 +37,20 @@ export function WorkflowStepCard({ step, index, definition, selected, roleTarget
       {targetOptions.map((target) => <option key={target} value={target}>{destination(target)}</option>)}
     </Select>
   </label> : null;
-  return <Card data-workflow-step={step.id} selected={selected} className={`${selected ? "bg-[color-mix(in_srgb,var(--raised)_50%,var(--base))] hover:bg-[color-mix(in_srgb,var(--raised)_50%,var(--base))] [--input:var(--base)]" : ""}`}>
-    <div className={`flex items-start gap-2${selected ? " nodrag nopan" : ""}`}>
-      {selected ? <>
+  const editing = selected && expanded;
+  const meanwhile = step.kind === "approval" ? eligibleMeanwhileSteps(definition, step) : [];
+  return <Surface data-workflow-step={step.id} data-selected={selected || undefined} className={`px-[11px] py-[9px] ${selected ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : ""}`}>
+    <div className={`flex items-start gap-2${editing ? " nodrag nopan" : ""}`}>
+      {editing ? <>
         <Input data-workflow-field="title" autoFocus={autoFocusTitle} aria-label={`Title for step ${index + 1}`} value={step.title} onChange={(event) => onChange({ ...step, title: event.target.value })} className="h-8 min-w-0 flex-1 font-medium" />
         <Control size="icon" variant="quiet" onClick={() => onSelect("")} aria-label={`Collapse ${step.title}`}><ChevronDown aria-hidden className="h-3.5 w-3.5" /></Control>
       </> : <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(step.id)} aria-label={`Edit ${step.title}`}>
         <span className="block break-words text-[var(--t-ui)] font-medium">{step.title}</span>
         <span className="mt-1 block text-[12px] text-[var(--text-muted)]">{index + 1} · {STEP_LABELS[step.kind]}</span>
       </button>}
-      {actions ? <div className="nodrag nopan">{actions}</div> : null}
+      {actions && editing ? <div className="nodrag nopan">{actions}</div> : null}
     </div>
-    {selected ? <div className="nodrag nopan mt-2 space-y-3 cursor-auto">
+    {editing ? <div className="nodrag nopan mt-2 space-y-3 cursor-auto">
       <div className="flex min-w-0 items-center gap-2 text-[12px] text-[var(--text-muted)]"><span>{index + 1}</span>{typeEditor ?? <span>{STEP_LABELS[step.kind]}</span>}</div>
       {step.kind === "role-assign" ? <>
         <label className={labelClass}>Role<Select data-workflow-field="role" aria-label={`Role for ${step.title}`} value={step.role} onChange={(event) => { const target = roleTargets.find((candidate) => candidate.roleKey === event.target.value); onChange({ ...step, role: event.target.value, execution: target?.execution ?? step.execution }); }} containerClassName="mt-1 w-full" controlSize="sm">
@@ -62,7 +65,7 @@ export function WorkflowStepCard({ step, index, definition, selected, roleTarget
           {(["then", "else"] as const).map((field) => <label key={field} className={labelClass}>{field === "then" ? "Yes" : "No"}<Select data-workflow-field={field} aria-label={`${field === "then" ? "Yes" : "No"} route for ${step.title}`} value={step[field]} onChange={(event) => onChange({ ...step, [field]: event.target.value })} containerClassName="mt-1 w-full" controlSize="sm">{targetOptions.map((target) => <option key={target} value={target}>{destination(target)}</option>)}</Select></label>)}
         </div>
       </> : null}
-      {step.kind === "approval" ? <label className={labelClass}>Gate<Input data-workflow-field="gate" aria-label={`Approval gate for ${step.title}`} value={step.gate} onChange={(event) => onChange({ ...step, gate: event.target.value })} className="mt-1 h-8" /></label> : null}
+      {step.kind === "approval" ? <><label className={labelClass}>Gate<Input data-workflow-field="gate" aria-label={`Approval gate for ${step.title}`} value={step.gate} onChange={(event) => onChange({ ...step, gate: event.target.value })} className="mt-1 h-8" /></label><section className="space-y-2 border-t border-[var(--border)] pt-3"><div><p className="text-[12px] text-[var(--text)]">Meanwhile</p><p className="mt-0.5 text-[var(--t-count)] text-[var(--text-muted)]">Independent, read-only side work only.</p></div>{meanwhile.length ? meanwhile.map((candidate) => { const checked = step.meanwhile?.includes(candidate.id) ?? false; const blocker = checked ? meanwhileBindingBlocker(candidate, roleTargets) : null; return <div key={candidate.id}><label className="flex items-start gap-2 text-[12px]"><Checkbox aria-label={`Run ${candidate.title} meanwhile`} checked={checked} onCheckedChange={(enabled) => onChange({ ...step, meanwhile: enabled ? [...(step.meanwhile ?? []), candidate.id] : step.meanwhile?.filter((id) => id !== candidate.id), reminder: "never" })} /><span><span className="block text-[var(--text)]">{candidate.title}</span><span className="block font-mono text-[var(--t-count)] text-[var(--text-muted)]">{candidate.id}</span></span></label>{blocker ? <p role="status" className="mt-1 text-[var(--t-count)] text-[var(--warning)]">{blocker}</p> : null}</div>; }) : <p className="text-[var(--t-count)] text-[var(--text-muted)]">No independent side step is eligible.</p>}<p className="text-[var(--t-count)] text-[var(--text-muted)]">Reminder: Never</p></section></> : null}
       {step.kind === "artifact" ? <label className={labelClass}>Action<Select data-workflow-field="action" aria-label={`Action for ${step.title}`} value={step.action} onChange={(event) => onChange({ ...step, action: event.target.value as typeof step.action })} containerClassName="mt-1 w-full" controlSize="sm">{Object.entries(ARTIFACT_ACTIONS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label> : null}
       {step.kind === "decision" ? <label className={labelClass}>Rationale<Textarea data-workflow-field="rationale" aria-label={`Rationale for ${step.title}`} value={step.rationale} onChange={(event) => onChange({ ...step, rationale: event.target.value })} rows={2} className="mt-1" /></label> : null}
       {nextControl}
@@ -83,5 +86,5 @@ export function WorkflowStepCard({ step, index, definition, selected, roleTarget
         <Control size="sm" variant="quiet" onClick={() => onAskRole(step.role)}><MessageSquareText aria-hidden className="h-3.5 w-3.5" />Ask role</Control>
       </Disclosure> : null}
     </div> : <p className="mt-2 break-words text-[12px] text-[var(--text-muted)]">{owner ? `${owner}${unavailable ? " · unavailable" : ""} · ` : ""}{result}</p>}
-  </Card>;
+  </Surface>;
 }

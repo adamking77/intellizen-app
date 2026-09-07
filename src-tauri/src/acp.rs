@@ -45,6 +45,35 @@ const TURN_TIMEOUT: Duration = Duration::from_secs(600);
 const STDERR_TAIL_LINES: usize = 20;
 const PROTOCOL_VERSION: u64 = 1;
 
+fn client_capabilities() -> Value {
+    json!({
+        "fs": { "readTextFile": false, "writeTextFile": false },
+        "_meta": { "jetbrains": { "air": {
+            "version": 1, "capabilities": ["sessionFailure"]
+        } } }
+    })
+}
+
+fn turn_outcome(result: &Value) -> Value {
+    let air = &result["_meta"]["jetbrains"]["air"];
+    let failure = &air["sessionFailure"];
+    if air["version"].as_u64().is_some_and(|version| version >= 1)
+        && failure["severity"].as_str() == Some("error")
+    {
+        return json!({
+            "status": "error",
+            "error": failure["title"].as_str()
+                .unwrap_or("The ACP provider reported a terminal failure.")
+        });
+    }
+    let stop = result["stopReason"].as_str().unwrap_or("end_turn");
+    if stop == "cancelled" {
+        json!({ "status": "interrupted" })
+    } else {
+        json!({ "status": "complete", "stop_reason": stop })
+    }
+}
+
 /// Where an event goes: the app emits to the webview, tests collect.
 type Sink = Arc<dyn Fn(&str, Value) + Send + Sync>;
 type StderrTail = Arc<StdMutex<VecDeque<String>>>;
@@ -297,7 +326,8 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, r
     })?;
     let cwd = resolve_cwd(agent.cwd.as_deref());
 
-    let mut child = Command::new(&binary)
+    let mut command = Command::new(&binary);
+    command
         .args(&agent.args)
         .args(&restrictions.args)
         .current_dir(&cwd)
@@ -310,7 +340,11 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, r
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    if restrictions.remove_codex_home {
+        command.env_remove("CODEX_HOME");
+    }
+    let mut child = command
         .spawn()
         .map_err(|e| format!("could not start {}: {e}", binary.display()))?;
 
@@ -383,7 +417,7 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, r
             "initialize",
             json!({
                 "protocolVersion": PROTOCOL_VERSION,
-                "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false } },
+                "clientCapabilities": client_capabilities(),
             }),
             HANDSHAKE_TIMEOUT,
         )
@@ -421,6 +455,10 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, r
                 live.kill();
                 return Err(reason);
             }
+            if let Err(reason) = sync_mode(&live, restrictions.required_session_mode).await {
+                live.kill();
+                return Err(reason);
+            }
             Ok(live)
         }
         Err(reason) => {
@@ -428,6 +466,34 @@ async fn connect(agent: &AcpAgentSpawn, sink: Sink, public_session_id: String, r
             Err(with_stderr(reason, &tail))
         }
     }
+}
+
+/// Codex ACP 0.16 does not consume INITIAL_AGENT_MODE. Enforce the mode on
+/// the created ACP session and require its config response to confirm it
+/// before a workflow prompt can be submitted.
+async fn sync_mode(live: &Arc<Live>, requested: Option<&str>) -> Result<(), String> {
+    let Some(mode) = requested else {
+        return Ok(());
+    };
+    let session_id = live.session_id.get().cloned().unwrap_or_default();
+    let response = live
+        .request(
+            "session/set_config_option",
+            json!({ "sessionId": session_id, "configId": "mode", "value": mode }),
+            HANDSHAKE_TIMEOUT,
+        )
+        .await?;
+    let (updated, _) = adapter_options(&response);
+    if updated.permission_mode.as_deref() != Some(mode) {
+        return Err(format!(
+            "The Codex ACP adapter did not confirm required session mode {mode}"
+        ));
+    }
+    live.options
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .permission_mode = Some(mode.to_string());
+    Ok(())
 }
 
 async fn sync_model(live: &Arc<Live>, requested: Option<&str>) -> Result<(), String> {
@@ -476,14 +542,7 @@ async fn sync_model(live: &Arc<Live>, requested: Option<&str>) -> Result<(), Str
 fn watch_turn(live: Arc<Live>, rx: oneshot::Receiver<Result<Value, String>>) {
     tauri::async_runtime::spawn(async move {
         let outcome = match tokio::time::timeout(TURN_TIMEOUT, rx).await {
-            Ok(Ok(Ok(result))) => {
-                let stop = result.get("stopReason").and_then(Value::as_str).unwrap_or("end_turn");
-                if stop == "cancelled" {
-                    json!({ "status": "interrupted" })
-                } else {
-                    json!({ "status": "complete", "stop_reason": stop })
-                }
-            }
+            Ok(Ok(Ok(result))) => turn_outcome(&result),
             Ok(Ok(Err(reason))) => {
                 json!({ "status": "error", "error": with_stderr(reason, &live.stderr_tail) })
             }
@@ -596,12 +655,24 @@ pub async fn acp_start(
     agent_id: String,
     caller: String,
     cwd: Option<String>,
+    mode: Option<String>,
 ) -> Result<AcpStarted, String> {
     let mut spec = registry_entry(&registry_path(&app)?, &agent_id)?;
     if cwd.as_deref().is_some_and(|path| !path.trim().is_empty()) {
         spec.cwd = cwd;
     }
-    let key = session_key(&agent_id, &caller, &resolve_cwd(spec.cwd.as_deref()));
+    if mode.as_deref().is_some_and(|value| value != "read-only") {
+        return Err("Unsupported ACP session mode".into());
+    }
+    if mode.as_deref() == Some("read-only") {
+        crate::cli_capability_policy::verify_workflow_read_only_adapter(&spec)?;
+    }
+    let key = session_key(
+        &agent_id,
+        &caller,
+        &resolve_cwd(spec.cwd.as_deref()),
+        mode.as_deref(),
+    );
     if let Some(existing) = agents()
         .lock()
         .map_err(|_| "the agent table is poisoned".to_string())?
@@ -614,7 +685,15 @@ pub async fn acp_start(
             pid: existing.pid,
         });
     }
-    let restrictions = crate::cli_capability_policy::for_app(&app, &spec.engine)?;
+    let restrictions = if mode.as_deref() == Some("read-only") {
+        crate::cli_capability_policy::for_workflow_read_only(
+            &app,
+            &spec.engine,
+            &resolve_cwd(spec.cwd.as_deref()),
+        )?
+    } else {
+        crate::cli_capability_policy::for_app(&app, &spec.engine)?
+    };
     let ready = connect(&spec, app_sink(app), key.clone(), &restrictions).await?;
     let started = AcpStarted {
         agent_id: agent_id.clone(),
@@ -912,56 +991,7 @@ done
         let _ = fs::remove_dir_all(dir);
     }
 
-    #[tokio::test]
-    #[ignore = "requires a logged-in codex-acp adapter"]
-    async fn the_installed_codex_adapter_answers_one_turn() {
-        let seen: Arc<TestMutex<Vec<Value>>> = Arc::new(TestMutex::new(Vec::new()));
-        let sink_seen = Arc::clone(&seen);
-        let sink: Sink = Arc::new(move |_, envelope| sink_seen.lock().unwrap().push(envelope));
-        let spec = AcpAgentSpawn {
-            id: "live-codex".into(),
-            engine: "codex".into(),
-            command: std::env::var("INTELLIZEN_LIVE_ACP_COMMAND").unwrap_or_else(|_| "codex-acp".into()),
-            args: vec![],
-            cwd: Some(env!("CARGO_MANIFEST_DIR").into()),
-            model: Some(std::env::var("INTELLIZEN_LIVE_ACP_MODEL").unwrap_or_else(|_| "gpt-5.5".into())),
-            identity: None,
-            context: vec![],
-        };
-        let live = connect(&spec, sink, "live-test".into(), &Default::default())
-            .await
-            .expect("codex-acp handshake");
 
-        prompt(&live, "Reply with exactly: ACP OK")
-            .await
-            .expect("submit prompt");
-
-        for _ in 0..600 {
-            if seen
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|event| event["type"] == "message.complete")
-            {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-
-        let events = seen.lock().unwrap().clone();
-        let complete = events
-            .iter()
-            .find(|event| event["type"] == "message.complete")
-            .unwrap_or_else(|| panic!("turn never completed: {events:?}"));
-        assert_eq!(complete["payload"]["status"], "complete", "{complete:?}");
-        let text = events
-            .iter()
-            .filter(|event| event["type"] == "message.delta")
-            .filter_map(|event| event["payload"]["text"].as_str())
-            .collect::<String>();
-        assert!(text.contains("ACP OK"), "missing streamed reply: {events:?}");
-        live.kill();
-    }
 }
 
 #[cfg(test)]

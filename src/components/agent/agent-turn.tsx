@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, Copy, FileText, Pencil, RotateCcw, Volume2, VolumeX } from "lucide-react";
 
-import { took, clock } from "@/components/agent/turn-time";
 import {
   agentTurnActions,
   errorReport,
@@ -25,6 +24,10 @@ import { cn } from "@/lib/utils";
 
 const TURN_ICON =
   "inline-flex h-5 w-5 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
+
+function absoluteTime(at: number) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
 
 /** A fact about a turn, in the row with its controls. Not a control, so it
  *  never rides the hover fade. */
@@ -124,7 +127,6 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
           className="min-w-0 flex-1"
           tool={tool.name}
           detail={tool.title === tool.name ? undefined : tool.title}
-          duration={tool.durationMs === undefined ? undefined : tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
           state={tool.ok === undefined ? tool.historical ? "recorded" : "running" : tool.ok ? "completed" : "failure"}
         />
       </button>
@@ -152,11 +154,9 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
 
 export function UserTurn({
   message,
-  now,
   actions,
 }: {
   message: Message;
-  now: number;
   actions?: TurnActions;
 }) {
   // Editing replaces the bubble with an editor rather than opening a second
@@ -221,7 +221,7 @@ export function UserTurn({
       </div>
       <TurnBar align="end">
         {message.at !== undefined ? (
-          <TurnFact text={clock(message.at, now)} title={new Date(message.at).toLocaleString()} />
+          <TurnFact text={absoluteTime(message.at)} title={new Date(message.at).toLocaleString()} />
         ) : null}
         {userTurnActions(message, contextOf(actions, false)).map((action) => (
           <ActionIcon key={action.id} action={action} onRun={run} />
@@ -234,7 +234,6 @@ export function UserTurn({
 export function AgentTurn({
   message,
   profile,
-  now,
   onRetry,
   actions,
   reading,
@@ -243,7 +242,6 @@ export function AgentTurn({
 }: {
   message: Message;
   profile: HermesProfile | null;
-  now: number;
   onRetry?: (prompt: string) => void;
   actions?: TurnActions;
   /** Measured playback amplitude while this reply is being spoken. */
@@ -304,7 +302,7 @@ export function AgentTurn({
         {message.text || message.streaming ? (
           <div
             className="rounded-[var(--r-ctl)] px-[11px] py-2"
-            style={{ background: `color-mix(in srgb, ${agentColor} 12%, transparent)` }}
+            style={{ background: `color-mix(in srgb, ${agentColor} var(--agent-bubble-weight), transparent)` }}
           >
             {message.text ? (
               <ReplyMarkdown
@@ -330,16 +328,15 @@ export function AgentTurn({
             {agentTurnActions(message, contextOf(actions, Boolean(reading))).map((action) => (
               <ActionIcon key={action.id} action={action} onRun={runAction} />
             ))}
-            {message.tookMs !== undefined ? <TurnFact text={took(message.tookMs)} title="How long this turn took" /> : null}
             <div className="flex-1" />
             {message.at !== undefined ? (
-              <TurnFact text={clock(message.at, now)} title={new Date(message.at).toLocaleString()} />
+              <TurnFact text={absoluteTime(message.at)} title={new Date(message.at).toLocaleString()} />
             ) : null}
           </TurnBar>
         ) : null}
 
         {message.failed ? (
-          <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
+          <div className="rounded-[var(--r-ctl)] bg-transparent px-[11px] py-2">
             <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
             {/* Word-labelled and always visible: an action you must hover to
                 discover is not offered, and the row survives greyscale. */}

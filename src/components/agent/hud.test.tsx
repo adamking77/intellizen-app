@@ -1,12 +1,20 @@
 // @vitest-environment happy-dom
 
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { HermesProfile } from "@/engine/profiles";
+import type { SessionAttachment } from "@/engine/session";
 import type { VoiceHandle } from "@/voice/use-voice";
+import type { ApprovalDecision, Message } from "@/engine/transcript";
 import { Hud, hudGroundCanDrag, type HudOpen } from "./hud";
 import type { RunState } from "./run-state";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+afterEach(() => document.body.replaceChildren());
 
 const profile: HermesProfile = {
   name: "fiona",
@@ -42,14 +50,20 @@ function voice(talking: string | null = null): VoiceHandle {
   };
 }
 
-function render(open: HudOpen, talking: string | null = null, run: RunState = { kind: "idle" }, voiceOverrides: Partial<VoiceHandle> = {}) {
+function render(open: HudOpen, talking: string | null = null, run: RunState = { kind: "idle" }, voiceOverrides: Partial<VoiceHandle> = {}, decision?: ApprovalDecision, composer: { attachments?: SessionAttachment[]; onAttach?: () => void; permission?: string | null } = {}, messages: Message[] = []) {
   return renderToStaticMarkup(
     <Hud
       agent={profile}
       profiles={[profile]}
       target={profile.name}
-      messages={[]}
+      messages={messages}
       run={run}
+      decision={decision}
+      onApprove={vi.fn()}
+      onClarify={vi.fn()}
+      attachments={composer.attachments}
+      onAttach={composer.onAttach}
+      permission={composer.permission ?? null}
       voice={{ ...voice(talking), ...voiceOverrides }}
       open={open}
       onOpen={vi.fn()}
@@ -102,6 +116,106 @@ describe("HUD controls", () => {
     const selectedRow = markup.match(/<button[^>]*role="option"[^>]*>/)?.[0];
     expect(selectedRow).toBeDefined();
     expect(selectedRow).not.toContain("accent-border");
+  });
+
+  it("keeps a profile approval actionable in the HUD conversation", () => {
+    const markup = render("chat", null, { kind: "waiting" }, {}, {
+      kind: "approval",
+      requestId: "permission-1",
+      command: "Write the report",
+      description: "The draft is ready to save.",
+      choices: ["once", "deny"],
+      messageId: "message-1",
+      at: 1,
+    });
+    expect(markup).toContain("A question for you");
+    expect(markup).toContain("Allow once");
+    expect(markup).toContain("Deny");
+    const host = document.createElement("div");
+    host.innerHTML = markup;
+    expect(host.querySelector("[data-hud-log] [data-decision=approval]")).toBeTruthy();
+  });
+
+  it("keeps the shared attachment and permission controls in the HUD composer", () => {
+    const markup = render("chat", null, { kind: "idle" }, {}, undefined, {
+      attachments: [{ path: "/tmp/brief.pdf", name: "brief.pdf" }],
+      onAttach: vi.fn(),
+      permission: "Ask first",
+    });
+    expect(markup).toContain("brief.pdf");
+    expect(markup).toContain("Remove brief.pdf");
+    expect(markup).toContain("Attach files");
+    expect(markup).toContain("Ask first");
+  });
+
+  it("does not paint an empty assistant bubble for a tool-only turn", () => {
+    const markup = render("chat", null, { kind: "idle" }, {}, undefined, {}, [
+      { id: "tool-turn", from: profile.name, text: "", tools: [{ id: "tool-1", name: "read", title: "Read document" }] },
+      { id: "answer", from: profile.name, text: "Here is the answer." },
+    ]);
+    const element = document.createElement("div");
+    element.innerHTML = markup;
+    expect(element.querySelectorAll('div[style*="color-mix"]')).toHaveLength(1);
+    expect(element.textContent).toContain("Here is the answer.");
+  });
+
+  it("disables a dispatched answer and restores a retry after the main window rejects it", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(host);
+    let reject!: (error: Error) => void;
+    const onApprove = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    const decision: ApprovalDecision = {
+      kind: "approval", requestId: "permission-1", command: "Write the report", description: "The draft is ready to save.",
+      choices: ["once", "deny"], messageId: "message-1", at: 1,
+    };
+    await act(async () => root.render(
+      <Hud agent={profile} profiles={[profile]} target={profile.name} messages={[]} run={{ kind: "waiting" }} decision={decision}
+        onApprove={onApprove} onClarify={vi.fn()} voice={voice()} open="chat" onOpen={vi.fn()} onTarget={vi.fn()}
+        onSend={vi.fn()} draft="" onDraft={vi.fn()} onStop={vi.fn()} onGrow={vi.fn()} onRedock={vi.fn()} sending={false} ready permission={null} />,
+    ));
+    const allow = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Allow once"))!;
+    await act(async () => allow.click());
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(allow.disabled).toBe(true);
+
+    await act(async () => {
+      reject(new Error("The main window could not answer this request."));
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[role=alert]")?.textContent).toContain("could not answer");
+    expect(allow.disabled).toBe(false);
+    await act(async () => allow.click());
+    expect(onApprove).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
+  });
+
+  it("ignores a delayed approval rejection after the target changes with the same request id", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(host);
+    let reject!: (error: Error) => void;
+    const onApprove = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    const decision: ApprovalDecision = {
+      kind: "approval", requestId: "permission-1", command: "Write the report", description: "The draft is ready to save.",
+      choices: ["once", "deny"], messageId: "message-1", at: 1,
+    };
+    const second = { ...profile, name: "keel", displayName: "Keel" };
+    const hud = (agent: HermesProfile) => <Hud agent={agent} profiles={[agent]} target={agent.name} messages={[]} run={{ kind: "waiting" }} decision={decision}
+      onApprove={onApprove} onClarify={vi.fn()} voice={voice()} open="chat" onOpen={vi.fn()} onTarget={vi.fn()}
+      onSend={vi.fn()} draft="" onDraft={vi.fn()} onStop={vi.fn()} onGrow={vi.fn()} onRedock={vi.fn()} sending={false} ready permission={null} />;
+    await act(async () => root.render(hud(profile)));
+    const oldAllow = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Allow once"))!;
+    await act(async () => oldAllow.click());
+    expect(oldAllow.disabled).toBe(true);
+    await act(async () => root.render(hud(second)));
+    const newAllow = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Allow once"))!;
+    expect(newAllow.disabled).toBe(false);
+    await act(async () => {
+      reject(new Error("The old profile rejected this."));
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[role=alert]")).toBeNull();
+    expect(newAllow.disabled).toBe(false);
+    await act(async () => root.unmount());
   });
 
   it("drags empty transcript ground but keeps messages, controls and the scrollbar interactive", () => {

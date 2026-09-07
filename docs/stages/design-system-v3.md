@@ -1,5 +1,23 @@
 # Design system v3 — the one control kit
 
+**Panel correction, 2026-09-07:** Adam's subsequent native review preserves
+the pre-2050 attached/detached/HUD layout and name size. Apply new colors and
+visual treatment, retaining the compact header and combined composer/controls.
+This overrides expanded panel layouts in the 2050 frames.
+
+**2050 supersession, 2026-09-07:** Adam authorized the full SPEC-2050 implementation.
+`DESIGN.md` and `design/features/app-architecture/SPEC-2050.md` now own typography,
+floating-surface hairlines/radius, equal-weight decision actions, truthful state
+language and contextual dock presentation. Earlier conflicting rules below
+(including no additional primitives, no borders on Surfaces, shadowed popovers,
+tracked-capital page titles and primary recommended decisions) are historical.
+Existing interaction, permission, data and database-preservation contracts stay
+unless explicitly revised. The external HUD still exists; the contextual dock
+does not replace it. GenZen Build is disabled here; use the ordinary 2050 plan.
+Adam confirmed on 2026-09-07 that database selection uses a tinted row while
+preserving Accent Strength. The old 2px rail exception below is superseded;
+database functions, view types and record editing remain required.
+
 Written 2026-09-04 from Adam's review of the direction studies and the
 "IntelliZen Room Views" prototype. This file is the complete brief for the
 front-end design-system change. A cold agent should be able to read this file,

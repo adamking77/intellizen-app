@@ -134,6 +134,7 @@ export function WorkspaceDashboard({ workspaceId, workspaceName }: { workspaceId
       </div>
       {widgets.length ? (
         <PinnedViewGrid
+          workspaceName={workspaceName}
           widgets={widgets}
           catalog={catalog.data ?? []}
           layout={layout}

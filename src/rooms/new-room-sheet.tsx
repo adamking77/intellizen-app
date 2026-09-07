@@ -151,6 +151,7 @@ export function NewRoomSheet({
                         agent={{
                           displayName: displayName(member),
                           avatarStyle: member.avatar_style,
+                          avatarSeed: member.avatar_seed,
                           avatarKind: member.avatar_kind,
                           avatarColor: member.avatar_color,
                         }}

@@ -4,9 +4,9 @@ description: A calm, editorial desktop workspace for directing intelligence work
 colors:
   rail: "#11111a"
   panel: "#171724"
-  work: "#1d1d2c"
+  work: "#1b1b29"
   raised: "#252539"
-  text: "#aeb6cf"
+  text: "#dfe4f0"
   text-muted: "#9ca4bd"
   accent: "#7fa6e6"
   waiting: "#e2a47d"
@@ -16,10 +16,10 @@ colors:
 typography:
   title:
     fontFamily: "Geist, sans-serif"
-    fontSize: "16px"
+    fontSize: "28px"
     fontWeight: 300
-    lineHeight: 1.2
-    letterSpacing: "0.16em"
+    lineHeight: 1.3
+    letterSpacing: "0"
   body:
     fontFamily: "Geist, sans-serif"
     fontSize: "14px"
@@ -42,6 +42,7 @@ typography:
     lineHeight: 1.35
 rounded:
   plane: "12px"
+  surface: "10px"
   control: "8px"
   pill: "999px"
 spacing:
@@ -110,9 +111,11 @@ planes, deliberate whitespace, and attributed data make sophisticated work feel
 calm. The interface is advanced through behavior and clarity, never through
 glow, glass, ornamental gradients, or generic dashboard furniture.
 
-Hermes Workspace is the UI and interaction reference. IntelliZen keeps its own
-information architecture and domain surfaces, but shared shell, agent, theme,
-type, motion, accessibility, and component behavior follows the Hermes system.
+The current visual authority is `design/features/app-architecture/SPEC-2050.md`
+and its Turn 8 frames, with the engineering corrections in REVIEW-2050.md.
+Adam authorized full implementation on 2026-09-07. The 2050 rules below replace
+the older v3 typography, floating-surface and decision presentation contracts;
+existing functional capabilities and explicit database exceptions remain.
 The implemented source of truth is `src/index.css`, `src/lib/theme.ts`, and the
 shared components under `src/components`.
 
@@ -123,6 +126,27 @@ shared components under `src/components`.
 - Dense desktop controls with complete keyboard parity.
 - Agent identity carried consistently by avatar, bubble, voice, and HUD.
 - Explicit loading, content, empty, error, and recovery states.
+
+### 2050 interaction rules
+
+No elapsed-time counters, countdowns, escalation deadlines, streaks or pressure
+language. Static asked-at timestamps are facts. Say "a question for you" and
+describe only work that is actually continuing. Counts remain counts; completion
+never implies verification. Preserve failure, denial and unknown-data meaning.
+
+Decisions use equally weighted text actions with a hairline underline. A
+recommendation is explicit source data, never the first option by position.
+Creation actions may retain primary styling. Every move/task/output exposes its
+done condition when known; missing evidence is not invented. Local session modes
+are Thinking, Deciding, Executing and Not today. Not today suppresses presentation
+interruptions across main/ejected/HUD windows without changing agent execution.
+
+Keep vault markdown, workspace records and profiles in their existing stores.
+Agent writes retain proposal/confirmed-MCP boundaries. Cards serve inventories;
+activity and long sets are lists. Use no coloured left borders. Adam confirmed
+database selection uses a tinted row on 2026-09-07. Meaningful metadata, hints and quiet
+controls must meet 4.5:1 contrast; dim/faint decoration is never the only way to
+read an action, permission, done condition or receipt.
 
 ## Colors
 
@@ -169,21 +193,20 @@ lights, or user-authored canvas content. UI components consume semantic tokens.
 
 `--accent` preserves the exact palette color for fills, swatches and focus. `--accent-text` is its readable text derivative on neutral surfaces. Solid fills use `--accent-fg`, selected automatically as black or white for contrast; their hover moves the fill away from that ink. Dark primary actions retain a gentle selected tint. Controls own their hover feedback; no blanket button shadow may stack another wash over selected/primary states.
 
-**Borders Mean Two Things.** A border marks a field actively being edited or a
-failure whose word appears beside it. The color-swatch inset ring and the tree's
-live drop target are the only operational exceptions. Accent borders are not
-selection, button, checkbox, or card decoration.
+**Borders Follow Role.** Opaque floating surfaces use one neutral hairline.
+An edited field may use a focus hairline, and a failure may use its semantic
+hairline with a word. Preserve the colour-swatch and live drop-target affordances.
+Accent borders are not selection, button, checkbox or card decoration.
 
 **The Accent Strength Rule.** Settings ▸ Appearance is the only place that
 writes `--sel-step`. Its 0.04–0.14 slider defaults to 0.08, and every selected
 surface and shared hover wash read the same token. The existing preference key is retained so saved choices survive the label change.
 
-**The Database Preservation Rule.** The existing Databases workspace is an
-approved Sogo-parity instrument, not a v3-kit migration target. The installed
-production app, represented by commit `904a456`, is its visual authority. Its
-local controls, compact row radius, accent-soft selected rows with a 2px accent
-rail, colored property badges, all database views, and resizable/full-page
-record panel stay intact until Adam explicitly revisits it.
+**The Database Preservation Rule.** Preserve the existing database controls,
+compact row radius, coloured property badges, every view type and the
+resizable/full-page record panel. SPEC-2050 now governs their framing.
+Adam confirmed on 2026-09-07 that selected rows use the tinted plane and
+preserve Accent Strength; the old 2px coloured selection rail is superseded.
 
 ## Typography
 
@@ -191,15 +214,17 @@ record panel stay intact until Adam explicitly revisits it.
 **Body Font:** Geist
 **Label/Mono Font:** Geist Mono
 
-**Character:** restrained, compact, and editorial. The interface has no display
-type and no marketing-scale headings inside the shell.
+**Character:** restrained and editorial. One light sentence establishes the
+situation; smaller controls and mono metadata support the material.
 
 ### Hierarchy
 
-- **Page title:** 16px, weight 300, uppercase, +0.16em tracking.
-- **Section:** 11px, weight 300, uppercase, +0.14em tracking, muted.
-- **Body:** 14px, weight 400, sentence case.
-- **Interface:** 13px, weight 400, sentence case.
+- **Sentence:** 20–26px, weight 300, line 1.3; Adam reduced the oversized display scale on 2026-09-07.
+- **Page heading:** 24–28px maximum, weight 300, sentence case.
+- **Card/dialog title:** 19–22px, weight 300.
+- **Section/eyebrow:** about 10px Geist Mono, uppercase, restrained +0.08em tracking; preserve readable contrast.
+- **Body:** 14–17px, weight 400, line 1.55–1.65, sentence case.
+- **Interface:** 13–16px, weight 400, sentence case.
 - **Meta:** 12px, weight 400.
 - **Rail group:** 11px, weight 450, uppercase, +0.14em tracking.
 - **Identifier:** Geist Mono, 12px, weight 400.
@@ -207,14 +232,12 @@ type and no marketing-scale headings inside the shell.
 
 ### Named Rules
 
-**The Closed Scale Rule.** Chrome uses only 16, 14, 13, 12.5, 12, 11, and 10px.
-The 12.5px value is reserved for shared Control labels, as specified by the
-approved Design System V3 stage. A
-size outside the scale is a defect unless it belongs to user content or a data
-visualization whose readability requires it.
+**The Role Scale Rule.** Use the named roles above. Existing compact controls
+may retain 12.5px during migration. No page invents another scale. User content
+and analytical visualizations retain sizes required by their material.
 
 **The Light Capitals Rule.** Tracking gives uppercase hierarchy its structure;
-heavy uppercase labels do not.
+heavy uppercase labels do not. Page titles are never tracked capitals.
 
 ## Layout
 
@@ -239,8 +262,9 @@ application chrome must not force viewport-level horizontal scrolling.
 ## Elevation & Depth
 
 The system is flat by default. Major planes separate tonally or by a shell gap.
-Persistent cards do not use shadows. One soft shadow is reserved for transient
-popovers/dialogs. The detached panel and HUD paint only their rounded surfaces;
+Floating content uses one opaque Surface: shared background, neutral hairline,
+10px radius and no shadow at rest. Dialogs retain 12px radius over a 55–60%
+ground scrim. The detached panel and HUD paint only their rounded surfaces;
 the surrounding native window stays transparent, with no outer shadow.
 
 **The No Ghost Card Rule.** Do not combine a structural border, rounded
@@ -252,27 +276,29 @@ Shape communicates role rather than decoration:
 
 - Major planes: 12px.
 - Controls, rows, fields, cards, messages, disclosures, and nodes: 8px.
+- 2050 floating surfaces, decisions, popovers and record peeks: 10px.
 - Pills: 999px, reserved for non-clickable state words and circular identity.
 
 Selection is a raised fill, never a colored side stripe or focus ring. Borders
-mean editable input or failure. A hairline may separate adjacent content without
-enclosing it.
+follow their semantic role. A neutral hairline may enclose a floating Surface
+or separate adjacent content.
 
 ## Components
 
-The kit has twelve components. These are the only shared shapes for their roles;
-page-specific content composes them rather than creating new variants.
+The existing kit remains the behavioral foundation. Surface, Eyebrow, Sentence
+and Choices supply the 2050 presentation roles; compose them with existing
+Control, Segmented, Drawer and dialogs instead of rebuilding their behavior.
 
 | Component | Shipped contract |
 |---|---|
-| Control | 28px high, 8px radius; default, selected, primary, quiet, danger; loading is a 6px running dot. |
+| Control | 28px high, 8px radius; default, selected, primary, quiet, danger and text; loading disables the control. |
 | Segmented | 28px track, 2px inset and gap; roving keys; the selected child uses the selected plane. |
 | Field | Input-plane ground, no border at rest, line-strong while editing; text entry relies on the caret. |
 | Select | Field contract with native appearance removed and one dim chevron. |
 | Card | Raised plane, 8px radius, 9px × 11px padding; hover wash; selected plane when selected. |
 | Pill | Non-clickable state word, 999px radius; neutral, waiting, verified, failure, runtime. |
 | Identity | 16px identity mark, name, then runtime; Hermes, ACP, or you. |
-| Decision field | One waiting-tint question with compact choices; the recommended choice is primary. |
+| Decision field | Opaque Surface, question eyebrow and equal-weight Choices; recommendation is an explicit text annotation only. |
 | Receipt | Mono 11px tool or work line with explicit settled, running, or failed state. |
 | Drawer | 320px transient work-plane detail, 12px radius, 200ms motion, Escape and focus return. |
 | Skeleton | In-place raised bars; 1.4s sheen stops under Reduce Motion. |
@@ -285,7 +311,9 @@ line-strong focus border, without an outer accent outline.
 
 ### Procedural Avatar
 
-Every agent chooses a mesh gradient sphere or Blobatar. The sphere is rendered by
+Every agent chooses a mesh gradient sphere, Blobatar or seeded SVG trace through
+`avatarStyle`. `avatarKind` remains a Blobatar silhouette. Trace seed is persisted
+through profile/ACP adapters and rendered consistently everywhere. The sphere is rendered by
 `@outpacelabs/avatars`; the blob is rendered by `blobatar`. Name/identifier seeds
 are deterministic. Blob silhouette and identity color may be pinned per agent.
 Uploaded profile pictures may override the procedural face without deleting the
@@ -297,12 +325,16 @@ audio level—never to a decorative timer—and Reduce Motion removes the transf
 
 ### Agent Conversation
 
-Every turn is a message bubble. The user enters from the opposite side on one
-constant accent-derived ground. An agent bubble uses that agent's identity hue
-and always includes the same avatar and name. Work products are actionable cards;
-tool runs collapse to a summary. Run status sits directly above the bottom
-composer. Its outer surface uses the shared `--r-ctl` (8px) radius in docked,
-ejected and HUD views.
+**Adam's native correction, 2026-09-07:** retain the pre-2050 layout in attached,
+detached and HUD modes. Keep the previous small selected-agent name, compact
+header and combined composer/controls area. Apply the new palette and visual
+treatment without adding Sees/Thread bands, a separate permission strip or
+extra padding that takes space from the conversation. Removable context stays
+in its original compact location and determines the next-turn payload. Turns
+retain attribution and the previous tool/fact placement and folding threshold;
+decisions stay readable and actionable.
+Preserve attachments, voice, picker, stop and all modes, with the common
+`--r-ctl` (8px) composer radius and the functional decision/context fixes.
 
 Team conversations use the same Composer component and panel spacing. The room
 body inherits its panel surface; it does not add a nested background or a second
@@ -319,7 +351,7 @@ the reader has moved away, position holds and a “New reply” action appears.
 ### HUD
 
 The detached HUD is a fixed-height pill. Stacked agent avatars are its status
-display: full strength is running, dimmed is idle. Longer content opens above the
+display: full strength is running, quiet is resting. Longer content opens above the
 bar. The bar never grows and has no outer shadow. Changing between HUD and full
 panel keeps the window on its current monitor. The bar always uses `--r-pill`, including while chat or roster is open;
 expanded conversation and roster surfaces use `--r-plane`. The full panel puts
@@ -327,8 +359,8 @@ the agent picker and reduce/redock controls in one row, without a redundant titl
 
 ### Page Header Pattern
 
-A page header carries the caps title, breadcrumb, one state line, what waits on
-you, an optional view switcher, and at most one primary Control. Search and
+A page header carries a sentence-case title, breadcrumb, one factual state line,
+any question for the user and an optional view switcher. Search and
 filters belong to the list or table they affect.
 
 ## Do's and Don'ts
@@ -341,7 +373,7 @@ filters belong to the list or table they affect.
 - **Do** announce consequential asynchronous state changes through scoped live regions.
 - **Do** preserve user reading position while streaming agent output.
 - **Do** use the same selection-strength token for rows, cards, and segments.
-- **Do** use borders only for active editing or an explicitly named failure.
+- **Do** use neutral hairlines for floating surfaces, and semantic field/failure borders.
 - **Do** verify every primary surface at desktop, 390px, and 200% zoom.
 
 ### Don't:
@@ -350,7 +382,7 @@ filters belong to the list or table they affect.
 - **Don't** add pane borders where the shell gap already provides separation.
 - **Don't** use arbitrary radii, font sizes, shadows, or palette utilities.
 - **Don't** use accent borders to decorate buttons, checkboxes, cards, or selection.
-- **Don't** create a thirteenth kit component when composition of the twelve works.
+- **Don't** duplicate shared primitive behavior in a page-specific component.
 - **Don't** use gradients as chrome; procedural avatars and analytical canvas
   rendering are the intentional exceptions.
 - **Don't** pulse, spin, or shimmer to communicate waiting. State is explicit text.

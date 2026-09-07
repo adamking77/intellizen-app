@@ -7,6 +7,15 @@ vi.mock("@/lib/supabase", async () => {
 });
 afterEach(() => vi.clearAllMocks());
 describe("session receipt database request", () => {
+  it("filters explicit record IDs before limiting and makes no request for an empty scope", async () => {
+    expect(await listWorkEvents({ recordIds: [] })).toEqual([]);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    mocks.fetch.mockResolvedValue(new Response("[]", { status: 200, headers: { "content-type": "application/json" } }));
+    await listWorkEvents({ recordIds: ["record-a", "record-b"], limit: 1 });
+    const url = new URL(String(mocks.fetch.mock.calls[0][0]));
+    expect(url.searchParams.get("record_id")).toBe("in.(record-a,record-b)");
+    expect(url.searchParams.get("limit")).toBe("1");
+  });
   it("sends session correlation filters with the limit so unrelated recent events cannot exhaust it", async () => {
     mocks.fetch.mockResolvedValue(new Response("[]", { status: 200, headers: { "content-type": "application/json" } }));
     await listWorkEvents({ sessionId: "older-session", sessionProfile: "fiona", limit: 500 });

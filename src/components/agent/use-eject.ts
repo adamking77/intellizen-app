@@ -2,6 +2,10 @@ import { roomSnapshot, runRoomAction } from "./panel-room";
 import { $groupChats, $groupClarify } from "@/rooms/group-chat";
 import { $groupActivity } from "@/rooms/group-activity";
 import { refreshHostedRoom } from "@/rooms/hermes-hosted";
+import { readApprovalMode, saveApprovalMode, type ApprovalMode } from "@/engine/approval-mode";
+import { getGatewayClient } from "@/engine/gateway";
+import { readSessionMode, useSessionMode } from "@/lib/session-mode";
+import type { DocumentProposalDecision, DocumentProposalReview } from "@/proposals/document-review-context";
 /** The main window's half of ejecting.
  *
  *  Ported from hermes-app `useEject.ts`. It runs the state machine in
@@ -25,6 +29,7 @@ import {
   onPanelClosed,
   openPanelWindow,
   panelWindowIsOpen,
+  publishActionResult,
   publishFrame,
   readPanelDetached,
   writePanelDetached,
@@ -42,7 +47,12 @@ export interface EjectHandle {
   redock: () => void;
 }
 
-export function useEject(): EjectHandle {
+export function useEject(documentReview: DocumentProposalReview | null = null, decideDocumentProposal?: (decision: DocumentProposalDecision) => Promise<void>): EjectHandle {
+  const sessionMode = useSessionMode();
+  const documentReviewRef = useRef(documentReview);
+  const decideDocumentProposalRef = useRef(decideDocumentProposal);
+  documentReviewRef.current = documentReview;
+  decideDocumentProposalRef.current = decideDocumentProposal;
   // A remembered flag is a hint, not the truth: the check below settles it.
   const [state, dispatch] = useReducer(ejectReducer, undefined, () =>
     isTauri && readPanelDetached() ? "ejected" : "docked",
@@ -99,8 +109,7 @@ export function useEject(): EjectHandle {
   useEffect(() => {
     if (!isTauri) return;
     const frame = () => {
-      const s = useSessionStore.getState();
-      void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) }).catch((error) => toastError("Could not update the detached panel", error));
+      void publishFrame(currentPanelFrame(documentReviewRef.current)).catch((error) => toastError("Could not update the detached panel", error));
     };
     const stops: Array<() => void> = [];
     const roomChanged = () => { if (serving.current) frame(); };
@@ -108,7 +117,7 @@ export function useEject(): EjectHandle {
     const unsubscribe = useSessionStore.subscribe(() => {
       if (serving.current) frame();
     });
-    void onAction((action) => run(action)).then((un) => stops.push(un));
+    void onAction((action) => { void run(action, decideDocumentProposalRef.current); }).then((un) => stops.push(un));
     return () => {
       unsubscribe();
       roomStops.forEach((stop) => stop());
@@ -120,9 +129,8 @@ export function useEject(): EjectHandle {
   // rather than waiting for the next thing to change.
   useEffect(() => {
     if (!ejected || !isTauri) return;
-    const s = useSessionStore.getState();
-    void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) }).catch((error) => toastError("Could not update the detached panel", error));
-  }, [ejected]);
+    void publishFrame(currentPanelFrame(documentReview)).catch((error) => toastError("Could not update the detached panel", error));
+  }, [ejected, sessionMode.ready, sessionMode.mode, documentReview]);
 
   const selectedRoomId = useSessionStore((s) => s.selectedRoomId);
   useEffect(() => {
@@ -143,8 +151,7 @@ export function useEject(): EjectHandle {
     // Written before the window opens so it dresses itself at first paint
     // rather than flashing the full panel and then shrinking.
     leaveHudHandoff(asHud);
-    const s = useSessionStore.getState();
-    void publishFrame({ selectedProfile: s.selectedProfile, profileDirectory: s.profileDirectory, threads: s.threads, room: roomSnapshot(s.selectedRoomId) })
+    void publishFrame(currentPanelFrame(documentReviewRef.current))
       .then(() => openPanelWindow(asHud ? PANEL_SIZES.hud : PANEL_SIZES.panel))
       .then(() => dispatch({ type: "opened" }))
       .catch((error) => {
@@ -161,38 +168,81 @@ export function useEject(): EjectHandle {
   return { ejected, busy: state === "ejecting", eject, redock };
 }
 
+function currentPanelFrame(documentReview: DocumentProposalReview | null = null) {
+  const state = useSessionStore.getState();
+  return {
+    selectedProfile: state.selectedProfile,
+    profileDirectory: state.profileDirectory,
+    threads: state.threads,
+    room: roomSnapshot(state.selectedRoomId),
+    documentReview,
+    sessionMode: readSessionMode(),
+  };
+}
+
 /** Run what the ejected panel asked for, against the one store that owns it. */
-function run(action: PanelAction) {
+function actionErrorTitle(action: PanelAction) {
+  if (action.type.startsWith("room-") || action.type === "select-team") return "Room action failed";
+  if (action.type === "send" || action.type === "edit") return "Could not send";
+  if (action.type === "stop") return "Could not stop the turn";
+  if (action.type === "approve") return "Could not answer the approval";
+  if (action.type === "clarify") return "Could not send the answer";
+  if (action.type === "approval-mode") return "Could not update approval settings";
+  if (action.type === "document-proposal") return "Could not apply the document decision";
+  return "Could not update the agent panel";
+}
+
+async function run(action: PanelAction, decideDocumentProposal?: (decision: DocumentProposalDecision) => Promise<void>) {
+  try {
+    const result = await execute(action, decideDocumentProposal);
+    await publishActionResult(action, undefined, result).catch(() => undefined);
+  } catch (error) {
+    await publishActionResult(action, error).catch(() => undefined);
+    toastError(actionErrorTitle(action), error);
+  }
+}
+
+async function execute(action: PanelAction, decideDocumentProposal?: (decision: DocumentProposalDecision) => Promise<void>): Promise<ApprovalMode | undefined> {
   if (action.type.startsWith("room-") || action.type === "select-team") {
-    void runRoomAction(action as Parameters<typeof runRoomAction>[0]).catch((error) => toastError("Room action failed", error));
+    await runRoomAction(action as Parameters<typeof runRoomAction>[0]);
     return;
   }
   const s = useSessionStore.getState();
   switch (action.type) {
+    case "document-proposal":
+      if (!decideDocumentProposal) throw new Error("The document review is no longer open.");
+      await decideDocumentProposal(action.decision);
+      return;
     case "select":
       s.selectProfile(action.profile);
       return;
     case "send":
-      s.send(action.profile, action.text, action.attachments).catch((error) => toastError("Could not send", error));
+      await s.send(action.profile, action.text, action.attachments, action.context);
       return;
     case "edit":
-      s.editAndSend(action.profile, action.messageId, action.text).catch((error) => toastError("Could not send", error));
+      await s.editAndSend(action.profile, action.messageId, action.text);
       return;
     case "openSettings":
       window.history.pushState({}, "", "/settings?section=providers");
       window.dispatchEvent(new PopStateEvent("popstate"));
       return;
     case "stop":
-      s.stop(action.profile).catch((error) => toastError("Could not stop the turn", error));
+      await s.stop(action.profile);
       return;
     case "approve":
-      s.decideApproval(action.profile, action.decision, action.choice).catch((error) =>
-        toastError("Could not answer the approval", error),
-      );
+      await s.decideApproval(action.profile, action.decision, action.choice);
       return;
     case "clarify":
-      s.decideClarify(action.profile, action.decision, action.answers).catch((error) =>
-        toastError("Could not send the answer", error),
-      );
+      await s.decideClarify(action.profile, action.decision, action.answers);
+      return;
+    case "approval-mode": {
+      if (action.profile.startsWith("acp:") || !s.profileDirectory[action.profile] || s.selectedProfile !== action.profile || (s.threads[action.profile]?.sessionId ?? null) !== action.sessionId) {
+        throw new Error("The selected agent or session changed. Open approval settings again.");
+      }
+      const client = getGatewayClient();
+      return action.mode
+        ? saveApprovalMode(client, action.profile, action.sessionId, action.mode)
+        : readApprovalMode(client, action.profile, action.sessionId);
+    }
   }
 }

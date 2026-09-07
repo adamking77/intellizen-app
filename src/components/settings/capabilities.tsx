@@ -100,7 +100,7 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
         return (
           <section key={group.id} className="pt-2">
             <div className="flex flex-wrap items-baseline gap-2 pb-0.5">
-              <h2 className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">{group.label}</h2>
+              <h2 className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">{group.label}</h2>
               <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
               <span className="text-[var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
             </div>

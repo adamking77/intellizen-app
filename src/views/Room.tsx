@@ -1,14 +1,13 @@
 import { requestAction } from "@/components/agent/panel-window";
 import { runRoomAction, type PanelRoomSnapshot } from "@/components/agent/panel-room";
 import { usePanelDraft } from "@/components/agent/panel-draft";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Trash2, Users, X } from "lucide-react";
 
 import { DecisionCard } from "@/components/agent/decision-card";
 import { RunStatus } from "@/components/agent/agent-composer";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
-import { clock } from "@/components/agent/turn-time";
 import { Avatar, identityColor } from "@/components/agents/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -38,6 +37,10 @@ import type { GroupMember, GroupMessage } from "@/rooms/types";
  *  (DESIGN.md), applied to the room log. */
 const GAP_MS = 15 * 60_000;
 
+function absoluteTime(at: number) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function Turn({
   entry,
   members,
@@ -56,6 +59,7 @@ function Turn({
   const face = {
     displayName: who,
     avatarStyle: profile?.avatarStyle ?? member?.avatar_style ?? "sphere",
+    avatarSeed: profile?.avatarSeed ?? member?.avatar_seed,
     avatarKind: profile?.avatarKind ?? member?.avatar_kind,
     avatarColor: profile?.avatarColor ?? member?.avatar_color,
   };
@@ -67,7 +71,7 @@ function Turn({
         <div className="my-1 flex items-center gap-2 px-1">
           <span className="h-px flex-1 bg-[var(--hair)]" />
           <span className="font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
-            {clock(entry.at)}
+            {absoluteTime(entry.at)}
           </span>
           <span className="h-px flex-1 bg-[var(--hair)]" />
         </div>
@@ -115,6 +119,7 @@ export function RoomView({
   onEject,
   voice,
   showVoiceControls = true,
+  trailingContent,
 }: {
   roomId?: string;
   panel?: boolean;
@@ -125,6 +130,7 @@ export function RoomView({
   onEject?: () => void;
   voice?: VoiceHandle;
   showVoiceControls?: boolean;
+  trailingContent?: ReactNode;
 } = {}) {
   const { id: routeId = "" } = useParams();
   const id = roomId ?? routeId;
@@ -138,6 +144,11 @@ export function RoomView({
   const [sheet, setSheet] = useState(false);
   const [confirmDisband, setConfirmDisband] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const decisionAttempt = useRef(0);
+  const decisionInFlight = useRef<string | null>(null);
+  const activeRoom = useRef(id);
+  activeRoom.current = id;
   const logRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -158,7 +169,13 @@ export function RoomView({
     () => remote ? snapshot.pending : Object.values(clarify).find((p) => p.group === id) ?? null,
     [remote, snapshot, clarify, id],
   );
-  const pendingMember = pending ? members.find((m) => m.name === pending.member) ?? null : null;
+  const pendingMember = pending ? members.find((m) => groupMemberKey(m) === pending.memberKey) ?? null : null;
+
+  useEffect(() => {
+    decisionAttempt.current += 1;
+    setBusy(false);
+    setDecisionError(null);
+  }, [id, pending?.memberKey, pending?.decision.requestId]);
 
   const syncHosted = async () => {
     if (remote) { requestAction({ type: "room-refresh", roomId: id }); return; }
@@ -194,33 +211,53 @@ export function RoomView({
     } else {
       setBehind(true);
     }
-  }, [log.length, activity.length]);
+  }, [log.length, activity.length, pending?.memberKey, pending?.decision.requestId]);
 
   const onApprove = async (decision: ApprovalDecision, choice: ApprovalChoice) => {
     if (!pending || !pendingMember) return;
-    if (remote) { requestAction({ type: "room-approve", roomId: id, requestId: decision.requestId, choice }); return; }
+    const identity = `${id}:${pending.memberKey}:${decision.requestId}`;
+    if (decisionInFlight.current?.startsWith(`${id}:`)) return;
+    decisionInFlight.current = identity;
+    const attempt = ++decisionAttempt.current;
     setBusy(true);
+    setDecisionError(null);
     try {
-      if (pending.hosted) await approveHostedRoom(id, pending, choice);
+      if (remote) await requestAction({ type: "room-approve", roomId: id, memberKey: pending.memberKey, requestId: decision.requestId, choice });
+      else if (pending.hosted) await approveHostedRoom(id, pending, choice);
       else await respondGroupApproval(id, pendingMember, decision.requestId, choice);
     } catch (error) {
+      if (activeRoom.current === id && decisionAttempt.current === attempt) {
+        setDecisionError(error instanceof Error ? error.message : String(error));
+      }
       toastError("Couldn't answer that request", error);
     } finally {
-      setBusy(false);
+      if (decisionInFlight.current === identity) decisionInFlight.current = null;
+      if (activeRoom.current === id && decisionAttempt.current === attempt) setBusy(false);
     }
   };
 
   const onClarify = async (decision: ClarifyDecision, answers: Record<string, string[]>) => {
     if (!pending || !pendingMember) return;
-    if (remote) { requestAction({ type: "room-clarify", roomId: id, requestId: decision.requestId, answers }); return; }
+    const identity = `${id}:${pending.memberKey}:${decision.requestId}`;
+    if (decisionInFlight.current?.startsWith(`${id}:`)) return;
+    decisionInFlight.current = identity;
+    const attempt = ++decisionAttempt.current;
     setBusy(true);
+    setDecisionError(null);
     try {
-      await answerClarify(clientFor(pendingMember), decision, answers);
-      clearGroupPrompt(id, pendingMember);
+      if (remote) await requestAction({ type: "room-clarify", roomId: id, memberKey: pending.memberKey, requestId: decision.requestId, answers });
+      else {
+        await answerClarify(clientFor(pendingMember), decision, answers);
+        clearGroupPrompt(id, pendingMember);
+      }
     } catch (error) {
+      if (activeRoom.current === id && decisionAttempt.current === attempt) {
+        setDecisionError(error instanceof Error ? error.message : String(error));
+      }
       toastError("Couldn't answer that question", error);
     } finally {
-      setBusy(false);
+      if (decisionInFlight.current === identity) decisionInFlight.current = null;
+      if (activeRoom.current === id && decisionAttempt.current === attempt) setBusy(false);
     }
   };
 
@@ -296,6 +333,7 @@ export function RoomView({
                     agent={{
                       displayName: displayName(member),
                       avatarStyle: profile?.avatarStyle ?? member.avatar_style,
+                      avatarSeed: profile?.avatarSeed ?? member.avatar_seed,
                       avatarKind: profile?.avatarKind ?? member.avatar_kind,
                       avatarColor: profile?.avatarColor ?? member.avatar_color,
                     }}
@@ -367,14 +405,17 @@ export function RoomView({
           {pending ? (
             <div className="py-2">
               <DecisionCard
+                key={`${id}:${pending.memberKey}:${pending.decision.requestId}`}
                 decision={pending.decision}
                 asker={pendingMember ? displayName(pendingMember) : pending.member}
                 busy={busy}
                 onApprove={(decision, choice) => void onApprove(decision, choice)}
                 onClarify={(decision, answers) => void onClarify(decision, answers)}
               />
+              {decisionError ? <p role="alert" className="mt-1.5 text-[var(--t-meta)] text-[var(--bad)]">{decisionError}</p> : null}
             </div>
           ) : null}
+          {trailingContent ? <div className="shrink-0">{trailingContent}</div> : null}
         </div>
 
         {behind ? (
@@ -463,6 +504,7 @@ export function RoomView({
                   agent={{
                     displayName: displayName(member),
                     avatarStyle: profileForMember(directory, member)?.avatarStyle ?? member.avatar_style,
+                    avatarSeed: profileForMember(directory, member)?.avatarSeed ?? member.avatar_seed,
                     avatarKind: profileForMember(directory, member)?.avatarKind ?? member.avatar_kind,
                     avatarColor: profileForMember(directory, member)?.avatarColor ?? member.avatar_color,
                   }}
@@ -495,7 +537,7 @@ export function RoomView({
             activity.map((event, index) => (
               <li key={`${event.at}-${index}`} className="flex gap-2 px-4 py-0.5">
                 <span className="shrink-0 font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
-                  {clock(event.at)}
+                  {absoluteTime(event.at)}
                 </span>
                 <span
                   className="min-w-0 flex-1 font-ui text-[var(--t-section)] leading-4"

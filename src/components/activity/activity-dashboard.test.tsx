@@ -27,11 +27,11 @@ it("saves a real card pin through read/write/read and leaves a failed save open 
     expect(button).toBeTruthy(); await act(async () => button!.click());
   }
   try {
-    await click("Pin Needs attention to a dashboard");
+    await click("Pin Questions and issues to a dashboard");
     storage.fail = true;
     await click("Pin widget");
     expect(storage.pins).toHaveLength(0);
-    expect(host.querySelector('dialog[aria-label="Pin Needs attention"]')?.hasAttribute("open")).toBe(true);
+    expect(host.querySelector('dialog[aria-label="Pin Questions and issues"]')?.hasAttribute("open")).toBe(true);
     storage.fail = false;
     await click("Pin widget");
     expect(storage.pins).toHaveLength(1);

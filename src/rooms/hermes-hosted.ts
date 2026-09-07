@@ -1,5 +1,10 @@
 import { request, type ApprovalChoice, type GatewayClientLike } from "@/engine/contract";
 import { getGatewayClient } from "@/engine/gateway";
+import {
+  promptWithConversationContext,
+  visibleTextWithoutConversationContext,
+  type ConversationContextSnapshot,
+} from "@/lib/conversation-context";
 
 import { $groupChats, $groupClarify, $groupNeedsYou, updateGroupChat, type GroupChatRoom } from "./group-chat";
 import { botHandle, durableGroupChatMembers, groupMemberKey } from "./group-membership";
@@ -66,6 +71,8 @@ interface HostedLogResult {
   has_more?: boolean;
 }
 
+const CONTEXT_THREAD_ID = /^iz-context-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function roomOwnerFor(members: GroupMember[]): RoomOwner {
   return members.some((member) => member.door === "acp") ? "local" : "hermes";
 }
@@ -95,7 +102,12 @@ function localMembers(room: HostedRoom, cached?: GroupChatRoom): GroupMember[] {
 
 function messageFromEvent(event: HostedEvent, members: GroupMember[]): GroupMessage | null {
   if (event.kind !== "message.user" && event.kind !== "message.member") return null;
-  const text = typeof event.payload?.text === "string" ? event.payload.text.trim() : "";
+  const threadId = typeof event.payload?.thread_id === "string" ? event.payload.thread_id : "legacy";
+  const text = typeof event.payload?.text === "string"
+    ? event.kind === "message.user" && CONTEXT_THREAD_ID.test(threadId)
+      ? visibleTextWithoutConversationContext(event.payload.text.trim())
+      : event.payload.text.trim()
+    : "";
   if (!text) return null;
   const memberId = typeof event.payload?.member_id === "string" ? event.payload.member_id : "";
   const member = members.find((candidate) => groupMemberKey(candidate) === memberId);
@@ -107,7 +119,7 @@ function messageFromEvent(event: HostedEvent, members: GroupMember[]): GroupMess
         ? { kind: "user", name: "You" }
         : { kind: "member", name: member?.name || event.actor?.profile || memberId },
     text,
-    thread: typeof event.payload?.thread_id === "string" ? event.payload.thread_id : "legacy",
+    thread: threadId,
   };
 }
 
@@ -289,13 +301,21 @@ export async function sendHostedRoom(
   roomId: string,
   text: string,
   client: GatewayClientLike = getGatewayClient(),
-): Promise<void> {
+  context: ConversationContextSnapshot | null = null,
+): Promise<{ eventId: string; threadId: string }> {
+  const prompt = promptWithConversationContext(text, context);
+  const eventId = `iz-${crypto.randomUUID()}`;
+  const threadId = `${prompt === text ? "t" : "iz-context"}-${crypto.randomUUID()}`;
   await request(client, "groups.send", {
     room_id: roomId,
-    event_id: `iz-${crypto.randomUUID()}`,
-    payload: { text, thread_id: `t-${crypto.randomUUID()}` },
+    event_id: eventId,
+    payload: {
+      text: prompt,
+      thread_id: threadId,
+    },
   });
   await refreshHostedRoom(roomId, client);
+  return { eventId, threadId };
 }
 
 export async function stopHostedRoom(

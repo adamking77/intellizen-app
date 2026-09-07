@@ -11,10 +11,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { ApprovalChoice } from "@/engine/contract";
+import type { ApprovalMode } from "@/engine/approval-mode";
 import type { ProfileThread } from "@/engine/session-store";
 import type { SessionAttachment } from "@/engine/session";
 import type { HermesProfile } from "@/engine/profiles";
 import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
+import { readConversationContext, type ConversationContextSnapshot } from "@/lib/conversation-context";
+import type { SessionMode } from "@/lib/session-mode";
+import type { DocumentProposalDecision, DocumentProposalReview } from "@/proposals/document-review-context";
 
 /** The label the ejected panel's window carries; `panel_window.rs` builds it. */
 export const PANEL_WINDOW = "agent-panel";
@@ -120,7 +124,9 @@ export function sizeFor(mode: PanelMode): { w: number; h: number } {
 /** What the panel renders from: the session store's data, nothing else. */
 export interface PanelFrame {
   revision?: number;
+  sessionMode?: SessionMode | null;
   room?: PanelRoomSnapshot | null;
+  documentReview?: DocumentProposalReview | null;
   selectedProfile: string | null;
   profileDirectory: Record<string, HermesProfile>;
   threads: Record<string, ProfileThread>;
@@ -131,15 +137,24 @@ export interface PanelFrame {
 export type PanelAction =
   | PanelRoomAction
   | { type: "select"; profile: string | null }
-  | { type: "send"; profile: string; text: string; attachments?: SessionAttachment[] }
+  | { type: "send"; profile: string; text: string; attachments?: SessionAttachment[]; context?: ConversationContextSnapshot | null }
   | { type: "edit"; profile: string; messageId: string; text: string }
   | { type: "openSettings" }
   | { type: "stop"; profile: string }
-  | { type: "approve"; profile: string; decision: ApprovalDecision; choice: ApprovalChoice }
-  | { type: "clarify"; profile: string; decision: ClarifyDecision; answers: Record<string, string[]> };
+  | { type: "approve"; profile: string; decision: ApprovalDecision; choice: ApprovalChoice; receiptId?: string }
+  | { type: "clarify"; profile: string; decision: ClarifyDecision; answers: Record<string, string[]>; receiptId?: string }
+  | { type: "approval-mode"; profile: string; sessionId: string | null; mode?: ApprovalMode; receiptId?: string }
+  | { type: "document-proposal"; decision: DocumentProposalDecision; receiptId?: string };
+
+export interface PanelActionResult {
+  receiptId: string;
+  error?: string;
+  approvalMode?: ApprovalMode;
+}
 
 const FRAME = "agent-panel:frame";
 const ACTION = "agent-panel:action";
+const ACTION_RESULT = "agent-panel:action-result";
 /** Emitted by `panel_window.rs` when the panel window is destroyed. */
 export const PANEL_CLOSED_EVENT = "agent-panel:closed";
 
@@ -175,13 +190,81 @@ export function requestFrame(): Promise<PanelFrame | null> {
 }
 
 /** Panel window: ask the main window to act on the session. */
-export function requestAction(action: PanelAction) {
-  safeEmit(ACTION, action);
+export function capturePanelActionContext(
+  action: PanelAction,
+  context = readConversationContext(),
+): PanelAction {
+  return (action.type === "send" || action.type === "room-send") && action.context === undefined
+    ? { ...action, context }
+    : action;
+}
+
+function correlatedRequestId(action: PanelAction) {
+  return action.type === "approve" || action.type === "clarify"
+    ? action.decision.requestId
+    : action.type === "room-approve" || action.type === "room-clarify"
+      ? action.requestId
+      : action.type === "approval-mode"
+        ? `${action.profile}:approval-mode`
+      : action.type === "document-proposal"
+        ? `${action.decision.documentId}:${action.decision.proposalId}`
+      : null;
+}
+
+async function requestCorrelatedAction(action: PanelAction): Promise<PanelActionResult | null> {
+  const captured = capturePanelActionContext(action);
+  const requestId = correlatedRequestId(captured);
+  if (!isTauri || !requestId) {
+    safeEmit(ACTION, captured);
+    return null;
+  }
+  const receiptId = `${requestId}:${crypto.randomUUID()}`;
+  const correlated = { ...captured, receiptId } as PanelAction;
+  let receive = (_result: PanelActionResult) => undefined;
+  const unlisten = await safeListen<PanelActionResult>(ACTION_RESULT, (result) => receive(result));
+  return new Promise<PanelActionResult>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      unlisten();
+      reject(new Error(captured.type === "approval-mode"
+        ? "The approval settings response could not be confirmed. Reopen the settings to read the current value before trying again."
+        : "The response could not be confirmed. The answer may still be processing; choices return if it is rejected."));
+    }, 15_000);
+    receive = (result) => {
+      if (result.receiptId !== receiptId) return;
+      window.clearTimeout(timeout);
+      unlisten();
+      if (result.error) reject(new Error(result.error));
+      else resolve(result);
+    };
+    void emit(ACTION, correlated).catch((error) => {
+      window.clearTimeout(timeout);
+      unlisten();
+      reject(error);
+    });
+  });
+}
+
+/** Consequential actions settle only after the main owner accepts or rejects them. */
+export async function requestAction(action: PanelAction): Promise<void> {
+  await requestCorrelatedAction(action);
+}
+
+export async function requestRemoteApprovalMode(profile: string, sessionId: string | null, mode?: ApprovalMode): Promise<ApprovalMode> {
+  const result = await requestCorrelatedAction({ type: "approval-mode", profile, sessionId, ...(mode ? { mode } : {}) });
+  if (result?.approvalMode === "manual" || result?.approvalMode === "smart" || result?.approvalMode === "off") return result.approvalMode;
+  throw new Error("The main window did not return an approval mode.");
 }
 
 /** Main window: run what the panel asked. */
 export function onAction(fn: (action: PanelAction) => void) {
   return safeListen<PanelAction>(ACTION, fn);
+}
+
+/** Main window: settle a correlated detached decision request. */
+export async function publishActionResult(action: PanelAction, error?: unknown, approvalMode?: ApprovalMode): Promise<void> {
+  if (!("receiptId" in action) || !action.receiptId || !isTauri) return;
+  const message = error instanceof Error ? error.message : error === undefined ? undefined : String(error);
+  await emit(ACTION_RESULT, { receiptId: action.receiptId, ...(message ? { error: message } : {}), ...(approvalMode ? { approvalMode } : {}) } satisfies PanelActionResult);
 }
 
 export function onPanelClosed(fn: () => void) {

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { BaseDirectory, exists, mkdir, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
+import type { AvatarStyle } from "@/components/agents/agent-model";
 
 /** Registry ids are intentionally open-ended. The official ACP registry, not
  *  this bundle, decides which agent families can appear. */
@@ -39,7 +40,8 @@ export interface AcpAgent {
   model?: string;
   role?: string;
   avatar?: string;
-  avatarStyle?: "sphere" | "blob";
+  avatarStyle?: AvatarStyle;
+  avatarSeed?: number;
   avatarKind?: string;
   avatarColor?: string;
   voice?: AcpVoice;
@@ -124,6 +126,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function optionalInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) ? value : undefined;
+}
+
 function stringList(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const strings = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -145,7 +151,12 @@ export function normalizeAcpAgent(value: unknown): AcpAgent | null {
   const command = optionalString(row.command);
   if (!id || !command || !isEngine(row.engine)) return null;
 
-  const avatarStyle = row.avatarStyle === "blob" || row.avatar_style === "blob" ? "blob" : undefined;
+  const avatarStyle = row.avatarStyle === "blob" || row.avatarStyle === "trace"
+    ? row.avatarStyle
+    : row.avatar_style === "blob" || row.avatar_style === "trace"
+      ? row.avatar_style
+      : undefined;
+  const avatarSeed = optionalInteger(row.avatarSeed) ?? optionalInteger(row.avatar_seed);
   const avatarKind = optionalString(row.avatarKind ?? row.avatar_kind);
   const avatarColor = optionalString(row.avatarColor ?? row.avatar_color);
   const cwd = optionalString(row.cwd);
@@ -167,6 +178,7 @@ export function normalizeAcpAgent(value: unknown): AcpAgent | null {
     ...(role ? { role } : {}),
     ...(avatar ? { avatar } : {}),
     ...(avatarStyle ? { avatarStyle } : {}),
+    ...(avatarSeed !== undefined ? { avatarSeed } : {}),
     ...(avatarKind ? { avatarKind } : {}),
     ...(avatarColor ? { avatarColor } : {}),
     ...(normalizedVoice ? { voice: normalizedVoice } : {}),

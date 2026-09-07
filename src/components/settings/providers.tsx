@@ -276,13 +276,13 @@ function ProviderLine({
       {open ? (
         <div className="flex flex-col gap-2.5 px-3 pb-4 pl-9 pt-1 text-[var(--t-meta)]">
           <div>
-            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Connections</span>
+            <span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Connections</span>
             <div className="mt-1 flex flex-wrap gap-1">
               {connections.length ? connections.map((connection) => <span key={connection} className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-1 text-[var(--subtext-0)]">{connection}</span>) : <span className="text-[var(--overlay-1)]">None configured.</span>}
             </div>
           </div>
-          <div className="flex flex-wrap items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Capabilities</span><button type="button" className="text-left text-[var(--subtext-0)] hover:text-[var(--text)] hover:underline" onClick={onCapabilities}>View {capabilities.toLowerCase()}</button></div>
-          <div className="flex items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Invoked as</span><span className="font-mono text-[var(--subtext-0)]">{invocation}</span></div>
+          <div className="flex flex-wrap items-baseline gap-2"><span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Capabilities</span><button type="button" className="text-left text-[var(--subtext-0)] hover:text-[var(--text)] hover:underline" onClick={onCapabilities}>View {capabilities.toLowerCase()}</button></div>
+          <div className="flex items-baseline gap-2"><span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Invoked as</span><span className="font-mono text-[var(--subtext-0)]">{invocation}</span></div>
           <p className="max-w-[62ch] leading-[1.45] text-[var(--overlay-1)]">Credentials and connection configuration stay with Hermes or the provider CLI; IntelliZen never stores them here.</p>
         </div>
       ) : null}

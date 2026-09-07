@@ -35,13 +35,15 @@
 :root[data-flavor="mocha"] {
   --crust: #11111a;
   --mantle: #171724;
-  --base: #1d1d2c;
+  --base: #1b1b29;
   --raised: #252539;
   --input: #11111a;
-  --text: #aeb6cf;
+  --text: #dfe4f0;
   --text-muted: #9ca4bd;
   --line: #2a2a3d;
   --line-strong: #3a3a52;
+  --ground: #1b1b29;
+  --surface: #20202f;
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e2cfcb;
   --flamingo: #e9c5c5;
@@ -69,6 +71,8 @@
   --text-muted: #989fb6;
   --line: #232334;
   --line-strong: #32324a;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #dcc9c5;
   --flamingo: #e3bfbf;
@@ -96,6 +100,8 @@
   --text-muted: #aeb6d4;
   --line: #2f3247;
   --line-strong: #3f4360;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e4d0cc;
   --flamingo: #eac6c6;
@@ -123,6 +129,8 @@
   --text-muted: #b2bcdf;
   --line: #3a3e52;
   --line-strong: #4a4f68;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e6d2ce;
   --flamingo: #ecc8c8;
@@ -150,6 +158,8 @@
   --text-muted: #979db1;
   --line: #17171f;
   --line-strong: #383844;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #c9b7b3;
   --flamingo: #d0adad;
@@ -176,9 +186,11 @@
   --raised: #c6c8cd;
   --input: #cfd1d4;
   --text: #474a63;
-  --text-muted: #555970;
+  --text-muted: #4c5068;
   --line: #b8bac0;
   --line-strong: #8d9099;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(0, 0, 0, 0.09);
   --rosewater: #a8817a;
   --flamingo: #b07070;
@@ -206,6 +218,8 @@
   --text-muted: #62626b;
   --line: #d8d5d0;
   --line-strong: #aaa69f;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(0, 0, 0, 0.08);
   --rosewater: #a07b74;
   --flamingo: #a86a6a;
@@ -231,8 +245,8 @@
      could make failure look like success. */
   --wait: #e2a47d;
   --ok: #a6cfa1;
-  --bad: #d47b95;
-  --runtime: #789cd6;
+  --bad: #de96aa;
+  --runtime: #8cabdc;
 
   /* User preference. Selection, focus, active nav, links. Set by
      applyTheme(); this is only the pre-JS fallback (Mocha blue). */
@@ -244,6 +258,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --user-bubble: color-mix(in srgb, var(--accent) 15%, var(--raised));
+  --agent-bubble-weight: 11%;
 
   /* Accent wash shared by interaction states; status colors stay independent. */
   --hover: color-mix(in srgb, var(--accent) var(--sel-accent-weight), transparent);
@@ -265,6 +280,15 @@
   --overlay-2: color-mix(in srgb, var(--text) 72%, var(--base));
   --overlay-1: color-mix(in srgb, var(--text) 60%, var(--base));
   --overlay-0: color-mix(in srgb, var(--text) 48%, var(--base));
+
+  /* 2050 semantic text roles. Mid and dim carry information; faint is only
+     decorative and must not be used for labels, actions, or receipts. */
+  --text-mid: var(--text-muted);
+  --text-dim: var(--text-muted);
+  --text-faint: var(--overlay-0);
+  --surface-line: var(--line);
+  --row-line: var(--hair);
+  --question: var(--wait);
 
   --surface-wash: var(--hover);
   --surface-wash-strong: var(--hover-strong);
@@ -305,6 +329,7 @@
 
   /* Closed shape and type roles shared with Hermes. */
   --r-plane: 12px;
+  --r-surface: 10px;
   --r-ctl: 8px;
   --r-pill: 999px;
   --r-sm: var(--r-ctl);
@@ -328,7 +353,6 @@
   --background: var(--base);
   --background-elevated: var(--mantle);
   --panel: var(--mantle);
-  --surface: var(--mantle);
   --surface-strong: var(--mantle);
   --surface-glass: var(--mantle);
   --foreground: var(--text);
@@ -378,10 +402,10 @@
 :root[data-flavor="latte"],
 :root[data-flavor="flat"] {
   color-scheme: light;
-  --wait: #b06d33;
-  --ok: #4a7c4e;
-  --bad: #b04a5f;
-  --runtime: #3f6ba8;
+  --wait: #774a22;
+  --ok: #375c3a;
+  --bad: #893a4a;
+  --runtime: #325586;
   --go-bg: var(--accent);
   --go-fg: var(--accent-fg);
   --go-hover: var(--accent-hover);
@@ -1631,8 +1655,8 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .db-row-active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--selected);
+  box-shadow: none;
 }
 
 .db-td {

@@ -10,7 +10,6 @@ import {
   GraphSettingToggle as SettingToggleRow,
   GraphSlider as SliderRow,
   GraphStatBlock as StatBlock,
-  GraphStatChip as StatChip,
   GraphToolbarButton as ToolbarBtn,
   GraphTopbarIconButton as TopbarIconBtn,
 } from "@/components/graph/graph-controls";
@@ -23,7 +22,6 @@ import {
   Link2,
   MapPin,
   Maximize2,
-  MoreHorizontal,
   Orbit,
   PanelRightClose,
   PanelRightOpen,
@@ -908,6 +906,10 @@ export function GraphView() {
   const filteredNodes = filteredGraph.nodes;
   const filteredEdges = filteredGraph.edges;
   const nodeDegreeById = filteredGraph.degreeByNodeId;
+  const highestDegreeNode = useMemo(() => filteredNodes.reduce<GraphNodeRecord | null>((highest, node) => {
+    if (!highest) return node;
+    return (nodeDegreeById.get(node.node_id) ?? 0) > (nodeDegreeById.get(highest.node_id) ?? 0) ? node : highest;
+  }, null), [filteredNodes, nodeDegreeById]);
   const visibleNodeIds = useMemo(
     () => new Set(filteredNodes.map((node) => node.node_id)),
     [filteredNodes],
@@ -1135,6 +1137,14 @@ export function GraphView() {
     }
     const targetNodes = renderedFilteredNodes.length > 0 ? renderedFilteredNodes : visualNodes;
     setViewport(computeFitViewToNodes(targetNodes, viewportRef.current));
+  }
+
+  function zoomGraph(factor: number) {
+    if (isInsightMode) {
+      insightGraphRef.current?.zoomBy(factor);
+      return;
+    }
+    setViewport((current) => ({ ...current, scale: clamp(current.scale * factor, 0.25, 2.5) }));
   }
 
   function centerViewportOnNode(nodeId: string) {
@@ -1985,37 +1995,6 @@ export function GraphView() {
             </select>
           </div>
 
-          {/* Center — Insight | Construct */}
-          <div className={cn(
-            "flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] p-0.5",
-            isCramped && "order-3 w-full justify-center",
-          )}>
-            <button
-              type="button"
-              onClick={() => setInteractionMode("insight")}
-              className={cn(
-                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
-                isInsightMode
-                  ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
-                  : "text-[var(--subtext-0)] hover:text-[var(--text)]",
-              )}
-            >
-              Insight
-            </button>
-            <button
-              type="button"
-              onClick={() => setInteractionMode("construct")}
-              className={cn(
-                "rounded-[var(--r-pill)] px-3 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
-                isConstructMode
-                  ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
-                  : "text-[var(--subtext-0)] hover:text-[var(--text)]",
-              )}
-            >
-              Construct
-            </button>
-          </div>
-
           {/* Right — search + actions */}
           <div className={cn("flex items-center gap-1.5", isCramped && "order-2")}>
             {!isCramped && (
@@ -2031,49 +2010,12 @@ export function GraphView() {
               </div>
             )}
 
-            {!isCramped ? (
-              <>
-            <TopbarIconBtn
-              title="Zoom in"
-              onClick={() => {
-                if (isInsightMode) insightGraphRef.current?.zoomBy(1.12);
-                else
-                  setViewport((c) => ({
-                    ...c,
-                    scale: clamp(c.scale * 1.12, 0.25, 1.75),
-                  }));
-              }}
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </TopbarIconBtn>
-            <TopbarIconBtn
-              title="Zoom out"
-              onClick={() => {
-                if (isInsightMode) insightGraphRef.current?.zoomBy(0.88);
-                else
-                  setViewport((c) => ({
-                    ...c,
-                    scale: clamp(c.scale * 0.88, 0.25, 1.75),
-                  }));
-              }}
-            >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </TopbarIconBtn>
-            <TopbarIconBtn title="Fit view" onClick={fitVisibleGraph}>
-              <Maximize2 className="h-3.5 w-3.5" />
-            </TopbarIconBtn>
-              </>
-            ) : null}
-
             {/* Overflow */}
             <div className="relative">
-              <TopbarIconBtn title="More" onClick={() => setOverflowOpen((o) => !o)}>
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </TopbarIconBtn>
               {overflowOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOverflowOpen(false)} />
-                  <div className="absolute right-0 top-full z-50 mt-1 w-[220px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] py-1 shadow-[var(--shadow-elevated)]">
+                  <div className="fixed bottom-14 left-4 z-50 w-[220px] rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] py-1 shadow-[var(--shadow-elevated)]">
                     <OverflowItem
                       label="Reset view"
                       onClick={() => {
@@ -2230,6 +2172,8 @@ export function GraphView() {
               </div>
             ) : null}
           </div>
+
+          {isInsightMode && highestDegreeNode ? <p data-graph-knot className="pointer-events-none absolute left-4 top-4 z-30 max-w-sm rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-3 py-2 text-[var(--t-meta)] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{highestDegreeNode.label}</span> is the knot with the most links.</p> : null}
 
           {/* Construct mode */}
           <div
@@ -2758,9 +2702,24 @@ export function GraphView() {
             </div>
           )}
 
+          <div data-graph-dock className={cn("pointer-events-auto absolute left-4 z-30 max-w-[calc(100%-2rem)]", isConstructMode ? "bottom-20" : "bottom-4")}>
+            <div className="flex max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)]">
+              <ToolbarBtn title="Insight" active={isInsightMode} onClick={() => setInteractionMode("insight")}>Insight</ToolbarBtn>
+              <ToolbarBtn title="Construct" active={isConstructMode} onClick={() => setInteractionMode("construct")}>Construct</ToolbarBtn>
+              <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+              <ToolbarBtn title="Fit graph" onClick={fitVisibleGraph}><Maximize2 className="h-3.5 w-3.5" />Fit</ToolbarBtn>
+              <ToolbarBtn title="Zoom in" onClick={() => zoomGraph(1.2)} aria-label="Zoom in"><ZoomIn className="h-3.5 w-3.5" /></ToolbarBtn>
+              <ToolbarBtn title="Zoom out" onClick={() => zoomGraph(1 / 1.2)} aria-label="Zoom out"><ZoomOut className="h-3.5 w-3.5" /></ToolbarBtn>
+              <ToolbarBtn title="Ego network from selection" disabled={activeSelectedNodeIds.length === 0} onClick={handleApplyEgoFromSelection}><Orbit className="h-3.5 w-3.5" />Ego</ToolbarBtn>
+              <ToolbarBtn title="Path from selection" disabled={activeSelectedNodeIds.length < 2} onClick={handleUseSelectedForPath}><Route className="h-3.5 w-3.5" />Path</ToolbarBtn>
+              <ToolbarBtn title="Export graph" disabled={visualNodes.length === 0} onClick={() => setOverflowOpen(true)}><Download className="h-3.5 w-3.5" />Export</ToolbarBtn>
+              <ToolbarBtn title="More graph actions" onClick={() => setOverflowOpen(true)}>More</ToolbarBtn>
+            </div>
+          </div>
+
           {/* Floating status (bottom-left) */}
           {(statusMessage || errorMessage) && (
-            <div className="pointer-events-none absolute bottom-4 left-4 z-30">
+            <div className={cn("pointer-events-none absolute left-4 z-30", isConstructMode ? "bottom-32" : "bottom-16")}>
               <div
                 className={cn(
                   "rounded-[var(--r-ctl)] border px-3 py-1.5 font-ui text-[var(--t-section)]",
@@ -2774,21 +2733,6 @@ export function GraphView() {
             </div>
           )}
 
-          {/* Graph stats strip (top-left of canvas) */}
-          <div className="pointer-events-none absolute left-4 top-4 z-30 flex gap-2">
-            <StatChip label="Nodes" value={`${filteredNodes.length}/${visualNodes.length}`} />
-            <StatChip label="Edges" value={`${filteredEdges.length}/${edges.length}`} />
-            {isInsightMode ? null : (
-              <StatChip label="Zoom" value={`${Math.round(viewport.scale * 100)}%`} />
-            )}
-            {shortestPathNodeIds.length > 1 && (
-              <StatChip
-                label="Route"
-                value={`${shortestPathNodeIds.length - 1}h`}
-                accent
-              />
-            )}
-          </div>
         </div>
       </div>
 

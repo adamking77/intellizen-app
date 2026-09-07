@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FilePlus, Folder, FolderOpen, FolderPlus, RefreshCw, Search, Star } from 'lucide-react';
 import { Control } from '@/components/ui/control';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import type { WorkspaceDatabaseRecordModel } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 function savedList(key: string): string[] { try { const value = JSON.parse(localStorage.getItem(key) ?? '[]'); return Array.isArray(value) ? value.filter(x => typeof x === 'string') : []; } catch { return []; } }
-export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuery, width, creating, inventory, loadingVault, vaultError, workspaceError, activeFolder, onFolder, onRefresh, onSearch, onSelect, onCreate, onCreateFolder, onResize }: {
+export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuery, width, creating, inventory, loadingVault, vaultError, workspaceError, activeFolder, onFolder, onRefresh, onSearch, onSelect, onCreate, onCreateFolder }: {
   records: WorkspaceDatabaseRecordModel[];
   projects: Array<{ id: string; name: string }>;
   proposalCounts: Record<string, number>;
@@ -18,7 +18,7 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
   activeFolder: string; onFolder: (path: string) => void; onRefresh: () => void;
   onSearch: (value: string) => void; onSelect: (id: string) => void;
   onCreate: (template?: WorkspaceDatabaseRecordModel | null) => void;
-  onCreateFolder: (name: string) => Promise<void>; onResize: (width: number) => void;
+  onCreateFolder: (name: string) => Promise<void>;
 }) {
   const [menu, setMenu] = useState(false);
   const [view, setView] = useState<DocsView>('folders');
@@ -70,16 +70,9 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
     const open = !!searchQuery || expanded.includes(id);
     return <section className="mt-3"><button type="button" className="nav-node min-h-[var(--h-row)] w-full gap-2 px-2" aria-expanded={open} onClick={() => setExpanded(current => open ? current.filter(p => p !== id) : [...current, id])}>{open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}<span className="flex-1 text-left">{label}</span><span className="text-[var(--t-count)]">{items.length}</span></button>{open ? items.map(record => row(record, 1)) : null}</section>;
   }
-  const startResize = (event: PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const origin = event.clientX; const start = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 300;
-    const move = (next: globalThis.PointerEvent) => onResize(Math.max(180, Math.min(480, start + next.clientX - origin)));
-    const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop); window.addEventListener('pointercancel', stop);
-  };
-  return <aside className="relative flex min-h-0 shrink-0 flex-col bg-[var(--mantle)]" style={{ width }} aria-label="Documents">
+  return <aside className="relative flex min-h-0 shrink-0 flex-col border-r border-[var(--line)] bg-[var(--ground)]" style={{ width }} aria-label="Documents">
     <div className="grid gap-2 p-3">
-      <div className="flex min-h-[var(--h-ctl)] items-center gap-2"><span className="text-[var(--t-section)] uppercase tracking-[0.14em] text-[var(--text)]">Docs</span><div className="flex-1" />
+      <div className="flex min-h-[var(--h-ctl)] items-center gap-2"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text)]">Docs</span><div className="flex-1" />
         <Control size="icon" variant="quiet" aria-label="Refresh vault folders" onClick={onRefresh}><RefreshCw className="h-3.5 w-3.5" /></Control>
         <div ref={menuRef} className="relative"><Control size="sm" variant="primary" loading={creating} onClick={() => setMenu(open => !open)} aria-expanded={menu}>New <ChevronDown className="h-3 w-3" /></Control>
           {menu ? <div className="absolute right-0 top-8 z-40 w-60 max-w-[80vw] rounded-[var(--r-plane)] bg-[var(--raised)] p-1.5 shadow-[var(--shadow-elevated)]">
@@ -107,7 +100,6 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
       {!filtered.length && !tree.folders.length && !loadingVault ? <p className="px-2 py-3 text-[var(--t-meta)] text-[var(--text-muted)]">{searchQuery ? 'No documents match this search.' : view === 'favorites' ? 'Star a document to keep it here.' : 'No documents in this view.'}</p> : null}
     </div>
     <p className="truncate px-3 pb-2 text-[var(--t-meta)] text-[var(--text-muted)]" title={activeFolder || 'journal'}>New notes → {activeFolder || 'journal'}</p>
-    {typeof width === 'number' ? <div role="separator" aria-orientation="vertical" aria-label="Resize document list" aria-valuemin={180} aria-valuemax={480} aria-valuenow={width} tabIndex={0} onPointerDown={startResize} onKeyDown={event => { if (event.key === 'ArrowLeft') onResize(Math.max(180, width - 10)); else if (event.key === 'ArrowRight') onResize(Math.min(480, width + 10)); else return; event.preventDefault(); }} className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-[var(--hover)]" /> : null}
   </aside>;
 }
 function DocumentRow({ record, selected, favorite, pending, level, showPath, onSelect, onFavorite }: { record: WorkspaceDatabaseRecordModel; selected: boolean; favorite: boolean; pending: number; level: number; showPath: boolean; onSelect: (id: string) => void; onFavorite: (id: string) => void }) {

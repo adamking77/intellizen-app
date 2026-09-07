@@ -3,6 +3,49 @@
 macOS-only Tauri v2 desktop intelligence platform for GenZen. This file is
 the current v3 build contract; older product specs are historical context.
 
+## Engineering workflow
+
+**Adam's project override, reaffirmed 2026-09-07: GenZen Build is disabled in
+this project.** Do not invoke or initialize it, create its harness, or impose
+its lifecycle, templates or approval machinery. This overrides references to
+GenZen Build in shared vault instructions, agent charters and skills.
+
+Use ordinary implementation plans, bounded file ownership and checks against
+the running native app. Every coding agent and delegate uses **Ponytail, full
+mode**: reuse existing code first, make the smallest complete change, and
+preserve accessibility, data integrity and permission boundaries. Adam's
+explicit external-action and destructive-action approval rules still apply.
+
+**Keel's role, Adam 2026-09-07:** executive engineer, engineering manager,
+chief of staff and project manager. Own scope, sequencing, delegation,
+coordination, integration and verification. Delegate bounded implementation
+to Sol, Terra and Luna where appropriate; keep the project moving, resolve
+cross-agent conflicts and bring Adam only material product/authority decisions.
+Do not delegate accountability or treat a worker's completion claim as proof.
+
+**Interface animation, Adam 2026-09-07:** Emil Kowalski's skills are installed
+globally and vendored in `.agents/skills/` (source revision and license in
+`EMIL-SOURCE.md` and `EMIL-LICENSE`). Before building surface animation, read
+`emil-design-eng/SKILL.md` and `animate/SKILL.md`; review motion changes with
+`review-animations/SKILL.md`. Apply alongside Ponytail full and SPEC-2050:
+reuse existing motion tokens/components, keep keyboard actions immediate,
+honor reduced motion and verify interruption in the native app. Use the other
+installed skills when relevant; Expo/Swift skills do not change this app's stack.
+
+**Agent panel layout correction, Adam 2026-09-07:** preserve the pre-2050
+attached, detached and HUD layouts. Restore the previous selected-agent name
+size, compact header and combined composer/controls footprint. Apply the new
+colors and visual treatment without adding tall Sees/Thread headings, moving
+permission into a separate band, or shrinking the usable conversation viewport.
+This overrides SPEC-2050 frame layout instructions for these three modes.
+Keep the context-removal and decision safety fixes.
+
+**Page typography correction, Adam 2026-09-07:** the new availability heading
+and eyebrow are too large. Use a calmer page scale: headings about 24–28px,
+summary sentences about 20–26px, and small readable eyebrows around 10px.
+Carry this through the remaining redesigned pages. This overrides Fable's
+large display sizes without changing the restored agent-panel layout.
+
 ## Current v3 contract
 
 The sidebar is the shared hierarchy tree: department → workspace → project →

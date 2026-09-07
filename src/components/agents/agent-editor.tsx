@@ -35,10 +35,10 @@ function voiceLabel(service: VoiceService | undefined): string {
   return VOICE_SERVICES.find((s) => s.id === service)?.label ?? "the voice service";
 }
 
-const CAPS = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--overlay-1)]";
+const CAPS = "font-mono text-[var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
 const FIELD =
-  "w-full rounded-[var(--r-ctl)] border-0 bg-[var(--input)] px-[9px] py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
-  "placeholder:text-[var(--overlay-0)] focus:outline-none focus:shadow-none";
+  "w-full border-b border-[var(--surface-line)] bg-transparent px-0 py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "placeholder:text-[var(--text-dim)] focus-visible:outline-none focus-visible:border-[var(--line-strong)]";
 const PILL = "pill";
 const COMPACT_PILL = "pill pill-compact";
 const COMPACT_GROUP =
@@ -84,6 +84,9 @@ export interface EditorProps {
   onSave: (draft: Agent, confirmModel: boolean) => Promise<void>;
   onDelete: (agent: Agent) => void;
   onPickImage: (dataUrl: string | null) => Promise<void>;
+  onMessage?: () => void;
+  resting?: boolean;
+  onRestToggle?: () => void;
   onClose: () => void;
 }
 
@@ -98,6 +101,9 @@ export function AgentEditor({
   onSave,
   onDelete,
   onPickImage,
+  onMessage,
+  resting = false,
+  onRestToggle,
   onClose,
 }: EditorProps) {
   const [draft, setDraft] = useState<Agent>(agent);
@@ -178,7 +184,6 @@ export function AgentEditor({
     setError(null);
     try {
       await onSave({ ...draft, name, displayName: draft.displayName.trim() || name }, confirmModel);
-      if (proceduralPreview && image) await onPickImage(null);
       onClose();
     } catch (e) {
       if (e instanceof Error && e.name === "ModelConfirmRequired") setConfirm(e.message);
@@ -235,7 +240,7 @@ export function AgentEditor({
                 />
 
                 <div className={COMPACT_GROUP} role="group" aria-label="Avatar style">
-                  {(["sphere", "blob"] as AvatarStyle[]).map((style) => (
+                  {(["sphere", "blob", "trace"] as AvatarStyle[]).map((style) => (
                     <button
                       key={style}
                       type="button"
@@ -243,13 +248,26 @@ export function AgentEditor({
                       className={COMPACT_PILL}
                       onClick={() => {
                         setProceduralPreview(true);
-                        set({ avatarStyle: style, avatarKind: style === "blob" ? draft.avatarKind : undefined });
+                        set({ avatarStyle: style });
                       }}
                     >
-                      {style === "sphere" ? "Sphere" : "Blob"}
+                      {style === "sphere" ? "Sphere" : style === "blob" ? "Blob" : "Trace"}
                     </button>
                   ))}
                 </div>
+
+                {draft.avatarStyle === "trace" ? (
+                  <button
+                    type="button"
+                    className={COMPACT_PILL}
+                    onClick={() => {
+                      setProceduralPreview(true);
+                      set({ avatarSeed: Math.floor(Math.random() * 2_147_483_648) });
+                    }}
+                  >
+                    Generate another
+                  </button>
+                ) : null}
 
                 {draft.avatarStyle === "blob" ? (
                   <div className="grid grid-cols-4 gap-1" aria-label="Blob silhouette">
@@ -339,11 +357,13 @@ export function AgentEditor({
                   ))}
                 </div>
                 <span className="text-center font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
-                  {image && !proceduralPreview
-                    ? "Picture override. Choose Sphere or Blob to replace it when you save."
-                    : draft.avatarKind || draft.avatarColor
-                      ? "Procedural avatar pinned."
-                      : "Drawn from the name."}
+                  {image
+                    ? "Picture override is kept. Remove it to reveal this drawing."
+                    : draft.avatarStyle === "trace"
+                      ? "A static trace is drawn from this seed."
+                      : draft.avatarKind || draft.avatarColor
+                        ? "Procedural avatar pinned."
+                        : "Drawn from the name."}
                 </span>
 
                 {/* Voice, at the foot of the identity column: something the
@@ -581,6 +601,8 @@ export function AgentEditor({
               <button type="button" className={PILL} onClick={onClose} disabled={busy}>
                 Cancel
               </button>
+              {onMessage ? <button type="button" className={PILL} onClick={onMessage} disabled={busy}>Message {draft.displayName || draft.name}</button> : null}
+              {onRestToggle ? <button type="button" className={PILL} onClick={onRestToggle} disabled={busy}>{resting ? "Restore" : "Rest for today"}</button> : null}
               <button
                 type="button"
                 disabled={!nameOk || !dirty || busy || loadingDetail}

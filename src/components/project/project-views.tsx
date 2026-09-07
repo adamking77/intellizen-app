@@ -124,45 +124,47 @@ export function ProjectEvidenceTable({
 }) {
   return (
     <div className="px-5 py-4">
-      <div role="table" aria-label="Project evidence" className="overflow-hidden rounded-[var(--r-ctl)] bg-[var(--raised)]">
-        <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          <span role="columnheader">Evidence</span><span role="columnheader">Runs as</span><span role="columnheader">State</span><span role="columnheader">Updated</span>
-        </div>
-        {files.map((file) => {
-          const author = text(file, DOCUMENTS_DB_FIELDS.author).trim();
-          return (
-            <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenDocument(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-              <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{title(file)}</span>
-              <span role="cell">{author ? <Attribution name={author} /> : "—"}</span>
-              <span role="cell"><Pill>{text(file, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill></span>
-              <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{date(file.updated_at)}</span>
+      <div className="overflow-x-auto rounded-[var(--r-ctl)]">
+        <div role="table" aria-label="Project evidence" className="min-w-[620px] overflow-hidden bg-[var(--raised)]">
+          <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            <span role="columnheader">Evidence</span><span role="columnheader">Runs as</span><span role="columnheader">State</span><span role="columnheader">Updated</span>
+          </div>
+          {files.map((file) => {
+            const author = text(file, DOCUMENTS_DB_FIELDS.author).trim();
+            return (
+              <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenDocument(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+                <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{title(file)}</span>
+                <span role="cell">{author ? <Attribution name={author} /> : "—"}</span>
+                <span role="cell"><Pill>{text(file, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill></span>
+                <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{date(file.updated_at)}</span>
+              </button>
+            );
+          })}
+          {linkedRecords.map((record) => (
+            <button key={`${record.databaseId}:${record.recordId}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenRecord(record), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+              <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{record.title}</span>
+              <span role="cell">—</span>
+              <span role="cell">{record.status ? <Pill>{record.status}</Pill> : "—"}</span>
+              <span role="cell" className="text-[var(--t-meta)] text-[var(--text-muted)]">{record.databaseName}</span>
             </button>
-          );
-        })}
-        {linkedRecords.map((record) => (
-          <button key={`${record.databaseId}:${record.recordId}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenRecord(record), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{record.title}</span>
-            <span role="cell">—</span>
-            <span role="cell">{record.status ? <Pill>{record.status}</Pill> : "—"}</span>
-            <span role="cell" className="text-[var(--t-meta)] text-[var(--text-muted)]">{record.databaseName}</span>
-          </button>
-        ))}
-        {signals.map((signal) => (
-          <button key={`signal:${signal.id}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenSignal?.(signal), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{signal.intel_signals?.title || "Untitled signal"}</span>
-            <span role="cell" className="truncate text-[var(--t-meta)] text-[var(--text-muted)]">{signal.intel_signals?.source || "—"}</span>
-            <span role="cell"><Pill>signal</Pill></span>
-            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{signal.intel_signals?.updated_at ? date(signal.intel_signals.updated_at) : "—"}</span>
-          </button>
-        ))}
-        {(folderFiles ?? []).map((file) => (
-          <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenFile?.(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{file.title}</span>
-            <span role="cell" className="truncate font-mono text-[11px] text-[var(--text-muted)]">{file.folder.split("/").pop() || "folder"}</span>
-            <span role="cell"><Pill>file</Pill></span>
-            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{file.updatedAt ? date(new Date(file.updatedAt).toISOString()) : "—"}</span>
-          </button>
-        ))}
+          ))}
+          {signals.map((signal) => (
+            <button key={`signal:${signal.id}`} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenSignal?.(signal), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+              <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{signal.intel_signals?.title || "Untitled signal"}</span>
+              <span role="cell" className="truncate text-[var(--t-meta)] text-[var(--text-muted)]">{signal.intel_signals?.source || "—"}</span>
+              <span role="cell"><Pill>signal</Pill></span>
+              <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{signal.intel_signals?.updated_at ? date(signal.intel_signals.updated_at) : "—"}</span>
+            </button>
+          ))}
+          {(folderFiles ?? []).map((file) => (
+            <button key={file.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpenFile?.(file), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+              <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{file.title}</span>
+              <span role="cell" className="truncate font-mono text-[11px] text-[var(--text-muted)]">{file.folder.split("/").pop() || "folder"}</span>
+              <span role="cell"><Pill>file</Pill></span>
+              <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{file.updatedAt ? date(new Date(file.updatedAt).toISOString()) : "—"}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -171,18 +173,20 @@ export function ProjectEvidenceTable({
 export function ProjectEntities({ entities, onOpen }: { entities: IntelEntity[]; onOpen: (entity: IntelEntity) => void }) {
   return (
     <div className="px-5 py-4">
-      <div role="table" aria-label="Case entities" className="overflow-hidden rounded-[var(--r-ctl)] bg-[var(--raised)]">
-        <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          <span role="columnheader">Entity</span><span role="columnheader">Type</span><span role="columnheader">Confidence</span><span role="columnheader">Updated</span>
+      <div className="overflow-x-auto rounded-[var(--r-ctl)]">
+        <div role="table" aria-label="Case entities" className="min-w-[640px] overflow-hidden bg-[var(--raised)]">
+          <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            <span role="columnheader">Entity</span><span role="columnheader">Type</span><span role="columnheader">Confidence</span><span role="columnheader">Updated</span>
+          </div>
+          {entities.map((entity) => (
+            <button key={entity.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpen(entity), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
+              <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{entity.name}</span>
+              <span role="cell" className="capitalize text-[var(--t-meta)] text-[var(--text-muted)]">{entity.entity_type}</span>
+              <span role="cell">{entity.confidence ? <Pill>{entity.confidence}</Pill> : "—"}</span>
+              <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{date(entity.updated_at)}</span>
+            </button>
+          ))}
         </div>
-        {entities.map((entity) => (
-          <button key={entity.id} type="button" role="row" onClick={(event) => runViewTransition("drawer", () => onOpen(entity), event.currentTarget)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_150px_120px_110px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{entity.name}</span>
-            <span role="cell" className="capitalize text-[var(--t-meta)] text-[var(--text-muted)]">{entity.entity_type}</span>
-            <span role="cell">{entity.confidence ? <Pill>{entity.confidence}</Pill> : "—"}</span>
-            <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{date(entity.updated_at)}</span>
-          </button>
-        ))}
       </div>
     </div>
   );

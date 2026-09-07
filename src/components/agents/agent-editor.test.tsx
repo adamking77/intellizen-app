@@ -63,7 +63,7 @@ describe("AgentEditor avatar controls", () => {
     const button = (label: string) =>
       Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label);
 
-    for (const label of ["Sphere", "Blob", "Replace picture", "Remove"]) {
+    for (const label of ["Sphere", "Blob", "Trace", "Replace picture", "Remove"]) {
       expect(button(label)?.className).toContain("pill");
     }
     expect(button("Sphere")?.className).toContain("pill-compact");
@@ -79,4 +79,39 @@ describe("AgentEditor avatar controls", () => {
 
     await act(async () => root.unmount());
   });
+});
+
+it("saves a generated trace seed without removing an uploaded picture", async () => {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  const onPickImage = vi.fn().mockResolvedValue(undefined);
+
+  await act(async () => {
+    root.render(
+      <AgentEditor
+        agent={agent}
+        creating={false}
+        loadingDetail={false}
+        detailError={null}
+        image="data:image/png;base64,avatar"
+        defaultContext={[]}
+        onSave={onSave}
+        onDelete={vi.fn()}
+        onPickImage={onPickImage}
+        onClose={vi.fn()}
+      />,
+    );
+  });
+
+  const button = (label: string) => Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label)!;
+  await act(async () => button("Trace").click());
+  expect(button("Generate another")).toBeTruthy();
+  await act(async () => button("Generate another").click());
+  await act(async () => button("Save").click());
+
+  expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ avatarStyle: "trace", avatarSeed: expect.any(Number) }), false);
+  expect(onPickImage).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
 });

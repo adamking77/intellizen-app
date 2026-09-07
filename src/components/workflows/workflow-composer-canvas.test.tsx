@@ -13,7 +13,7 @@ it("projects only schema connections and offers accessible connect and edit call
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const definition = addWorkflowDesignerStep(createWorkflowDesignerDraft({ id: "canvas", name: "Canvas" }), "condition");
   const connect = vi.fn(), duplicate = vi.fn(), undo = vi.fn(), positions = vi.fn();
-  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="step_2" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={positions} onConnect={connect} onAdd={() => {}} onDuplicate={duplicate} onRemove={() => {}} onUndo={undo} onRedo={() => {}} />));
+  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="step_2" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={positions} onConnect={connect} onDuplicate={duplicate} onRemove={() => {}} onUndo={undo} onRedo={() => {}} />));
   const edges = mock.flowProps.edges as Array<{ source: string; target: string; sourceHandle: string }>;
   expect(edges.map(({ source, target, sourceHandle }) => [source, target, sourceHandle])).toEqual([["trigger", "step:step_1", "next"], ["step:step_1", "step:step_2", "next"], ["step:step_2", "terminal:complete", "then"], ["step:step_2", "terminal:blocked", "else"]]);
   expect(mock.flowProps.edgesFocusable).toBe(false);
@@ -33,8 +33,8 @@ it("preserves a live drag across parent rerenders and adopts committed positions
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const definition = createWorkflowDesignerDraft({ id: "arrange", name: "Arrange" });
   const persist = vi.fn();
-  const render = async (positions: Record<string, { x: number; y: number }> = {}) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={persist} onConnect={() => {}} onAdd={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
-  const node = () => (mock.flowProps.nodes as Array<{ id: string; position: { x: number; y: number } }>).find((entry) => entry.id === "step:step_1")!;
+  const render = async (positions: Record<string, { x: number; y: number }> = {}) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={persist} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
+  const node = () => (mock.flowProps.nodes as Array<{ id: string; position: { x: number; y: number }; data: object }>).find((entry) => entry.id === "step:step_1")!;
   await render(); const original = node().position;
   await act(async () => (mock.flowProps.onNodesChange as Function)([{ id: "step:step_1", type: "position", position: { x: 300, y: 220 }, dragging: true }]));
   expect(node().position).toEqual({ x: 300, y: 220 });
@@ -47,23 +47,17 @@ it("preserves a live drag across parent rerenders and adopts committed positions
   expect(node().position).toEqual(original);
 });
 
-it("reflows from actual dimensions without persisting expansion, and restores base layout on collapse", async () => {
+it("keeps canvas cards compact when a step is selected", async () => {
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const definition = createWorkflowDesignerDraft({ id: "expand", name: "Expand" }); const persist = vi.fn();
   const base = { "step:step_1": { x: 60, y: 220 } };
-  const render = async (selected: string, positions = base) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId={selected} positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={persist} onConnect={() => {}} onAdd={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
-  const node = () => (mock.flowProps.nodes as Array<{ id: string; position: { x: number; y: number } }>).find((entry) => entry.id === "step:step_1")!;
+  const render = async (selected: string, positions = base) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId={selected} positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={persist} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
+  const node = () => (mock.flowProps.nodes as Array<{ id: string; position: { x: number; y: number }; data: object }>).find((entry) => entry.id === "step:step_1")!;
   await render("trigger");
   await act(async () => (mock.flowProps.onNodesChange as Function)([{ id: "trigger", type: "dimensions", dimensions: { width: 380, height: 760 } }, { id: "step:step_1", type: "dimensions", dimensions: { width: 280, height: 120 } }]));
-  expect(node().position).toEqual({ x: 60, y: 788 }); expect(persist).not.toHaveBeenCalled();
-  await act(async () => (mock.flowProps.onNodeDragStart as Function)(null, node()));
-  await act(async () => (mock.flowProps.onNodeDragStop as Function)(null, { ...node(), position: { x: 100, y: 838 } }));
-  expect(persist).toHaveBeenLastCalledWith({ "step:step_1": { x: 100, y: 270 } });
-  await render("trigger", { "step:step_1": { x: 100, y: 270 } });
-  expect(node().position).toEqual({ x: 100, y: 838 });
-  await render("", { "step:step_1": { x: 100, y: 270 } }); expect(node().position).toEqual({ x: 100, y: 270 });
-  await render("trigger", { "step:step_1": { x: 100, y: 270 } }); expect(node().position).toEqual({ x: 100, y: 788 });
-  expect(persist).toHaveBeenCalledTimes(1);
+  expect(node().position).toEqual(base["step:step_1"]); expect(node().data).toMatchObject({ expanded: false }); expect(persist).not.toHaveBeenCalled();
+  await render("", base);
+  expect(node().position).toEqual(base["step:step_1"]);
 });
 
 
@@ -71,7 +65,7 @@ it.each(["complete", "blocked", "escalate"])("lets %s move, retain its layout th
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const definition = createWorkflowDesignerDraft({ id: "outcomes", name: "Outcomes" });
   const persist = vi.fn(), select = vi.fn(); const id = `terminal:${outcome}`;
-  const render = async (positions: Record<string, { x: number; y: number }> = {}) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={persist} onConnect={() => {}} onAdd={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
+  const render = async (positions: Record<string, { x: number; y: number }> = {}) => act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={positions} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={persist} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
   const node = () => (mock.flowProps.nodes as Array<{ id: string; position: { x: number; y: number }; draggable: boolean; selectable: boolean; focusable: boolean; dragHandle?: string; data: object }>).find((entry) => entry.id === id)!;
   await render(); const original = node().position; const moved = { x: original.x + 120, y: original.y + 80 };
   expect(node()).toMatchObject({ draggable: true, selectable: true, focusable: true });
@@ -99,7 +93,7 @@ it.each(["complete", "blocked", "escalate"])("lets %s move, retain its layout th
 it("does not delete or duplicate the previously edited step when an outcome has keyboard focus", async () => {
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const definition = createWorkflowDesignerDraft({ id: "keys", name: "Keys" }); const remove = vi.fn(), duplicate = vi.fn();
-  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="step_1" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={() => {}} onConnect={() => {}} onAdd={() => {}} onDuplicate={duplicate} onRemove={remove} onUndo={() => {}} onRedo={() => {}} />));
+  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="step_1" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={() => {}} onConnect={() => {}} onDuplicate={duplicate} onRemove={remove} onUndo={() => {}} onRedo={() => {}} />));
   const outcome = document.createElement("div"); outcome.className = "react-flow__node"; outcome.dataset.id = "terminal:complete"; host.firstElementChild!.append(outcome);
   await act(async () => { outcome.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true })); outcome.dispatchEvent(new KeyboardEvent("keydown", { key: "d", metaKey: true, bubbles: true })); });
   expect(remove).not.toHaveBeenCalled(); expect(duplicate).not.toHaveBeenCalled();
@@ -110,7 +104,7 @@ it("retains the supplied viewport and opens an optional outline that selects a n
   const definition = createWorkflowDesignerDraft({ id: "outline", name: "Outline" });
   const select = vi.fn(), setViewport = vi.fn(), fitView = vi.fn(), changed = vi.fn();
   const viewport = { x: 123, y: -80, zoom: 0.55 };
-  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={() => {}} onConnect={() => {}} onAdd={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} initialViewport={viewport} onViewportChange={changed} />));
+  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={() => {}} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} initialViewport={viewport} onViewportChange={changed} />));
   await act(async () => (mock.flowProps.onInit as Function)({ setViewport, fitView, getViewport: () => viewport, getNode: () => undefined }));
   expect(setViewport).toHaveBeenCalledWith(viewport);
   expect(fitView).not.toHaveBeenCalled();

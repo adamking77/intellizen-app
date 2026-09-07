@@ -5,9 +5,9 @@ export type StatusPillVariant = "active" | "paused" | "error" | "stale" | "new";
 
 const pillStyles: Record<PillVariant, string> = {
   neutral: "bg-[var(--raised)] text-[var(--text-muted)]",
-  waiting: "bg-[color-mix(in_srgb,var(--wait)_18%,transparent)] text-[var(--wait)]",
-  verified: "bg-[color-mix(in_srgb,var(--ok)_18%,transparent)] text-[var(--ok)]",
-  failure: "bg-[color-mix(in_srgb,var(--bad)_18%,transparent)] text-[var(--bad)]",
+  waiting: "bg-transparent text-[var(--wait)]",
+  verified: "bg-transparent text-[var(--ok)]",
+  failure: "bg-transparent text-[var(--bad)]",
   runtime: "bg-transparent text-[var(--runtime)]",
 };
 

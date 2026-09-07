@@ -33,7 +33,10 @@ describe("project room views", () => {
     const host = document.body.appendChild(document.createElement("div"));
     const root = createRoot(host);
     await act(async () => root.render(<ProjectEvidenceTable files={[file]} linkedRecords={[]} onOpenDocument={open} onOpenRecord={vi.fn()} />));
+    const table = host.querySelector<HTMLElement>('[role="table"]')!;
     const row = host.querySelector<HTMLButtonElement>('button[role="row"]')!;
+    expect(table.className).toContain("min-w-[620px]");
+    expect(table.parentElement?.className).toContain("overflow-x-auto");
     expect(row.className).toContain("h-[var(--h-line)]");
     await act(async () => row.click());
     expect(open).toHaveBeenCalledWith(file);

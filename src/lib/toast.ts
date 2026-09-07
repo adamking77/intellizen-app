@@ -1,4 +1,5 @@
 import { toast as sonner } from "sonner";
+import { readSessionMode } from "./session-mode";
 
 type ToastOpts = {
   description?: string;
@@ -6,10 +7,14 @@ type ToastOpts = {
 };
 
 export const toast = {
-  success: (message: string, opts?: ToastOpts) => sonner.success(message, opts),
-  error: (message: string, opts?: ToastOpts) => sonner.error(message, opts),
-  info: (message: string, opts?: ToastOpts) => sonner.message(message, opts),
+  success: (message: string, opts?: ToastOpts) => readSessionMode() === "not_today" ? undefined : sonner.success(message, opts),
+  error: (message: string, opts?: ToastOpts) => readSessionMode() === "not_today" ? undefined : sonner.error(message, opts),
+  info: (message: string, opts?: ToastOpts) => readSessionMode() === "not_today" ? undefined : sonner.message(message, opts),
 };
+
+export function dismissToasts() {
+  sonner.dismiss();
+}
 
 export function errorMessage(err: unknown) {
   if (err instanceof Error) return err.message;
@@ -39,5 +44,6 @@ export function errorMessage(err: unknown) {
 }
 
 export function toastError(prefix: string, err: unknown) {
+  if (readSessionMode() === "not_today") return;
   sonner.error(prefix, { description: errorMessage(err) });
 }

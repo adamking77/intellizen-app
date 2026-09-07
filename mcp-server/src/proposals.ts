@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 
 import { dryRunPreview } from "./write-contract.js";
 
@@ -8,7 +8,7 @@ import { dryRunPreview } from "./write-contract.js";
  *  Hunks are never stored; the app diffs `newText` against the file on disk. */
 export interface ProposalFile {
   id: string;
-  /** Vault-relative (`~/vault/intelligence/<path>`) or absolute. */
+  /** `vault:<path>`, intelligence-relative, or absolute. */
   docPath: string;
   author: string;
   note: string;
@@ -27,6 +27,13 @@ export const PROPOSALS_DIR = join(
 export function resolveDocPath(docPath: string, vaultBase: string) {
   if (!docPath || docPath.split(/[\\/]/).includes("..")) {
     throw new Error(`Unusable document path: ${docPath}`);
+  }
+  if (docPath.startsWith("vault:")) {
+    const relative = docPath.slice("vault:".length);
+    if (!relative || relative.split(/[\\/]/).includes("..") || relative.startsWith("/") || relative.startsWith("\\") || /^[A-Za-z]:/.test(relative)) {
+      throw new Error(`Unusable document path: ${docPath}`);
+    }
+    return join(dirname(vaultBase), relative);
   }
   return docPath.startsWith("/") ? docPath : join(vaultBase, docPath);
 }
@@ -73,7 +80,7 @@ export const proposeDocumentEditTool = {
   inputSchema: {
     type: "object",
     properties: {
-      doc_path: { type: "string", description: "The document's vault_path: relative to ~/vault/intelligence, or absolute." },
+      doc_path: { type: "string", description: "The document's vault_path: vault:<path> under ~/vault, relative to ~/vault/intelligence, or absolute." },
       new_text: { type: "string" },
       author: { type: "string" },
       note: { type: "string", description: "One line saying what this changes." },

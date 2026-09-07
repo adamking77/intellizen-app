@@ -9,7 +9,7 @@ import { Card, NewCard, Tag } from "@/components/agents/agent-card";
 import { AgentEditor } from "@/components/agents/agent-editor";
 import { blankAgent, engineLabel, isHermes, profileOf, teamMembers, type Agent, type Team } from "@/components/agents/agent-model";
 import { deleteAgent, describeHermesAgent, listAgents, loadAvatar, saveAgent, setAvatar } from "@/components/agents/agents-data";
-import { Avatar, TeamStack } from "@/components/agents/avatar";
+import { Avatar, TeamStack, identityColor } from "@/components/agents/avatar";
 import { TeamSheet } from "@/components/agents/team-sheet";
 import { deleteTeam, loadTeams, newTeamId, saveTeam } from "@/components/agents/teams-store";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -17,15 +17,19 @@ import { useEngineStore } from "@/engine/engine-store";
 import { discoverAcpProviders } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { useSessionStore } from "@/engine/session-store";
+import { transcriptBusy } from "@/engine/transcript";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
 import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
+import { useRestingAgents } from "@/lib/session-mode";
 import { errorMessage, toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { groupMemberKey } from "@/rooms/group-membership";
 import { hasGroupChatNameBase } from "@/rooms/group-chat";
 import { createRoom, ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
 import type { GroupMember } from "@/rooms/types";
 
-const TITLE = "font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]";
+const TITLE = "font-ui text-[clamp(22px,2.5vw,26px)] font-light leading-[1.2] text-[var(--text)]";
+const EYEBROW = "font-mono text-[var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
 const GRID = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]";
 const ACTION =
   "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
@@ -44,10 +48,13 @@ export function AgentsView() {
 
 function AgentDirectory() {
   const [defaultContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
+  const [agentView, setAgentView] = useState<"cards" | "list">("cards");
+  const resting = useRestingAgents();
   const client = getGatewayClient();
   const queryClient = useQueryClient();
   const engineOpen = useEngineStore((s) => s.connection === "open");
   const engineError = useEngineStore((s) => s.error);
+  const threads = useSessionStore((state) => state.threads);
 
   const list = useQuery({
     queryKey: ["agents", "list", engineOpen],
@@ -61,6 +68,20 @@ function AgentDirectory() {
     staleTime: 15_000,
   });
   const agents = list.data?.agents ?? [];
+  const toggleRest = useCallback((agentId: string) => {
+    if (!resting.ready) return;
+    resting.setRestingAgents(resting.restingAgents.includes(agentId)
+      ? resting.restingAgents.filter((id) => id !== agentId)
+      : [...resting.restingAgents, agentId]);
+  }, [resting]);
+  const agentState = (agent: Agent) => {
+    if (resting.restingAgents.includes(agent.id)) return { text: "Resting locally. Work keeps going.", active: false };
+    const key = isHermes(agent) ? profileOf(agent.id)! : agent.id;
+    const thread = threads[key];
+    return thread?.opening || (thread && transcriptBusy(thread.transcript))
+      ? { text: "Working in its conversation.", active: true }
+      : { text: "On demand.", active: false };
+  };
   const providerOptions = [
     { id: "hermes" as const, label: "Hermes", available: engineOpen },
     ...(discoveredProviders.data ?? []).map((provider) => ({
@@ -145,6 +166,7 @@ function AgentDirectory() {
       model: agent.model || null,
       provider: agent.provider || engineLabel(agent.engine),
       avatar_style: agent.avatarStyle,
+      avatar_seed: agent.avatarSeed,
       avatar_kind: agent.avatarKind,
       avatar_color: agent.avatarColor,
     }));
@@ -178,10 +200,16 @@ function AgentDirectory() {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-3.5 pb-4">
-        <h1 className={TITLE}>Agents</h1>
-        {list.isSuccess ? <Tag>{agents.length} configured</Tag> : null}
+      <div className="flex flex-wrap items-end gap-3.5 pb-5">
+        <div>
+          <p className={EYEBROW}>Agents{list.isSuccess ? ` · ${agents.length} configured` : ""}</p>
+          <h1 className={TITLE}>The inventory of who can work for you.</h1>
+        </div>
         <div className="grow" />
+        <div className="flex items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1" role="group" aria-label="Agent view">
+          <button type="button" className={cn(ACTION, agentView === "cards" ? "text-[var(--text)]" : "text-[var(--text-dim)]")} aria-pressed={agentView === "cards"} onClick={() => setAgentView("cards")}>Cards</button>
+          <button type="button" className={cn(ACTION, agentView === "list" ? "text-[var(--text)]" : "text-[var(--text-dim)]")} aria-pressed={agentView === "list"} onClick={() => setAgentView("list")}>List</button>
+        </div>
         <button type="button" className={ACTION} onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })}>
           New agent
         </button>
@@ -193,40 +221,61 @@ function AgentDirectory() {
             <div key={i} className="h-[150px] rounded-[var(--r-plane)] bg-[var(--mantle)] opacity-60" />
           ))}
         </div>
-      ) : (
+      ) : agentView === "cards" ? (
         <div className={GRID}>
-          {agents.map((a) => (
-            <Card
+          {agents.map((a) => {
+            const state = agentState(a);
+            return <Card
               key={a.id}
               label={a.displayName}
               onOpen={() => setEditing({ agent: a, creating: false })}
               items={[
                 { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
                 { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
+                ...(resting.ready ? [{ label: resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today", onSelect: () => toggleRest(a.id) }] : []),
                 { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
               ]}
             >
-              <Avatar agent={a} size={48} image={images[a.id]} />
+              <Avatar agent={a} size={44} image={images[a.id]} />
               <div className="flex flex-col gap-[3px]">
                 <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{a.displayName}</span>
-                <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>
-                  {a.role}
-                </span>
+                <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
+                <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>{a.role || "No role recorded."}</span>
+                <span className="font-ui text-[var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-[7px]">
-                <Tag>{engineLabel(a.engine)}</Tag>
-                <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">{a.model}</span>
+              <div className="flex flex-wrap gap-2">
+                {resting.restingAgents.includes(a.id) ? <Tag>Resting today · Restore in actions</Tag> : null}
                 {a.isDefault ? <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span> : null}
               </div>
-            </Card>
-          ))}
+            </Card>;
+          })}
           <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
+        </div>
+      ) : (
+        <div className="divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
+          {agents.map((a) => {
+            const state = agentState(a);
+            return <div key={a.id} className="flex flex-wrap items-center gap-3 py-3">
+              <button type="button" className="flex min-w-0 grow items-center gap-3 text-left" onClick={() => setEditing({ agent: a, creating: false })}>
+                <Avatar agent={a} size={26} image={images[a.id]} />
+                <span className="min-w-0">
+                  <span className="block font-ui text-[var(--t-ui)] text-[var(--text)]">{a.displayName}</span>
+                  <span className="block truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
+                </span>
+              </button>
+              <span className="max-w-[360px] truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{a.role || "No role recorded."}</span>
+              <span className="font-ui text-[var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
+              <button type="button" className={ACTION} onClick={() => talkTo(isHermes(a) ? profileOf(a.id)! : a.id)}>Message</button>
+              {resting.ready ? <button type="button" className={ACTION} onClick={() => toggleRest(a.id)}>{resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today"}</button> : null}
+              <button type="button" className={ACTION} onClick={() => setEditing({ agent: a, creating: false })}>Edit</button>
+            </div>;
+          })}
         </div>
       )}
 
       {/* Teams: below the agents, because a team is made of them. */}
       <div className="flex flex-wrap items-center gap-3.5 pb-4 pt-[30px]">
-        <h1 className={TITLE}>Teams</h1>
+        <h2 className={TITLE}>Teams</h2>
         {(teams.data?.length ?? 0) > 0 ? <Tag>{teams.data!.length}</Tag> : null}
         <div className="grow" />
         <button type="button" className={ACTION} disabled={agents.length < 2} onClick={() => setTeamSheet(true)}>
@@ -287,6 +336,12 @@ function AgentDirectory() {
             setImages((m) => ({ ...m, [opened.id]: url }));
             void refresh();
           }}
+          onMessage={editing!.creating ? undefined : () => {
+            talkTo(isHermes(opened) ? profileOf(opened.id)! : opened.id);
+            setEditing(null);
+          }}
+          resting={resting.restingAgents.includes(opened.id)}
+          onRestToggle={resting.ready && !editing!.creating ? () => toggleRest(opened.id) : undefined}
           onClose={() => setEditing(null)}
         />
       ) : null}
@@ -344,7 +399,7 @@ function Notice({ tone, children }: { tone: "bad" | "wait"; children: React.Reac
   return (
     <div
       className="mb-4 rounded-[var(--r-ctl)] border px-3 py-2 font-ui text-[var(--t-meta)] leading-[1.5]"
-      style={{ borderColor: `var(--${tone})`, color: `var(--${tone})`, background: `color-mix(in srgb, var(--${tone}) 11%, transparent)` }}
+      style={{ borderColor: `var(--${tone})`, color: `var(--${tone})`, background: "var(--surface)" }}
     >
       {children}
     </div>

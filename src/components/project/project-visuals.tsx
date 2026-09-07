@@ -39,13 +39,13 @@ export function ProjectGraph({ projectId, nodes }: { projectId: number; nodes: G
   }, {}));
   return (
     <ProjectTabFrame>
-      <Card className="flex items-center gap-4 p-5">
+      <Card className="flex flex-wrap items-center gap-4 p-5">
         <Network className="h-5 w-5 shrink-0 text-[var(--accent-text)]" />
-        <span className="min-w-0 flex-1">
+        <span className="min-w-40 flex-1">
           <span className="block font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">Relationship graph</span>
           <span className="mt-1 block font-ui text-[var(--t-section)] text-[var(--subtext-0)]">{nodes.length} linked entities</span>
         </span>
-        <span className="flex flex-wrap justify-end gap-1.5">
+        <span className="flex min-w-0 flex-1 flex-wrap justify-end gap-1.5">
           {byType.map(([type, count]) => <Pill key={type}>{type} {count}</Pill>)}
         </span>
         <Control onClick={() => navigate(`/graph?project=${projectId}`)}>Open graph</Control>

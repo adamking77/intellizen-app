@@ -88,7 +88,11 @@ export function ProjectView() {
     enabled: Boolean(node?.folders.length),
   });
   const catalog = useQuery({ queryKey: ["workspace-database-catalog", "project-room"], queryFn: () => listWorkspaceDatabaseCatalog() });
-  const linkedRecords = useMemo(() => linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId), [catalog.data, id, legacyProjectId]);
+  const linkedRecords = useMemo(() => {
+    const documentIds = new Set(files.map((file) => file.id));
+    return linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId)
+      .filter((record) => !documentIds.has(record.recordId));
+  }, [catalog.data, files, id, legacyProjectId]);
   const canvases = useQuery({ queryKey: ["canvas-documents"], queryFn: listCanvasDocuments });
   const projectCanvases = useMemo(
     () => legacyProjectId == null ? [] : (canvases.data ?? []).filter((canvas) => canvas.project_id === legacyProjectId),

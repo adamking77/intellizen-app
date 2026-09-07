@@ -113,26 +113,27 @@ function relatesTo(record: WorkspaceDatabaseRecordModel, field: string, id: stri
   return value === id || (Array.isArray(value) && value.includes(id));
 }
 
+/** Explicit record identities only; equal project names do not establish scope. */
+export function unitProjectRecords(project: UnitChild, catalog: WorkspaceDatabaseCatalogEntry[]) {
+  const initiatives = catalog.find((entry) => entry.id === GENZEN_WORKSPACE_DATABASE_IDS.bizOps)?.records ?? [];
+  const initiative = initiatives.find((record) => project.legacyProjectId != null && record.legacy_project_id === project.legacyProjectId) ?? null;
+  const tasks = (catalog.find((entry) => entry.id === GENZEN_WORKSPACE_DATABASE_IDS.tasks)?.records ?? []).filter((record) =>
+    project.projectIds.includes(String(record.task_scope_node_id ?? "")) || (initiative && relatesTo(record, "task_project", initiative.id))
+  );
+  return { initiative, tasks };
+}
+
 /** Derive the four operating facts without creating duplicate project state. */
 export function unitProjectSummary(
   project: UnitChild,
   catalog: WorkspaceDatabaseCatalogEntry[],
   cards: KanbanCard[] = [],
 ): UnitProjectSummary {
-  const bizOps = catalog.find((entry) => entry.id === GENZEN_WORKSPACE_DATABASE_IDS.bizOps);
-  const tasks = catalog.find((entry) => entry.id === GENZEN_WORKSPACE_DATABASE_IDS.tasks);
+  const { initiative, tasks: relatedTasks } = unitProjectRecords(project, catalog);
   const projects = catalog.find((entry) => entry.name === "Projects");
-  const normalizedName = project.name.trim().toLocaleLowerCase();
-  const initiative = bizOps?.records.find((record) =>
-    (project.legacyProjectId != null && record.legacy_project_id === project.legacyProjectId) ||
-    text(record, "initiative_name")?.toLocaleLowerCase() === normalizedName
-  ) ?? null;
   const projectRecord = projects?.records.find((record) =>
     project.legacyProjectId != null && record.legacy_project_id === project.legacyProjectId
   ) ?? null;
-  const relatedTasks = initiative
-    ? (tasks?.records ?? []).filter((record) => relatesTo(record, "task_project", initiative.id))
-    : [];
   const blockedTask = relatedTasks.find((record) =>
     [text(record, "task_status"), text(record, "task_stage")].some((value) => value?.toLocaleLowerCase() === "blocked")
   );

@@ -33,7 +33,7 @@ import {
   listWorkflows,
   OPERATOR_ACTOR,
   requestWorkflowApproval,
-  resolveWorkflowApproval,
+  resolveWorkflowApproval, workflowApprovalIdentityFromRecord,
   saveRecordAsTemplate,
   updateWorkflowRun,
 } from "@/lib/data";
@@ -945,7 +945,6 @@ function WorkflowRunOperationsSection({
   const timelineEntries = parseWorkflowRunTimeline(record._body, receipt, record._updatedAt);
   const runName = fieldText(record[WORKFLOW_RUN_FIELD_IDS.name]) ?? record.id;
   const availableActions = runActionsForStatus(status);
-
   function handleActionClick(action: WorkflowRunAction) {
     if (isRunningAction) return;
     if (RUN_NOTE_REQUIRED.includes(action)) {
@@ -965,6 +964,7 @@ function WorkflowRunOperationsSection({
           decision: "approved",
           decisionSummary: note ?? "",
           decidedBy: OPERATOR_ACTOR,
+          ...workflowApprovalIdentityFromRecord(record),
           confirmWrite: true,
         });
       } else if (action === "request_approval") {

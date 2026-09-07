@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -21,7 +21,7 @@ import {
   createWorkspaceDatabase,
   deleteWorkspaceDatabase,
   isOperationalSystemWorkspaceIcon,
-  listWorkspaceDatabases,
+  listWorkspaceDatabaseWayIn,
   removeHomePinsForWorkspaceDatabase,
 } from "@/lib/data";
 import { toast, toastError } from "@/lib/toast";
@@ -30,6 +30,16 @@ import { useAppStore } from "@/store";
 
 const DATABASE_RAIL_STORAGE_KEY = "intelizen:databases-rail-collapsed";
 const DATABASE_RAIL_WIDTH_EXPANDED = 280;
+const DATABASES_LAST_VISIT_KEY = "intelizen:databases-last-visit";
+
+function readDatabasesLastVisit() {
+  try {
+    const value = window.localStorage.getItem(DATABASES_LAST_VISIT_KEY);
+    return value && Number.isFinite(Date.parse(value)) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 export function DatabasesView() {
   const queryClient = useQueryClient();
@@ -40,6 +50,8 @@ export function DatabasesView() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [databaseMenu, setDatabaseMenu] = useState<ContextMenuState | null>(null);
   const [currentDatabaseId, setCurrentDatabaseId] = useState<string | null>(() => loadCurrentDatabaseId());
+  const [lastVisit] = useState(readDatabasesLastVisit);
+  const enteredAt = useRef(new Date().toISOString());
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(DATABASE_RAIL_STORAGE_KEY) === "1";
@@ -50,9 +62,13 @@ export function DatabasesView() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["workspace-databases", entityFilter],
-    queryFn: () => listWorkspaceDatabases({ entity: entityFilter }),
+    queryKey: ["workspace-database-way-in", entityFilter, lastVisit],
+    queryFn: () => listWorkspaceDatabaseWayIn({ entity: entityFilter, since: lastVisit }),
   });
+
+  useEffect(() => () => {
+    try { window.localStorage.setItem(DATABASES_LAST_VISIT_KEY, enteredAt.current); } catch { /* The next visit remains unknown. */ }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -89,17 +105,11 @@ export function DatabasesView() {
       }
       return;
     }
-
-    const currentExists = currentDatabaseId
-      ? safeDatabases.some((database) => database.id === currentDatabaseId)
-      : false;
-
-    if (currentExists) return;
-    setCurrentDatabaseId(safeDatabases[0]?.id ?? null);
+    if (currentDatabaseId) setCurrentDatabaseId(null);
   }, [currentDatabaseId, safeDatabases, searchParams]);
 
   const currentDatabase = useMemo(
-    () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? safeDatabases[0] ?? null,
+    () => safeDatabases.find((database) => database.id === currentDatabaseId) ?? null,
     [currentDatabaseId, safeDatabases],
   );
   const canDeleteCurrentDatabase = Boolean(currentDatabase && !isOperationalSystemWorkspaceIcon(currentDatabase.icon));
@@ -123,7 +133,7 @@ export function DatabasesView() {
         taxonomy: entityFilter ? { entity: entityFilter } : undefined,
       });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-way-in"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
       ]);
       setCurrentDatabaseId(created.database.id);
@@ -153,7 +163,7 @@ export function DatabasesView() {
       setCurrentDatabaseId(nextDatabaseId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["home-pins"] }),
-        queryClient.invalidateQueries({ queryKey: ["workspace-databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-database-way-in"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["workspace-database", currentDatabase.id] }),
       ]);
@@ -218,14 +228,14 @@ export function DatabasesView() {
         >
           <div className="min-h-0 flex-1 overflow-y-auto">
             {isLoading ? (
-              <div className="flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--overlay-1)]">
+              <div className="flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Loading databases...</span>
               </div>
             ) : safeDatabases.length === 0 ? (
               <div className="p-4">
                 <p className="font-ui text-[13px] font-medium text-[var(--text)]">No databases yet</p>
-                <p className="mt-1 text-[12px] text-[var(--overlay-1)]">Create your first database to get started.</p>
+                <p className="mt-1 text-[12px] text-[var(--text-muted)]">Create your first database to get started.</p>
               </div>
             ) : (
               <div className="divide-y divide-[var(--border-subtle)]">
@@ -235,17 +245,10 @@ export function DatabasesView() {
                       type="button"
                       onClick={() => selectDatabase(database.id)}
                       className={cn(
-                        "group relative flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[color-mix(in_srgb,var(--surface-wash)_82%,var(--accent-soft)_18%)]",
-                        currentDatabase?.id === database.id && "bg-[var(--accent-soft)]",
+                        "group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[var(--selected-hover)]",
+                        currentDatabase?.id === database.id && "bg-[var(--selected)]",
                       )}
                     >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-[var(--accent)] transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                          currentDatabase?.id === database.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                        )}
-                      />
                       <p className="min-w-0 flex-1 truncate font-ui text-[13px] font-medium text-[var(--text)] transition-colors group-hover:text-[var(--accent-text)]">
                         {database.name}
                       </p>
@@ -265,14 +268,18 @@ export function DatabasesView() {
 
           <div className={cn("h-full overflow-hidden", railCollapsed && "pl-14")}>
             <div className="h-full">
-              {safeDatabases.length > 0 ? (
-                currentDatabase ? (
+              {isLoading ? (
+                <p role="status" className="px-6 py-8 font-ui text-[13px] text-[var(--text-muted)]">Loading databases…</p>
+              ) : safeDatabases.length > 0 ? (
+                !searchParams.get("database") || !currentDatabase ? (
+                  <DatabaseWayIn databases={safeDatabases} lastVisit={lastVisit} onOpen={selectDatabase} />
+                ) : currentDatabase ? (
                   <DatabaseEditorView databaseIdOverride={currentDatabase.id} embedded />
                 ) : null
               ) : (
                 <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                   <p className="text-label">No databases yet</p>
-                  <p className="max-w-xl font-ui text-[12px] text-[var(--overlay-1)]">
+                  <p className="max-w-xl font-ui text-[12px] text-[var(--text-muted)]">
                     Create your first database to get started.
                   </p>
                   <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
@@ -320,4 +327,28 @@ export function DatabasesView() {
       />
     </div>
   );
+}
+
+function DatabaseWayIn({ databases, lastVisit, onOpen }: {
+  databases: Array<{ id: string; name: string; entity?: string; recordCount: number | null; revisionCount: number | null; revisionCountCapped: boolean }>;
+  lastVisit: string | null;
+  onOpen: (id: string) => void;
+}) {
+  const countKnown = databases.every((database) => database.recordCount !== null);
+  const revisionsKnown = Boolean(lastVisit) && databases.every((database) => database.revisionCount !== null);
+  const changed = databases.filter((database) => (database.revisionCount ?? 0) > 0).length;
+  return <section className="@container mx-auto w-full max-w-[960px] overflow-y-auto px-6 py-8" aria-label="Database inventory">
+    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Databases</p>
+    <h1 className="mt-4 max-w-[760px] font-ui text-[26px] font-normal leading-[1.3] text-[var(--text)]">
+      {countKnown ? `${databases.length} ${databases.length === 1 ? "database" : "databases"}.` : "Database counts are unavailable."}{revisionsKnown && changed ? ` ${changed} ${changed === 1 ? "database changed" : "databases changed"} since your last visit.` : ""}
+    </h1>
+    <p className="mt-3 max-w-[660px] text-[var(--t-ui)] leading-6 text-[var(--text-mid)]">Open one and the editor takes over. Your data stays in the workspace tables where you put it.</p>
+    <div className="mt-9 divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
+      {databases.map((database) => <button key={database.id} type="button" onClick={() => onOpen(database.id)} className="grid w-full gap-x-5 gap-y-1 py-4 text-left hover:bg-[var(--selected-hover)] @min-[720px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
+        <span className="text-[var(--t-ui)] text-[var(--text)]">{database.name}</span>
+        <span className="font-mono text-[10px] text-[var(--text-muted)]">{database.recordCount === null ? "Record count unavailable" : `${database.recordCount} ${database.recordCount === 1 ? "record" : "records"}`} · {database.entity || "Unscoped"}</span>
+        <span className="text-[var(--t-meta)] text-[var(--text-mid)]">{!lastVisit ? "No earlier visit recorded." : database.revisionCount === null ? "Changes unavailable." : `${database.revisionCountCapped ? "At least " : ""}${database.revisionCount} ${database.revisionCount === 1 ? "change" : "changes"} since your last visit.`}</span>
+      </button>)}
+    </div>
+  </section>;
 }

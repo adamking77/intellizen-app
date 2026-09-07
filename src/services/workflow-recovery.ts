@@ -1,5 +1,6 @@
 import { GENZEN_WORKSPACE_DATABASE_IDS } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
+import { loadWorkflowRunContinuation } from "@/lib/workflow-continuation";
 import {
   assertWorkflowDefinitionIdentity,
   validateWorkflowDefinition,
@@ -136,21 +137,21 @@ export function recoverInterruptedLocalWorkflowsOnLaunch() {
     for (const row of (data ?? []) as WorkflowRunRow[]) {
       report.inspected += 1;
       try {
-        const fields = row.fields;
-        const definition = fields.run_definition_snapshot as WorkflowDefinitionV1;
+        const continuation = await loadWorkflowRunContinuation(row.id);
+        const definition = continuation.definitionSnapshot as WorkflowDefinitionV1;
         const validation = validateWorkflowDefinition(definition);
         if (!validation.valid) {
           throw new Error("Stored workflow definition snapshot is invalid.");
         }
         await assertWorkflowDefinitionIdentity(
           definition,
-          fields.run_definition_hash,
+          continuation.identity.definitionHash,
         );
         const currentStepId = requiredString(
-          fields.run_current_step_id,
+          continuation.currentStepId,
           "Current step ID",
         );
-        const stepStates = fields.run_step_states as
+        const stepStates = continuation.stepStates as
           | Record<string, WorkflowStepState>
           | undefined;
         const currentStepState = stepStates?.[currentStepId];
@@ -158,14 +159,15 @@ export function recoverInterruptedLocalWorkflowsOnLaunch() {
         const result = await recoverInterruptedWorkflow(
           {
             runId: row.id,
-            runVersion: requiredNonNegativeInteger(fields.run_version, "Run version"),
+            runVersion: continuation.runVersion,
             currentStepId,
             currentStepState,
             leaseExpiresAt:
-              typeof fields.run_lease_expires_at === "string"
-                ? fields.run_lease_expires_at
+              typeof row.fields.run_lease_expires_at === "string"
+                ? row.fields.run_lease_expires_at
                 : null,
             definition,
+            identity: continuation.identity,
           },
           {
             actor: "IntelliZen Relaunch Recovery",

@@ -9,10 +9,12 @@ import {
 } from "@/engine/execution-targets";
 import { supabase } from "@/lib/supabase";
 import type { WorkflowRunItem } from "@/lib/types";
+import { listWorkEvents } from "@/lib/data/work-receipts";
 import { requiredNonNegativeInteger } from "@/lib/validated-number";
 import {
   assertWorkflowDefinitionIdentity,
   validateWorkflowDefinition,
+  workflowDefinitionHash,
   type WorkflowDefinitionV1,
   type WorkflowRoleAssignStep,
 } from "@/lib/workflow-schema";
@@ -20,11 +22,22 @@ import { getGatewayClient } from "@/engine/gateway";
 import { runPrompt } from "@/engine/session";
 import { workflowDispatchPrompt } from "@/services/agent";
 import {
+  attachWorkflowTransitionContinuation,
+  loadWorkflowRunContinuation,
+  type WorkflowExecutionIdentity,
+  type WorkflowRunContinuation,
+} from "@/lib/workflow-continuation";
+import {
   WorkflowDispatchCoordinator,
   WorkflowDispatchError,
   type ResolvedWorkflowRole,
   type WorkflowRoleResolutionBlocker,
   type WorkflowRunnerPort,
+  type WorkflowApproval,
+  type WorkflowAssignmentSnapshot,
+  type WorkflowSideTransitionRequest,
+  type WorkflowSideSettlementRequest,
+  type WorkflowStepState,
   type WorkflowTransitionRequest,
 } from "@/services/workflow-runner";
 
@@ -97,6 +110,14 @@ export function assertProductionWorkflowArtifacts(
       `Artifact action ${unsupported.action} is not enabled in the Wave 1 production dispatcher. Use an explicit preview and confirm-write surface.`,
     );
   }
+}
+
+export function workflowAcpIsolation(assignmentId: string) {
+  return {
+    caller: `workflow:${assignmentId}`,
+    mode: "read-only" as const,
+    isolated: true,
+  };
 }
 
 async function loadRoleResolver(targets: ExecutionTarget[]) {
@@ -224,6 +245,7 @@ async function loadRoleResolver(targets: ExecutionTarget[]) {
       agentRecordId: agent.id,
       bindingRef: target.ref,
       adapterId: target.kind,
+      providerEngine: target.engine,
       resolvedModel: target.model,
       execution: target.execution,
       providerAuthority: target.kind === "hermes" ? "Hermes profile and API run controls" : "ACP agent permission protocol",
@@ -251,6 +273,7 @@ function workflowPrompt(input: {
 
 async function productionPort(
   targets: ExecutionTarget[],
+  identity: WorkflowExecutionIdentity,
 ): Promise<WorkflowRunnerPort> {
   const targetsByRef = new Map(targets.map((target) => [target.ref, target]));
   const resolveRole = await loadRoleResolver(targets);
@@ -258,17 +281,59 @@ async function productionPort(
     now: () => new Date().toISOString(),
     newId: () => crypto.randomUUID(),
     acquireLease: async (input) => {
-      const { data, error } = await supabase
+      let request = input;
+      let result = await supabase
         .schema("workspace")
         .rpc("acquire_workflow_dispatch_lease", {
-          p_workflow_run_id: input.runId,
-          p_expected_run_version: input.expectedRunVersion,
-          p_dispatcher_session: input.dispatcherSession,
+          p_workflow_run_id: request.runId,
+          p_expected_run_version: request.expectedRunVersion,
+          p_dispatcher_session: request.dispatcherSession,
           p_lease_ttl_seconds: 300,
-          p_idempotency_key: input.idempotencyKey,
-          p_request_hash: input.requestHash,
-          p_actor: input.actor,
+          p_idempotency_key: request.idempotencyKey,
+          p_request_hash: request.requestHash,
+          p_actor: request.actor,
         });
+      if (result.error?.message.includes("version mismatch")) {
+        const { data: runData, error: runError } = await supabase
+          .schema("workspace")
+          .from("records")
+          .select("fields")
+          .eq("id", input.runId)
+          .single();
+        if (runError) throw new Error(runError.message);
+        const currentVersion = requiredNonNegativeInteger(
+          recordValue(runData?.fields)?.run_version,
+          "Run version",
+        );
+        const { data: intervening, error: eventError } = await supabase
+          .schema("workspace")
+          .from("work_events")
+          .select("event_kind,run_version")
+          .eq("workflow_run_id", input.runId)
+          .gt("run_version", input.expectedRunVersion)
+          .lte("run_version", currentVersion);
+        if (eventError) throw new Error(eventError.message);
+        if (!intervening?.length || intervening.some((event) =>
+          typeof event.event_kind !== "string" || !event.event_kind.startsWith("meanwhile_")
+        )) {
+          throw new Error(result.error.message);
+        }
+        const withoutHash = { ...input, expectedRunVersion: currentVersion };
+        request = {
+          ...withoutHash,
+          requestHash: await workflowDefinitionHash(withoutHash),
+        };
+        result = await supabase.schema("workspace").rpc("acquire_workflow_dispatch_lease", {
+          p_workflow_run_id: request.runId,
+          p_expected_run_version: request.expectedRunVersion,
+          p_dispatcher_session: request.dispatcherSession,
+          p_lease_ttl_seconds: 300,
+          p_idempotency_key: request.idempotencyKey,
+          p_request_hash: request.requestHash,
+          p_actor: request.actor,
+        });
+      }
+      const { data, error } = result;
       if (error) throw new Error(error.message);
       return {
         runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
@@ -279,25 +344,29 @@ async function productionPort(
       };
     },
     transition: async (input: WorkflowTransitionRequest) => {
+      const transition = attachWorkflowTransitionContinuation(input, identity);
+      const rpcRequest = {
+        p_workflow_run_id: transition.runId,
+        p_expected_run_version: transition.expectedRunVersion,
+        p_expected_step_id: transition.expectedStepId,
+        p_expected_step_state: transition.expectedStepState,
+        p_next_step_id: transition.nextStepId,
+        p_next_step_state: transition.nextStepState,
+        p_next_run_status: transition.nextRunStatus,
+        p_dispatcher_session: transition.dispatcherSession,
+        p_fencing_token: transition.fencingToken,
+        p_idempotency_key: transition.idempotencyKey,
+        p_actor: transition.actor,
+        p_event_kind: transition.eventKind,
+        p_event_summary: transition.eventSummary,
+        p_event_payload: transition.eventPayload,
+        p_approval_mutation: transition.approvalMutation ?? null,
+      };
       const { data, error } = await supabase
         .schema("workspace")
         .rpc("transition_workflow_step", {
-          p_workflow_run_id: input.runId,
-          p_expected_run_version: input.expectedRunVersion,
-          p_expected_step_id: input.expectedStepId,
-          p_expected_step_state: input.expectedStepState,
-          p_next_step_id: input.nextStepId,
-          p_next_step_state: input.nextStepState,
-          p_next_run_status: input.nextRunStatus,
-          p_dispatcher_session: input.dispatcherSession,
-          p_fencing_token: input.fencingToken,
-          p_idempotency_key: input.idempotencyKey,
-          p_request_hash: input.requestHash,
-          p_actor: input.actor,
-          p_event_kind: input.eventKind,
-          p_event_summary: input.eventSummary,
-          p_event_payload: input.eventPayload,
-          p_approval_mutation: input.approvalMutation ?? null,
+          ...rpcRequest,
+          p_request_hash: await workflowDefinitionHash(rpcRequest),
         });
       if (error) throw new Error(error.message);
       return {
@@ -307,6 +376,68 @@ async function productionPort(
           "Dispatcher fencing token",
         ),
       };
+    },
+    transitionSideStep: async (input: WorkflowSideTransitionRequest) => {
+      const { data, error } = await supabase
+        .schema("workspace")
+        .rpc("transition_workflow_side_step", {
+          p_workflow_run_id: input.runId,
+          p_expected_run_version: input.expectedRunVersion,
+          p_approval_step_id: input.approvalStepId,
+          p_expected_approval_state: input.expectedApprovalState,
+          p_side_step_id: input.sideStepId,
+          p_expected_side_step_state: input.expectedSideStepState,
+          p_next_side_step_state: input.nextSideStepState,
+          p_dispatcher_session: input.dispatcherSession,
+          p_fencing_token: input.fencingToken,
+          p_idempotency_key: input.idempotencyKey,
+          p_request_hash: input.requestHash,
+          p_actor: input.actor,
+          p_event_kind: input.eventKind,
+          p_event_summary: input.eventSummary,
+          p_event_payload: input.eventPayload,
+        });
+      if (error) throw new Error(error.message);
+      return {
+        runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
+        fencingToken: requiredNonNegativeInteger(
+          data?.fencing_token,
+          "Dispatcher fencing token",
+        ),
+      };
+    },
+    settleSideStep: async (input: WorkflowSideSettlementRequest) => {
+      const deadline = Date.now() + 30 * 60_000;
+      let delayMs = 500;
+      while (true) {
+        const { data, error } = await supabase.schema("workspace").rpc(
+          "settle_workflow_side_step",
+          {
+          p_workflow_run_id: input.runId,
+          p_approval_step_id: input.approvalStepId,
+          p_side_step_id: input.sideStepId,
+          p_expected_side_step_state: input.expectedSideStepState,
+          p_next_side_step_state: input.nextSideStepState,
+          p_assignment_id: input.assignmentId,
+          p_idempotency_key: input.idempotencyKey,
+          p_request_hash: input.requestHash,
+          p_actor: input.actor,
+          p_event_kind: input.eventKind,
+          p_event_summary: input.eventSummary,
+          p_event_payload: input.eventPayload,
+          },
+        );
+        if (!error) {
+          return {
+            runVersion: requiredNonNegativeInteger(data?.run_version, "Run version"),
+          };
+        }
+        if (!error.message.includes("waits for active dispatcher lease") || Date.now() >= deadline) {
+          throw new Error(error.message);
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        delayMs = Math.min(delayMs * 2, 10_000);
+      }
     },
     releaseLease: async (input) => {
       const { data, error } = await supabase
@@ -325,7 +456,7 @@ async function productionPort(
       };
     },
     resolveRole,
-    dispatch: async ({ step, assignment, renderedContext, signal }) => {
+    dispatch: async ({ step, assignment, renderedContext, signal, readOnly }) => {
       const target = targetsByRef.get(assignment.selectedBinding);
       if (!target) {
         throw new WorkflowDispatchError({
@@ -352,6 +483,7 @@ async function productionPort(
             text,
             timeoutMs: step.timeoutMinutes * 60_000,
             signal,
+            ...(readOnly ? workflowAcpIsolation(assignment.assignmentId) : {}),
           });
         return {
           sessionId: turn.sessionId,
@@ -396,6 +528,82 @@ function parsedRunContext(value: string | null) {
   }
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+const WORKFLOW_STEP_STATES = new Set<WorkflowStepState>([
+  "queued", "running", "awaiting_input", "suspended", "blocked",
+  "completed", "failed", "cancelled", "abandoned",
+]);
+
+async function loadWorkflowRuntimeSnapshot(
+  run: WorkflowRunItem,
+  continuation: WorkflowRunContinuation,
+) {
+  const stepStates = Object.fromEntries(
+    Object.entries(continuation.stepStates).filter(
+      (entry): entry is [string, WorkflowStepState] =>
+        typeof entry[1] === "string" && WORKFLOW_STEP_STATES.has(entry[1] as WorkflowStepState),
+    ),
+  );
+  const approvals = Object.fromEntries(
+    Object.entries(recordValue(run.approvals) ?? {}).filter(([, value]) => {
+      const approval = recordValue(value);
+      return typeof approval?.approvalId === "string" && typeof approval.stepId === "string";
+    }),
+  ) as Record<string, WorkflowApproval>;
+  const assignments: Record<string, WorkflowAssignmentSnapshot> = {};
+  const stepResults: Record<string, unknown> = { ...continuation.stepResults };
+  const events = await listWorkEvents({ workflowRunId: run.id, limit: 10_000 });
+  events.sort((left, right) =>
+    (left.run_version ?? 0) - (right.run_version ?? 0)
+      || left.created_at.localeCompare(right.created_at)
+      || left.id.localeCompare(right.id)
+  );
+  for (const event of events) {
+    const payload = recordValue(event.payload) ?? {};
+    const assignmentPayload = recordValue(payload.assignment);
+    const resolution = recordValue(payload.resolution);
+    const envelope = recordValue(payload.envelope);
+    const assignmentEnvelope = recordValue(assignmentPayload?.envelope);
+    const stepId = event.step_id
+      ?? fieldString(recordValue(assignmentEnvelope?.parent)?.stepId)
+      ?? fieldString(recordValue(envelope?.parent)?.stepId);
+    if (!stepId) continue;
+    if (assignmentPayload) {
+      assignments[stepId] = assignmentPayload as WorkflowAssignmentSnapshot;
+    } else if (event.event_kind === "assignment_created" && resolution && envelope) {
+      assignments[stepId] = {
+        assignmentId: fieldString(payload.assignmentId) ?? event.assignment_id ?? "",
+        requestedRole: fieldString(resolution.requestedRole) ?? "",
+        selectedAgent: fieldString(resolution.selectedAgent) ?? event.actor,
+        selectedBinding: fieldString(resolution.selectedBinding) ?? "",
+        resolutionRule: resolution.resolutionRule as WorkflowAssignmentSnapshot["resolutionRule"],
+        resolutionTimestamp: fieldString(resolution.resolutionTimestamp) ?? event.created_at,
+        agentOverride: fieldString(resolution.agentOverride),
+        overrideReason: fieldString(resolution.overrideReason),
+        runtimeSessionId: event.runtime_session_id ?? null,
+        envelope: envelope as WorkflowAssignmentSnapshot["envelope"],
+        contextEvidence: (recordValue(payload.contextEvidence)
+          ?? {
+            sources: [],
+            renderedContextHash: "",
+            renderedBytes: 0,
+            maxBytes: 0,
+          }) as WorkflowAssignmentSnapshot["contextEvidence"],
+      };
+    }
+    const assignment = assignments[stepId];
+    if (assignment && event.runtime_session_id) {
+      assignment.runtimeSessionId = event.runtime_session_id;
+    }
+  }
+  return { stepStates, stepResults, assignments, approvals };
+}
+
 export async function dispatchWorkflowRun(
   run: WorkflowRunItem,
   signal?: AbortSignal,
@@ -406,12 +614,16 @@ export async function dispatchWorkflowRun(
   ) {
     return null;
   }
-  const definition = run.definition_snapshot as WorkflowDefinitionV1;
+  const continuation = await loadWorkflowRunContinuation(run.id);
+  const definition = continuation.definitionSnapshot as WorkflowDefinitionV1;
   const validation = validateWorkflowDefinition(definition);
   if (!validation.valid) {
     throw new Error("The stored Workflow Run definition snapshot is invalid.");
   }
-  await assertWorkflowDefinitionIdentity(definition, run.definition_hash);
+  await assertWorkflowDefinitionIdentity(
+    definition,
+    continuation.identity.definitionHash,
+  );
   assertProductionWorkflowArtifacts(definition);
   const context = parsedRunContext(run.context);
   const inputs =
@@ -421,11 +633,12 @@ export async function dispatchWorkflowRun(
       ? (context.context as Record<string, unknown>)
       : {};
   const targets = await listExecutionTargets();
-  const port = await productionPort(targets);
+  const port = await productionPort(targets, continuation.identity);
+  const snapshot = await loadWorkflowRuntimeSnapshot(run, continuation);
   return productionCoordinator.start(
     {
       runId: run.id,
-      runVersion: run.run_version,
+      runVersion: continuation.runVersion,
       actor: fieldString(context.requested_by) ?? OPERATOR_ACTOR,
       definition,
       inputs,
@@ -436,6 +649,9 @@ export async function dispatchWorkflowRun(
           .filter(Boolean) ?? [],
       sourcePaths: [],
       sourceTools: [],
+      currentStepId: continuation.currentStepId,
+      executionIdentity: continuation.identity,
+      ...snapshot,
       signal,
     },
     port,

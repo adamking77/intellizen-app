@@ -27,6 +27,7 @@ export function WorkflowsView() {
   const queryClient = useQueryClient();
   const selectedId = searchParams.get("workflow");
   const draftId = searchParams.get("draft");
+  const draftWithAgent = searchParams.get("draft-agent") === "1";
   const runId = searchParams.get("run");
   const newDraft = useMemo(() => draftId && /^workflow-[a-f0-9-]{36}$/i.test(draftId) ? newWorkflowTemplate(draftId) : null, [draftId]);
   const workflowQuery = useQuery({ queryKey: ["workflow-registry", "screen", entityFilter], queryFn: () => listWorkflows({ entity: entityFilter, includeInactive: true, limit: 100 }), refetchInterval: 60_000 });
@@ -48,13 +49,13 @@ export function WorkflowsView() {
     return workflow ? classifyWorkflow(workflow, rolesQuery.data ?? []) : null;
   }, [newDraft, selectedQuery.data, rolesQuery.data]);
   const backToLibrary = useCallback(() => setSearchParams((current) => {
-    const next = new URLSearchParams(current); next.delete("workflow"); next.delete("draft"); next.delete("view"); next.delete("run"); return next;
+    const next = new URLSearchParams(current); next.delete("workflow"); next.delete("draft"); next.delete("draft-agent"); next.delete("view"); next.delete("run"); return next;
   }), [setSearchParams]);
   const closeRun = useCallback(() => setSearchParams((current) => { const next = new URLSearchParams(current); next.delete("run"); return next; }, { replace: true }), [setSearchParams]);
-  function newWorkflow() {
+  function newWorkflow(withAgent = false) {
     const id = `workflow-${crypto.randomUUID()}`;
     storeWorkflowDesignerDraft(id, { definition: createWorkflowDesignerDraft({ id, name: "Untitled workflow" }), baseUpdatedAt: "" });
-    setSearchParams({ draft: id });
+    setSearchParams(withAgent ? { draft: id, "draft-agent": "1" } : { draft: id });
   }
   function saved(created?: WorkflowTemplateItem) {
     if (created) { queryClient.setQueryData(["workflow-detail", created.id], created); setSearchParams({ workflow: created.id }, { replace: true }); }
@@ -65,14 +66,14 @@ export function WorkflowsView() {
   return <div className="relative flex h-full min-h-0 flex-col overflow-y-auto bg-[var(--base)] p-5">
     {editing ? <>
       {!selectedItem ? <Control size="sm" variant="quiet" className="mb-3 shrink-0 self-start" onClick={backToLibrary}>Back to workflows</Control> : null}
-      {selectedItem ? <WorkflowWorkspace key={selectedItem.workflow.id || selectedItem.workflow.workflow_id} item={selectedItem} onBack={backToLibrary} roleTargets={rolesQuery.data ?? []} rolesUnavailable={Boolean(rolesQuery.error)} onRetryRoles={() => void rolesQuery.refetch()} onSaved={saved} onOpenRun={(run) => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("run", run.id); return next; })} /> : selectedQuery.isLoading ? <Skeleton lines={8} /> : <QueryState isLoading={false} error={selectedQuery.error ?? new Error("The requested draft is unavailable.")} isEmpty={false} errorTitle="Workflow unavailable" onRetry={() => void selectedQuery.refetch()}>{null}</QueryState>}
+      {selectedItem ? <WorkflowWorkspace key={selectedItem.workflow.id || selectedItem.workflow.workflow_id} item={selectedItem} autoDraftWithAgent={draftWithAgent} onBack={backToLibrary} roleTargets={rolesQuery.data ?? []} rolesUnavailable={Boolean(rolesQuery.error)} onRetryRoles={() => void rolesQuery.refetch()} onSaved={saved} onOpenRun={(run) => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("run", run.id); return next; })} /> : selectedQuery.isLoading ? <Skeleton lines={8} /> : <QueryState isLoading={false} error={selectedQuery.error ?? new Error("The requested draft is unavailable.")} isEmpty={false} errorTitle="Workflow unavailable" onRetry={() => void selectedQuery.refetch()}>{null}</QueryState>}
       {selectedQuery.error && selectedItem ? <p role="alert" className="mt-2 text-[var(--danger)]">Could not refresh this workflow. Your draft is retained. <Control size="sm" onClick={() => void selectedQuery.refetch()}>Retry</Control></p> : null}
     </> : <>
-      <PageHeader title="Workflows" state="Design how your agents work together." action={<Control size="sm" variant="primary" onClick={newWorkflow}><Plus size={14} aria-hidden />New workflow</Control>} />
+      <PageHeader title="Workflows" state="Design how your agents work together." action={<Control size="sm" variant="primary" onClick={() => newWorkflow()}><Plus size={14} aria-hidden />New workflow</Control>} />
       <div className="mt-5">
         <QueryState isLoading={workflowQuery.isLoading && !localDrafts.length} error={workflowQuery.error} isEmpty={false} retainContentOnError={Boolean(workflowQuery.data || localDrafts.length)} errorTitle="Workflows unavailable" onRetry={() => void workflowQuery.refetch()}>
           {rolesQuery.error ? <p role="alert" className="mb-3 text-[var(--warning)]">Role availability could not be checked. <Control size="sm" onClick={() => void rolesQuery.refetch()}>Retry</Control></p> : null}
-          <WorkflowLibrary items={[...localDrafts, ...catalog]} onOpen={(item) => setSearchParams(item.workflow.id ? { workflow: item.workflow.id } : { draft: item.workflow.workflow_id })} onCreate={newWorkflow} />
+          <WorkflowLibrary items={[...localDrafts, ...catalog]} onOpen={(item) => setSearchParams(item.workflow.id ? { workflow: item.workflow.id } : { draft: item.workflow.workflow_id })} onCreate={newWorkflow} onDraftWithAgent={() => newWorkflow(true)} />
           {fullCatalog.length > catalog.length ? <p className="mt-5 text-[var(--t-meta)] text-[var(--text-muted)]">{fullCatalog.length - catalog.length} written procedures in <Link to="/docs" className="text-[var(--accent-text)] hover:underline">Docs</Link> can become workflows.</p> : null}
         </QueryState>
       </div>

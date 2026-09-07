@@ -25,7 +25,7 @@ export function AgentPanelShell({
       className={cn(
         "pane relative flex shrink-0 flex-col",
         standalone
-          ? "h-full w-full rounded-none bg-[var(--mantle)]"
+          ? "h-full w-full rounded-none bg-transparent"
           : "h-full",
       )}
       onFocusCapture={onInteraction}

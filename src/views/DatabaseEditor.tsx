@@ -29,14 +29,17 @@ import {
 import { createTimelineDateField, getTimelineFieldDefaults } from "@/lib/database-timeline";
 import { withDatabaseRecordParam } from "@/lib/database-record-link";
 import {
-  findHomePin,
+  configForDashboard,
+  createDatabaseHomePin,
+  isDatabaseViewHomePin,
   loadHomePins,
-  removeHomePin,
+  pinsForDashboard,
   saveHomePins,
   supportsPinnedHomeView,
-  upsertHomePin,
+  type DashboardScope,
 } from "@/lib/home-pins";
 import { getVaultAbsolutePath, writeVaultFile } from "@/lib/vault";
+import { useHierarchy } from "@/lib/use-hierarchy";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { dirname } from "@tauri-apps/api/path";
 import {
@@ -46,6 +49,7 @@ import {
   deleteWorkspaceRecord,
   deleteWorkspaceView,
   getWorkspaceDatabaseBundle,
+  getWorkspaceDatabaseRecordModel,
   isOperationalSystemWorkspaceIcon,
   listHomePinsFromWorkspace,
   listWorkspaceDatabaseCatalog,
@@ -130,6 +134,7 @@ export function DatabaseEditorView({
   const [taxonomySaving, setTaxonomySaving] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const [homePins, setHomePins] = useState(() => loadHomePins());
+  const { tree: hierarchy } = useHierarchy();
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -143,6 +148,11 @@ export function DatabaseEditorView({
   });
 
   const database = bundle?.model;
+  const requestedRecord = useQuery({
+    queryKey: ["workspace-database-record", databaseId, requestedRecordId],
+    queryFn: () => getWorkspaceDatabaseRecordModel(requestedRecordId!, databaseId),
+    enabled: !embedded && Boolean(databaseId && requestedRecordId),
+  });
   const { data: catalogData = [] } = useQuery({
     queryKey: ["workspace-database-catalog", entityFilter],
     queryFn: () => listWorkspaceDatabaseCatalog({ entity: entityFilter }),
@@ -217,9 +227,13 @@ export function DatabaseEditorView({
     [activeViewId, database],
   );
   const canPinActiveViewToHome = Boolean(activeView && supportsPinnedHomeView(activeView.type));
-  const isActiveViewPinnedToHome = Boolean(
-    database && activeView && findHomePin(homePins, { databaseId: database.id, viewId: activeView.id }),
-  );
+  const pinDestinations = useMemo(() => [
+    { scope: "home" as DashboardScope, label: "Home" },
+    ...hierarchy.departments.flatMap((department) => department.workspaces.map((workspace) => ({
+      scope: `workspace:${workspace.id}` as DashboardScope,
+      label: workspace.name,
+    }))),
+  ], [hierarchy]);
 
   const subRecordsConfig = useMemo(() => {
     if (!database) return undefined;
@@ -257,7 +271,9 @@ export function DatabaseEditorView({
   const activeRecordId = activePeek?.databaseId === databaseId ? activePeek.recordId : null;
   const peekDatabase = activePeek ? catalogDatabaseMap.get(activePeek.databaseId) ?? null : null;
   const activeRecord = activePeek && peekDatabase
-    ? peekDatabase.records.find((record) => record.id === activePeek.recordId) ?? null
+    ? peekDatabase.records.find((record) => record.id === activePeek.recordId)
+      ?? (activePeek.databaseId === databaseId && requestedRecord.data?.id === activePeek.recordId ? requestedRecord.data : null)
+      ?? null
     : null;
 
   useEffect(() => {
@@ -274,11 +290,13 @@ export function DatabaseEditorView({
       setActivePeek((current) => (current?.databaseId === database.id ? null : current));
       return;
     }
-    if (database.records.some((record) => record.id === requestedRecordId)) {
+    if (database.records.some((record) => record.id === requestedRecordId) || requestedRecord.data?.id === requestedRecordId) {
       setActivePeek({ databaseId: database.id, recordId: requestedRecordId });
       setSchemaOpen(false);
       return;
     }
+
+    if (requestedRecord.isPending) return;
 
     setActivePeek((current) =>
       current?.databaseId === database.id && current.recordId === requestedRecordId ? null : current,
@@ -289,7 +307,7 @@ export function DatabaseEditorView({
     toast.error("Record unavailable", {
       description: "The linked record is not present in this database.",
     });
-  }, [database, embedded, requestedRecordId, setSearchParams]);
+  }, [database, embedded, requestedRecord.data, requestedRecord.isPending, requestedRecordId, setSearchParams]);
 
   useEffect(() => {
     if (!database || !activeView || activeView.type !== "timeline") return;
@@ -953,65 +971,30 @@ export function DatabaseEditorView({
     }
   }
 
-  async function handleToggleActiveViewHomePin() {
-    if (!database || !activeView) return;
-    if (!supportsPinnedHomeView(activeView.type)) return;
+  async function handlePinActiveView(destination: DashboardScope) {
+    if (!database || !activeView || !supportsPinnedHomeView(activeView.type)) return;
     const previousPins = homePins;
-
-    if (findHomePin(homePins, { databaseId: database.id, viewId: activeView.id })) {
-      const result = removeHomePin(homePins, {
-        databaseId: database.id,
-        viewId: activeView.id,
-      });
-      setHomePins(result.pins);
-      saveHomePins(result.pins);
-      if (result.removed) {
-        try {
-          await saveHomePinsToWorkspace(result.pins);
-          await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
-          toast.success("View removed from Home", {
-            action: {
-              label: "Undo",
-              onClick: () => {
-                setHomePins(previousPins);
-                saveHomePins(previousPins);
-                void saveHomePinsToWorkspace(previousPins)
-                  .then(() => queryClient.invalidateQueries({ queryKey: ["home-pins"] }))
-                  .catch((undoError) => toastError("Couldn't restore Home view", undoError));
-              },
-            },
-          });
-        } catch (err) {
-          setHomePins(previousPins);
-          saveHomePins(previousPins);
-          toastError("Home pin update failed", err);
-        }
-      }
-      return;
-    }
-
-    const result = upsertHomePin(homePins, {
-      databaseId: database.id,
-      viewId: activeView.id,
-    });
-    setHomePins(result.pins);
-    saveHomePins(result.pins);
-    if (result.added) {
-      try {
-        await saveHomePinsToWorkspace(result.pins);
-        await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
-        toast.success("View pinned to Home", {
-          action: { label: "Open Home", onClick: () => navigate("/home") },
-        });
-      } catch (err) {
-        setHomePins(previousPins);
-        saveHomePins(previousPins);
-        toastError("Home pin update failed", err);
-      }
-    } else {
-      toast.info("View is already pinned to Home", {
-        action: { label: "Open Home", onClick: () => navigate("/home") },
-      });
+    const existing = pinsForDashboard(homePins, destination).find(
+      (pin) => isDatabaseViewHomePin(pin) && pin.databaseId === database.id && pin.viewId === activeView.id,
+    );
+    const nextPins = existing
+      ? homePins.filter((pin) => pin.id !== existing.id)
+      : [...homePins, createDatabaseHomePin(homePins, {
+          databaseId: database.id,
+          viewId: activeView.id,
+          config: configForDashboard(toViewConfig(activeView) as unknown as Record<string, unknown>, destination),
+        })];
+    setHomePins(nextPins);
+    saveHomePins(nextPins);
+    try {
+      await saveHomePinsToWorkspace(nextPins);
+      await queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+      const destinationName = pinDestinations.find((item) => item.scope === destination)?.label ?? "dashboard";
+      toast.success(existing ? `View removed from ${destinationName}` : `View pinned to ${destinationName}`);
+    } catch (err) {
+      setHomePins(previousPins);
+      saveHomePins(previousPins);
+      toastError("Dashboard pin update failed", err);
     }
   }
 
@@ -1532,9 +1515,14 @@ export function DatabaseEditorView({
           onImportCsv={isSystemDatabase ? () => {} : () => csvInputRef.current?.click()}
           onExportCsv={handleCsvExport}
           canPinToHome={canPinActiveViewToHome}
-          isPinnedToHome={isActiveViewPinnedToHome}
-          onTogglePinToHome={handleToggleActiveViewHomePin}
-          onOpenHome={() => navigate("/home")}
+          pinDestinations={pinDestinations}
+          pinnedDestinations={database && activeView
+            ? pinDestinations.filter((destination) => pinsForDashboard(homePins, destination.scope).some(
+                (pin) => isDatabaseViewHomePin(pin) && pin.databaseId === database.id && pin.viewId === activeView.id,
+              )).map((destination) => destination.scope)
+            : []}
+          onPinToDashboard={handlePinActiveView}
+          onOpenDashboard={(scope) => navigate(scope === "home" ? "/home" : `/unit/${scope.slice("workspace:".length)}?view=dashboard`)}
           isImportingCsv={isImportingCsv}
         />
       </div>

@@ -15,6 +15,10 @@ export interface WorkEventItem {
   decision_role: string | null;
   summary: string | null;
   payload: Record<string, unknown>;
+  run_version?: number | null;
+  step_id?: string | null;
+  assignment_id?: string | null;
+  runtime_session_id?: string | null;
   created_at: string;
 }
 
@@ -27,10 +31,11 @@ export function workEventsForSession(events: WorkEventItem[], sessionId: string,
   }).sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
-export async function listWorkEvents(input: { recordId?: string; workflowRunId?: string; sessionId?: string; sessionProfile?: string; since?: string; limit?: number }) {
+export async function listWorkEvents(input: { recordId?: string; recordIds?: string[]; workflowRunId?: string; sessionId?: string; sessionProfile?: string; since?: string; limit?: number }) {
+  if (input.recordIds?.length === 0) return [];
   let query = supabase
     .schema("workspace").from("work_events")
-    .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, created_at")
+    .select("id, record_id, workflow_run_id, event_kind, actor, durable_role, decision_role, summary, payload, run_version, step_id, assignment_id, runtime_session_id, created_at")
     .order("created_at", { ascending: false })
     .limit(input.limit ?? 30);
   if (input.recordId && input.workflowRunId) {
@@ -45,6 +50,7 @@ export async function listWorkEvents(input: { recordId?: string; workflowRunId?:
     query = query.or(["session_id", "sessionId", "session_key", "sessionKey"].flatMap((key) => values.map((value) => `payload->>${key}.eq.${JSON.stringify(value)}`)).join(","));
   }
   if (input.since) query = query.gte("created_at", input.since);
+  if (input.recordIds) query = query.in("record_id", input.recordIds);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as WorkEventItem[];

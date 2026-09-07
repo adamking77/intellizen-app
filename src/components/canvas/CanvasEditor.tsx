@@ -1309,7 +1309,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           type: "bezier",
           style: {
             stroke: "var(--canvas-edge)",
-            strokeWidth: 2,
+            strokeWidth: 1,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,

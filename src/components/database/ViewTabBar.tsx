@@ -24,6 +24,7 @@ import {
   LayoutGrid,
   List,
   MoreHorizontal,
+  Pin,
   Plus,
   Settings2,
   Table2,
@@ -35,7 +36,9 @@ import { DatabaseButton as Button } from "@/components/database/primitives/Datab
 import { DatabaseConfirmDialog as ConfirmDialog } from "@/components/database/primitives/DatabaseConfirmDialog";
 import { DatabaseDialog as AppDialog } from "@/components/database/primitives/DatabaseDialog";
 import { DatabaseInput as Input } from "@/components/database/primitives/DatabaseInput";
+import { DatabasePinDialog } from "@/components/database/DatabasePinDialog";
 import { findDefaultChartGroupField, getChartGroupCandidates } from "@/lib/database-core";
+import type { DashboardScope } from "@/lib/home-pins";
 import type {
   WorkspaceDatabaseChartType,
   WorkspaceDatabaseField,
@@ -122,9 +125,10 @@ interface ViewTabBarProps {
   onImportCsv: () => void;
   onExportCsv: () => void;
   canPinToHome: boolean;
-  isPinnedToHome: boolean;
-  onTogglePinToHome: () => void;
-  onOpenHome: () => void;
+  pinDestinations: Array<{ scope: DashboardScope; label: string }>;
+  pinnedDestinations: DashboardScope[];
+  onPinToDashboard: (scope: DashboardScope) => void;
+  onOpenDashboard: (scope: DashboardScope) => void;
   isImportingCsv: boolean;
 }
 
@@ -143,9 +147,10 @@ export function ViewTabBar({
   onImportCsv,
   onExportCsv,
   canPinToHome,
-  isPinnedToHome,
-  onTogglePinToHome,
-  onOpenHome,
+  pinDestinations,
+  pinnedDestinations,
+  onPinToDashboard,
+  onOpenDashboard,
   isImportingCsv,
 }: ViewTabBarProps) {
   const [addViewOpen, setAddViewOpen] = useState(false);
@@ -153,6 +158,7 @@ export function ViewTabBar({
   const [sortOpen, setSortOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [pendingDeleteViewId, setPendingDeleteViewId] = useState<string | null>(null);
@@ -256,7 +262,6 @@ export function ViewTabBar({
     nextViews.splice(nextIndex, 0, moved);
     onReorderViews(nextViews.map((view) => view.id));
   }
-
   return (
     <>
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
@@ -370,35 +375,13 @@ export function ViewTabBar({
             Settings
           </Button>
 
+          <Button variant="ghost" size="icon" disabled={!canPinToHome} aria-label="Pin this view to a dashboard" title="Pin this view to a dashboard" onClick={() => { closePanels(); setPinDialogOpen(true); }}><Pin className="h-3.5 w-3.5" /></Button>
           <div ref={moreRef} className="relative">
             <Button variant="ghost" size="icon" onClick={() => togglePanel("more")} aria-label="More options" aria-expanded={moreOpen} className="h-8 w-8">
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
             {moreOpen ? (
               <div className="db-dropdown-panel absolute right-0 top-full z-50 mt-2 min-w-[180px]">
-                <button
-                  type="button"
-                  className="db-context-menu-item"
-                  onClick={() => {
-                    closePanels();
-                    onTogglePinToHome();
-                  }}
-                  disabled={!canPinToHome}
-                >
-                  {isPinnedToHome ? "Unpin from Home" : "Pin to Home"}
-                </button>
-                {isPinnedToHome ? (
-                  <button
-                    type="button"
-                    className="db-context-menu-item"
-                    onClick={() => {
-                      closePanels();
-                      onOpenHome();
-                    }}
-                  >
-                    Open Home
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   className="db-context-menu-item"
@@ -454,6 +437,14 @@ export function ViewTabBar({
         }}
         onToggleField={toggleFieldVisibility}
         onUpdateViewConfig={onUpdateViewConfig}
+      />
+      <DatabasePinDialog
+        open={pinDialogOpen}
+        destinations={pinDestinations}
+        pinnedDestinations={pinnedDestinations}
+        onOpenChange={setPinDialogOpen}
+        onPin={onPinToDashboard}
+        onOpenDashboard={onOpenDashboard}
       />
       <ConfirmDialog
         open={pendingDeleteViewId !== null}

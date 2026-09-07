@@ -24,7 +24,12 @@ import type { RunState } from "./run-state";
 import type { HermesProfile } from "@/engine/profiles";
 import { Avatar, identityColor } from "@/components/agents/avatar";
 import { Composer, RunStatus } from "./agent-composer";
+import { MaterialContext } from "./material-context";
 import { SEND_ON_ENTER_KEY, usePreference } from "@/lib/settings-preferences";
+import { DecisionCard } from "@/components/agent/decision-card";
+import type { ApprovalChoice } from "@/engine/contract";
+import type { ApprovalDecision, ClarifyDecision, Decision } from "@/engine/transcript";
+import type { SessionAttachment } from "@/engine/session";
 
 /** What the HUD has open above its bar. */
 export type HudOpen = "none" | "roster" | "chat";
@@ -49,7 +54,8 @@ const ICON =
 
 /** Only the HUD's surface paints; its surrounding window stays clear. */
 const SURFACE: CSSProperties = {
-  background: "var(--hud-bg)",
+  background: "var(--surface)",
+  border: "1px solid var(--surface-line)",
 };
 
 function startResize(dir: ResizeDirection) {
@@ -107,6 +113,13 @@ export interface HudProps {
   target: string | null;
   messages: Message[];
   run: RunState;
+  decision?: Decision | null;
+  onApprove?: (decision: ApprovalDecision, choice: ApprovalChoice) => Promise<void> | void;
+  onClarify?: (decision: ClarifyDecision, answers: Record<string, string[]>) => Promise<void> | void;
+  attachments?: SessionAttachment[];
+  onAttach?: () => void;
+  onRemoveAttachment?: (path: string) => void;
+  permission: React.ReactNode;
   voice: VoiceHandle;
   open: HudOpen;
   onOpen: (open: HudOpen) => void;
@@ -130,6 +143,13 @@ export function Hud({
   target,
   messages,
   run,
+  decision,
+  onApprove,
+  onClarify,
+  attachments,
+  onAttach,
+  onRemoveAttachment,
+  permission,
   voice,
   open,
   onOpen,
@@ -147,6 +167,16 @@ export function Hud({
   const log = useRef<HTMLDivElement | null>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const decisionKey = decision ? `${target ?? ""}:${decision.requestId}` : null;
+  const currentDecisionKey = useRef(decisionKey);
+  currentDecisionKey.current = decisionKey;
+
+  useEffect(() => {
+    setAnswering(null);
+    setAnswerError(null);
+  }, [decisionKey]);
 
   useEffect(() => {
     const el = log.current;
@@ -157,7 +187,7 @@ export function Hud({
     } else {
       setBehind(true);
     }
-  }, [messages, open]);
+  }, [messages, open, decisionKey]);
 
   const speaking = voice.mine ? "you" : voice.talking ? "agent" : null;
   const name = agent?.displayName || agent?.name || target || "Agents";
@@ -185,8 +215,20 @@ export function Hud({
   // Only the main window clears the shared draft after an accepted send.
   const submit = () => {
     const text = draft.trim();
-    if (!text || sending || !ready || voice.mine || voice.hearing) return;
+    if ((!text && !attachments?.length) || sending || !ready || voice.mine || voice.hearing) return;
     onSend(text);
+  };
+
+  const answer = (send: () => Promise<void> | void) => {
+    if (!decision || !decisionKey || answering === decisionKey) return;
+    const answerKey = decisionKey;
+    setAnswering(answerKey);
+    setAnswerError(null);
+    void Promise.resolve(send()).catch((error: unknown) => {
+      if (currentDecisionKey.current !== answerKey) return;
+      setAnswering(null);
+      setAnswerError(error instanceof Error ? error.message : "Could not send your answer. Try again.");
+    });
   };
 
   return (
@@ -199,7 +241,7 @@ export function Hud({
       {open === "roster" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[var(--r-plane)] px-3 py-[9px]"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[var(--r-surface)] px-3 py-[9px]"
           style={SURFACE}
           role="listbox"
           aria-label="Agents"
@@ -230,6 +272,7 @@ export function Hud({
                   agent={{
                     displayName: profile.displayName || profile.name,
                     avatarStyle: profile.avatarStyle,
+                    avatarSeed: profile.avatarSeed,
                     avatarKind: profile.avatarKind,
                     avatarColor: profile.avatarColor,
                   }}
@@ -252,10 +295,11 @@ export function Hud({
       {open === "chat" ? (
         <div
           onMouseDown={drag}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)]"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-surface)]"
           style={SURFACE}
         >
           {chatContent ?? <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+          <MaterialContext />
           <div
             ref={log}
             data-hud-log
@@ -269,7 +313,7 @@ export function Hud({
           >
             {messages.length === 0 ? (
               <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5">
-                <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">{ready ? `Ready — ${name} can answer.` : "No agent selected."}</p>
+                <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">{ready ? `Ready. ${name} can answer.` : "No agent selected."}</p>
                 <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{ready ? "Send a message to begin." : "Choose an agent from the pill below."}</p>
               </div>
             ) : null}
@@ -281,7 +325,7 @@ export function Hud({
                 >
                   {m.text}
                 </div>
-              ) : (
+              ) : m.text.trim() || m.streaming ? (
                 <div key={m.id} className="flex gap-2">
                   <div className="mt-0.5 shrink-0">
                     <Avatar agent={face} size={20} image={face.avatarImage} animate={false} />
@@ -290,7 +334,7 @@ export function Hud({
                     <span className="t-section uppercase tracking-[0.14em] text-[var(--text-muted)]">{name}</span>
                     <div
                       className="whitespace-pre-wrap rounded-[var(--r-ctl)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
-                      style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
+                      style={{ background: `color-mix(in srgb, ${hue} var(--agent-bubble-weight), transparent)` }}
                     >
                       {m.text.replace(/^\s+/, "")}
                       {m.streaming ? (
@@ -302,8 +346,21 @@ export function Hud({
                     </div>
                   </div>
                 </div>
-              ),
+              ) : null,
             )}
+            {decision && onApprove && onClarify ? (
+              <div className="px-0.5 py-2">
+                <DecisionCard
+                  key={decisionKey}
+                  decision={decision}
+                  asker={name}
+                  busy={answering === decisionKey}
+                  onApprove={(pending, choice) => answer(() => onApprove(pending, choice))}
+                  onClarify={(pending, answers) => answer(() => onClarify(pending, answers))}
+                />
+                {answerError ? <p role="alert" className="mt-2 text-[var(--t-meta)] text-[var(--danger)]">{answerError}</p> : null}
+              </div>
+            ) : null}
           </div>
 
           {behind ? (
@@ -330,8 +387,11 @@ export function Hud({
             onDraft={onDraft}
             onSend={submit}
             onStop={onStop}
+            attachments={attachments}
+            onAttach={onAttach}
+            onRemoveAttachment={onRemoveAttachment}
             agent={ready ? name : null}
-            permission={null}
+            permission={permission}
             placeholder={ready ? `Message ${name}…` : "Choose an agent"}
             running={sending}
             ready={ready && !voice.mine && !voice.hearing}
@@ -502,7 +562,7 @@ function HudRun({ run, agent }: { run: RunState; agent: string }) {
           ? `· ${run.label}`
           : "is working…"
         : run.kind === "waiting"
-          ? "needs a decision"
+          ? "has a question for you"
           : `failed · ${run.reason}`;
   return (
     <span

@@ -199,6 +199,48 @@ describe("workflow schema v1", () => {
     );
   });
 
+  it("allows only independent bounded work while an approval waits", () => {
+    const withMeanwhile = structuredClone(proofWorkflow);
+    const approval = withMeanwhile.steps.find((step) => step.id === "approve");
+    if (approval?.kind !== "approval") throw new Error("Fixture mismatch.");
+    approval.meanwhile = ["research_while_waiting"];
+    approval.reminder = "never";
+    withMeanwhile.steps.push({
+      id: "research_while_waiting",
+      kind: "role-assign",
+      title: "Research while waiting",
+      role: "researcher",
+      resolution: "primary-active-occupant",
+      instructions: "Read the verified result and prepare bounded notes.",
+      contextRefs: ["steps.verify.result"],
+      execution: "ephemeral",
+      mediatedAuthority: "read-only",
+      verification: { required: false },
+      timeoutMinutes: 10,
+      next: null,
+    });
+    expect(validateWorkflowDefinition(withMeanwhile).valid).toBe(true);
+
+    const unsafe = structuredClone(withMeanwhile);
+    const unsafeApproval = unsafe.steps.find((step) => step.id === "approve");
+    const side = unsafe.steps.find((step) => step.id === "research_while_waiting");
+    if (unsafeApproval?.kind !== "approval" || side?.kind !== "role-assign") {
+      throw new Error("Fixture mismatch.");
+    }
+    unsafeApproval.reminder = "hourly" as "never";
+    side.mediatedAuthority = "local-write";
+    side.contextRefs = ["steps.simulate.result"];
+    side.next = "simulate";
+    expect(validateWorkflowDefinition(unsafe).errors.map((error) => error.code)).toEqual(
+      expect.arrayContaining([
+        "unsupported_reminder",
+        "unsafe_meanwhile_authority",
+        "meanwhile_result_dependency",
+        "meanwhile_not_leaf",
+      ]),
+    );
+  });
+
   it("hashes a canonical key-sorted representation", async () => {
     const reordered = {
       ...proofWorkflow,

@@ -6,6 +6,7 @@ import { open as pickFiles } from "@tauri-apps/plugin-dialog";
 import { ChevronsUpDown, PanelRightClose, Users } from "lucide-react";
 
 import { Composer, RunStatus, type RunState } from "@/components/agent/agent-composer";
+import { ApprovalSettings } from "@/components/agent/approval-settings";
 import { MaterialContext } from "@/components/agent/material-context";
 import type { PaneResize } from "@/components/layout/pane-resize";
 import { AgentPanelShell } from "@/components/agent/agent-panel-shell";
@@ -18,6 +19,7 @@ import { Receipt } from "@/components/ui/receipt";
 import { usePanelSession } from "@/components/agent/use-panel-session";
 import { usePanelDraft } from "@/components/agent/panel-draft";
 import { useEngineStore } from "@/engine/engine-store";
+import { readApprovalMode, saveApprovalMode, type ApprovalMode } from "@/engine/approval-mode";
 import type { SessionUsage } from "@/engine/contract";
 import { acpEngineLabel, listAcpAgents } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
@@ -36,9 +38,11 @@ import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { VoiceButton } from "@/voice/voice-button";
 import { RoomView } from "@/views/Room";
 import { useSessionStore } from "@/engine/session-store";
-import { requestAction, type PanelFrame } from "@/components/agent/panel-window";
+import { requestAction, requestRemoteApprovalMode, type PanelFrame } from "@/components/agent/panel-window";
 import { loadTeams } from "@/components/agents/teams-store";
 import { openTeamRoom, teamForRoom } from "@/rooms/team-room";
+import { InlineProposals } from "@/components/docs/inline-proposals";
+import type { DocumentProposalDecision, DocumentProposalReview } from "@/proposals/document-review-context";
 
 const ICON_BUTTON =
   "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
@@ -64,14 +68,9 @@ interface AgentPanelProps {
   onCollapsedChange?: (collapsed: boolean) => void;
   openRequest?: number;
   toggleRequest?: number;
+  documentReview?: DocumentProposalReview | null;
+  onDocumentProposalDecision?: (decision: DocumentProposalDecision) => Promise<void>;
 }
-
-// Permissions stated as a word, the donor's wording ("Ask first").
-const PERMISSION_WORD = {
-  manual: "Ask first",
-  smart: "Ask when unsure",
-  off: "Never ask",
-} as const;
 
 /** The conversation with a Hermes profile, and the controls for it. The
  *  donor's `AgentPanel` restricted to one turn through the gateway and its
@@ -87,6 +86,8 @@ export function AgentPanel({
   onCollapsedChange,
   openRequest = 0,
   toggleRequest = 0,
+  documentReview,
+  onDocumentProposalDecision,
 }: AgentPanelProps) {
   const standalone = mode === "standalone";
   const { isCramped } = useWindowSize();
@@ -103,7 +104,12 @@ export function AgentPanel({
 
 
 
-  const { remote, room: remoteRoom, frameReady, profileDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } = usePanelSession(panelFrame);
+  const { remote, room: remoteRoom, frameReady, profileDirectory, selectedProfile, thread, decisionError, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify } = usePanelSession(panelFrame);
+  const activeDocumentReview = remote ? panelFrame?.documentReview ?? null : documentReview ?? null;
+  const decideDocumentProposal = useCallback((decision: DocumentProposalDecision) => remote
+    ? requestAction({ type: "document-proposal", decision })
+    : (onDocumentProposalDecision?.(decision) ?? Promise.reject(new Error("The document review is no longer open."))),
+  [remote, onDocumentProposalDecision]);
   const connection = useEngineStore((s) => s.connection);
   const engineError = useEngineStore((s) => s.error);
   const engineOpen = connection === "open";
@@ -138,7 +144,8 @@ export function AgentPanel({
         provider: acpEngineLabel(agent.engine),
         isDefault: false,
         gatewayRunning: true,
-        avatarStyle: agent.avatarStyle === "blob" ? "blob" : "sphere",
+        avatarStyle: agent.avatarStyle === "blob" || agent.avatarStyle === "trace" ? agent.avatarStyle : "sphere",
+        avatarSeed: agent.avatarSeed,
         avatarKind: agent.avatarKind,
         avatarColor: agent.avatarColor || agent.avatar,
       })),
@@ -180,6 +187,18 @@ export function AgentPanel({
     (selectedProfile ? { name: selectedProfile, isDefault: false, model: null, provider: null, gatewayRunning: engineOpen, description: "", displayName: "", avatarStyle: "sphere" } : null);
   const agentName = profile?.displayName || profile?.name || null;
   const isAcp = selectedProfile?.startsWith("acp:") ?? false;
+  const readPermission = useCallback(
+    (target: string, sessionId: string | null) => remote
+      ? requestRemoteApprovalMode(target, sessionId)
+      : readApprovalMode(getGatewayClient(), target, sessionId),
+    [remote],
+  );
+  const savePermission = useCallback(
+    (target: string, sessionId: string | null, next: ApprovalMode) => remote
+      ? requestRemoteApprovalMode(target, sessionId, next)
+      : saveApprovalMode(getGatewayClient(), target, sessionId, next),
+    [remote],
+  );
   const usable = useCallback((p: HermesProfile) => p.name.startsWith("acp:") || ((remote || engineOpen) && p.gatewayRunning), [remote, engineOpen]);
   const targetReady = Boolean(profile && usable(profile));
 
@@ -198,13 +217,6 @@ export function AgentPanel({
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const focusComposerWhenOpen = useRef(false);
   const log = useRef<HTMLDivElement | null>(null);
-
-  // A relative stamp must not freeze: re-render once a minute.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const transcript = thread?.transcript ?? null;
   const messages = useMemo(() => transcript?.messages ?? [], [transcript]);
@@ -373,7 +385,7 @@ export function AgentPanel({
     ? connection === "connecting" || (connection === "idle" && !engineError)
       ? "Starting Hermes…"
       : "Hermes is offline"
-    : profilesQuery.isPending
+    : !remote && profilesQuery.isPending
       ? "Loading profiles…"
       : agentName
         ? `Message ${agentName}…  ↵ to send`
@@ -416,6 +428,7 @@ export function AgentPanel({
                   agent={{
                     displayName: agentName ?? profile.name,
                     avatarStyle: profile.avatarStyle,
+                    avatarSeed: profile.avatarSeed,
                     avatarKind: profile.avatarKind,
                     avatarColor: profile.avatarColor,
                   }}
@@ -431,7 +444,7 @@ export function AgentPanel({
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
           {!selectedRoomId && profile?.model && !headerActions ? (
-            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{profile.model}</span>
+            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-dim)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
           {headerActions}
@@ -465,7 +478,7 @@ export function AgentPanel({
           ) : null}
         </div>
 
-        {selectedRoomId ? <RoomView roomId={selectedRoomId} panel hideHeader onEject={onEject} snapshot={remote ? remoteRoom ?? undefined : undefined} panelDirectory={profileDirectory} /> : <>
+        {selectedRoomId ? <RoomView key={selectedRoomId} roomId={selectedRoomId} panel hideHeader onEject={onEject} snapshot={remote ? remoteRoom ?? undefined : undefined} panelDirectory={profileDirectory} trailingContent={activeDocumentReview ? <InlineProposals review={activeDocumentReview} onDecision={decideDocumentProposal} /> : undefined} /> : <>
         <MaterialContext />
         <div
           ref={log}
@@ -488,41 +501,45 @@ export function AgentPanel({
           ) : null}
           {messages.map((m) =>
             m.from === "you" ? (
-              <UserTurn key={m.id} message={m} now={now} actions={turnActions} />
+              <UserTurn key={m.id} message={m} actions={turnActions} />
             ) : (
               <AgentTurn
                 key={m.id}
                 message={m}
                 profile={profile}
-                now={now}
                 onRetry={(prompt) => submit(prompt)}
                 actions={turnActions}
                 reading={voice.talking === m.id ? voice.said : undefined}
                 showReasoning={showReasoning !== "0"}
               >
                 {decisionsFor(m.id).map((decision) => (
-                  <DecisionCard
-                    key={decision.requestId}
-                    decision={decision}
-                    asker={agentName ?? m.from}
-                    busy={thread?.deciding === decision.requestId}
-                    onApprove={(d, choice) => {
-                      if (!selectedProfile) return;
-                      decideApproval(selectedProfile, d, choice).catch((error) =>
-                        toastError("Could not answer the approval", error),
-                      );
-                    }}
-                    onClarify={(d, answers) => {
-                      if (!selectedProfile) return;
-                      decideClarify(selectedProfile, d, answers).catch((error) =>
-                        toastError("Could not send the answer", error),
-                      );
-                    }}
-                  />
+                  <div key={`${selectedProfile}:${decision.requestId}`} className="grid gap-1.5">
+                    <DecisionCard
+                      decision={decision}
+                      asker={agentName ?? m.from}
+                      busy={Boolean(thread?.deciding)}
+                      onApprove={(d, choice) => {
+                        if (!selectedProfile) return;
+                        decideApproval(selectedProfile, d, choice).catch((error) =>
+                          toastError("Could not answer the approval", error),
+                        );
+                      }}
+                      onClarify={(d, answers) => {
+                        if (!selectedProfile) return;
+                        decideClarify(selectedProfile, d, answers).catch((error) =>
+                          toastError("Could not send the answer", error),
+                        );
+                      }}
+                    />
+                    {decisionError?.requestId === decision.requestId ? (
+                      <p role="alert" className="text-[var(--t-meta)] text-[var(--bad)]">{decisionError.message}</p>
+                    ) : null}
+                  </div>
                 ))}
               </AgentTurn>
             ),
           )}
+          {activeDocumentReview ? <div className="shrink-0"><InlineProposals review={activeDocumentReview} onDecision={decideDocumentProposal} /></div> : null}
         </div>
 
         {behind ? (
@@ -566,7 +583,16 @@ export function AgentPanel({
           ready={targetReady}
           running={running}
           agent={agentName}
-          permission={transcript?.approvalMode ? PERMISSION_WORD[transcript.approvalMode] : null}
+          permission={!isAcp && selectedProfile && transcript?.approvalMode ? (
+            <ApprovalSettings
+              key={`${selectedProfile}:${thread?.sessionId ?? ""}`}
+              profile={selectedProfile}
+              sessionId={thread?.sessionId ?? null}
+              effectiveMode={transcript.approvalMode}
+              read={readPermission}
+              save={savePermission}
+            />
+          ) : null}
           note={voice.note}
           dictating={voice.mine || voice.hearing}
           dictate={<VoiceButton mode="dictate" voice={voice} onTranscript={() => undefined} />}

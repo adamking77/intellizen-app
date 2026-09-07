@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Control } from "@/components/ui/control";
-import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +19,9 @@ import {
   type Team,
 } from "./agent-model";
 import { Avatar } from "./avatar";
+
+const LABEL = "font-mono text-[var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
+const VALUE = "w-full border-b border-[var(--surface-line)] bg-transparent px-0 py-2 font-ui text-[var(--t-ui)] text-[var(--text)] placeholder:text-[var(--text-dim)] focus-visible:outline-none focus-visible:border-[var(--line-strong)]";
 
 export function TeamSheet({
   agents,
@@ -102,13 +104,33 @@ export function TeamSheet({
       className="max-h-[72dvh] w-[min(420px,calc(100vw-24px))]"
       bodyClassName="p-0"
     >
-            {agents.length >= TEAM_SEARCH_THRESHOLD ? (
-              <div className="px-[17px] pb-2.5">
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
-              </div>
-            ) : null}
+            <div className="grid gap-3 px-[17px] pb-3">
+              <label className="grid gap-1">
+                <span className={LABEL}>Team name</span>
+                <input
+                  ref={input}
+                  className={VALUE}
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save();
+                  }}
+                  placeholder={fallback || "Team name"}
+                  aria-label="Team name"
+                />
+              </label>
+              {agents.length >= TEAM_SEARCH_THRESHOLD ? (
+                <label className="grid gap-1">
+                  <span className={LABEL}>Search members</span>
+                  <input className={VALUE} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search agents…" aria-label="Search agents" />
+                </label>
+              ) : null}
+            </div>
 
-            <div className="flex-1 overflow-y-auto px-[9px]">
+            <div className="flex-1 overflow-y-auto border-y border-[var(--row-line)] px-[9px]">
               {shown.length === 0 ? <div className="px-2 py-2.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No agent matches “{query}”.</div> : null}
               {shown.map((a) => {
                 const on = picked.includes(a.id);
@@ -123,7 +145,7 @@ export function TeamSheet({
                       shut ? "opacity-40" : "cursor-pointer hover:bg-[var(--hover)]",
                     )}
                   >
-                    <input type="checkbox" checked={on} disabled={shut} onChange={() => toggle(a.id)} style={{ accentColor: "var(--accent)" }} />
+                    <input className="h-4 w-4 shrink-0" type="checkbox" checked={on} disabled={shut} onChange={() => toggle(a.id)} style={{ accentColor: "var(--accent)" }} />
                     <Avatar agent={a} size={22} image={images?.[a.id]} />
                     <div className="flex min-w-0 flex-col">
                       <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{a.displayName}</span>
@@ -137,20 +159,7 @@ export function TeamSheet({
             </div>
 
             <div className="flex items-center gap-[9px] px-[13px] py-[11px]">
-              <Input
-                ref={input}
-                className="flex-1"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") save();
-                }}
-                placeholder={fallback || "Team name"}
-                aria-label="Team name"
-              />
+              <span className="grow font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{picked.length} {picked.length === 1 ? "agent" : "agents"} selected</span>
               <Control size="sm" onClick={onClose} disabled={busy}>
                 Cancel
               </Control>

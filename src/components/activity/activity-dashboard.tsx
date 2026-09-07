@@ -109,7 +109,7 @@ export function ActivityDashboard() {
     <div className="@container space-y-5 pb-5">
       <header className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 grow">
-          <h1 className="font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+          <h1 className="font-ui text-[24px] font-light leading-tight text-[var(--text)]">
             Activity
           </h1>
           <p className="mt-1 text-[var(--t-meta)] text-[var(--text-muted)]">
@@ -209,12 +209,12 @@ export function ActivityDashboard() {
             <section
               key={id}
               aria-labelledby={`activity-${id}`}
-              className={`min-w-0 rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 ${id === "usage" || id === "outcomes" ? "@[560px]:col-span-6 @[1000px]:col-span-3" : "@[560px]:col-span-2"}`}
+              className={`min-w-0 border-t border-[var(--surface-line)] px-1 py-4 ${id === "usage" || id === "outcomes" ? "@[560px]:col-span-6 @[1000px]:col-span-3" : "@[560px]:col-span-2 @[560px]:border-r @[560px]:pr-4"}`}
             >
               <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2
                   id={`activity-${id}`}
-                  className="mr-auto font-ui text-[var(--t-ui)] text-[var(--text-muted)]"
+                  className="mr-auto font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
                 >
                   {ACTIVITY_TITLES[id]}
                 </h2>
@@ -252,7 +252,7 @@ export function ActivityDashboard() {
       ) : (
         <p role="alert">Activity could not be read. Use Refresh to retry.</p>
       )}
-      <p className="text-[var(--t-count)] leading-5 text-[var(--overlay-1)]">
+      <p className="font-mono text-[var(--t-count)] leading-5 text-[var(--text-muted)]">
         Live conversations include connected Hermes and ACP agents. External
         terminal sessions require an integration to appear. Periods use UTC
         calendar days; current work and connections are live.

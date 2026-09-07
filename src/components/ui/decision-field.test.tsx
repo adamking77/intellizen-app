@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DecisionField } from "./decision-field";
 
 describe("DecisionField", () => {
-  it("renders every choice and marks the recommendation primary", () => {
+  it("renders every choice as an equal-weight, explicit recommendation", () => {
     const html = renderToStaticMarkup(createElement(DecisionField, {
       question: "Ship this?",
       why: "The checks are green.",
@@ -15,9 +15,10 @@ describe("DecisionField", () => {
       ],
       onChoose: () => undefined,
     }));
-    expect(html).toContain("Waiting on you");
+    expect(html).toContain("A question for you");
     expect(html).toContain("Ship");
     expect(html).toContain("Wait");
-    expect(html).toContain("--go-bg");
+    expect(html).toContain("· recommended");
+    expect(html).toContain("--surface-line");
   });
 });

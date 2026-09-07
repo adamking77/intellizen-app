@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowDefinitionV1 } from "@/lib/workflow-schema";
-import { assertProductionWorkflowArtifacts } from "./workflow-dispatch";
+import {
+  assertProductionWorkflowArtifacts,
+  workflowAcpIsolation,
+} from "./workflow-dispatch";
 
 function definitionWithAction(
   action: "create-doc" | "simulate-consequential-action",
@@ -40,5 +43,15 @@ describe("production workflow dispatch", () => {
     expect(() =>
       assertProductionWorkflowArtifacts(definitionWithAction("create-doc")),
     ).toThrow("explicit preview and confirm-write");
+  });
+
+  it("isolates concurrent meanwhile assignments even when they use the same agent", () => {
+    expect([
+      workflowAcpIsolation("assignment-a"),
+      workflowAcpIsolation("assignment-b"),
+    ]).toEqual([
+      { caller: "workflow:assignment-a", mode: "read-only", isolated: true },
+      { caller: "workflow:assignment-b", mode: "read-only", isolated: true },
+    ]);
   });
 });

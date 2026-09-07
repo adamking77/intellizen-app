@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { DocumentHeader } from "./document-header";
@@ -6,7 +6,7 @@ import { DocumentBodyEditor } from "./document-body-editor";
 import { DocumentAttachment } from "./document-attachment";
 import { documentFolderPath, canonicalDocumentPath } from "@/lib/docs-library";
 import { DocumentImage } from "./document-image";
-import { InlineProposals } from "./inline-proposals";
+import { DocumentDock } from "./document-dock";
 import { Control } from "@/components/ui/control";
 import { Drawer } from "@/components/ui/drawer";
 import { MarkdownBody } from "@/components/ui/markdown-body";
@@ -19,6 +19,13 @@ import { getWorkspaceRecord, listRecordRevisions, updateWorkspaceRecord, listAll
 import { readVaultFile, writeVaultFile } from "@/lib/vault";
 import { getWorkflowSource } from "@/lib/workflow-source";
 import type { WorkflowTemplateItem, WorkspaceDatabaseRecordModel } from "@/lib/types";
+import { useProposals } from "@/proposals/use-proposals";
+import { useRegisterDocumentProposal, type DocumentProposalDecision } from "@/proposals/document-review-context";
+import { SHELL_COMMAND_EVENT, type ShellCommand } from "@/components/layout/command-palette";
+import type { Proposal } from "@/proposals/types";
+
+const NO_PROPOSALS: Proposal[] = [];
+const FOCUS_MODE_CHANGE_EVENT = "intelizen:focus-mode-change";
 
 interface Props {
   record: WorkspaceDatabaseRecordModel;
@@ -75,6 +82,11 @@ function LoadedDocument({ record, workflow, projects, initialEdit, isCramped, sa
   const path = documentVaultRelativePath(record);
   const [mode, setMode] = useState<"read" | "edit">(initialEdit && !workflow ? "edit" : "read");
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const [readingFocus, setReadingFocus] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem("intelizen:focus-mode") === "1"; }
+    catch { return false; }
+  });
   const [history, setHistory] = useState(false);
   const [editorVersion, setEditorVersion] = useState(0);
   const [inVault, setInVault] = useState(loaded.inVault);
@@ -123,10 +135,18 @@ function LoadedDocument({ record, workflow, projects, initialEdit, isCramped, sa
   const revisions = useQuery({ queryKey: ["document-history", record.id], queryFn: () => listRecordRevisions(record.id), enabled: history });
   const [revisionId, setRevisionId] = useState<string | null>(null);
   const revision = revisions.data?.find((item) => item.id === revisionId);
+  const { proposals, accept: acceptProposal, busy: proposalBusy, error: proposalError } = useProposals(workflow ? null : path);
+  const listedProposals = proposals ?? NO_PROPOSALS;
+  const proposalCount = listedProposals.reduce((sum, proposal) => sum + proposal.hunks.length, 0);
 
   useEffect(() => { session.adopt(loaded.raw); }, [session, loaded.raw]);
   useEffect(() => () => { if (!workflow) void session.flush(); }, [session, workflow]);
   useEffect(() => { if (draft.status === "saved" && path) setInVault(true); }, [draft.status, path]);
+  useEffect(() => {
+    const changed = (event: Event) => setReadingFocus(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener(FOCUS_MODE_CHANGE_EVENT, changed);
+    return () => window.removeEventListener(FOCUS_MODE_CHANGE_EVENT, changed);
+  }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.metaKey && event.key.toLowerCase() === "e" && !workflow && !decisionBusy) { event.preventDefault(); setMode((old) => old === "edit" ? "read" : "edit"); }
@@ -142,21 +162,74 @@ function LoadedDocument({ record, workflow, projects, initialEdit, isCramped, sa
       : composeDocument(draft.text, title, body, record.id);
     session.edit(text);
   };
+  const decideProposal = useCallback(async (decision: DocumentProposalDecision) => {
+    if (decision.documentId !== record.id || decision.docPath !== path) throw new Error("The open document changed. Review the current proposal before deciding.");
+    const proposal = listedProposals.find((item) => item.id === decision.proposalId);
+    if (!proposal) throw new Error("That proposal is no longer waiting. Review the current suggestions.");
+    const selected = [...decision.taken, ...decision.dropped];
+    const keys = selected.map((hunk) => JSON.stringify([hunk.id, hunk.at, hunk.old, hunk.new]));
+    const available = new Set(proposal.hunks.map((hunk) => JSON.stringify([hunk.id, hunk.at, hunk.old, hunk.new])));
+    if (selected.length === 0 || new Set(keys).size !== keys.length || keys.some((key) => !available.has(key))) {
+      throw new Error("Those suggested edits changed. Review the current proposal before deciding.");
+    }
+    setDecisionBusy(true);
+    try {
+      await session.flush();
+      if (session.getSnapshot().status === "error") throw new Error("Save the current draft before deciding on suggested edits.");
+      const text = await acceptProposal(proposal.id, decision.taken, decision.dropped);
+      if (text !== null) {
+        session.edit(text);
+        setEditorVersion((version) => version + 1);
+      }
+    } finally {
+      setDecisionBusy(false);
+    }
+  }, [path, listedProposals, record.id, session, acceptProposal]);
+  const proposalRegistration = useMemo(() => path && (listedProposals.length || proposalError) ? {
+    review: {
+      documentId: record.id,
+      docPath: path,
+      title: page.title,
+      proposals: listedProposals,
+      busy: decisionBusy || proposalBusy,
+      error: proposalError,
+    },
+    decide: decideProposal,
+  } : null, [path, listedProposals, proposalBusy, proposalError, record.id, page.title, decisionBusy, decideProposal]);
+  useRegisterDocumentProposal(record.id, proposalRegistration);
+  const sectionCount = Math.max(1, page.body.split("\n").filter((line) => /^#{1,6}\s/.test(line)).length);
+  const wordCount = page.body.trim() ? page.body.trim().split(/\s+/).length : 0;
+  const changeMode = (next: "read" | "edit") => {
+    if (workflow || decisionBusy) return;
+    setMode(next);
+  };
+  const toggleReadingFocus = () => {
+    const next = !readingFocus;
+    setReadingFocus(next);
+    window.dispatchEvent(new CustomEvent<ShellCommand>(SHELL_COMMAND_EVENT, { detail: "focus-mode" }));
+  };
+  const proposalLabel = proposals === null
+    ? "Suggestions unavailable"
+    : proposalCount > 0
+      ? `${proposalCount} suggestion${proposalCount === 1 ? "" : "s"} in the panel`
+      : "No suggestions waiting";
   return <div className="relative flex min-h-0 flex-1 flex-col">
-    <DocumentHeader decisionBusy={decisionBusy} breadcrumb={`Docs / ${documentFolderPath(record) ?? "Saved in workspace"}`} localOnly={Boolean(record._vaultOnly)} mode={mode} saveStatus={draft.status} inVault={inVault} isTemplate={Boolean(record._isTemplate)} isCramped={isCramped} savingTemplate={savingTemplate} readOnly={Boolean(workflow)} onBack={onBack} onModeChange={setMode} onRetry={() => void session.flush()} onSaveTemplate={onSaveTemplate} onMakeRunnable={onMakeRunnable} onDelete={onDelete} onHistory={() => setHistory(true)} onFile={() => setFiling((open) => !open)} />
+    {!readingFocus ? <DocumentHeader decisionBusy={decisionBusy} breadcrumb={`Docs / ${documentFolderPath(record) ?? "Saved in workspace"}`} localOnly={Boolean(record._vaultOnly)} mode={mode} saveStatus={draft.status} inVault={inVault} isTemplate={Boolean(record._isTemplate)} isCramped={isCramped} savingTemplate={savingTemplate} readOnly={Boolean(workflow)} onBack={onBack} onModeChange={changeMode} onRetry={() => void session.flush()} onSaveTemplate={onSaveTemplate} onMakeRunnable={onMakeRunnable} onDelete={onDelete} onHistory={() => setHistory(true)} onFile={() => setFiling((open) => !open)} /> : null}
     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 md:px-10">
       <article className="mx-auto max-w-[65ch]">
         {mode === "edit" ? <input aria-label="Document title" autoFocus={initialEdit} value={editingTitle} onChange={(event) => { setEditingTitle(event.target.value); edit(event.target.value, page.body); }} className="w-full bg-transparent font-ui text-[24px] font-normal leading-tight text-[var(--text)] outline-none" /> : <h1 className="font-ui text-[24px] font-normal leading-tight text-[var(--text)]">{page.title}</h1>}
+        <p className="mt-2 font-mono text-[10px] leading-relaxed text-[var(--text-muted)]">Verification unavailable · Done when not recorded · {proposalLabel}</p>
         <p className="mb-6 mt-2 text-[var(--t-meta)] text-[var(--text-muted)]">{workflow ? `Maintained by ${workflow.owner_role || "the workflow owner"}` : documentFieldString(record, DOCUMENTS_DB_FIELDS.author) ? `${/^(adam|you)$/i.test(documentFieldString(record, DOCUMENTS_DB_FIELDS.author)) ? "You" : documentFieldString(record, DOCUMENTS_DB_FIELDS.author)} wrote it` : "Document"}{updatedDate ? ` · Updated ${updatedDate}` : ""}{project || attachment ? ` · linked to ${project?.name || attachment}` : ""}</p>
         {filing && !workflow ? <div className="mb-5"><Select aria-label="Document project" value={projectId} onChange={async (event) => {
           try { setFilingError(null); await updateWorkspaceRecord(record.id, { fieldId: DOCUMENTS_DB_FIELDS.project, value: event.target.value || null }); await client.invalidateQueries({ queryKey: ["docs-workspace-bundle"] }); setFiling(false); } catch (error) { setFilingError(String(error)); }
         }}><option value="">Unfiled</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>{filingError ? <p role="alert">{filingError}</p> : null}</div> : null}
         {draft.error ? <div role="alert" className="mb-5 text-[var(--bad)]">Could not save. Your draft is kept on this Mac. {draft.error} <Control onClick={() => void session.flush()}>Retry save</Control></div> : null}
         {loaded.source?.warning ? <p role="status" className="mb-4 text-[var(--wait)]">{loaded.source.warning}</p> : null}
-        {mode === "edit" ? <DocumentBodyEditor key={editorVersion} body={page.body} onChange={(body) => edit(editingTitle, body)} /> : <InlineProposals sourcePath={loaded.source?.sourcePath} beforeDecision={async () => { await session.flush(); return session.getSnapshot().status !== "error"; }} onDecisionChange={setDecisionBusy} path={workflow ? null : path} raw={draft.text} title={page.title} onApplied={(text) => { session.edit(text); setEditorVersion((version) => version + 1); }} />}
+        {mode === "edit" ? <DocumentBodyEditor key={editorVersion} body={page.body} onChange={(body) => edit(editingTitle, body)} /> : <MarkdownBody content={page.body} vaultPath={loaded.source?.sourcePath || path} />}
         {loaded.source ? <Link to={loaded.source.recordHref} className="mt-6 inline-block text-[var(--t-meta)] text-[var(--accent-text)]">Open source record</Link> : null}
       </article>
     </div>
+    <DocumentDock mode={mode} onModeChange={changeMode} positionLabel={`${sectionCount} section${sectionCount === 1 ? "" : "s"} · ${wordCount.toLocaleString()} words`} readingFocus={readingFocus} onReadingFocus={toggleReadingFocus} proposalCount={proposalCount} readOnly={Boolean(workflow)} decisionBusy={decisionBusy} />
     <Drawer open={history} onClose={() => setHistory(false)} label="Document history" className="max-w-[calc(100%-16px)]">
       <div className="p-4"><div className="mb-4 flex items-center justify-between"><span>History</span><Control onClick={() => setHistory(false)}>Close</Control></div>
         <QueryState isLoading={revisions.isLoading} error={revisions.error} isEmpty={!revisions.data?.length} emptyTitle="No earlier revisions" emptyDescription="Saved changes will appear here." onRetry={() => void revisions.refetch()}>

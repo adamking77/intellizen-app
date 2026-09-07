@@ -33,7 +33,7 @@ const SPEAKING_SERVICES: Catalog[] = [
   { id: "minimax", label: "MiniMax", models: ["speech-02-hd", "speech-02-turbo"], needsKey: false },
 ];
 
-const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
+const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]";
 const meta = "font-ui text-[var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
 
 function Row({ label, detail, children }: { label: string; detail: string; children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WorkflowDesigner } from "./workflow-designer";
 import { RunsTable, WorkflowSource } from "./workflow-detail";
@@ -26,8 +26,9 @@ function seedSopDefinition(item: WorkflowCatalogItem, content: string) {
   return { ...definition, inputs: sourceId ? [{ key: "source_document", type: "document-ref" as const }] : [], steps: [{ ...first, title: "Run this SOP", instructions: content, contextRefs: sourceId ? [`document:${sourceId}`] : [] }] };
 }
 
-export function WorkflowWorkspace({ item, roleTargets, rolesUnavailable, onRetryRoles, onSaved, onOpenRun, onBack }: {
+export function WorkflowWorkspace({ item, autoDraftWithAgent = false, roleTargets, rolesUnavailable, onRetryRoles, onSaved, onOpenRun, onBack }: {
   item: WorkflowCatalogItem;
+  autoDraftWithAgent?: boolean;
   roleTargets: AgentPanelRoleTarget[];
   rolesUnavailable: boolean;
   onRetryRoles: () => void;
@@ -42,6 +43,12 @@ export function WorkflowWorkspace({ item, roleTargets, rolesUnavailable, onRetry
   const [selectedStepId, setSelectedStepId] = useState(draft.steps[0]?.id ?? "");
   const onDraftChange = useCallback((definition: WorkflowDefinitionV1, stepId: string) => { setDraft(definition); setSelectedStepId(stepId); }, []);
   const bridge = useWorkflowAgentDraft({ draftKey: workflow.id || workflow.workflow_id, currentDefinition: draft, selectedStepId });
+  const autoDraftRequested = useRef(false);
+  useEffect(() => {
+    if (!autoDraftWithAgent || autoDraftRequested.current) return;
+    autoDraftRequested.current = true;
+    void bridge.requestWithAgent().then(() => requestAgentPanelOpen()).catch(() => {});
+  }, [autoDraftWithAgent, bridge.requestWithAgent]);
   const runsQuery = useQuery({ queryKey: ["workflow-runs", workflow.id], queryFn: () => listWorkflowRuns({ workflowId: workflow.id, includeCompleted: true, limit: 100 }), enabled: Boolean(workflow.id), refetchInterval: 15_000 });
   const starter = useStartWorkflow({ onStarted: () => runsQuery.refetch() });
   const sourceQuery = useQuery({ queryKey: ["workflow-source", workflow.id, workflow.updated_at], queryFn: () => getWorkflowSource(workflow), enabled: item.state === "sop-only" });

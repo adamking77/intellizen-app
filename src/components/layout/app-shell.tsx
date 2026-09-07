@@ -14,7 +14,7 @@ import { isTauriRuntime, PANE_BG, useWindowDrag, WindowResizeHandles } from "./w
 import { Sidebar } from "./sidebar";
 import { PaneDivider, usePaneResize } from "./pane-resize";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
-import { toast, toastError } from "@/lib/toast";
+import { dismissToasts, toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { contextForRoute, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
@@ -24,8 +24,11 @@ import { AGENT_PANEL_COLLAPSED_KEY, AGENT_PANEL_OPEN_EVENT, readAgentPanelCollap
 import { useWindowSize } from "@/lib/use-window-size";
 import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-registry";
 import { readPreference, RECONNECT_ON_LAUNCH_KEY, SCAN_ON_LAUNCH_KEY } from "@/lib/settings-preferences";
+import { useSessionMode } from "@/lib/session-mode";
+import { DocumentProposalProvider, useDocumentProposalBridge } from "@/proposals/document-review-context";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
+const FOCUS_MODE_CHANGE_EVENT = "intelizen:focus-mode-change";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
 const SIDEBAR_COLLAPSED_KEY = "intelizen:sidebar-collapsed";
 
@@ -61,10 +64,12 @@ function isEditableTarget(target: EventTarget | null) {
 
 export function AppShell() {
   useEngineBoot();
+  const sessionMode = useSessionMode();
   const queryClient = useQueryClient();
   const location = useLocation();
   const { tree: contextTree } = useHierarchy();
-  const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject();
+  const documentProposal = useDocumentProposalBridge();
+  const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject(documentProposal.review, documentProposal.decide);
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
   const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
@@ -75,7 +80,14 @@ export function AppShell() {
   const sidebarPane = usePaneResize("intelizen:sidebar-width", 216, 160, Math.min(360, windowWidth - 680));
   const panelPane = usePaneResize("intelizen:agent-panel-width", 336, 300, Math.min(560, windowWidth - (sidebarCollapsed ? 56 : sidebarPane.width) - 352));
 
-  useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
+  useEffect(() => {
+    writeFlag(FOCUS_MODE_KEY, focusMode);
+    window.dispatchEvent(new CustomEvent<boolean>(FOCUS_MODE_CHANGE_EVENT, { detail: focusMode }));
+  }, [focusMode]);
+
+  useEffect(() => {
+    if (sessionMode.ready && sessionMode.mode === "not_today") dismissToasts();
+  }, [sessionMode.ready, sessionMode.mode]);
 
   useEffect(() => {
     if (!isTauriRuntime || readPreference(SCAN_ON_LAUNCH_KEY, "1") === "0") return;
@@ -199,6 +211,7 @@ export function AppShell() {
 
   return (
     <CommandPaletteProvider>
+      <DocumentProposalProvider register={documentProposal.register}>
       <HomePinSync />
       {/* Clicks landing on the transparent gutters (this element itself, not
           a pane) move the window. */}
@@ -257,13 +270,13 @@ export function AppShell() {
                   >
                     <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </ChromeButton>
-                  <ChromeButton
+                  {sessionMode.mode !== "not_today" ? <ChromeButton
                     label="Reduce agent panel to HUD"
                     onClick={() => eject(true)}
                     disabled={agentPanelEjecting}
                   >
                     <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </ChromeButton>
+                  </ChromeButton> : null}
                 </>
               ) : null}
             </div>
@@ -276,7 +289,7 @@ export function AppShell() {
         </main>
         {focusMode || agentPanelDetached ? null : isNarrow ? (
           <Drawer open={!agentPanelHidden} onClose={closeNarrowPanel} label="Agent conversation" className="w-[390px] max-w-[calc(100vw-16px)] overflow-hidden">
-            <AgentPanel overlay onOverlayClose={closeNarrowPanel} onEject={() => eject()} openRequest={agentPanelOpenRequest} />
+            <AgentPanel overlay onOverlayClose={closeNarrowPanel} onEject={() => eject()} openRequest={agentPanelOpenRequest} documentReview={documentProposal.review} onDocumentProposalDecision={documentProposal.decide} />
           </Drawer>
         ) : (
           <AgentPanel
@@ -285,11 +298,13 @@ export function AppShell() {
             onCollapsedChange={setAgentPanelHidden}
             openRequest={agentPanelOpenRequest}
             toggleRequest={agentPanelToggleRequest}
+            documentReview={documentProposal.review}
+            onDocumentProposalDecision={documentProposal.decide}
           />
         )}
       </div>
       <WindowResizeHandles sides={agentPanelHidden || agentPanelDetached || focusMode || isNarrow} />
-      <Toaster
+      {sessionMode.ready && sessionMode.mode !== "not_today" ? <Toaster
         position="bottom-right"
         theme="dark"
         closeButton
@@ -303,7 +318,8 @@ export function AppShell() {
           },
           className: "intelizen-toast",
         }}
-      />
+      /> : null}
+      </DocumentProposalProvider>
     </CommandPaletteProvider>
   );
 }
@@ -338,10 +354,14 @@ function ChromeButton({
 
 export function AgentPanelWindow() {
   useEngineBoot();
+  const sessionMode = useSessionMode();
+  useEffect(() => {
+    if (sessionMode.ready && sessionMode.mode === "not_today") dismissToasts();
+  }, [sessionMode.ready, sessionMode.mode]);
   return (
     <>
       <EjectedPanel />
-      <Toaster
+      {sessionMode.ready && sessionMode.mode !== "not_today" ? <Toaster
         position="bottom-right"
         theme="dark"
         closeButton
@@ -355,7 +375,7 @@ export function AgentPanelWindow() {
           },
           className: "intelizen-toast",
         }}
-      />
+      /> : null}
     </>
   );
 }

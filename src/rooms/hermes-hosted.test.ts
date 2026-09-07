@@ -8,7 +8,9 @@ import {
   createHostedRoom,
   refreshHostedRoom,
   roomOwnerFor,
+  sendHostedRoom,
 } from "./hermes-hosted";
+import { createRouteConversationContext, promptWithConversationContext } from "@/lib/conversation-context";
 import { flushRoomWrites, memoryRoomStorage, setRoomStorage } from "./persist";
 import { resetRoomsForTests } from "./rooms";
 import type { GroupMember } from "./types";
@@ -165,5 +167,50 @@ describe("Hermes hosted rooms", () => {
       choice: "once",
     });
     expect(Object.values($groupClarify.get())).toHaveLength(0);
+  });
+
+  it("sends selected material to Hermes while projecting plain user text", async () => {
+    setRoomStorage(memoryRoomStorage());
+    const context = createRouteConversationContext({ pathname: "/docs", search: "?record=doc-a" });
+    context.selections = [{ kind: "document", documentId: "doc-a", label: "Brief" }];
+    const transported = promptWithConversationContext("Review this", context);
+    const client = gateway({
+      "groups.send": { accepted: true },
+      "groups.log": {
+        events: [{ seq: 4, event_id: "u2", kind: "message.user", created_at: 13, payload: { text: transported, thread_id: "iz-context-123e4567-e89b-42d3-a456-426614174000" } }],
+        cursor: 4,
+        latest_seq: 4,
+        has_more: false,
+      },
+    });
+
+    const receipt = await sendHostedRoom("r1", "Review this", client, context);
+
+    const send = client.calls.find((call) => call.method === "groups.send")!;
+    const payload = send.params.payload as { text: string; thread_id: string };
+    expect(payload.text).toContain("doc-a");
+    expect(payload.thread_id).toMatch(/^iz-context-/);
+    expect(receipt).toEqual({ eventId: send.params.event_id, threadId: payload.thread_id });
+    expect($groupChats.get().r1.log[0].text).toBe("Review this");
+  });
+
+  it("preserves user-authored marker text when no context envelope was sent", async () => {
+    setRoomStorage(memoryRoomStorage());
+    const pasted = "Notes\n\n[Current IntelliZen material — descriptive references only]\nkept verbatim\n[End current material]";
+    const client = gateway({
+      "groups.send": { accepted: true },
+      "groups.log": {
+        events: [{ seq: 4, event_id: "u3", kind: "message.user", created_at: 13, payload: { text: pasted, thread_id: "t-plain" } }],
+        cursor: 4,
+        latest_seq: 4,
+        has_more: false,
+      },
+    });
+
+    await sendHostedRoom("r1", pasted, client, null);
+
+    const payload = client.calls.find((call) => call.method === "groups.send")?.params.payload as { thread_id: string };
+    expect(payload.thread_id).toMatch(/^t-/);
+    expect($groupChats.get().r1.log[0].text).toBe(pasted);
   });
 });

@@ -15,7 +15,7 @@ export const ACTIVITY_CARDS = [
 ] as const;
 export type ActivityCardId = (typeof ACTIVITY_CARDS)[number];
 export const ACTIVITY_TITLES: Record<ActivityCardId, string> = {
-  attention: "Needs attention",
+  attention: "Questions and issues",
   progress: "Running",
   outcomes: "Outcomes",
   usage: "Usage",

@@ -1,6 +1,7 @@
 // Hermes profiles, from `profiles.list` over the gateway.
 
 import { request, type GatewayClientLike } from "./contract";
+import type { AvatarStyle } from "@/components/agents/agent-model";
 
 export interface HermesProfile {
   name: string;
@@ -15,7 +16,8 @@ export interface HermesProfile {
   displayName: string;
   /** First folder is the session cwd; absent means the Settings default. */
   context?: string[];
-  avatarStyle?: "sphere" | "blob";
+  avatarStyle?: AvatarStyle;
+  avatarSeed?: number;
   avatarKind?: string;
   avatarColor?: string;
   hasAvatar?: boolean;
@@ -43,7 +45,7 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
     .map((row) => {
       const ui = row.ui_meta && typeof row.ui_meta === "object" ? row.ui_meta as Record<string, unknown> : {};
       const mine = ui.intellizen && typeof ui.intellizen === "object"
-        ? ui.intellizen as { context?: unknown; avatar_style?: unknown; avatar_kind?: unknown; avatar_color?: unknown }
+        ? ui.intellizen as { context?: unknown; avatar_style?: unknown; avatar_seed?: unknown; avatar_kind?: unknown; avatar_color?: unknown }
         : {};
       const bots = ui["hermes-bots"] && typeof ui["hermes-bots"] === "object"
         ? ui["hermes-bots"] as { color?: unknown }
@@ -51,7 +53,10 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
       const context = Array.isArray(mine.context)
         ? mine.context.filter((path): path is string => typeof path === "string")
         : [];
-      const avatarStyle = mine.avatar_style === "blob" ? "blob" : undefined;
+      const avatarStyle = mine.avatar_style === "blob" || mine.avatar_style === "trace" ? mine.avatar_style : undefined;
+      const avatarSeed = typeof mine.avatar_seed === "number" && Number.isFinite(mine.avatar_seed) && Number.isInteger(mine.avatar_seed)
+        ? mine.avatar_seed
+        : undefined;
       const avatarKind = typeof mine.avatar_kind === "string" && mine.avatar_kind ? mine.avatar_kind : undefined;
       const avatarColor =
         typeof mine.avatar_color === "string" && mine.avatar_color
@@ -68,6 +73,7 @@ export async function listProfiles(client: GatewayClientLike): Promise<HermesPro
         description: typeof row.description === "string" ? row.description : "",
         displayName: typeof row.display_name === "string" ? row.display_name : "",
         ...(avatarStyle ? { avatarStyle } : {}),
+        ...(avatarSeed !== undefined ? { avatarSeed } : {}),
         ...(avatarKind ? { avatarKind } : {}),
         ...(avatarColor ? { avatarColor } : {}),
         ...(row.has_avatar === true ? { hasAvatar: true } : {}),

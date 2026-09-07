@@ -1,14 +1,14 @@
 .intelizen-canvas {
   --canvas-bg: var(--crust);
-  --canvas-surface: color-mix(in srgb, var(--mantle) 84%, white 4%);
-  --canvas-surface-strong: color-mix(in srgb, var(--surface-0) 70%, white 10%);
-  --canvas-border: color-mix(in srgb, var(--text) 18%, transparent);
+  --canvas-surface: var(--surface);
+  --canvas-surface-strong: var(--surface);
+  --canvas-border: var(--surface-line);
   --canvas-border-strong: color-mix(in srgb, var(--accent) 74%, white 6%);
   --canvas-grid-color: color-mix(in srgb, var(--text) 10%, transparent);
   --canvas-text: var(--text);
   --canvas-text-muted: color-mix(in srgb, var(--text) 58%, transparent);
   --canvas-accent: var(--accent);
-  --canvas-edge: color-mix(in srgb, var(--text) 40%, transparent);
+  --canvas-edge: color-mix(in srgb, var(--text) 28%, transparent);
   --canvas-minimap-node: color-mix(in srgb, var(--text) 24%, transparent);
   --toolbar-bg: color-mix(in srgb, var(--mantle) 90%, black 4%);
   --toolbar-border: color-mix(in srgb, var(--text) 12%, transparent);
@@ -116,7 +116,7 @@
   height: 100%;
   min-width: 100px;
   min-height: 44px;
-  padding: 14px 18px;
+  padding: 12px 14px;
   position: relative;
   overflow: visible;
   background: transparent;
@@ -178,7 +178,7 @@
 }
 
 .intelizen-canvas .canvas-node.shape-rect {
-  border-radius: 14px;
+  border-radius: var(--r-surface);
 }
 
 .intelizen-canvas .canvas-node.shape-pill {

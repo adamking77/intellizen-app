@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { SettingSwitch } from "./setting-switch";
 import { SETTINGS_TITLE } from "./settings-style";
 
-const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
+const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]";
 const card =
   "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-[background-color,box-shadow] hover:bg-[var(--raised)]";
 const activeTag =

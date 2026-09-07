@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ROSTER_DATABASE_IDS,
   WORKER_TOOL_NAMES,
+  adminSupabaseClientOptions,
   assertGenericRecordMutationAllowed,
   assertRosterProposalPatch,
   assertWorkerPlaneEnvironment,
@@ -17,6 +18,25 @@ test("MCP plane parsing defaults to admin and rejects unknown planes", () => {
   assert.equal(parseMcpPlane(["--plane", "worker"]), "worker");
   assert.equal(parseMcpPlane(["--plane=worker"]), "worker");
   assert.throws(() => parseMcpPlane(["--plane", "other"]), /Unsupported MCP plane/);
+});
+
+test("admin Supabase requests carry local authority while worker clients receive no database options", () => {
+  assert.deepEqual(
+    adminSupabaseClientOptions(
+      "admin",
+      { INTELLIZEN_LOCAL_ACCESS_KEY: " process-key ", VITE_INTELLIZEN_LOCAL_ACCESS_KEY: "ignored" },
+      { VITE_INTELLIZEN_LOCAL_ACCESS_KEY: "file-key" },
+    ),
+    { global: { headers: { "x-intellizen-local-access": "process-key" } } },
+  );
+  assert.deepEqual(
+    adminSupabaseClientOptions("admin", {}, { VITE_INTELLIZEN_LOCAL_ACCESS_KEY: "file-key" }),
+    { global: { headers: { "x-intellizen-local-access": "file-key" } } },
+  );
+  assert.equal(
+    adminSupabaseClientOptions("worker", { INTELLIZEN_LOCAL_ACCESS_KEY: "must-not-forward" }, {}),
+    undefined,
+  );
 });
 
 test("worker plane exposes only the reviewed tool allowlist", () => {
@@ -65,6 +85,10 @@ test("worker plane rejects admin credentials but permits isolated profile homes"
     /VITE_INTELLIZEN_LOCAL_ACCESS_KEY/,
   );
   assert.throws(
+    () => assertWorkerPlaneEnvironment({ INTELLIZEN_LOCAL_ACCESS_KEY: "not-printed" }),
+    /INTELLIZEN_LOCAL_ACCESS_KEY/,
+  );
+  assert.throws(
     () => assertWorkerPlaneEnvironment({ CLAUDE_UNREVIEWED_CREDENTIAL: "not-printed" }),
     /CLAUDE_UNREVIEWED_CREDENTIAL/,
   );
@@ -101,6 +125,7 @@ test("generic create and update reject protected roster and workflow fields", ()
     [ROSTER_DATABASE_IDS.agents, "agent_key"],
     [ROSTER_DATABASE_IDS.agents, "agent_status"],
     [ROSTER_DATABASE_IDS.roleAssignments, "role_assignment_binding_ref"],
+    [ROSTER_DATABASE_IDS.workflowRuns, "run_execution_version"],
     [ROSTER_DATABASE_IDS.workflowRuns, "run_approvals"],
     [ROSTER_DATABASE_IDS.workflowRuns, "run_fencing_token"],
   ] as const) {

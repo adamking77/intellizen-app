@@ -113,4 +113,75 @@ describe("workflow catalog", () => {
       ).map((item) => item.workflow_id),
     ).toEqual(["runnable"]);
   });
+
+  it("requires a verified Codex ACP binding for meanwhile work", () => {
+    const item = workflow({
+      definition: {
+        schema: "intellizen.workflow/1",
+        id: "catalog-meanwhile-proof",
+        name: "Catalog meanwhile proof",
+        version: 1,
+        trigger: { kind: "manual" },
+        inputs: [],
+        steps: [
+          {
+            id: "prepare",
+            kind: "role-assign",
+            title: "Prepare",
+            role: "chief_engineer",
+            resolution: "primary-active-occupant",
+            instructions: "Prepare input.",
+            execution: "ephemeral",
+            mediatedAuthority: "read-only",
+            verification: { required: false },
+            timeoutMinutes: 5,
+            next: "approve",
+          },
+          {
+            id: "approve",
+            kind: "approval",
+            title: "Approve",
+            gate: "founder_approval_authority",
+            payloadRef: "steps.prepare.result",
+            meanwhile: ["research"],
+            reminder: "never",
+            next: null,
+          },
+          {
+            id: "research",
+            kind: "role-assign",
+            title: "Research",
+            role: "researcher",
+            resolution: "primary-active-occupant",
+            instructions: "Research without writes.",
+            execution: "ephemeral",
+            mediatedAuthority: "read-only",
+            verification: { required: false },
+            timeoutMinutes: 5,
+            next: null,
+          },
+        ],
+      },
+    });
+    const approvalRole = role({ roleKey: "founder_approval_authority" });
+    const unverifiedSide = role({
+      roleKey: "researcher",
+      bindingRef: "hermes-researcher",
+      adapterId: "hermes",
+      engine: "hermes",
+    });
+    expect(classifyWorkflow(item, [role(), approvalRole, unverifiedSide])).toMatchObject({
+      state: "blocked",
+      blockers: [expect.objectContaining({
+        kind: "binding",
+        stepId: "research",
+        message: expect.stringContaining("Codex ACP"),
+      })],
+    });
+    expect(classifyWorkflow(item, [
+      role(),
+      approvalRole,
+      role({ roleKey: "researcher", engine: "codex" }),
+    ])).toMatchObject({ state: "runnable", runnable: true });
+  });
 });
