@@ -26,6 +26,7 @@ import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-regist
 import { readPreference, RECONNECT_ON_LAUNCH_KEY, SCAN_ON_LAUNCH_KEY } from "@/lib/settings-preferences";
 import { useSessionMode } from "@/lib/session-mode";
 import { DocumentProposalProvider, useDocumentProposalBridge } from "@/proposals/document-review-context";
+import { WeekTheme } from "./week-theme";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
 const FOCUS_MODE_CHANGE_EVENT = "intelizen:focus-mode-change";
@@ -248,7 +249,9 @@ export function AppShell() {
                 ⌘⇧F to leave focus
               </span>
             )}
-            <div className="flex-1" />
+            <div className="min-w-0 flex-1 px-3">
+              <WeekTheme />
+            </div>
             <div className="flex items-center gap-0.5 pr-3 text-[var(--overlay-1)]">
               <ChromeButton label="Toggle sidebar" onClick={toggleSidebar}>
                 <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.5} />

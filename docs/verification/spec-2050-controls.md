@@ -75,3 +75,22 @@ Final typography suite: 904 passed, one intentionally skipped live test, across 
 The local packaged build is private and unsigned. It includes this machine's local access configuration and must not be uploaded. GitHub receives source changes only.
 
 Resolved scope difference: the reusable reference includes a rail-foot Pulse and universal ambient dock. The accepted app contract keeps Dock/Pulse contextual (Home owns session controls), reserves the sidebar footer for connection status (DESIGN.md:402), and preserves existing Graph/Canvas/Docs/Workflow toolbars. No extra global dock or rail status surface was introduced. This is an intentional app-specific mapping, not a claim that every reference feature was copied.
+
+## Week theme and Pulse follow-up (2026-09-08)
+
+The production date-derived Build / Marketing / Ops / Slack rotation is restored in AppShell's existing 34px window strip. It is passive persistent context across routes and Not today, with readable neutral ink and the complete label in its hover title. The original 2026-03-23 Build anchor is retained. Calendar-day arithmetic fixes the original daylight-saving edge case; local-midnight, focus and visibility refresh keep the displayed week current. Sunday uses singular day.
+
+Pulse review against COMPONENTS.md, QUIET.md and rendered frame 8e found a confirmed idle-state gap: a known empty snapshot returned no graphic. Pulse now retains a flat, half-opacity neutral baseline with an accessible No active work label. Active waves retain the existing real-work data; Not today suppresses motion and question dots. Unknown data is not relabelled as rest. Ends fade as shown in the reference. The reference calls for a visible but static Pulse in Not today; no new motion was added to that mode.
+
+Focused checks: Pulse/Home/Dock 18 passed; header/rotation/AppShell 10 passed, including midnight and daylight-saving rollover. The publication checkout's full check command passed, including TypeScript, product/design gates and 145,110 contrast pairs.
+
+The combined unsigned native release build passed. The relaunched packaged app (`tauri://localhost/home`) showed Build week · 6 days remaining on Home and Agents, in focus mode, in Not today, and at 200% zoom. The idle Pulse line was visible in Not today with no question count/dots; at 200%, vertical scrolling kept the mode controls reachable while the week label stayed in the header. Zoom and attached-panel state were restored. Private screenshots: `week-theme-not-today-pulse.png` and `week-theme-not-today-pulse-200.png` in the existing local evidence directory. Live data had no active traces, so active-wave freezing was checked from the existing CSS contract and focused fixtures, not claimed as a live-work visual test.
+
+Motion review of this change:
+
+| Before | After | Why |
+| --- | --- | --- |
+| Known idle Pulse disappeared | Flat static baseline | Quiet status remains visible without inventing active agents |
+| Hard SVG edges | Faded ends | Matches the Not today reference |
+
+Verdict: approve the bounded motion change. Existing active traces use transform-only drift; Not today and reduced-motion CSS keep them static. The added idle baseline has no animation class.

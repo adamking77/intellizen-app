@@ -54,6 +54,10 @@ surfaces remain flat and borderless.
 groups anchored to the far left and far right of its available width. They may
 wrap on narrow screens, but do not pull both groups into a centered cluster.
 
+**Week theme restoration, Adam 2026-09-08:** retain the production weekly
+rotation label as persistent app context, including Not today. It shares the
+existing compact header and is not a transient notification.
+
 ## Current v3 contract
 
 The sidebar is the shared hierarchy tree: department → workspace → project →
