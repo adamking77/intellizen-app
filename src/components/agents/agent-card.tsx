@@ -9,7 +9,7 @@ import { Pill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 
 const CARD =
-  "flex w-full flex-col gap-3 rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-4 py-3 text-left text-[var(--text)] " +
+  "flex w-full flex-col gap-3 rounded-[var(--r-surface)] bg-[var(--surface)] px-4 py-3 text-left text-[var(--text)] " +
   "transition-colors hover:bg-[var(--hover)]";
 
 export function Tag({ children, tone, className }: { children: ReactNode; tone?: "bad" | "wait" | "ok"; className?: string }) {
@@ -61,10 +61,10 @@ export function NewCard({ label, onClick, disabled }: { label: string; onClick: 
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={cn(CARD, "min-h-[150px] items-center justify-center gap-2 border-[var(--surface-line)] bg-transparent text-[var(--text-muted)] disabled:opacity-50")}
+      className={cn(CARD, "min-h-[150px] items-center justify-center gap-2 border border-[var(--surface-line)] bg-transparent text-[var(--text-muted)] disabled:opacity-50")}
     >
       <Plus size={20} strokeWidth={1.6} aria-hidden />
-      <span className="font-ui text-[var(--t-ui)]">{label}</span>
+      <span className="font-ui text-[length:var(--t-ui)]">{label}</span>
     </button>
   );
 }

@@ -353,7 +353,7 @@ export function CanvasView() {
             {canvasesQuery.isPending ? (
               <div><span className="sr-only">Loading canvases</span><Skeleton lines={4} className="p-2" /></div>
             ) : canvases.length === 0 && !canvasesQuery.error ? (
-              <p className="px-2 py-2 text-[var(--t-section)] text-[var(--overlay-1)]">No canvases yet.</p>
+              <p className="px-2 py-2 text-[length:var(--t-section)] text-[var(--overlay-1)]">No canvases yet.</p>
             ) : (
               <div className="space-y-0.5">
                 {canvases.map((canvas) => {
@@ -374,10 +374,10 @@ export function CanvasView() {
                         aria-current={isActive ? "page" : undefined}
                         className="flex min-h-[var(--h-row)] min-w-0 flex-1 items-center gap-2 text-left"
                       >
-                        <span className={cn("min-w-0 flex-1 truncate text-[var(--t-meta)]", isActive ? "font-medium text-[var(--text)]" : "text-[var(--subtext-1)]")}>
+                        <span className={cn("min-w-0 flex-1 truncate text-[length:var(--t-meta)]", isActive ? "font-medium text-[var(--text)]" : "text-[var(--subtext-1)]")}>
                           {canvas.name}
                         </span>
-                        <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+                        <span className="shrink-0 font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">
                           {Number.isNaN(Date.parse(canvas.updated_at)) ? "" : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(canvas.updated_at))}
                         </span>
                         {isActive ? <span aria-hidden>›</span> : null}
@@ -425,20 +425,20 @@ export function CanvasView() {
                     (event.target as HTMLInputElement).blur();
                   }
                 }}
-                className="min-w-0 flex-1 border-none bg-transparent p-0 text-[var(--t-ui)] text-[var(--subtext-1)] outline-none"
+                className="min-w-0 flex-1 border-none bg-transparent p-0 text-[length:var(--t-ui)] text-[var(--subtext-1)] outline-none"
               />
             ) : null}
           </div>
           {loadingCanvas ? (
             <Skeleton lines={1} className="w-20" />
           ) : selectedCanvas && draftDocument ? (
-            <span className="font-mono text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span className="font-mono text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}
             </span>
           ) : null}
         </div>
 
-        {saveError ? <div role="alert" className="flex shrink-0 items-center gap-3 px-4 py-2 text-[var(--t-meta)] text-[var(--bad)]"><span>Canvas save failed. Your draft is retained. {saveError}</span><Control size="sm" onClick={() => void saveSessionRef.current?.flush()}>Retry save</Control></div> : null}
+        {saveError ? <div role="alert" className="flex shrink-0 items-center gap-3 px-4 py-2 text-[length:var(--t-meta)] text-[var(--bad)]"><span>Canvas save failed. Your draft is retained. {saveError}</span><Control size="sm" onClick={() => void saveSessionRef.current?.flush()}>Retry save</Control></div> : null}
         {canvasQuery.error && selectedCanvas ? <QueryState isLoading={false} isEmpty={false} error={canvasQuery.error} errorTitle="Canvas refresh failed" onRetry={() => void canvasQuery.refetch()} className="px-4">{null}</QueryState> : null}
         <div className="min-h-0 flex-1">
           {selectedCanvas && selectedCanvas.id === selectedId && draftCanvasId === selectedId && draftDocument ? (

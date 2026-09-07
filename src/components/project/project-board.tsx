@@ -93,8 +93,8 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
           {(boardData.data ?? []).map(({ board, snapshot }) => (
             <section key={board.slug} aria-label={board.name}>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <h2 className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{board.name}</h2>
-                <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{board.total} cards</span>
+                <h2 className="font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{board.name}</h2>
+                <span className="font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{board.total} cards</span>
               </div>
               <div className="flex min-w-0 gap-3 overflow-x-auto pb-2">
                 {snapshot.columns.map((column) => (
@@ -109,13 +109,13 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
                         return (
                         <button key={card.id} type="button" className="block w-full text-left" onClick={(event) => runViewTransition("drawer", () => setSelected({ ...card, board: board.name, boardSlug: board.slug }), event.currentTarget)}>
                           <Card selected={selected?.id === card.id} waiting={reason?.needsYou}>
-                          <p className="font-ui text-[var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
-                          {reason ? <p className="mt-1 font-ui text-[var(--t-section)] text-[var(--text-muted)]">{reason.word}</p> : null}
+                          <p className="font-ui text-[length:var(--t-meta)] font-medium leading-5 text-[var(--text)]">{card.title}</p>
+                          {reason ? <p className="mt-1 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">{reason.word}</p> : null}
                           {card.latestSummary ? (
-                            <p className="mt-1 line-clamp-2 font-ui text-[var(--t-section)] leading-4 text-[var(--text-muted)]">{card.latestSummary}</p>
+                            <p className="mt-1 line-clamp-2 font-ui text-[length:var(--t-section)] leading-4 text-[var(--text-muted)]">{card.latestSummary}</p>
                           ) : null}
                           <div className="mt-2 flex items-center justify-between gap-2">
-                            {card.assignee ? <Identity name={card.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">—</span>}
+                            {card.assignee ? <Identity name={card.assignee} runtime="hermes" /> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">—</span>}
                             <Pill>{COLUMN_LABELS[card.status] ?? card.status}</Pill>
                           </div>
                           </Card>
@@ -134,18 +134,18 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
         {openCard ? (
           <div className="grid gap-5 p-4">
             <div>
-              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {openCard.status}</div>
-              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{openCard.title}</h2>
-              <div className="mt-2">{openCard.assignee ? <Identity name={openCard.assignee} runtime="hermes" /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
-              {blockReason(openCard.blockKind ?? "") ? <p className="mt-2 text-[var(--t-meta)] text-[var(--text-muted)]">{blockReason(openCard.blockKind ?? "")!.word}</p> : null}
+              <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Card · {openCard.status}</div>
+              <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{openCard.title}</h2>
+              <div className="mt-2">{openCard.assignee ? <Identity name={openCard.assignee} runtime="hermes" /> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}</div>
+              {blockReason(openCard.blockKind ?? "") ? <p className="mt-2 text-[length:var(--t-meta)] text-[var(--text-muted)]">{blockReason(openCard.blockKind ?? "")!.word}</p> : null}
             </div>
             {cardDetail.isLoading ? <Skeleton lines={4} /> : cardDetail.error ? (
-              <div role="alert" className="text-[var(--t-meta)] text-[var(--bad)]">
+              <div role="alert" className="text-[length:var(--t-meta)] text-[var(--bad)]">
                 Full card details could not be read. <button type="button" className="underline" onClick={() => void cardDetail.refetch()}>Retry</button>
               </div>
             ) : cardDetail.data ? <CardDetailSections card={cardDetail.data} /> : null}
-            {!cardDetail.data && openCard.latestSummary ? <p className="text-[var(--t-ui)] leading-relaxed text-[var(--text)]">{openCard.latestSummary}</p> : null}
-            <dl className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2 text-[var(--t-meta)]">
+            {!cardDetail.data && openCard.latestSummary ? <p className="text-[length:var(--t-ui)] leading-relaxed text-[var(--text)]">{openCard.latestSummary}</p> : null}
+            <dl className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2 text-[length:var(--t-meta)]">
               <dt className="text-[var(--text-muted)]">Board</dt><dd>{openCard.board}</dd>
               <dt className="text-[var(--text-muted)]">State</dt><dd><Pill>{openCard.status}</Pill></dd>
             </dl>
@@ -194,7 +194,7 @@ function formatCardTime(epoch: number) {
 }
 
 function DrawerSection({ label, children }: { label: string; children: ReactNode }) {
-  return <section className="grid gap-1 text-[var(--t-meta)] leading-relaxed text-[var(--text)]"><span className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</span>{children}</section>;
+  return <section className="grid gap-1 text-[length:var(--t-meta)] leading-relaxed text-[var(--text)]"><span className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</span>{children}</section>;
 }
 
 export function ProjectTabFrame({ children }: { children: ReactNode }) {

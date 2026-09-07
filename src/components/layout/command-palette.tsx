@@ -404,7 +404,7 @@ function CommandPalette() {
         <div className="min-h-0 flex-1 overflow-y-auto pt-2">
           <div id="cp-listbox" role="listbox" aria-label="Commands">
           {groups.length === 0 && (
-            <div className="py-6 text-center font-ui text-[var(--t-ui)] text-[var(--text-muted)]">
+            <div className="py-6 text-center font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">
               No results
             </div>
           )}
@@ -455,14 +455,14 @@ function CommandPalette() {
           {ask ? <section aria-label={`Answer from ${ask.agent}`} className="border-t border-[var(--line)] py-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent-text)]">{ask.agent} · answer</p>
             <p className="mt-1 font-ui text-[15px] text-[var(--text-muted)]">{ask.question}</p>
-            {ask.error || profileAnswer?.failed ? <p role="alert" className="mt-3 text-[var(--t-ui)] text-[var(--bad)]">{ask.error || profileAnswer?.failed}</p> : ask.kind === "room" && roomAnswers.length ? (
+            {ask.error || profileAnswer?.failed ? <p role="alert" className="mt-3 text-[length:var(--t-ui)] text-[var(--bad)]">{ask.error || profileAnswer?.failed}</p> : ask.kind === "room" && roomAnswers.length ? (
               <div className="mt-3 grid gap-3">{roomAnswers.map((message) => <div key={message.id || `${message.at}:${message.from.name}`}>
                 <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">{message.from.name}</p>
                 <ReplyMarkdown content={message.text} className="mt-1 font-ui text-[17px] leading-relaxed text-[var(--text)]" />
               </div>)}</div>
             ) : profileAnswer?.text ? (
               <ReplyMarkdown content={profileAnswer.text} className="mt-3 font-ui text-[17px] leading-relaxed text-[var(--text)]" />
-            ) : <p role="status" className="mt-3 font-ui text-[var(--t-ui)] text-[var(--text-muted)]">{askRunning ? `${ask.agent} is checking…` : "No answer was returned."}</p>}
+            ) : <p role="status" className="mt-3 font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">{askRunning ? `${ask.agent} is checking…` : "No answer was returned."}</p>}
             {(ask.kind === "room" ? Boolean(roomQuestion && !askRoom?.running) : Boolean(profileAnswer && !profileAnswer.streaming)) ? <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-[var(--line)] pt-3 font-mono text-[10px] text-[var(--text-muted)]">
               <span className="uppercase tracking-[0.1em]">Sources</span>
               {sources.length ? <span className="flex flex-wrap gap-x-3 gap-y-1">{sources.map((source) => <a key={source.href} href={source.href} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] underline decoration-[var(--accent-border)] underline-offset-2">{source.label}</a>)}</span> : <span>None attached to this answer</span>}

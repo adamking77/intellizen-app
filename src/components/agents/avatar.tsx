@@ -37,6 +37,7 @@ const KIND_TRAIT: Record<BlobKind, number> = {
 
 /** Identity avoids semantic status hues: waiting, verified, failed, and runtime. */
 const IDENTITY_ACCENTS = ["mauve", "teal", "lavender", "pink", "flamingo", "sky", "sapphire", "rosewater"] as const;
+const RESERVED_IDENTITY_ACCENTS = new Set(["red", "peach", "green"]);
 
 type AvatarAgent = Pick<Agent, "displayName" | "avatarKind" | "avatarColor" | "avatarSeed"> & { avatarStyle?: AvatarStyle };
 
@@ -118,11 +119,23 @@ function useThemeSnapshot() {
 }
 
 function identityPalette(seed: string, pinned?: string): string[] {
-  const accents = flavorById(loadTheme().flavor).accents;
-  const colors = IDENTITY_ACCENTS.map((name) => accents.find((accent) => accent.name === name)?.hex).filter(
-    (color): color is string => Boolean(color),
+  const theme = loadTheme();
+  const accents = flavorById(theme.flavor).accents;
+  const sameColor = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+  const identityColors = IDENTITY_ACCENTS.map((name) => accents.find((accent) => accent.name === name)?.hex).filter(
+    (color): color is string => typeof color === "string",
   );
-  const first = pinned ?? colors[hash(seed) % colors.length] ?? loadTheme().accent;
+  const colors = identityColors.filter((color) => !sameColor(color, theme.accent));
+  const preferred = pinned ?? identityColors[hash(seed) % identityColors.length];
+  const preferredAccent = accents.find((accent) => preferred && sameColor(accent.hex, preferred));
+  const safePreferred = preferred
+    && !sameColor(preferred, theme.accent)
+    && (!preferredAccent || !RESERVED_IDENTITY_ACCENTS.has(preferredAccent.name));
+  const start = preferredAccent ? accents.indexOf(preferredAccent) : -1;
+  const fallback = accents
+    .slice(start + 1).concat(accents.slice(0, start + 1))
+    .find((accent) => !RESERVED_IDENTITY_ACCENTS.has(accent.name) && !sameColor(accent.hex, theme.accent))?.hex;
+  const first = safePreferred ? preferred : fallback ?? colors[0] ?? "currentColor";
   return [first, ...colors.filter((color) => color !== first)];
 }
 
@@ -201,7 +214,7 @@ export function Avatar({
         name={seed}
         size={size}
         className={className}
-        palette={agent.avatarColor ? { head: agent.avatarColor } : undefined}
+        palette={{ head: palette[0] }}
         traits={kind ? { shape: KIND_TRAIT[kind] } : undefined}
         {...(animate ? { animate: animate === true ? "hover" as const : animate } : {})}
       />,

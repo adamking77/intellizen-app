@@ -36,4 +36,52 @@ describe("Choices", () => {
     expect(choose).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
+
+  it("merges caller keyboard handling and ignores modified or disabled shortcuts", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const choose = vi.fn();
+    const keyDown = vi.fn();
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Choices
+          choices={[{ id: "continue", label: "Continue" }, { id: "later", label: "Later", disabled: true }]}
+          onChoose={choose}
+          onKeyDown={keyDown}
+        />,
+      );
+    });
+    const first = host.querySelector("button")!;
+    first.focus();
+
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "1" })));
+    expect(keyDown).toHaveBeenCalledOnce();
+    expect(choose).toHaveBeenCalledWith("continue");
+
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "1", shiftKey: true })));
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "2" })));
+    expect(choose).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("honors a caller that prevents a keyboard shortcut", async () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const choose = vi.fn();
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <Choices
+          choices={[{ id: "continue", label: "Continue" }]}
+          onChoose={choose}
+          onKeyDown={(event) => event.preventDefault()}
+        />,
+      );
+    });
+    const first = host.querySelector("button")!;
+    first.focus();
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "1", cancelable: true })));
+    expect(choose).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
 });

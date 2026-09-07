@@ -4,7 +4,7 @@ import { LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function GraphLoadingOverlay() {
-  return <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--base)]/80"><div className="flex items-center gap-2 font-ui text-[var(--t-ui)] text-[var(--subtext-0)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading graph</div></div>;
+  return <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--base)]/80"><div className="flex items-center gap-2 font-ui text-[length:var(--t-ui)] text-[var(--subtext-0)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading graph</div></div>;
 }
 
 interface ButtonProps {
@@ -54,7 +54,7 @@ export function GraphOverflowItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[var(--t-meta)] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[length:var(--t-meta)] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         disabled
           ? "cursor-not-allowed text-[var(--overlay-0)]"
           : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -79,7 +79,7 @@ export function GraphRailTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[length:var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         active
           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -102,9 +102,11 @@ export function GraphToolbarButton({
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
+      aria-pressed={active}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-[var(--r-pill)] px-2 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "inline-flex h-[var(--h-ctl)] items-center gap-1.5 rounded-[var(--r-pill)] px-2 font-ui text-[12.5px] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         active
           ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
           : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -176,7 +178,7 @@ export function GraphStatChip({
     >
       <span
         className={cn(
-          "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]",
+          "font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em]",
           accent ? "text-[var(--accent-text)]" : "text-[var(--overlay-1)]",
         )}
       >
@@ -184,7 +186,7 @@ export function GraphStatChip({
       </span>
       <span
         className={cn(
-          "font-mono text-[var(--t-section)] tabular-nums",
+          "font-mono text-[length:var(--t-section)] tabular-nums",
           accent ? "text-[var(--accent-text)]" : "text-[var(--text)]",
         )}
       >
@@ -203,10 +205,10 @@ export function GraphStatBlock({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
         {label}
       </span>
-      <span className="font-mono text-[var(--t-title)] tabular-nums text-[var(--text)]">
+      <span className="font-mono text-[length:var(--t-title)] tabular-nums text-[var(--text)]">
         {value}
       </span>
     </div>
@@ -234,7 +236,7 @@ export function GraphSlider({
     <label className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <span className="text-meta">{label}</span>
-        <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
+        <span className="font-mono text-[length:var(--t-section)] text-[var(--overlay-1)]">
           {displayValue}
         </span>
       </div>

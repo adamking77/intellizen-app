@@ -36,9 +36,10 @@ export interface ControlProps
 }
 
 export const Control = forwardRef<HTMLButtonElement, ControlProps>(
-  ({ children, className, disabled, loading = false, variant, size, onBlur, onKeyDown, onPointerCancel, onPointerDown, onPointerLeave, onPointerUp, ...props }, ref) => (
+  ({ children, className, disabled, loading = false, variant, size, type = "button", onBlur, onKeyDown, onPointerCancel, onPointerDown, onPointerLeave, onPointerUp, ...props }, ref) => (
     <button
       ref={ref}
+      type={type}
       className={cn(controlVariants({ variant, size }), "motion-control", className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

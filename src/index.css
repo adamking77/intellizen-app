@@ -321,12 +321,12 @@
   /* Graph entity palette — follows the flavor's named accents */
   --entity-person: var(--teal);
   --entity-org: var(--sky);
-  --entity-location: var(--peach);
-  --entity-event: var(--red);
-  --entity-topic: var(--mauve);
+  --entity-location: var(--mauve);
+  --entity-event: var(--flamingo);
+  --entity-topic: var(--pink);
   --entity-signal: var(--yellow);
   --entity-investigation: var(--lavender);
-  --entity-report: var(--green);
+  --entity-report: var(--sapphire);
 
   /* Borders */
   --border: var(--line);
@@ -638,18 +638,18 @@ pre {
   --bn-colors-editor-text: var(--text);
   --bn-colors-editor-background: transparent;
   --bn-colors-menu-text: var(--text);
-  --bn-colors-menu-background: var(--raised);
+  --bn-colors-menu-background: var(--surface);
   --bn-colors-tooltip-text: var(--text);
-  --bn-colors-tooltip-background: var(--raised);
+  --bn-colors-tooltip-background: var(--surface);
   --bn-colors-hovered-text: var(--text);
   --bn-colors-hovered-background: var(--surface-wash);
   --bn-colors-selected-text: var(--text);
   --bn-colors-selected-background: var(--selected);
   --bn-colors-disabled-text: var(--overlay-1);
   --bn-colors-disabled-background: var(--surface-0);
-  --bn-colors-shadow: var(--shadow-elevated);
-  --bn-colors-border: var(--border);
-  --bn-colors-side-menu: var(--accent);
+  --bn-colors-shadow: none;
+  --bn-colors-border: transparent;
+  --bn-colors-side-menu: var(--text-muted);
 }
 
 .intelizen-live-markdown .bn-editor {
@@ -969,9 +969,9 @@ pre {
 .bn-panel-popover,
 .bn-emoji-picker-popover {
   border: 0 !important;
-  border-radius: var(--r-plane) !important;
-  background: var(--raised) !important;
-  box-shadow: var(--shadow-elevated) !important;
+  border-radius: var(--r-surface) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -1111,9 +1111,9 @@ pre {
 .bn-root .bn-panel-popover,
 .bn-root .bn-emoji-picker-popover {
   border: 0 !important;
-  border-radius: var(--r-plane) !important;
-  background: var(--raised) !important;
-  box-shadow: var(--shadow-elevated) !important;
+  border-radius: var(--r-surface) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -3125,8 +3125,8 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 .narrative-editor .bn-toolbar,
 .narrative-editor [data-content-type="formattingToolbar"] {
   border: none;
-  box-shadow: var(--shadow-elevated);
-  background: var(--mantle);
+  box-shadow: none;
+  background: var(--surface);
 }
 
 /* ─── Relation prop ─────────────────────────────────────── */
@@ -5028,11 +5028,11 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
   flex: 0 0 auto;
   border-radius: var(--r-pill);
   background: currentColor;
-  animation: control-running 900ms ease-in-out infinite alternate;
+  opacity: 0.7;
 }
 
 dialog.app-dialog::backdrop {
-  background: color-mix(in srgb, var(--crust) 76%, transparent);
+  background: color-mix(in srgb, var(--crust) 60%, transparent);
   backdrop-filter: blur(3px);
 }
 
@@ -5048,11 +5048,6 @@ dialog.app-dialog::backdrop {
 
 :root[data-session="not-today"] .pulse-trace { animation: none; }
 
-@keyframes control-running {
-  from { opacity: 0.35; transform: translateX(-1px); }
-  to { opacity: 1; transform: translateX(1px); }
-}
-
 .kit-drawer {
   animation: drawer-enter var(--t-slow) var(--ease) both;
 }
@@ -5063,20 +5058,39 @@ dialog.app-dialog::backdrop {
 }
 
 .skeleton-line {
-  animation: skeleton-sheen 1.4s ease-in-out infinite alternate;
-}
-
-@keyframes skeleton-sheen {
-  from { opacity: 0.45; }
-  to { opacity: 1; }
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .control-running-dot,
   .pulse-trace,
-  .kit-drawer,
-  .skeleton-line { animation: none; }
+  .kit-drawer { animation: none; }
 }
+
+.note {
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  gap: 6px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--r-surface);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--t-ui);
+  box-shadow: none;
+  transition: opacity var(--dur-pane) var(--ease-out), transform var(--dur-pane) var(--ease-out);
+}
+
+.note[data-mounted="false"] { opacity: 0; transform: translateY(8px); }
+.note[data-removed="true"] { opacity: 0; transform: translateY(8px); transition-duration: 150ms; }
+.note-meta { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--t-mono); }
+.note-choice { justify-self: end; border: 0; border-bottom: 1px solid var(--surface-line); background: none; color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .note { transition-property: opacity; }
+}
+
+:root[data-session="not-today"] .note { transition-property: opacity; }
 
 .nav-node:hover {
   background: var(--hover);
@@ -5146,17 +5160,17 @@ dialog.app-dialog::backdrop {
   white-space: nowrap;
 }
 
-/* Hermes modal contract: one raised plane over a soft blurred veil. Feature
-   dialogs own their width and height cap, but not their surface treatment. */
+/* Pop-up modals keep depth over the scrim; feature dialogs own their compact
+   geometry, while the shared primitive owns the material. */
 .modal-backdrop {
-  background: color-mix(in srgb, var(--crust) 42%, transparent);
+  background: color-mix(in srgb, var(--crust) 60%, transparent);
   backdrop-filter: blur(7px);
 }
 
 .modal-surface {
   border: 0;
   border-radius: var(--r-plane);
-  background: var(--raised);
+  background: var(--surface);
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
   outline: none;
 }

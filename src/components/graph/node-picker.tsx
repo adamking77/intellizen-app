@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function NodePicker({
 }: NodePickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const popupId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -67,60 +68,50 @@ export function NodePicker({
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "flex h-[var(--h-ctl)] w-full items-center justify-between gap-2 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 text-left",
-          "transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none",
-        )}
-      >
-        {selected ? (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-[var(--r-pill)]"
-              style={{ background: entityAccent[selected.entity_type] }}
-            />
-            <span className="text-ui truncate">{selected.label}</span>
-          </span>
-        ) : (
-          <span className="text-meta truncate">{placeholder}</span>
-        )}
-        <span className="flex shrink-0 items-center gap-1">
-          {selected && (
-            <span
-              role="button"
-              tabIndex={0}
-              aria-label="Clear"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onChange(null);
-                }
-              }}
-              className="inline-flex h-4 w-4 items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-            >
-              <X className="h-3 w-3" />
+      <div className="flex h-[var(--h-ctl)] w-full items-center gap-1 rounded-[var(--r-ctl)] border border-[var(--surface-line)] bg-[var(--surface)] px-2 focus-within:border-[var(--accent)]">
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={popupId}
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left focus-visible:outline-none"
+        >
+          {selected ? (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-[var(--r-pill)]"
+                style={{ background: entityAccent[selected.entity_type] }}
+              />
+              <span className="text-ui truncate">{selected.label}</span>
             </span>
+          ) : (
+            <span className="text-meta truncate">{placeholder}</span>
           )}
           <ChevronDown
+            aria-hidden
             className={cn(
-              "h-3 w-3 text-[var(--overlay-1)] transition-transform duration-[var(--t-base)] ease-[var(--ease)]",
+              "h-3 w-3 shrink-0 text-[var(--overlay-1)] transition-transform duration-[var(--t-base)] ease-[var(--ease)]",
               open && "rotate-180",
             )}
           />
-        </span>
-      </button>
+        </button>
+        {selected ? (
+          <button
+            type="button"
+            aria-label="Clear"
+            onClick={() => onChange(null)}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-dim)] hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:bg-[var(--hover)] focus-visible:outline-none"
+          >
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        ) : null}
+      </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] shadow-[var(--shadow-elevated)]">
-          <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-2 py-1.5">
+        <div id={popupId} role="dialog" aria-label="Choose a node" className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-[var(--r-surface)] bg-[var(--surface)]">
+          <div className="flex items-center gap-1.5 border-b border-[var(--surface-line)] px-2 py-1.5">
             <Search className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
             <input
               ref={inputRef}
@@ -163,7 +154,7 @@ export function NodePicker({
             )}
           </div>
           {nodes.length > 80 && !query && (
-            <div className="border-t border-[var(--border)] px-2 py-1.5">
+            <div className="border-t border-[var(--surface-line)] px-2 py-1.5">
               <p className="text-meta">
                 Showing first 80 of {nodes.length}. Type to narrow.
               </p>

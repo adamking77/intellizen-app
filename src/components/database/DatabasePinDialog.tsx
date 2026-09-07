@@ -28,13 +28,13 @@ export function DatabasePinDialog({
   return (
     <AppDialog open={open} title="Pin this view" onOpenChange={onOpenChange}>
       <div className="space-y-4 p-4">
-        <label className="flex flex-col gap-2 text-[var(--t-meta)] text-[var(--text-mid)]">
+        <label className="flex flex-col gap-2 text-[length:var(--t-meta)] text-[var(--text-mid)]">
           Dashboard
           <select className="db-select" value={destination} onChange={(event) => setDestination(event.target.value as DashboardScope)}>
             {destinations.map((item) => <option key={item.scope} value={item.scope}>{item.label}</option>)}
           </select>
         </label>
-        <p className="text-[var(--t-meta)] text-[var(--text-muted)]">
+        <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
           Saves this view’s current filters, sort, display, and grouping settings for {selected?.label ?? "this dashboard"}.
         </p>
         <div className="flex justify-end gap-2">

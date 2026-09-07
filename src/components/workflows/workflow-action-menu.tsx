@@ -35,7 +35,7 @@ export function WorkflowActionMenu({ label, actions, children }: { label: string
       const rect = trigger.current!.getBoundingClientRect();
       setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 232)), top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - actions.length * 34 - 24)) });
     }}>{children ?? <MoreHorizontal aria-hidden className="h-4 w-4" />}</Control>
-    {position ? createPortal(<div ref={menu} id={id} role="menu" aria-label={label} style={position} className="fixed z-[100] w-56 max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] overflow-auto rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--raised)] p-1" onKeyDown={(event) => {
+    {position ? createPortal(<div ref={menu} id={id} role="menu" aria-label={label} style={position} className="fixed z-[100] w-56 max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] overflow-auto rounded-[var(--r-surface)] bg-[var(--surface)] p-1" onKeyDown={(event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
       if (event.key === "Tab") { close(); }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;

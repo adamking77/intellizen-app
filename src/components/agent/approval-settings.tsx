@@ -83,7 +83,7 @@ export function ApprovalSettings({
         type="button"
         aria-label="Approval settings"
         aria-expanded={open}
-        className="font-ui text-[var(--t-meta)] text-[var(--text-mid)] hover:text-[var(--text)]"
+        className="font-ui text-[length:var(--t-meta)] text-[var(--text-mid)] hover:text-[var(--text)]"
         onClick={() => {
           const next = !open;
           setOpen(next);
@@ -108,16 +108,16 @@ export function ApprovalSettings({
               <label key={option.mode} className="flex cursor-default items-start gap-2 rounded-[var(--r-ctl)] px-1 py-1 text-[var(--text)] hover:bg-[var(--surface-wash)]">
                 <input type="radio" name={`approval-mode-${scopeKey}`} value={option.mode} checked={draft === option.mode} disabled={pending} onChange={() => setDraft(option.mode)} />
                 <span className="min-w-0">
-                  <span className="block font-ui text-[var(--t-section)]">{permissionLabel(option.mode)}</span>
-                  <span className="block font-ui text-[var(--t-meta)] leading-snug text-[var(--text-mid)]">{option.detail}</span>
+                  <span className="block font-ui text-[length:var(--t-section)]">{permissionLabel(option.mode)}</span>
+                  <span className="block font-ui text-[length:var(--t-meta)] leading-snug text-[var(--text-mid)]">{option.detail}</span>
                 </span>
               </label>
             ))}
           </div>
           {effectiveMode === "off" && profileMode !== null && profileMode !== "off" ? (
-            <p className="mt-2 font-ui text-[var(--t-meta)] leading-snug text-[var(--text-mid)]">This session separately bypasses approvals. Saving here does not change that session-only bypass.</p>
+            <p className="mt-2 font-ui text-[length:var(--t-meta)] leading-snug text-[var(--text-mid)]">This session separately bypasses approvals. Saving here does not change that session-only bypass.</p>
           ) : null}
-          {error ? <p role="alert" className="mt-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">{error}</p> : null}
+          {error ? <p role="alert" className="mt-2 font-ui text-[length:var(--t-meta)] text-[var(--bad)]">{error}</p> : null}
       </AppDialog>
     </>
   );

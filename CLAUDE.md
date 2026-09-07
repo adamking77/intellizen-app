@@ -46,6 +46,14 @@ summary sentences about 20–26px, and small readable eyebrows around 10px.
 Carry this through the remaining redesigned pages. This overrides Fable's
 large display sizes without changing the restored agent-panel layout.
 
+**Pop-up modal correction, Adam 2026-09-08:** preserve the shadow and blurred
+scrim on pop-up modals. Their depth is intentional even though ordinary
+surfaces remain flat and borderless.
+
+**Home dock correction, Adam 2026-09-08:** keep the Home dock's two control
+groups anchored to the far left and far right of its available width. They may
+wrap on narrow screens, but do not pull both groups into a centered cluster.
+
 ## Current v3 contract
 
 The sidebar is the shared hierarchy tree: department → workspace → project →

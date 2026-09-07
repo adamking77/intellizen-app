@@ -73,23 +73,27 @@ describe("Home availability", () => {
     expect(sentence).toContain("3 workflows are queued.");
   });
 
-  it("groups only by declared trigger and keeps unscoped tasks in a scope", () => {
+  it("groups only authoritative scope relations in a selected scope", () => {
     const tasks = projectHomeTasks([
       { id: "one", task_name: "Read", task_trigger: "Thirty minutes", task_scope_node_id: null },
       { id: "two", task_name: "Write", task_trigger: "Two hours", task_scope_node_id: "project" },
       { id: "three", task_name: "Legacy", task_scope_node_id: "missing" },
       { id: "out", task_name: "Elsewhere", task_kind: "keeping_out", task_scope_node_id: "other" },
     ], [{ id: "workspace", kind: "workspace", parent_id: null }, { id: "project", kind: "project", parent_id: "workspace" }, { id: "other", kind: "workspace", parent_id: null }] as never, "workspace");
-    expect(tasks.map((task) => task.id)).toEqual(["one", "two", "three"]);
-    expect(groupTasksByTrigger(tasks).map((group) => group.trigger)).toEqual(["Thirty minutes", "Two hours", "No trigger recorded"]);
+    expect(tasks.map((task) => task.id)).toEqual(["two"]);
+    expect(groupTasksByTrigger(tasks).map((group) => group.trigger)).toEqual(["Two hours"]);
   });
 
-  it("does not mark a stored scope broken while hierarchy is unavailable", () => {
-    const tasks = projectHomeTasks([
+  it("keeps unassigned work in All when hierarchy is unavailable", () => {
+    const records = [
       { id: "one", task_name: "Scoped", task_scope_node_id: "project-a" },
       { id: "two", task_name: "Unscoped", task_scope_node_id: null },
-    ], null, "project-b");
-    expect(tasks).toEqual([expect.objectContaining({ id: "two", scopeValid: true })]);
+    ];
+    expect(projectHomeTasks(records, null, "project-b")).toEqual([]);
+    expect(projectHomeTasks(records, null, null)).toEqual([
+      expect.objectContaining({ id: "one", scopeValid: true }),
+      expect.objectContaining({ id: "two", scopeValid: true }),
+    ]);
   });
 
   it("locally hides set-aside project work while retaining unscoped and other project work", () => {

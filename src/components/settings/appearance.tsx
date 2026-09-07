@@ -41,7 +41,7 @@ const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] tex
 const card =
   "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-[background-color,box-shadow] hover:bg-[var(--raised)]";
 const activeTag =
-  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[var(--t-section)] text-[var(--accent-text)]";
+  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[length:var(--t-section)] text-[var(--accent-text)]";
 
 /** The two arrangements, drawn rather than described: three panes at the
  *  shell's proportions, joined by a hairline or held apart over the window. */
@@ -143,7 +143,7 @@ function AccentPicker({
 
         <div className="flex min-h-[22px] items-center gap-2">
           <span className="h-[18px] w-[18px] rounded-[var(--r-pill)]" style={{ background: shown.hex }} />
-          <span className="text-[var(--t-ui)]">{shown.name}</span>
+          <span className="text-[length:var(--t-ui)]">{shown.name}</span>
           <span className="font-mono text-xs text-[var(--text-muted)]">{shown.hex}</span>
         </div>
 
@@ -228,7 +228,7 @@ export function AppearanceSection() {
   return (
     <div className="flex flex-col gap-2">
       <h1 className={SETTINGS_TITLE}>Appearance</h1>
-      <p className="pb-2.5 text-[var(--t-ui)] leading-normal text-[var(--text-muted)]">
+      <p className="pb-2.5 text-[length:var(--t-ui)] leading-normal text-[var(--text-muted)]">
         Choose the app’s colors, accent, contrast, and pane arrangement.
       </p>
 
@@ -239,7 +239,7 @@ export function AppearanceSection() {
           onToggle={() => commitSystemTheme({ ...systemTheme, followSystem: !systemTheme.followSystem })}
         />
         <div>
-          <div className="text-[var(--t-ui)] text-[var(--text)]">Follow system</div>
+          <div className="text-[length:var(--t-ui)] text-[var(--text)]">Follow system</div>
           <div className="text-xs text-[var(--text-muted)]">Switch light and dark flavors with macOS.</div>
         </div>
       </div>
@@ -247,7 +247,7 @@ export function AppearanceSection() {
       {systemTheme.followSystem ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
-            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Light appearance</span>
+            <span className={cn(caps, "mb-2 block text-[length:var(--t-count)]")}>Light appearance</span>
             <Select
               value={systemTheme.lightFlavor}
               containerClassName="flex"
@@ -257,7 +257,7 @@ export function AppearanceSection() {
             </Select>
           </label>
           <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
-            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Dark appearance</span>
+            <span className={cn(caps, "mb-2 block text-[length:var(--t-count)]")}>Dark appearance</span>
             <Select
               value={systemTheme.darkFlavor}
               containerClassName="flex"
@@ -286,7 +286,7 @@ export function AppearanceSection() {
                 <div className="w-[18px]" style={{ background: swatch }} />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--t-ui)]">{flavor.name}</span>
+                <span className="text-[length:var(--t-ui)]">{flavor.name}</span>
                 {on ? <span className={activeTag}>active</span> : null}
               </div>
             </button>
@@ -295,11 +295,11 @@ export function AppearanceSection() {
       </div>}
 
       <div className="flex items-center gap-3 pt-[18px]">
-        <span className={cn(caps, "text-[var(--t-count)]")}>Accent</span>
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Accent</span>
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[var(--t-ui)] text-[var(--text)] motion-safe:transition-colors hover:bg-[var(--raised)]"
+          className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[length:var(--t-ui)] text-[var(--text)] motion-safe:transition-colors hover:bg-[var(--raised)]"
         >
           <span className="h-[22px] w-[22px] rounded-[var(--r-pill)]" style={{ background: theme.accent }} />
           {accentName}
@@ -313,7 +313,7 @@ export function AppearanceSection() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-[18px]">
-        <span className={cn(caps, "text-[var(--t-count)]")}>Readability</span>
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Readability</span>
         <Segmented
           kind="choice"
           label="Readability"
@@ -325,7 +325,7 @@ export function AppearanceSection() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-[18px]">
-        <label htmlFor="selection-strength" className={cn(caps, "text-[var(--t-count)]")}>
+        <label htmlFor="selection-strength" className={cn(caps, "text-[length:var(--t-count)]")}>
           Accent Strength
         </label>
         <input
@@ -353,7 +353,7 @@ export function AppearanceSection() {
       </div>
 
       <div className="flex flex-col gap-2.5 pt-[26px]">
-        <span className={cn(caps, "text-[var(--t-count)]")}>Panes</span>
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Panes</span>
         <div className="flex gap-3">
           {(
             [
@@ -372,7 +372,7 @@ export function AppearanceSection() {
               >
                 <PanesDrawing panes={opt.id} />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--t-ui)]">{opt.name}</span>
+                  <span className="text-[length:var(--t-ui)]">{opt.name}</span>
                   {on ? <span className={activeTag}>active</span> : null}
                 </div>
                 <span className="text-xs text-[var(--text-muted)]">{opt.note}</span>

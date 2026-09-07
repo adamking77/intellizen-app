@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ActivityDashboardModel } from "@/lib/activity-dashboard";
+import type { HierarchyNode } from "@/lib/hierarchy";
 
 const rooms = vi.hoisted(() => ({ chats: {} as Record<string, unknown>, prompts: {} as Record<string, unknown> }));
 
@@ -15,7 +16,7 @@ const api = vi.hoisted(() => ({
   workflowRuns: vi.fn().mockResolvedValue([]),
   workflowApproval: vi.fn(),
   workflowCommitWarning: vi.fn(),
-  activity: { model: { progress: [] as ActivityDashboardModel["progress"], openWorkflows: [] as ActivityDashboardModel["openWorkflows"] }, data: { runs: { data: [] as unknown[] }, connections: {}, hierarchy: { data: [] }, profiles: {}, sessionFolders: {}, usage: {} } },
+  activity: { model: { progress: [] as ActivityDashboardModel["progress"], openWorkflows: [] as ActivityDashboardModel["openWorkflows"] }, data: { runs: { data: [] as unknown[] }, connections: {}, hierarchy: { data: [] as HierarchyNode[] }, profiles: {}, sessionFolders: {}, usage: {} } },
   decideApproval: vi.fn(),
   decideClarify: vi.fn(),
   threads: {} as Record<string, unknown>,
@@ -115,7 +116,36 @@ it("opens an Executing move in its actual task record", async () => {
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
   await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Executing"))!.click());
   expect([...host.querySelectorAll("a")].find((link) => link.textContent === "Review the brief")?.getAttribute("href")).toBe("/databases/tasks?record=task-1");
-  expect(host.textContent).toContain("this menu and its count are incomplete");
+  expect(host.textContent).toContain("Showing the first 5,000 tasks. More may be available in Databases.");
+});
+
+it("keeps unassigned work out of a selected project and explains where it remains", async () => {
+  api.activity = {
+    ...api.activity,
+    data: {
+      ...api.activity.data,
+      hierarchy: { data: [
+        { id: "workspace", kind: "workspace", parent_id: null, name: "Workspace" },
+        { id: "project-a", kind: "project", parent_id: "workspace", name: "CRM automation" },
+        { id: "project-b", kind: "project", parent_id: "workspace", name: "Elsewhere" },
+      ] as never },
+    },
+  };
+  api.tasks.mockResolvedValue({ records: [
+    { id: "unassigned", fields: { task_name: "Unassigned task" } },
+    { id: "elsewhere", fields: { task_name: "Other project task", task_scope_node_id: "project-b" } },
+  ] });
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Executing"))!.click());
+  const scope = host.querySelector<HTMLSelectElement>('select[aria-label="Task scope"]')!;
+  await act(async () => {
+    scope.value = "project-a";
+    scope.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(host.textContent).toContain("No task moves are recorded for this scope.");
+  expect(host.textContent).toContain("Unassigned and older task records remain available in All workspaces and projects.");
+  expect(host.textContent).not.toContain("Unassigned task");
+  expect(host.textContent).not.toContain("Other project task");
 });
 
 it("keeps Thinking free of approval actions without losing the pending request", async () => {
@@ -136,10 +166,24 @@ it("retains the session and saved failures when pinned views cannot load", async
   expect(host.textContent).toContain("Choose how to work");
   expect(host.textContent).toContain("Retry pinned views");
   await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"))!.click());
+  expect(host.textContent).not.toContain("Could not save report");
+  await act(async () => setSessionMode("deciding"));
   expect(host.textContent).toContain("Could not save report");
   expect(host.textContent).toContain("Connection closed");
   await act(async () => setSessionMode("not_today"));
   expect(host.textContent).not.toContain("Could not save report");
+});
+
+
+it("keeps task errors product-facing and constrains the scope selector to its container", async () => {
+  api.tasks.mockRejectedValue(new Error("PostgREST PGRST301: tenant detail"));
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Executing"))!.click());
+  expect(host.textContent).toContain("Task moves are unavailable right now. Work is unchanged.");
+  expect(host.textContent).not.toContain("PGRST301");
+  const scope = host.querySelector('select[aria-label="Task scope"]');
+  expect(scope?.className).toContain("min-w-0");
+  expect(scope?.className).toContain("flex-1");
 });
 
 it("answers a profile question through its owning session", async () => {
@@ -222,7 +266,7 @@ it("rechecks and resolves a workflow approval by its run identity", async () => 
   const deciding = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Deciding"))!;
   await act(async () => deciding.click());
   expect(host.textContent).toContain("Workflow approval · Fiona");
-  const approve = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve exact payload"))!;
+  const approve = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve this version"))!;
   await act(async () => approve.click());
   expect(api.workflowRuns).toHaveBeenCalledWith({ status: "Needs approval", limit: 100 });
   expect(host.textContent).toContain('"target": "brief"');
@@ -237,6 +281,22 @@ it("does not call a legacy workflow request an exact payload", async () => {
   api.workflowApproval.mockResolvedValue({ write_performed: true });
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
   await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Deciding"))!.click());
-  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve recorded approval"))!.click());
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve this request"))!.click());
   expect(api.workflowApproval).toHaveBeenCalledWith(expect.objectContaining({ decisionSummary: "Approved the recorded workflow request." }));
+});
+
+it("restores the selected task scope when Home remounts", async () => {
+  localStorage.setItem("intelizen:home-task-scope", "project-one");
+  api.activity = { ...api.activity, data: { ...api.activity.data, hierarchy: { data: [{
+    id: "project-one", name: "Project one", kind: "project", parent_id: null, folders: [], position: 0,
+    legacy_operation_id: null, legacy_project_id: null, legacy_investigation_id: null,
+    created_at: "2026-09-08T00:00:00.000Z", updated_at: "2026-09-08T00:00:00.000Z",
+  }] } } };
+  const view = <QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>;
+  await act(async () => root.render(view));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Executing"))!.click());
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Task scope"]')?.value).toBe("project-one");
+  await act(async () => root.render(null));
+  await act(async () => root.render(view));
+  expect(host.querySelector<HTMLSelectElement>('[aria-label="Task scope"]')?.value).toBe("project-one");
 });

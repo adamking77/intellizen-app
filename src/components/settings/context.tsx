@@ -73,8 +73,8 @@ export function ContextSettings() {
             <Folder className="h-[13px] w-[13px] shrink-0 text-[var(--text-muted)]" strokeWidth={1.6} aria-hidden />
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text)]">{path}</span>
             <span className={missing[path]
-              ? "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--bad)]"
-              : "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]"
+              ? "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--bad)]"
+              : "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]"
             }>{missing[path] ? "not found" : "read"}</span>
             <button type="button" className="pill !p-1" onClick={() => setContext(context.filter((item) => item !== path))} aria-label={`Remove ${path}`} title={`Remove ${path}`}>
               <X className="h-[13px] w-[13px]" strokeWidth={1.9} aria-hidden />
@@ -92,7 +92,7 @@ export function ContextSettings() {
       {error ? <p className="text-xs text-[var(--danger)]">{error}</p> : null}
       <div className="flex items-center gap-3">
         <button type="button" className="action" onClick={() => void add()} disabled={busy}>{busy ? "Choosing…" : "Add folder"}</button>
-        <span className="text-[var(--t-section)] text-[var(--overlay-1)]">Database and API access stays in each provider’s own connection settings.</span>
+        <span className="text-[length:var(--t-section)] text-[var(--overlay-1)]">Database and API access stays in each provider’s own connection settings.</span>
       </div>
     </div>
   );

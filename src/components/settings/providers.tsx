@@ -106,7 +106,7 @@ export function ProvidersSettings() {
       </header>
 
       {scanStatus ? (
-        <p className={cn("pb-1 text-[var(--t-meta)]", scanStatus.startsWith("Scan failed") ? "text-[var(--bad)]" : "text-[var(--ok)]")} role="status">
+        <p className={cn("pb-1 text-[length:var(--t-meta)]", scanStatus.startsWith("Scan failed") ? "text-[var(--bad)]" : "text-[var(--ok)]")} role="status">
           {scanStatus}
         </p>
       ) : null}
@@ -179,10 +179,10 @@ export function ProvidersSettings() {
         );
       })}
 
-      <p className="pt-3 text-[var(--t-section)] leading-5 text-[var(--overlay-1)]">
+      <p className="pt-3 text-[length:var(--t-section)] leading-5 text-[var(--overlay-1)]">
         Credentials remain with Hermes or the provider CLI. IntelliZen stores no provider credential here.
       </p>
-      <p className="text-[var(--t-section)] leading-5 text-[var(--overlay-1)]">
+      <p className="text-[length:var(--t-section)] leading-5 text-[var(--overlay-1)]">
         Discovery matches the official ACP registry against executable paths from your login shell and local ACP adapters. Use Rescan after installing or moving a CLI.
       </p>
     </div>
@@ -233,9 +233,9 @@ function ProviderLine({
     <div className="border-b border-[var(--hair)]">
       <div className="hoverable flex min-h-14 flex-wrap items-center gap-3 px-0.5 py-4">
         <ProviderIcon src={icon} hermes={kindTone === "runtime"} />
-        <span className="w-[118px] shrink-0 font-ui text-[var(--t-ui)] text-[var(--text)]">{name}</span>
+        <span className="w-[118px] shrink-0 font-ui text-[length:var(--t-ui)] text-[var(--text)]">{name}</span>
         <span className={cn(
-          "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)]",
+          "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[length:var(--t-count)]",
           kindTone === "runtime"
             ? "bg-[color-mix(in_srgb,var(--runtime)_14%,transparent)] text-[var(--runtime)]"
             : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)]",
@@ -243,22 +243,22 @@ function ProviderLine({
           {kindTone === "itself" ? <span aria-hidden className="mr-1 inline-block h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--runtime)] align-px" /> : null}
           {kind}
         </span>
-        <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-2 py-0.5 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{tier}</span>
+        <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-2 py-0.5 font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">{tier}</span>
         <div className="min-w-0 flex-1 max-[900px]:order-last max-[900px]:basis-full">
-          <p className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{path}</p>
-          <p className={cn("mt-0.5 truncate text-[var(--t-meta)]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
+          <p className="truncate font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{path}</p>
+          <p className={cn("mt-0.5 truncate text-[length:var(--t-meta)]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
         </div>
-        {connecting ? <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[var(--t-count)] text-[var(--overlay-1)]">connecting…</span> : null}
+        {connecting ? <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[length:var(--t-count)] text-[var(--overlay-1)]">connecting…</span> : null}
         {!connecting && connected && onDisconnect ? (
           <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] px-2 py-0.5 font-ui text-[var(--t-count)] text-[var(--ok)]">connected</span>
+            <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] px-2 py-0.5 font-ui text-[length:var(--t-count)] text-[var(--ok)]">connected</span>
             <button type="button" className="action" onClick={(event) => { event.stopPropagation(); onDisconnect(); }}>Disconnect</button>
           </div>
         ) : null}
         {!connecting && !connected && onConnect ? <button type="button" className="action" onClick={(event) => { event.stopPropagation(); onConnect(); }}>Connect</button> : null}
         {!onConnect && !connected && (
           <span className={cn(
-            "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)]",
+            "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[length:var(--t-count)]",
             bad ? "bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] text-[var(--bad)]" : "bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] text-[var(--ok)]",
           )}>{state}</span>
         )}
@@ -274,7 +274,7 @@ function ProviderLine({
         </button>
       </div>
       {open ? (
-        <div className="flex flex-col gap-2.5 px-3 pb-4 pl-9 pt-1 text-[var(--t-meta)]">
+        <div className="flex flex-col gap-2.5 px-3 pb-4 pl-9 pt-1 text-[length:var(--t-meta)]">
           <div>
             <span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Connections</span>
             <div className="mt-1 flex flex-wrap gap-1">

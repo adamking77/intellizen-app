@@ -32,7 +32,7 @@ export function MaterialContext() {
   if (references.length === 0) return null;
   const effective = conversationContextForPrompt(context);
   return (
-    <div className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-x-auto px-1 text-[var(--t-meta)] text-[var(--text-mid)]" aria-label="Material shared with the next message">
+    <div className="flex min-w-0 shrink-0 items-center gap-1.5 overflow-x-auto px-1 text-[length:var(--t-meta)] text-[var(--text-mid)]" aria-label="Material shared with the next message">
       <span className="shrink-0">Sees</span>
         {references.map((reference) => (
           <span

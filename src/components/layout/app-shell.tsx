@@ -308,19 +308,16 @@ export function AppShell() {
       <WindowResizeHandles sides={agentPanelHidden || agentPanelDetached || focusMode || isNarrow} />
       {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
-        theme="dark"
-        closeButton
+        theme="system"
+        offset={{ bottom: 72, right: 24 }}
+        gap={8}
+        expand={false}
+        closeButton={false}
+        richColors={false}
         visibleToasts={3}
         toastOptions={{
-          style: {
-            background: "var(--surface)",
-            border: "none",
-            boxShadow: "none",
-            color: "var(--text)",
-            fontFamily: "var(--font-ui, inherit)",
-            fontSize: "13px",
-          },
-          className: "intelizen-toast",
+          unstyled: true,
+          classNames: { toast: "note", title: "note-sentence", description: "note-meta", actionButton: "note-choice" },
         }}
       /> : null}
       </DocumentProposalProvider>
@@ -368,19 +365,16 @@ export function AgentPanelWindow() {
       <EjectedPanel />
       {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
-        theme="dark"
-        closeButton
+        theme="system"
+        offset={{ bottom: 72, right: 24 }}
+        gap={8}
+        expand={false}
+        closeButton={false}
+        richColors={false}
         visibleToasts={3}
         toastOptions={{
-          style: {
-            background: "var(--surface)",
-            border: "none",
-            boxShadow: "none",
-            color: "var(--text)",
-            fontFamily: "var(--font-ui, inherit)",
-            fontSize: "13px",
-          },
-          className: "intelizen-toast",
+          unstyled: true,
+          classNames: { toast: "note", title: "note-sentence", description: "note-meta", actionButton: "note-choice" },
         }}
       /> : null}
     </>

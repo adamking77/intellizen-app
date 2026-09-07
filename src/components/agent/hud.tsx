@@ -247,7 +247,7 @@ export function Hud({
           aria-label="Agents"
         >
           {profiles.length === 0 ? (
-            <span className="m-auto font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No agents listed.</span>
+            <span className="m-auto font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">No agents listed.</span>
           ) : null}
           {profiles.map((profile) => {
             const selected = profile.name === target;
@@ -280,10 +280,10 @@ export function Hud({
                   image={profile.avatarImage}
                   animate={false}
                 />
-                <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-meta)] text-[var(--text)]">
+                <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-meta)] text-[var(--text)]">
                   {profile.displayName || profile.name}
                 </span>
-                <span className="shrink-0 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+                <span className="shrink-0 font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">
                   {online ? profile.model ?? "ready" : "offline"}
                 </span>
               </button>
@@ -313,15 +313,15 @@ export function Hud({
           >
             {messages.length === 0 ? (
               <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5">
-                <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">{ready ? `Ready. ${name} can answer.` : "No agent selected."}</p>
-                <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{ready ? "Send a message to begin." : "Choose an agent from the pill below."}</p>
+                <p className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">{ready ? `Ready. ${name} can answer.` : "No agent selected."}</p>
+                <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">{ready ? "Send a message to begin." : "Choose an agent from the pill below."}</p>
               </div>
             ) : null}
             {messages.slice(-24).map((m) =>
               m.from === "you" ? (
                 <div
                   key={m.id}
-                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                  className="max-w-[82%] self-end whitespace-pre-wrap rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-1.5 font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
                 >
                   {m.text}
                 </div>
@@ -333,7 +333,7 @@ export function Hud({
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="t-section uppercase tracking-[0.14em] text-[var(--text-muted)]">{name}</span>
                     <div
-                      className="whitespace-pre-wrap rounded-[var(--r-ctl)] px-[11px] py-1.5 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                      className="whitespace-pre-wrap rounded-[var(--r-ctl)] px-[11px] py-1.5 font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
                       style={{ background: `color-mix(in srgb, ${hue} var(--agent-bubble-weight), transparent)` }}
                     >
                       {m.text.replace(/^\s+/, "")}
@@ -358,7 +358,7 @@ export function Hud({
                   onApprove={(pending, choice) => answer(() => onApprove(pending, choice))}
                   onClarify={(pending, answers) => answer(() => onClarify(pending, answers))}
                 />
-                {answerError ? <p role="alert" className="mt-2 text-[var(--t-meta)] text-[var(--danger)]">{answerError}</p> : null}
+                {answerError ? <p role="alert" className="mt-2 text-[length:var(--t-meta)] text-[var(--danger)]">{answerError}</p> : null}
               </div>
             ) : null}
           </div>
@@ -452,7 +452,7 @@ export function Hud({
                 className="flex min-w-0 items-center gap-[9px] rounded-[var(--r-ctl)] px-1 py-0.5 outline-none transition-colors hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)]"
               >
                 <Avatar agent={face} size={20} image={face.avatarImage} animate="always" />
-                <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">
+                <span className="truncate font-ui text-[length:var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text)]">
                   {name}
                 </span>
               </button>
@@ -567,7 +567,7 @@ function HudRun({ run, agent }: { run: RunState; agent: string }) {
   return (
     <span
       className={cn(
-        "min-w-0 truncate font-ui text-[var(--t-meta)]",
+        "min-w-0 truncate font-ui text-[length:var(--t-meta)]",
         run.kind === "failed" ? "text-[var(--bad)]" : run.kind === "waiting" ? "text-[var(--wait)]" : "text-[var(--text-muted)]",
       )}
       title={run.kind === "failed" ? run.reason : undefined}

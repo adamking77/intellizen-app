@@ -21,7 +21,7 @@ export function PluginSidebarEntries({ collapsed }: { collapsed: boolean }) {
           className={collapsed ? "rail-node mx-auto" : "nav-node"}
         >
           {collapsed ? (
-            <span aria-hidden className="font-ui text-[var(--t-meta)] font-semibold">
+            <span aria-hidden className="font-ui text-[length:var(--t-meta)] font-semibold">
               {entry.label.slice(0, 1).toUpperCase()}
             </span>
           ) : (
@@ -38,13 +38,13 @@ export function PluginSidebarEntries({ collapsed }: { collapsed: boolean }) {
           className={collapsed ? "rail-node mx-auto" : "nav-node"}
         >
           {collapsed ? (
-            <span aria-hidden className="font-ui text-[var(--t-meta)] font-semibold text-[var(--danger)]">
+            <span aria-hidden className="font-ui text-[length:var(--t-meta)] font-semibold text-[var(--danger)]">
               !
             </span>
           ) : (
             <>
               <span className="truncate">{plugin.name}</span>
-              <span className="ml-auto font-mono text-[var(--t-count)] text-[var(--danger)]">failed</span>
+              <span className="ml-auto font-mono text-[length:var(--t-count)] text-[var(--danger)]">failed</span>
             </>
           )}
         </NavLink>

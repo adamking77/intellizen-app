@@ -127,11 +127,11 @@ function WorkspaceProjects({ workspaceId, rows, catalog, cardsByProject, loading
       </div>
       <section aria-label="Work kept out of scope">
         <h2 className="border-b border-[var(--hair)] pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Work kept out of scope</h2>
-        {tasks.isLoading ? <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">Loading out-of-scope work…</p>
+        {tasks.isLoading ? <p className="py-3 text-[length:var(--t-meta)] text-[var(--text-muted)]">Loading out-of-scope work…</p>
           : tasks.error ? <FailureState message="The not-doing list could not be read." action={{ label: "Retry", onClick: () => void tasks.refetch() }} />
-          : keepingOut.length ? <div className="divide-y divide-[var(--hair)]">{keepingOut.map((task) => <Link key={task.id} to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.tasks}?record=${encodeURIComponent(task.id)}`} className="block py-3 text-[var(--t-ui)] hover:bg-[var(--hover)]">{task.title}</Link>)}</div>
-          : <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">No out-of-scope work recorded for this workspace.</p>}
-        {tasks.data && !tasks.data.complete && <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Only the first 5,000 task records were read; this list may be incomplete.</p>}
+          : keepingOut.length ? <div className="divide-y divide-[var(--hair)]">{keepingOut.map((task) => <Link key={task.id} to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.tasks}?record=${encodeURIComponent(task.id)}`} className="block py-3 text-[length:var(--t-ui)] hover:bg-[var(--hover)]">{task.title}</Link>)}</div>
+          : <p className="py-3 text-[length:var(--t-meta)] text-[var(--text-muted)]">No out-of-scope work recorded for this workspace.</p>}
+        {tasks.data && !tasks.data.complete && <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Only the first 5,000 task records were read; this list may be incomplete.</p>}
       </section>
     </div>
   );
@@ -144,9 +144,9 @@ function WorkspaceProjectRow({ row, catalog, cards, onOpen }: { row: UnitChild; 
   const latest = useQuery({ queryKey: ["unit-project-event", row.id, recordIds], queryFn: () => listWorkEvents({ recordIds, limit: 1 }), enabled: recordIds.length > 0, staleTime: 10_000, refetchInterval: 15_000 });
   const state = summary.waiting ? `A question for you: ${summary.waiting}` : latest.data?.[0]?.summary || summary.state || "No state recorded.";
   return <button type="button" onClick={() => onOpen(row)} className="block w-full space-y-2 py-4 text-left hover:bg-[var(--hover)]">
-    <span className="block text-[var(--t-ui)] text-[var(--text)]">{row.name}</span>
-    <span className={`block text-[var(--t-meta)] ${summary.waiting ? "text-[var(--question)]" : "text-[var(--text-muted)]"}`}>{state}</span>
-    {summary.blocker && <span className="block text-[var(--t-meta)] text-[var(--text-muted)]">Unresolved: {summary.blocker}</span>}
+    <span className="block text-[length:var(--t-ui)] text-[var(--text)]">{row.name}</span>
+    <span className={`block text-[length:var(--t-meta)] ${summary.waiting ? "text-[var(--question)]" : "text-[var(--text-muted)]"}`}>{state}</span>
+    {summary.blocker && <span className="block text-[length:var(--t-meta)] text-[var(--text-muted)]">Unresolved: {summary.blocker}</span>}
     {summary.holder && <Identity name={summary.holder} />}
     {latest.error && <span className="block font-mono text-[10px] text-[var(--text-muted)]">Latest receipt unavailable.</span>}
   </button>;
@@ -155,15 +155,15 @@ function WorkspaceProjectRow({ row, catalog, cards, onOpen }: { row: UnitChild; 
 function UnitTable({ rows, counts, onOpen }: { rows: UnitChild[]; counts: Map<string, number>; onOpen: (row: UnitChild) => void }) {
   return (
     <div role="table" aria-label="Projects" className="overflow-hidden rounded-[var(--r-ctl)] bg-[var(--raised)]">
-      <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_140px_110px_100px] items-center gap-3 px-3 text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+      <div role="row" className="grid h-[var(--h-line)] grid-cols-[minmax(0,1fr)_140px_110px_100px] items-center gap-3 px-3 text-[length:var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]">
         <span role="columnheader">Project</span><span role="columnheader">Runs as</span><span role="columnheader">State</span><span role="columnheader">Evidence</span>
       </div>
       {rows.map((row) => {
         const count = countFor(counts, row);
         return (
           <button key={row.id} type="button" role="row" onClick={() => onOpen(row)} className="grid h-[var(--h-line)] w-full grid-cols-[minmax(0,1fr)_140px_110px_100px] items-center gap-3 px-3 text-left hover:bg-[var(--hover)]">
-            <span role="cell" className="truncate text-[var(--t-ui)] text-[var(--text)]">{row.name}</span>
-            <span role="cell" className="text-[var(--t-meta)] text-[var(--text-muted)]">—</span>
+            <span role="cell" className="truncate text-[length:var(--t-ui)] text-[var(--text)]">{row.name}</span>
+            <span role="cell" className="text-[length:var(--t-meta)] text-[var(--text-muted)]">—</span>
             <span role="cell"><Pill>{row.caseLinked ? "client case" : row.kind}</Pill></span>
             <span role="cell" className="font-mono text-[11px] text-[var(--text-muted)]">{count} docs</span>
           </button>
@@ -179,9 +179,9 @@ function UnitBoard({ rows, counts, onOpen }: { rows: UnitChild[]; counts: Map<st
     <div className="flex gap-3 overflow-x-auto">
       {groups.map((group) => (
         <section key={group.label} className="w-64 shrink-0">
-          <div className="mb-2 flex h-[var(--h-row)] items-center justify-between"><h2 className="text-[var(--t-section)] uppercase tracking-[0.12em] text-[var(--text-muted)]">{group.label}</h2><Pill>{group.rows.length}</Pill></div>
+          <div className="mb-2 flex h-[var(--h-row)] items-center justify-between"><h2 className="text-[length:var(--t-section)] uppercase tracking-[0.12em] text-[var(--text-muted)]">{group.label}</h2><Pill>{group.rows.length}</Pill></div>
           <div className="grid gap-2">
-            {group.rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row)} className="text-left"><Card><div className="text-[var(--t-ui)] text-[var(--text)]">{row.name}</div><div className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">{countFor(counts, row)} documents · —</div></Card></button>)}
+            {group.rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row)} className="text-left"><Card><div className="text-[length:var(--t-ui)] text-[var(--text)]">{row.name}</div><div className="mt-1 font-mono text-[11px] text-[var(--text-muted)]">{countFor(counts, row)} documents · —</div></Card></button>)}
           </div>
         </section>
       ))}
@@ -193,9 +193,9 @@ function UnitBrief({ rows, counts, onOpen }: { rows: UnitChild[]; counts: Map<st
   const total = rows.reduce((sum, row) => sum + countFor(counts, row), 0);
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
-      <p className="text-[var(--t-ui)] text-[var(--text)]">{rows.length} projects · {rows.filter((row) => row.caseLinked).length} client cases · {total} documents</p>
+      <p className="text-[length:var(--t-ui)] text-[var(--text)]">{rows.length} projects · {rows.filter((row) => row.caseLinked).length} client cases · {total} documents</p>
       <div className="grid gap-px overflow-hidden rounded-[var(--r-ctl)] bg-[var(--hair)]">
-        {rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row)} className="grid min-h-[var(--h-line)] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 bg-[var(--base)] px-3 text-left hover:bg-[var(--hover)]"><span className="truncate text-[var(--t-ui)] text-[var(--text)]">{row.name}</span><Pill>{row.caseLinked ? "client case" : row.kind}</Pill><span className="font-mono text-[11px] text-[var(--text-muted)]">{countFor(counts, row)} docs</span></button>)}
+        {rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row)} className="grid min-h-[var(--h-line)] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 bg-[var(--base)] px-3 text-left hover:bg-[var(--hover)]"><span className="truncate text-[length:var(--t-ui)] text-[var(--text)]">{row.name}</span><Pill>{row.caseLinked ? "client case" : row.kind}</Pill><span className="font-mono text-[11px] text-[var(--text-muted)]">{countFor(counts, row)} docs</span></button>)}
       </div>
     </div>
   );

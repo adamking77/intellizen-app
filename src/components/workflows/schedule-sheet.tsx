@@ -223,7 +223,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
   const content = (
       <div className="space-y-5">
         <section>
-          <div className="mb-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">When</div>
+          <div className="mb-2 font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">When</div>
           <Select
             aria-label="Hermes schedule pattern"
             disabled={blueprintsQuery.isLoading}
@@ -244,12 +244,12 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
               value={schedule}
             />
           </label>
-          {!validSchedule ? <p className="mt-1 font-ui text-[var(--t-count)] text-[var(--danger)]">Use a five-part cron expression.</p> : null}
+          {!validSchedule ? <p className="mt-1 font-ui text-[length:var(--t-count)] text-[var(--danger)]">Use a five-part cron expression.</p> : null}
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2">
           <label>
-            <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Hermes profile</span>
+            <span className="mb-1.5 block font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Hermes profile</span>
             <Select
               disabled={profilesQuery.isLoading}
               onChange={(event) => setProfile(event.target.value)}
@@ -260,7 +260,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
             </Select>
           </label>
           <label>
-            <span className="mb-1.5 block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Progress board</span>
+            <span className="mb-1.5 block font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Progress board</span>
             <Select
               disabled={boardsQuery.isLoading}
               onChange={(event) => setBoard(event.target.value)}
@@ -272,20 +272,20 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
           </label>
         </section>
 
-        <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 font-ui text-[var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
+        <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 font-ui text-[length:var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
           Hermes will run the saved definition as <span className="font-mono text-[var(--text)]">{profile || "the selected profile"}</span>.
           {board ? ` ${definition.steps.length} idempotent progress cards will be created on ${board}.` : " No board data will be created."}
         </div>
 
         {profilesQuery.error || blueprintsQuery.error || boardsQuery.error || jobsQuery.error || failure ? (
-          <div role="alert" className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[var(--t-section)] text-[var(--danger)]">
+          <div role="alert" className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[length:var(--t-section)] text-[var(--danger)]">
             {failure ?? errorMessage(profilesQuery.error ?? blueprintsQuery.error ?? boardsQuery.error ?? jobsQuery.error)}
           </div>
         ) : null}
 
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Existing schedules</span>
+            <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">Existing schedules</span>
             {jobsQuery.isFetching ? <span className="control-running-dot" aria-label="Refreshing schedules" /> : null}
           </div>
           {jobs.length ? (
@@ -294,10 +294,10 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
                 <div className="flex items-center gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2" key={job.id}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">{job.scheduleDisplay}</span>
+                      <span className="truncate font-ui text-[length:var(--t-meta)] font-medium text-[var(--text)]">{job.scheduleDisplay}</span>
                       <Pill variant={job.lastStatus === "error" ? "failure" : "neutral"}>{job.state}</Pill>
                     </div>
-                    <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
+                    <p className="mt-0.5 truncate font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
                     {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].outcome}{runsQuery.data[job.id][0].preview ? ` · ${runsQuery.data[job.id][0].preview}` : ""}</p> : null}
                   </div>
                   <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id || (!job.enabled && !canExecute)} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
@@ -320,7 +320,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
               ))}
             </div>
           ) : (
-            <p className="px-3 py-4 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No schedules yet. Create one to run this workflow automatically.</p>
+            <p className="px-3 py-4 font-ui text-[length:var(--t-section)] text-[var(--overlay-1)]">No schedules yet. Create one to run this workflow automatically.</p>
           )}
         </section>
       </div>

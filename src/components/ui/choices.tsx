@@ -20,6 +20,7 @@ export function Choices({
   onChoose,
   label = "Choices",
   className,
+  onKeyDown,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & {
   choices: Choice[];
@@ -35,10 +36,13 @@ export function Choices({
       aria-label={label}
       className={cn("flex flex-wrap gap-x-4 gap-y-2", className)}
       onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented) return;
         if (
           event.altKey ||
           event.ctrlKey ||
           event.metaKey ||
+          event.shiftKey ||
           event.repeat ||
           event.nativeEvent.isComposing ||
           editableTarget(event.target) ||
@@ -62,7 +66,7 @@ export function Choices({
           className={cn(choice.quiet && "text-[var(--text-dim)]")}
         >
           {choice.label}
-          {choice.recommended ? <span className="font-mono text-[var(--t-count)] text-[var(--text-dim)]"> · recommended</span> : null}
+          {choice.recommended ? <span className="font-mono text-[length:var(--t-count)] text-[var(--text-dim)]"> · recommended</span> : null}
         </Control>
       ))}
     </div>

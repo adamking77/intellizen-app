@@ -105,7 +105,7 @@ export function NewRoomSheet({
     >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Name</span>
+          <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Name</span>
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -117,18 +117,18 @@ export function NewRoomSheet({
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
-            <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Members</span>
-            <span className="font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
+            <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Members</span>
+            <span className="font-ui text-[length:var(--t-section)] tabular-nums text-[var(--text-muted)]">
               {chosen.length} of {GROUP_CHAT_MAX_MEMBERS}
             </span>
           </div>
 
           {seatable.isLoading ? (
-            <p className="py-6 text-center font-ui text-[var(--t-ui)] text-[var(--text-muted)]">
+            <p className="py-6 text-center font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">
               Reading the roster…
             </p>
           ) : members.length === 0 ? (
-            <p className="py-6 text-center font-ui text-[var(--t-ui)] text-[var(--text-muted)]">
+            <p className="py-6 text-center font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">
               No agents are configured. Add them on the Agents page, then try again.
             </p>
           ) : (
@@ -159,15 +159,15 @@ export function NewRoomSheet({
                         animate={false}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+                        <span className="block truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                           {displayName(member)}
                         </span>
-                        <span className="block truncate font-mono text-[var(--t-section)] text-[var(--text-muted)]">
+                        <span className="block truncate font-mono text-[length:var(--t-section)] text-[var(--text-muted)]">
                           @{botHandle(member.name, member)}
                           {member.model ? ` · ${member.model}` : ""}
                         </span>
                       </span>
-                      <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+                      <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
                         {member.door === "acp" ? "ACP" : "Hermes"}
                       </span>
                     </button>
@@ -177,7 +177,7 @@ export function NewRoomSheet({
             </ul>
           )}
           {tooFew ? (
-            <p className="font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+            <p className="font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
               Seat at least {GROUP_CHAT_MIN_MEMBERS}.
             </p>
           ) : null}

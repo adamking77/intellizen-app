@@ -55,7 +55,7 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
   const rows = (point: Record<string, unknown>) => series.map((s) => ({ color: s.color, label: s.label, value: cost(point[s.key]) }));
   const data = model.usageDays.map((d) => ({ ...d, label: d.date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) }));
   return <>
-    <div className="mb-3 flex gap-4 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">
+    <div className="mb-3 flex gap-4 font-mono text-[length:var(--t-meta)] text-[var(--text-muted)]">
       {series.map((s) => <span key={s.key} className="inline-flex items-center gap-2"><svg aria-hidden width="18" height="6"><path d="M0 3H18" stroke={s.color} strokeWidth={style === "bar" ? 6 : 2} strokeDasharray={style !== "bar" && s.key === "estimated" ? "4 3" : undefined} /></svg>{s.label}</span>)}
     </div>
     <div className="h-[200px]" role="img" aria-label="Daily session cost in USD. Missing reports remain gaps. Exact values available in daily reports below.">
@@ -91,7 +91,7 @@ export function OutcomesChart({ model, style }: { model: ActivityDashboardModel;
           {data.map((o, index) => <PieSlice key={o.name} index={index} />)}
           <PieCenter defaultLabel="workflow runs" />
         </PieChart>
-        <dl className="min-w-32 space-y-2.5 py-3 text-[var(--t-meta)]">
+        <dl className="min-w-32 space-y-2.5 py-3 text-[length:var(--t-meta)]">
           {data.map((o) => <div key={o.name} className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: COLORS[o.name] }} /><dt className="grow text-[var(--text-muted)]">{o.name}</dt><dd className="ml-5 font-mono tabular-nums">{o.count}</dd></div>)}
         </dl>
       </>}

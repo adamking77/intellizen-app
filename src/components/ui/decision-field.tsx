@@ -29,7 +29,7 @@ export function DecisionField({ question, why, choices, onChoose, className, ...
       <div className="min-w-0">
         <Eyebrow tone="question">A question for you</Eyebrow>
         <div className="mt-1 text-[17px] font-light leading-[1.4] text-[var(--text)]">{question}</div>
-        {why ? <div className="mt-0.5 break-words text-[var(--t-meta)] text-[var(--text-mid)]">{why}</div> : null}
+        {why ? <div className="mt-0.5 break-words text-[length:var(--t-meta)] text-[var(--text-mid)]">{why}</div> : null}
       </div>
       <Choices choices={choices} onChoose={onChoose} label={question} />
     </Surface>

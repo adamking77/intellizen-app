@@ -35,7 +35,7 @@ export function TurnFact({ text, title, truncate }: { text: string; title?: stri
   return (
     <span
       className={cn(
-        "px-0.5 font-ui text-[var(--t-meta)] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
+        "px-0.5 font-ui text-[length:var(--t-meta)] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
         truncate ? "min-w-0 truncate" : "shrink-0",
       )}
       title={title}
@@ -144,7 +144,7 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
         />
       ) : null}
       {open && tool.resultText ? (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[var(--t-section)] leading-relaxed text-[var(--text-muted)]">
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[length:var(--t-section)] leading-relaxed text-[var(--text-muted)]">
           {tool.resultText}
         </pre>
       ) : null}
@@ -188,7 +188,7 @@ export function UserTurn({
               }
             }}
             aria-label="Edit this message"
-            className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+            className="w-full resize-none bg-transparent font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
             <Control
@@ -217,7 +217,7 @@ export function UserTurn({
   return (
     <div className="group relative max-w-[82%] self-end">
       <div className="rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2">
-        <span className="whitespace-pre-wrap font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
+        <span className="whitespace-pre-wrap font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
       </div>
       <TurnBar align="end">
         {message.at !== undefined ? (
@@ -274,12 +274,12 @@ export function AgentTurn({
             onToggle={(event) => setThoughtOpen(event.currentTarget.open)}
             className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]"
           >
-            <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <summary className="cursor-default list-none font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               {message.streaming ? "Thinking…" : "Thought"}
             </summary>
             <ReplyMarkdown
               content={message.thought.replace(/^\s+/, "")}
-              className="mt-1 font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]"
+              className="mt-1 font-ui text-[length:var(--t-meta)] leading-normal text-[var(--text-muted)]"
             />
           </details>
         ) : null}
@@ -290,7 +290,7 @@ export function AgentTurn({
             onClick={() => setRunOpen(true)}
             className="flex items-center gap-2 rounded-[var(--r-ctl)] bg-[var(--crust)] px-[9px] py-1.5 text-left"
           >
-            <span className="flex-1 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
+            <span className="flex-1 font-mono text-[length:var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
             <ChevronDown className="h-3 w-3 text-[var(--text-muted)]" strokeWidth={1.8} aria-hidden />
           </button>
         ) : (
@@ -307,7 +307,7 @@ export function AgentTurn({
             {message.text ? (
               <ReplyMarkdown
                 content={message.text.replace(/^\s+/, "")}
-                className="font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                className="font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
               />
             ) : null}
             {message.streaming ? (
@@ -337,7 +337,7 @@ export function AgentTurn({
 
         {message.failed ? (
           <div className="rounded-[var(--r-ctl)] bg-transparent px-[11px] py-2">
-            <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
+            <p className="font-ui text-[length:var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
             {/* Word-labelled and always visible: an action you must hover to
                 discover is not offered, and the row survives greyscale. */}
             <div className="mt-2 flex gap-1.5">

@@ -20,12 +20,12 @@ export function ProjectCanvases({ canvases }: { canvases: CanvasDocumentSummary[
             className="group flex h-[var(--h-line)] w-full items-center gap-3 bg-[var(--base)] px-3 text-left hover:bg-[var(--hover)]"
           >
             <PanelsTopLeft className="h-3.5 w-3.5 text-[var(--overlay-1)]" />
-            <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] font-medium text-[var(--text)]">{canvas.name}</span>
+            <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-ui)] font-medium text-[var(--text)]">{canvas.name}</span>
             <span className="text-meta">—</span>
             <Pill>canvas</Pill>
           </button>
         ))}
-        {!canvases.length ? <p className="bg-[var(--base)] py-2 text-[var(--t-ui)] text-[var(--text-muted)]">No canvases are linked to this project.</p> : null}
+        {!canvases.length ? <p className="bg-[var(--base)] py-2 text-[length:var(--t-ui)] text-[var(--text-muted)]">No canvases are linked to this project.</p> : null}
       </div>
     </ProjectTabFrame>
   );
@@ -42,8 +42,8 @@ export function ProjectGraph({ projectId, nodes }: { projectId: number; nodes: G
       <Card className="flex flex-wrap items-center gap-4 p-5">
         <Network className="h-5 w-5 shrink-0 text-[var(--accent-text)]" />
         <span className="min-w-40 flex-1">
-          <span className="block font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">Relationship graph</span>
-          <span className="mt-1 block font-ui text-[var(--t-section)] text-[var(--subtext-0)]">{nodes.length} linked entities</span>
+          <span className="block font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">Relationship graph</span>
+          <span className="mt-1 block font-ui text-[length:var(--t-section)] text-[var(--subtext-0)]">{nodes.length} linked entities</span>
         </span>
         <span className="flex min-w-0 flex-1 flex-wrap justify-end gap-1.5">
           {byType.map(([type, count]) => <Pill key={type}>{type} {count}</Pill>)}

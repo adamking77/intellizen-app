@@ -70,9 +70,9 @@ export function AppDialog({
     >
       <div className="flex max-h-[86dvh] flex-col">
         <header className={cn("shrink-0 px-[19px] pb-2 pt-[17px]", headerClassName)}>
-          <h2 ref={heading} tabIndex={initialFocus === "title" ? -1 : undefined} className={cn("font-ui text-[var(--t-ui)] font-medium text-[var(--text)]", initialFocus === "title" && "focus-visible:!outline-none")}>{title}</h2>
+          <h2 ref={heading} tabIndex={initialFocus === "title" ? -1 : undefined} className={cn("font-ui text-[length:var(--t-ui)] font-medium text-[var(--text)]", initialFocus === "title" && "focus-visible:!outline-none")}>{title}</h2>
           {description ? (
-            <p className="mt-1 font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>
+            <p className="mt-1 font-ui text-[length:var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>
           ) : null}
         </header>
         <div ref={body} className={cn("min-h-0 flex-1 overflow-y-auto px-[19px] py-3", bodyClassName)}>{children}</div>

@@ -175,8 +175,8 @@ export function RoomComposer({
                   index === active ? "bg-[var(--selected)]" : "hover:bg-[var(--hover)]",
                 )}
               >
-                <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">@{option.handle}</span>
-                <span className="truncate font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+                <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">@{option.handle}</span>
+                <span className="truncate font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
                   {option.label}
                 </span>
               </button>

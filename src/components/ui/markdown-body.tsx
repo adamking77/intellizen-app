@@ -152,7 +152,7 @@ export function MarkdownBody({ content, className, vaultPath }: MarkdownBodyProp
             </pre>
           );
         }
-        if (block.type === "table") return <div key={i} className="my-4 max-w-full overflow-x-auto"><table className="w-full border-collapse text-left text-[var(--t-meta)] leading-relaxed"><thead><tr>{block.headers.map((cell, column) => <th key={column} className="border-b border-[var(--border)] px-3 py-2 font-medium">{markdownInline(cell, vaultPath)}</th>)}</tr></thead><tbody>{block.rows.map((row, index) => <tr key={index}>{block.headers.map((_, column) => <td key={column} className="border-b border-[var(--border)] px-3 py-2 align-top">{markdownInline(row[column] ?? "", vaultPath)}</td>)}</tr>)}</tbody></table></div>;
+        if (block.type === "table") return <div key={i} className="my-4 max-w-full overflow-x-auto"><table className="w-full border-collapse text-left text-[length:var(--t-meta)] leading-relaxed"><thead><tr>{block.headers.map((cell, column) => <th key={column} className="border-b border-[var(--border)] px-3 py-2 font-medium">{markdownInline(cell, vaultPath)}</th>)}</tr></thead><tbody>{block.rows.map((row, index) => <tr key={index}>{block.headers.map((_, column) => <td key={column} className="border-b border-[var(--border)] px-3 py-2 align-top">{markdownInline(row[column] ?? "", vaultPath)}</td>)}</tr>)}</tbody></table></div>;
         if (block.type === "graph") return <GraphEmbedPreview key={i} spec={block.spec} />;
         if (block.type === "image") {
           return <MarkdownImage key={i} alt={block.alt} source={block.source} vaultPath={vaultPath} />;

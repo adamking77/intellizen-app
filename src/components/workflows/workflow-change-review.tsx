@@ -70,7 +70,7 @@ export function WorkflowChangeReview({ before, after }: { before?: WorkflowDefin
   const authority = workflowAuthorityDiff(before ?? null, after);
   const authorityName = (value: string | null) => value ? names[value] ?? value : "role defaults";
   const removedGates = before?.steps.filter((step): step is Extract<WorkflowStep, { kind: "approval" }> => step.kind === "approval" && !after.steps.some((candidate) => candidate.kind === "approval" && candidate.gate === step.gate)) ?? [];
-  return <div className="space-y-4 text-[var(--t-meta)]">
+  return <div className="space-y-4 text-[length:var(--t-meta)]">
     <section aria-label="Authority review" className="space-y-2">
       <h3 className="font-medium">Authority and approvals</h3>
       <p className={authority.authorityExpanded ? "text-[var(--warning)]" : "text-[var(--text-muted)]"}>{authority.authorityExpanded ? `Authority expands from ${authorityName(authority.before)} to ${authorityName(authority.after)}.` : `Highest explicit authority: ${authorityName(authority.after)}.`}</p>
@@ -87,8 +87,8 @@ export function WorkflowChangeReview({ before, after }: { before?: WorkflowDefin
     </section>) : <p>No definition changes.</p>}
     <details className="text-[var(--text-muted)]">
       <summary className="cursor-pointer">Source</summary>
-      {before ? <><p className="mt-3">Current definition</p><pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[var(--t-meta)]">{JSON.stringify(before, null, 2)}</pre></> : null}
-      <p className="mt-3">Definition after changes</p><pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[var(--t-meta)]">{JSON.stringify(after, null, 2)}</pre>
+      {before ? <><p className="mt-3">Current definition</p><pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[length:var(--t-meta)]">{JSON.stringify(before, null, 2)}</pre></> : null}
+      <p className="mt-3">Definition after changes</p><pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[length:var(--t-meta)]">{JSON.stringify(after, null, 2)}</pre>
     </details>
   </div>;
 }

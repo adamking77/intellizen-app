@@ -16,7 +16,7 @@ export function DocumentImage({ path, title, onBack }: { path: string; title: st
   }, [query.data, path]);
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-6 py-3">
-      <Control onClick={onBack}>Back</Control><span className="text-[var(--t-meta)] text-[var(--text-muted)]">Image · Preview</span>
+      <Control onClick={onBack}>Back</Control><span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Image · Preview</span>
     </div>
     <div className="min-h-0 flex-1 overflow-auto px-6 py-7 md:px-10">
       <h1 className="mb-6 font-ui text-[24px] font-normal text-[var(--text)]">{title}</h1>

@@ -20,7 +20,7 @@ export function Identity({ name, runtime, model, hue, kind = "hermes", className
       >
         {initial}
       </span>
-      <span className="truncate text-[var(--t-meta)] text-[var(--text)]">{name}</span>
+      <span className="truncate text-[length:var(--t-meta)] text-[var(--text)]">{name}</span>
       {runtime ? <Pill variant="runtime">{runtime}{kind === "acp" && model ? ` · ${model}` : ""}</Pill> : null}
     </span>
   );

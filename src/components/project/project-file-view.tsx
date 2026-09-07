@@ -53,12 +53,12 @@ function fileExtension(path: string) {
 
 function FileContent({ view }: { view: Awaited<ReturnType<typeof readProjectFile>> }) {
   if (view.kind === "binary") {
-    return <p className="text-[var(--t-meta)] text-[var(--text-muted)]">This {view.ext || "binary"} file is {formatBytes(view.bytes)} and cannot be displayed here.</p>;
+    return <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">This {view.ext || "binary"} file is {formatBytes(view.bytes)} and cannot be displayed here.</p>;
   }
   const lines = highlightLines(view.text, view.ext);
   const gutter = String(lines.length).length;
   return (
-    <pre className="m-0 max-h-[70vh] overflow-auto rounded-[var(--r-plane)] bg-[var(--crust)] py-3 font-mono text-[var(--t-meta)] leading-relaxed text-[var(--text)]" tabIndex={0}>
+    <pre className="m-0 max-h-[70vh] overflow-auto rounded-[var(--r-plane)] bg-[var(--crust)] py-3 font-mono text-[length:var(--t-meta)] leading-relaxed text-[var(--text)]" tabIndex={0}>
       <code>
         {lines.map((line, index) => (
           <span key={index} className="flex px-3">

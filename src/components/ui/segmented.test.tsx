@@ -49,4 +49,32 @@ describe("Segmented", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("keeps an enabled option reachable when the selected option is disabled", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const change = vi.fn();
+    await act(async () => root.render(
+      <Segmented
+        label="Availability"
+        value="thinking"
+        options={[
+          { value: "thinking", label: "Thinking", disabled: true },
+          { value: "executing", label: "Executing" },
+          { value: "reviewing", label: "Reviewing" },
+        ]}
+        onValueChange={change}
+      />,
+    ));
+    const group = host.querySelector<HTMLElement>('[role="tablist"]')!;
+    const tabs = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+    expect(group.className).toContain("flex-wrap");
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, 0, -1]);
+    tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(change).toHaveBeenLastCalledWith("reviewing");
+
+    await act(async () => root.unmount());
+  });
 });

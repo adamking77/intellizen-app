@@ -313,11 +313,11 @@ export function projectHomeTasks(records: TaskRecord[], hierarchy: HierarchyNode
       completed: ["done", "completed"].includes((fieldText(fields[TASK_FIELDS.status]) ?? "").toLowerCase()),
     };
   }).filter((task) => {
-    // A scoped view always retains unscoped and invalidly scoped tasks so
-    // legacy and repairable work is never made unreachable by this projection.
-    if (!selectedScopeId || !task.scopeNodeId || !task.scopeValid) return true;
-    // Without ancestry, retain only exact and unscoped work. This avoids
-    // leaking another project's scoped task into the selected project.
+    // `task_scope_node_id` is the task record's authoritative hierarchy relation.
+    // A selected scope must show only records that relation places inside it;
+    // unassigned and legacy-invalid tasks remain reachable from the All view.
+    if (!selectedScopeId) return true;
+    if (!task.scopeNodeId || !task.scopeValid) return false;
     if (hierarchy === null) return task.scopeNodeId === selectedScopeId;
     return scopeContains(hierarchy, selectedScopeId, task.scopeNodeId);
   });

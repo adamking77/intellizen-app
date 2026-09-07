@@ -18,10 +18,20 @@ it("uses supplied document handlers for modes and reading focus", async () => {
   expect(host.textContent).toContain("§2 of 5 · 1,204 words");
   expect(host.textContent).toContain("2 in panel");
   const buttons = [...host.querySelectorAll("button")];
+  expect(buttons.find((button) => button.textContent === "Reading")?.className).toContain("--selected");
+  expect(buttons.find((button) => button.textContent === "Edit")?.className).not.toContain("--selected");
   await act(async () => buttons.find((button) => button.textContent === "Edit")!.click());
   await act(async () => buttons.find((button) => button.textContent === "Reading focus")!.click());
   expect(onModeChange).toHaveBeenCalledWith("edit");
   expect(onReadingFocus).toHaveBeenCalledOnce();
+});
+
+it("shows reading focus as a selected toggle", async () => {
+  host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+  await act(async () => root.render(<DocumentDock mode="read" onModeChange={vi.fn()} positionLabel="§2" readingFocus onReadingFocus={vi.fn()} proposalCount={0} />));
+  const focus = [...host.querySelectorAll("button")].find((button) => button.textContent === "Reading focus")!;
+  expect(focus.getAttribute("aria-pressed")).toBe("true");
+  expect(focus.className).toContain("--selected");
 });
 
 it("does not offer editing for read-only or decision-busy documents", async () => {

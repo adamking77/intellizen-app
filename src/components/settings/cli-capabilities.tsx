@@ -85,7 +85,7 @@ export function CliCapabilities({ hermesControls }: { hermesControls?: (query: s
       })}
       {inventory.isSuccess && !rows.length ? <p className="text-xs text-[var(--subtext-0)]">{provider !== "all" && !PROVIDERS[provider] ? "Local inventory is not supported for this provider yet." : "No matching capabilities in the supported local sources."}</p> : null}
       {provider === "hermes" ? hermesControls?.(query) : null}
-      <details className="text-[var(--t-meta)] leading-5 text-[var(--overlay-1)]">
+      <details className="text-[length:var(--t-meta)] leading-5 text-[var(--overlay-1)]">
         <summary className="cursor-pointer">What this inventory includes</summary>
         <p className="pt-2">
         Reads user-level skills, Claude commands and Codex prompts; Hermes plugin manifests, Claude’s installation registry and Codex’s configured plugins; Claude, Codex, Gemini and Qwen MCP configuration. Project overrides, bundled plugin skills, remote installs and other CLI formats are not included. Codex skills, CLI plugins and MCP connections support session switches. Claude CLI plugins support session switches; its MCP switches block tool access without disconnecting the server. Other entries remain provider managed. Select Hermes to manage its shared profile settings below.

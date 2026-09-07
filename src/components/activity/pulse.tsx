@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 export interface PulseTrace {
   id: string;
   color?: string;
+  label?: string;
+  state?: string;
 }
 
 /** A quiet, data-shaped trace that drifts only for real active work. */

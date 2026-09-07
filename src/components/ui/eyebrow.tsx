@@ -12,7 +12,7 @@ export function Eyebrow({
   return (
     <span
       className={cn(
-        "font-mono text-[var(--t-count)] font-normal uppercase tracking-[0.14em]",
+        "font-mono text-[length:var(--t-count)] font-normal uppercase tracking-[0.14em]",
         tone === "question" ? "text-[var(--question)]" : tone === "agent" ? "" : "text-[var(--text-dim)]",
         className,
       )}

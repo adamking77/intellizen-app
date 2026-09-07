@@ -70,7 +70,7 @@ function Turn({
       {showTime ? (
         <div className="my-1 flex items-center gap-2 px-1">
           <span className="h-px flex-1 bg-[var(--hair)]" />
-          <span className="font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
+          <span className="font-ui text-[length:var(--t-section)] tabular-nums text-[var(--text-muted)]">
             {absoluteTime(entry.at)}
           </span>
           <span className="h-px flex-1 bg-[var(--hair)]" />
@@ -78,8 +78,8 @@ function Turn({
       ) : null}
       {isUser ? (
         <div className="group flex max-w-[82%] flex-col gap-1 self-end">
-          <span className="text-right font-ui text-[var(--t-meta)] text-[var(--text-muted)]">You</span>
-          <p className="whitespace-pre-wrap break-words rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">
+          <span className="text-right font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">You</span>
+          <p className="whitespace-pre-wrap break-words rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2 font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]">
             {entry.text}
           </p>
         </div>
@@ -89,7 +89,7 @@ function Turn({
             <Avatar agent={face} size={24} image={profile?.avatarImage} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{who}</span>
+            <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">{who}</span>
             <div
               className="rounded-[var(--r-ctl)] px-[11px] py-2"
               style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
@@ -293,10 +293,10 @@ export function RoomView({
                   onClick={() => navigate(`/room/${other.roomId}`)}
                   className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-[var(--hover)]"
                 >
-                  <span className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+                  <span className="truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                     {other.name}
                   </span>
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
                     {(other.members || []).length} members
                   </span>
                 </button>
@@ -346,10 +346,10 @@ export function RoomView({
             })}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+            <h1 className="truncate font-ui text-[length:var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
               {room.name}
             </h1>
-            <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <p className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               {room.turn
                 ? `${displayName(members.find((m) => m.name === room.turn) ?? { name: room.turn })} is thinking…`
                 : `${members.length} members${room.running ? " · running" : ""} · ${room.owner === "hermes" ? "Hermes durable log" : "ACP-compatible local room"}`}
@@ -368,7 +368,7 @@ export function RoomView({
               <X className="h-3.5 w-3.5" />
             </Button>
           ) : null}
-        </header> : <details className="shrink-0 px-0.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+        </header> : <details className="shrink-0 px-0.5 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
           <summary className="w-fit cursor-pointer rounded-[var(--r-ctl)] hover:text-[var(--text)] focus-visible:bg-[var(--hover)]">{members.length} members</summary>
           <p className="pt-1">{members.map(displayName).join(" · ")}</p>
         </details>}
@@ -386,8 +386,8 @@ export function RoomView({
         >
           {log.length === 0 ? (
             <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5">
-              <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">Message the team to begin.</p>
-              <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Everyone can respond. Use @name to address one member.</p>
+              <p className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">Message the team to begin.</p>
+              <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Everyone can respond. Use @name to address one member.</p>
             </div>
           ) : (
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
@@ -412,7 +412,7 @@ export function RoomView({
                 onApprove={(decision, choice) => void onApprove(decision, choice)}
                 onClarify={(decision, answers) => void onClarify(decision, answers)}
               />
-              {decisionError ? <p role="alert" className="mt-1.5 text-[var(--t-meta)] text-[var(--bad)]">{decisionError}</p> : null}
+              {decisionError ? <p role="alert" className="mt-1.5 text-[length:var(--t-meta)] text-[var(--bad)]">{decisionError}</p> : null}
             </div>
           ) : null}
           {trailingContent ? <div className="shrink-0">{trailingContent}</div> : null}
@@ -422,7 +422,7 @@ export function RoomView({
           <div className="flex shrink-0 justify-center pb-1.5">
             <button
               type="button"
-              className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[var(--t-meta)] text-[var(--text)]"
+              className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[length:var(--t-meta)] text-[var(--text)]"
               onClick={() => {
                 const el = logRef.current;
                 if (!el) return;
@@ -437,7 +437,7 @@ export function RoomView({
         ) : null}
 
         {room.owner === "hermes" && room.synced !== true ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5 py-2 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
             <span>Hermes durable room is offline{room.syncError ? ` — ${room.syncError}` : ""}.</span>
             <Button
               size="sm"
@@ -487,10 +487,10 @@ export function RoomView({
         </div>
       </div>
 
-      <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)] lg:flex", panel && "lg:hidden")}>
+      <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--region-plane)] lg:flex", panel && "lg:hidden")}>
         <div className="flex items-center gap-2 px-4 py-3">
           <Users className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Members</span>
+          <span className="font-ui text-[length:var(--t-meta)] font-medium text-[var(--text-muted)]">Members</span>
         </div>
         <ul className="shrink-0 py-1">
           {members.map((member) => {
@@ -512,13 +512,13 @@ export function RoomView({
                   size={20}
                   animate={false}
                 />
-                <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+                <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                   {displayName(member)}
                 </span>
                 {room.turn === member.name ? (
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--accent-text)]">on turn</span>
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--accent-text)]">on turn</span>
                 ) : held ? (
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">held</span>
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">held</span>
                 ) : null}
               </li>
             );
@@ -526,21 +526,21 @@ export function RoomView({
         </ul>
 
         <div className="border-t border-[var(--border-subtle)] px-4 py-3">
-          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Receipts</span>
+          <span className="font-ui text-[length:var(--t-meta)] font-medium text-[var(--text-muted)]">Receipts</span>
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto pb-3">
           {activity.length === 0 ? (
-            <li className="px-4 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <li className="px-4 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               Nothing running.
             </li>
           ) : (
             activity.map((event, index) => (
               <li key={`${event.at}-${index}`} className="flex gap-2 px-4 py-0.5">
-                <span className="shrink-0 font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
+                <span className="shrink-0 font-ui text-[length:var(--t-section)] tabular-nums text-[var(--text-muted)]">
                   {absoluteTime(event.at)}
                 </span>
                 <span
-                  className="min-w-0 flex-1 font-ui text-[var(--t-section)] leading-4"
+                  className="min-w-0 flex-1 font-ui text-[length:var(--t-section)] leading-4"
                   style={{ color: groupActivityTone(event.kind) }}
                   title={event.reason}
                 >

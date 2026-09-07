@@ -48,7 +48,7 @@ export function PluginsSettings() {
         <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">Installed IntelliZen extensions and their approved capabilities.</p>
       </header>
       <section>
-        {installed.error ? <p className="text-[var(--t-meta)] text-[var(--danger)]">Installed plugins could not be read.</p> : null}
+        {installed.error ? <p className="text-[length:var(--t-meta)] text-[var(--danger)]">Installed plugins could not be read.</p> : null}
         {(installed.data ?? []).map(({ id, metadata }) => {
           const plugin = loadedById.get(id);
           const enabled = metadata?.enabled !== false;
@@ -58,8 +58,8 @@ export function PluginsSettings() {
             <div key={id} className="border-b border-[var(--border-subtle)] py-3 last:border-0">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[var(--t-ui)] text-[var(--text)]">{name}</p>
-                  <p className="text-[var(--t-meta)] text-[var(--text-muted)]">v{metadata?.version ?? plugin?.version ?? "unknown"} · written by {metadata?.author ?? plugin?.author ?? "Unknown"} · {enabled ? plugin?.status ?? "loaded" : "installed-disabled"}</p>
+                  <p className="text-[length:var(--t-ui)] text-[var(--text)]">{name}</p>
+                  <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">v{metadata?.version ?? plugin?.version ?? "unknown"} · written by {metadata?.author ?? plugin?.author ?? "Unknown"} · {enabled ? plugin?.status ?? "loaded" : "installed-disabled"}</p>
                 </div>
                 <div className="flex gap-1.5">
                   <button type="button" className="action" disabled={busy === id} onClick={() => void toggle(id, !enabled)}>{enabled ? "Disable" : "Enable"}</button>
@@ -69,11 +69,11 @@ export function PluginsSettings() {
               <p className="mt-2 font-mono text-[11px] text-[var(--text-muted)]">
                 {Object.keys(grants).length ? Object.entries(grants).map(([capability, granted]) => `${capability}: ${granted ? "granted" : "denied"}`).join(" · ") : "No capability grants"}
               </p>
-              {plugin?.status === "error" ? <p className="mt-1 text-[var(--t-meta)] text-[var(--danger)]">{plugin.error}</p> : null}
+              {plugin?.status === "error" ? <p className="mt-1 text-[length:var(--t-meta)] text-[var(--danger)]">{plugin.error}</p> : null}
             </div>
           );
         })}
-        {!installed.isLoading && !installed.error && (installed.data?.length ?? 0) === 0 ? <p className="text-[var(--t-meta)] text-[var(--text-muted)]">No IntelliZen plugins installed.</p> : null}
+        {!installed.isLoading && !installed.error && (installed.data?.length ?? 0) === 0 ? <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">No IntelliZen plugins installed.</p> : null}
       </section>
     </>
   );

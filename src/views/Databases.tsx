@@ -342,12 +342,12 @@ function DatabaseWayIn({ databases, lastVisit, onOpen }: {
     <h1 className="mt-4 max-w-[760px] font-ui text-[26px] font-normal leading-[1.3] text-[var(--text)]">
       {countKnown ? `${databases.length} ${databases.length === 1 ? "database" : "databases"}.` : "Database counts are unavailable."}{revisionsKnown && changed ? ` ${changed} ${changed === 1 ? "database changed" : "databases changed"} since your last visit.` : ""}
     </h1>
-    <p className="mt-3 max-w-[660px] text-[var(--t-ui)] leading-6 text-[var(--text-mid)]">Choose a database to view its records, fields, and saved views.</p>
+    <p className="mt-3 max-w-[660px] text-[length:var(--t-ui)] leading-6 text-[var(--text-mid)]">Choose a database to view its records, fields, and saved views.</p>
     <div className="mt-9 divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
       {databases.map((database) => <button key={database.id} type="button" onClick={() => onOpen(database.id)} className="grid w-full gap-x-5 gap-y-1 py-4 text-left hover:bg-[var(--selected-hover)] @min-[720px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
-        <span className="text-[var(--t-ui)] text-[var(--text)]">{database.name}</span>
+        <span className="text-[length:var(--t-ui)] text-[var(--text)]">{database.name}</span>
         <span className="font-mono text-[10px] text-[var(--text-muted)]">{database.recordCount === null ? "Record count unavailable" : `${database.recordCount} ${database.recordCount === 1 ? "record" : "records"}`} · {database.entity || "Unscoped"}</span>
-        <span className="text-[var(--t-meta)] text-[var(--text-mid)]">{!lastVisit ? "No earlier visit recorded." : database.revisionCount === null ? "Changes unavailable." : database.revisionCount === 0 ? "No changes since your last visit." : `${database.revisionCountCapped ? "At least " : ""}${database.revisionCount} ${database.revisionCount === 1 ? "change" : "changes"} since your last visit.`}</span>
+        <span className="text-[length:var(--t-meta)] text-[var(--text-mid)]">{!lastVisit ? "No earlier visit recorded." : database.revisionCount === null ? "Changes unavailable." : database.revisionCount === 0 ? "No changes since your last visit." : `${database.revisionCountCapped ? "At least " : ""}${database.revisionCount} ${database.revisionCount === 1 ? "change" : "changes"} since your last visit.`}</span>
       </button>)}
     </div>
   </section>;

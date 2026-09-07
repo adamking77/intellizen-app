@@ -10,7 +10,7 @@ vi.mock("@/lib/view-transitions", () => ({ runViewTransition: (_: unknown, actio
 let root: ReturnType<typeof createRoot>; let host: HTMLDivElement;
 const open = vi.fn(); const create = vi.fn();
 const items = ["Research brief", "Publish report"].map((name, i) => ({ workflow: { id: String(i), name, workflow_id: `workflow-${i}`, owner_role: "chief_engineer" }, definition: createWorkflowDesignerDraft({ id: `workflow-${i}`, name }), state: i ? "draft" : "runnable", blockers: [], runnable: !i, executable: true }) as unknown as WorkflowCatalogItem);
-beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
+beforeEach(() => { localStorage.clear(); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.clearAllMocks(); });
 async function render(data = items) { await act(async () => root.render(<WorkflowLibrary items={data} onOpen={open} onCreate={create} onDraftWithAgent={create} />)); }
 it("opens an exact workflow from a semantic card, without rendering run history", async () => {
@@ -28,6 +28,8 @@ it("switches between cards and a compact list, and creates from the library dock
   await render();
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "List")!.click());
   expect(host.querySelector('[aria-label="Workflow library controls"]')).toBeTruthy();
+  expect(host.querySelector('[role="tablist"][aria-label="Workflow library view"]')).toBeTruthy();
+  expect(localStorage.getItem("intelizen:workflow-library-view")).toBe("list");
   expect(host.querySelector('[aria-label="Edit Research brief"]')?.parentElement?.className).toContain("divide-y");
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "New workflow")!.click());
   expect(create).toHaveBeenCalledOnce();

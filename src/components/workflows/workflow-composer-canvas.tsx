@@ -89,9 +89,9 @@ export function WorkflowComposerCanvas({ definition, selectedStepId, positions, 
     const position = (id: string) => displayPositions[id] ?? { x: 0, y: 0 };
     const outcomes = ["terminal:complete", "terminal:blocked", "terminal:escalate"];
     return [
-      { id: "trigger", type: "card", position: position("trigger"), data: { trigger: true, expanded: false, content: <button className="w-full rounded-[var(--r-ctl)] bg-[var(--raised)] p-3 text-left" onClick={() => onSelect("trigger")}><span className="text-[var(--t-meta)] text-[var(--text-muted)]">Trigger</span><strong className="mt-1 block text-[var(--t-ui)]">{definition.trigger.kind === "manual" ? "Start manually" : "Panel message"}</strong><span className="mt-1 block text-[var(--t-meta)] text-[var(--text-muted)]">{definition.inputs.length ? `Inputs · ${definition.inputs.map((input) => input.key).join(", ")}` : "No inputs required"}</span></button> } },
+      { id: "trigger", type: "card", position: position("trigger"), data: { trigger: true, expanded: false, content: <button className="w-full rounded-[var(--r-ctl)] bg-[var(--raised)] p-3 text-left" onClick={() => onSelect("trigger")}><span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Trigger</span><strong className="mt-1 block text-[length:var(--t-ui)]">{definition.trigger.kind === "manual" ? "Start manually" : "Panel message"}</strong><span className="mt-1 block text-[length:var(--t-meta)] text-[var(--text-muted)]">{definition.inputs.length ? `Inputs · ${definition.inputs.map((input) => input.key).join(", ")}` : "No inputs required"}</span></button> } },
       ...definition.steps.map((step, index): CardNode => ({ id: `step:${step.id}`, type: "card", position: position(`step:${step.id}`), data: { step, expanded: false, content: renderStep(step, index) } })),
-      ...outcomes.map((id): CardNode => ({ id, type: "card", draggable: true, selectable: true, focusable: true, ariaLabel: `${id.slice(9)} outcome`, position: position(id), data: { terminal: true, expanded: false, content: <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] p-3 text-[var(--t-meta)]">{id.slice(9) === "complete" ? "Complete" : id.slice(9) === "blocked" ? "Blocked" : "Escalate"}</div> } })),
+      ...outcomes.map((id): CardNode => ({ id, type: "card", draggable: true, selectable: true, focusable: true, ariaLabel: `${id.slice(9)} outcome`, position: position(id), data: { terminal: true, expanded: false, content: <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] p-3 text-[length:var(--t-meta)]">{id.slice(9) === "complete" ? "Complete" : id.slice(9) === "blocked" ? "Blocked" : "Escalate"}</div> } })),
     ];
   }, [displayPositions, definition, onSelect, renderStep, renderTrigger, roleTargets, selectedStepId]);
   const [nodes, setNodes] = useState<CardNode[]>(modelNodes);
@@ -165,13 +165,13 @@ export function WorkflowComposerCanvas({ definition, selectedStepId, positions, 
     </div>
     <div className="relative flex min-h-0 flex-1">
     {outlineOpen ? <nav aria-label="Workflow outline" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); closeOutline(); } }} className="absolute inset-y-0 left-0 z-10 flex w-60 max-w-full flex-col border-r border-[var(--border)] bg-[var(--base)] p-3">
-      <div className="mb-2 flex items-center justify-between"><span className="text-[var(--t-ui)] font-medium">Outline</span><Control size="icon" variant="quiet" aria-label="Close workflow outline" onClick={closeOutline}><X className="h-4 w-4" /></Control></div>
+      <div className="mb-2 flex items-center justify-between"><span className="text-[length:var(--t-ui)] font-medium">Outline</span><Control size="icon" variant="quiet" aria-label="Close workflow outline" onClick={closeOutline}><X className="h-4 w-4" /></Control></div>
       <Input autoFocus aria-label="Find a workflow step" placeholder="Find a step…" value={search} onChange={(event) => setSearch(event.target.value)} />
       <div className="mt-2 min-h-0 overflow-y-auto">{outlineItems.length ? outlineItems.map((item) => <button key={item.id} className="mb-1 w-full rounded-[var(--r-ctl)] px-2 py-2 text-left hover:bg-[var(--raised)]" onClick={() => {
         onSelect(item.id === "trigger" ? "trigger" : item.id.startsWith("step:") ? item.id.slice(5) : "");
         setOutlineOpen(false);
         setTimeout(() => { reveal(item.id); canvasHost.current?.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(item.id)}"]`)?.focus({ preventScroll: true }); }, 100);
-      }}><strong className="block text-[var(--t-ui)] font-medium">{item.label}</strong><span className="text-[var(--t-meta)] text-[var(--text-muted)]">{item.detail}</span></button>) : <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">No matching steps</p>}</div>
+      }}><strong className="block text-[length:var(--t-ui)] font-medium">{item.label}</strong><span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">{item.detail}</span></button>) : <p className="py-3 text-[length:var(--t-meta)] text-[var(--text-muted)]">No matching steps</p>}</div>
     </nav> : null}
     <div ref={canvasHost} className="relative min-h-0 flex-1" onFocusCapture={(event) => {
       const field = event.target as HTMLElement;

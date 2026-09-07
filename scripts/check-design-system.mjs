@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { compile } from "tailwindcss";
 import { accentForeground, contrast, mix, rgb } from "../shared/theme-contrast.mjs";
 
 const sourceRoot = new URL("../src/", import.meta.url);
@@ -46,7 +47,7 @@ function lines(pattern, paths = files) {
   );
 }
 
-function audit() {
+async function audit() {
   const preservedDatabaseMarkers = [
     ["src/views/Databases.tsx", "bg-[var(--selected)]"],
     ["src/views/Databases.tsx", "hover:bg-[var(--selected-hover)]"],
@@ -68,6 +69,7 @@ function audit() {
     ["left selection bar", /\bborder-l-(?:[2-4](?=\b)|\[(?:[2-4])px\])/g, kitFiles],
     ["one-pixel inset ring", /inset 0 0 0 1px/g, kitFiles],
     ["forbidden product phrase", /needs(?:[\s_-]+)me/gi, files],
+    ["ambiguous typography token", /text-\[var\(--t-(?:count|meta|ui|body|section|title)\)\]/g, codeFiles],
   ];
 
   const failures = closed.flatMap(([name, pattern, paths]) => {
@@ -101,6 +103,16 @@ function audit() {
 
   const legacyHeights = lines(/rounded-\[var\(--r-ctl\)\].*\bh-(?:7|8|9|10|11)\b|\bh-(?:7|8|9|10|11)\b.*rounded-\[var\(--r-ctl\)\]/, kitFiles);
   if (legacyHeights.length) failures.push(`legacy control heights:\n  ${legacyHeights.join("\n  ")}`);
+
+  const typographyTokens = ["count", "meta", "ui", "body", "section", "title"];
+  const typographyCss = (await compile("@tailwind utilities;")).build(
+    typographyTokens.map((token) => `text-[length:var(--t-${token})]`),
+  );
+  for (const token of typographyTokens) {
+    if (!typographyCss.includes(`font-size: var(--t-${token})`)) {
+      failures.push(`Tailwind did not generate font-size for --t-${token}`);
+    }
+  }
 
   if (failures.length) throw new Error(`Design-system audit failed\n\n${failures.join("\n\n")}`);
   console.log("Design-system audit passed (v3 kit; preserved Database surfaces excluded).")
@@ -259,4 +271,4 @@ function contrastAudit() {
 }
 
 if (process.argv.includes("--contrast")) contrastAudit();
-else audit();
+else await audit();

@@ -23,4 +23,9 @@ describe("Control", () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("control-running-dot");
   });
+
+  it("does not submit a containing form unless requested", () => {
+    expect(renderToStaticMarkup(createElement(Control, null, "Cancel"))).toContain('type="button"');
+    expect(renderToStaticMarkup(createElement(Control, { type: "submit" }, "Create"))).toContain('type="submit"');
+  });
 });

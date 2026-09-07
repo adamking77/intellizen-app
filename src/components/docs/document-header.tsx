@@ -95,7 +95,7 @@ export function DocumentHeader({
           !localOnly ? <div ref={menuRef} className="relative">
             <Control size="icon" variant="quiet" onClick={() => setMenuOpen((open) => !open)} aria-label="Document menu" aria-expanded={menuOpen}><MoreHorizontal className="h-4 w-4" /></Control>
             {menuOpen ? (
-              <div className="absolute right-0 top-9 z-40 w-48 rounded-[var(--r-plane)] bg-[var(--raised)] p-1.5 shadow-[var(--shadow-elevated)]">
+              <div className="absolute right-0 top-9 z-40 w-48 rounded-[var(--r-surface)] bg-[var(--surface)] p-1.5">
                 {!readOnly && !isTemplate ? <Control variant="quiet" loading={savingTemplate} className="w-full justify-start" onClick={() => { setMenuOpen(false); onSaveTemplate(); }}>Save as template</Control> : null}
                 <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenuOpen(false); onHistory(); }}>History</Control>
                 {!readOnly ? <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenuOpen(false); onFile(); }}>Link to project</Control> : null}

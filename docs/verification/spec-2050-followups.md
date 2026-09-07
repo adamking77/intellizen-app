@@ -1,6 +1,6 @@
 # SPEC-2050 follow-up verification
 
-Status: implementation complete; integrated verification passed. GitHub handoff recorded below.
+Status: user-reported controls gaps corrected, checked in the final packaged app and published to draft PR #24 on 2026-09-08. See [the controls correction report](spec-2050-controls.md) for current evidence and precise coverage. The earlier GitHub handoff below predates those corrections.
 
 ## Scope
 
@@ -58,8 +58,9 @@ all three delegated lanes use Ponytail full mode.
 
 ## Verification
 
-- Final publishing-checkout frontend suite: 889 passed, one intentionally skipped.
-  Focused checks cover the final chart modality and list timing corrections.
+- Final publishing-checkout frontend suite: 904 passed, one intentionally skipped.
+  Focused checks cover the final chart modality, list timing, Home scope memory
+  and typography corrections.
 - Product contracts, file limits, design-system audit and TypeScript passed.
 - 145,110 foreground/state contrast combinations passed across seven themes,
   fourteen accents, thirty-three Accent Strength values and three contrast
@@ -84,7 +85,7 @@ all three delegated lanes use Ponytail full mode.
 
 ## GitHub handoff
 
-Final publishing verification passed: 889 frontend tests, TypeScript, product
+Final publishing verification passed: 904 frontend tests, TypeScript, product
 contracts, source limits, 145,110 contrast pairs, production build and the final
 artifact credential scan. Source files match the native-reviewed workspace.
 

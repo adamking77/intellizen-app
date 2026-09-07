@@ -101,8 +101,8 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
           <section key={group.id} className="pt-2">
             <div className="flex flex-wrap items-baseline gap-2 pb-0.5">
               <h2 className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">{group.label}</h2>
-              <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
-              <span className="text-[var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
+              <span className="font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{rows.length}</span>
+              <span className="text-[length:var(--t-section)] text-[var(--overlay-1)]">{group.description}</span>
             </div>
             {rows.map((row) => {
               const pending = toggle.isPending && toggle.variables?.id === row.id && toggle.variables.kind === row.kind;
@@ -117,9 +117,9 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
                   />
                   <details className="min-w-0 flex-1 basis-48">
                     <summary className="cursor-pointer break-words font-ui text-xs text-[var(--text)]">{row.name}</summary>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">{row.description || "No description supplied."}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--t-meta)] leading-5 text-[var(--subtext-0)]">{row.description || "No description supplied."}</p>
                   </details>
-                  <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
+                  <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
                 </div>
               );
             })}
@@ -135,7 +135,7 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
       ) : null}
 
       {!capabilities.isPending && (capabilities.data?.length ?? 0) > 0 ? (
-        <p className="pt-2 text-[var(--t-meta)] text-[var(--overlay-1)]">{shown.length} of {capabilities.data?.length ?? 0} shown. Capabilities belong to the active Hermes profile.</p>
+        <p className="pt-2 text-[length:var(--t-meta)] text-[var(--overlay-1)]">{shown.length} of {capabilities.data?.length ?? 0} shown. Capabilities belong to the active Hermes profile.</p>
       ) : null}
     </div>
   );

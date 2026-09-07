@@ -77,7 +77,7 @@ describe("exact workflow run drawer", () => {
     await act(async () => root.render(<MemoryRouter><QueryClientProvider client={client}><WorkflowRunDrawer runId="approval-run" item={null} onClose={() => {}} /></QueryClientProvider></MemoryRouter>));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Open full-page run"]')!.click());
-    await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve exact payload"))!.click());
+    await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Approve this version"))!.click());
     expect(mocks.approval).toHaveBeenCalledWith(expect.objectContaining({ workflowRunId: "approval-run", approvalId: "approval-1", decisionRole: "founder_approval_authority" }));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(host.textContent).toContain("In progress");

@@ -191,7 +191,7 @@ export function ProjectView() {
       ) : view === "timeline" ? (
         <ProjectTimeline files={files} investigation={investigation} onOpenDocument={(record) => setSelected({ kind: "document", record })} />
       ) : (
-        <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">No linked material is available for this view.</p>
+        <p className="p-5 text-[length:var(--t-ui)] text-[var(--text-muted)]">No linked material is available for this view.</p>
       )}
       </div>
 
@@ -200,30 +200,30 @@ export function ProjectView() {
           <div className="grid gap-5 p-4">
             {selected.kind === "file" ? <ProjectFileView file={selected.file} folders={node?.folders ?? []} /> : selected.kind === "entity" ? <>
               <div>
-                <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.entity.entity_type}</div>
-                <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.entity.name}</h2>
+                <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.entity.entity_type}</div>
+                <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.entity.name}</h2>
               </div>
               {selected.entity.confidence ? <Pill>{selected.entity.confidence}</Pill> : null}
-              {selected.entity.aliases.length ? <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Also known as {selected.entity.aliases.join(", ")}</p> : null}
-              <p className="text-[var(--t-ui)] text-[var(--text)]">{selected.entity.summary || "No summary yet."}</p>
+              {selected.entity.aliases.length ? <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Also known as {selected.entity.aliases.join(", ")}</p> : null}
+              <p className="text-[length:var(--t-ui)] text-[var(--text)]">{selected.entity.summary || "No summary yet."}</p>
             </> : selected.kind === "signal" ? <>
               <div>
-                <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Signal · {selected.signal.intel_signals?.source || "unknown source"}</div>
-                <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.signal.intel_signals?.title || "Untitled signal"}</h2>
+                <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Signal · {selected.signal.intel_signals?.source || "unknown source"}</div>
+                <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.signal.intel_signals?.title || "Untitled signal"}</h2>
               </div>
-              <p className="text-[var(--t-ui)] text-[var(--text)]">{selected.signal.intel_signals?.snippet || "No excerpt available."}</p>
+              <p className="text-[length:var(--t-ui)] text-[var(--text)]">{selected.signal.intel_signals?.snippet || "No excerpt available."}</p>
               {selected.signal.intel_signals?.url ? <DrawerActions onOpen={openSelection} /> : null}
             </> : <>
             <div>
-              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
-              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
+              <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
+              <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
             </div>
             {selected.kind === "document" ? (
               <>
-                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} /> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
                 <Pill>{value(selected.record, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill>
               </>
-            ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+            ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
             <DrawerActions onOpen={openSelection} />
             </>}
           </div>

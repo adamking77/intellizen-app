@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { Avatar } from "./avatar";
+import { flavorById, saveTheme } from "@/lib/theme";
+import { Avatar, identityColor } from "./avatar";
+
+beforeEach(() => localStorage.clear());
 
 function trace(seed?: number, image?: string) {
   return renderToStaticMarkup(
@@ -29,5 +32,18 @@ describe("trace avatar", () => {
     const markup = trace(73, "data:image/png;base64,AA==");
     expect(markup).toContain("<img");
     expect(markup).not.toContain('data-avatar-style="trace"');
+  });
+
+  it("keeps safe saved colors and remaps selected or reserved role colors", () => {
+    const accents = flavorById("mocha").accents;
+    const color = (name: string) => accents.find((accent) => accent.name === name)!.hex;
+    saveTheme("mocha", color("teal"));
+
+    expect(identityColor("Fiona", color("mauve"))).toBe(color("mauve"));
+    expect(identityColor("Fiona", "#123456")).toBe("#123456");
+    expect(identityColor("Fiona", color("teal"))).toBe(color("sky"));
+    expect(identityColor("Fiona", color("red"))).toBe(color("maroon"));
+    expect(identityColor("Fiona", color("peach"))).toBe(color("yellow"));
+    expect(identityColor("Fiona", color("green"))).toBe(color("sky"));
   });
 });

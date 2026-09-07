@@ -35,13 +35,13 @@ const SPEAKING_SERVICES: Catalog[] = [
 ];
 
 const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]";
-const meta = "font-ui text-[var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
+const meta = "font-ui text-[length:var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
 
 function Row({ label, detail, children }: { label: string; detail: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-4 border-b border-[var(--hair)] px-0.5 py-3">
       <div className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{label}</span>
+        <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">{label}</span>
         <span className={meta}>{detail}</span>
       </div>
       {children}
@@ -106,7 +106,7 @@ function Half({
           {custom ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>Service id</span>
-              <Input className="h-8 text-[var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
+              <Input className="h-8 text-[length:var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
               <span className={meta}>
                 Custom services are saved for future use. Only {catalog.map((p) => p.label).join(" and ")} {title === "Speaking" ? "can speak" : "works for dictation"} in the current app.
               </span>
@@ -126,7 +126,7 @@ function Half({
                   ))}
                 </Select>
               ) : (
-                <Input className="h-8 text-[var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
+                <Input className="h-8 text-[length:var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
               )}
             </label>
           ) : null}
@@ -135,7 +135,7 @@ function Half({
             <label className="flex flex-col gap-1">
               <span className={caps}>Language</span>
               <Input
-                className="h-8 text-[var(--t-meta)]"
+                className="h-8 text-[length:var(--t-meta)]"
                 value={value.language}
                 placeholder="en"
                 onChange={(e) => onChange({ ...value, language: e.target.value })}
@@ -147,7 +147,7 @@ function Half({
           {needsKey ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>API key</span>
-              <Input className="h-8 text-[var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
+              <Input className="h-8 text-[length:var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
               <span className={meta}>
                 The app reads credentials from the service’s environment variable. A key entered here is saved but is not used yet.
               </span>

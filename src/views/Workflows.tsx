@@ -74,7 +74,7 @@ export function WorkflowsView() {
         <QueryState isLoading={workflowQuery.isLoading && !localDrafts.length} error={workflowQuery.error} isEmpty={false} retainContentOnError={Boolean(workflowQuery.data || localDrafts.length)} errorTitle="Workflows unavailable" onRetry={() => void workflowQuery.refetch()}>
           {rolesQuery.error ? <p role="alert" className="mb-3 text-[var(--warning)]">Role availability could not be checked. <Control size="sm" onClick={() => void rolesQuery.refetch()}>Retry</Control></p> : null}
           <WorkflowLibrary items={[...localDrafts, ...catalog]} onOpen={(item) => setSearchParams(item.workflow.id ? { workflow: item.workflow.id } : { draft: item.workflow.workflow_id })} onCreate={newWorkflow} onDraftWithAgent={() => newWorkflow(true)} />
-          {fullCatalog.length > catalog.length ? <p className="mt-5 text-[var(--t-meta)] text-[var(--text-muted)]">{fullCatalog.length - catalog.length} written procedures in <Link to="/docs" className="text-[var(--accent-text)] hover:underline">Docs</Link> can become workflows.</p> : null}
+          {fullCatalog.length > catalog.length ? <p className="mt-5 text-[length:var(--t-meta)] text-[var(--text-muted)]">{fullCatalog.length - catalog.length} written procedures in <Link to="/docs" className="text-[var(--accent-text)] hover:underline">Docs</Link> can become workflows.</p> : null}
         </QueryState>
       </div>
     </>}

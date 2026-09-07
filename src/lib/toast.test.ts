@@ -59,9 +59,10 @@ it("shows own action results in Executing, holding background updates", () => {
   toast.success("Saved");
   toast.info("Import finished", { origin: "background" });
   toastError("Could not save", new Error("Try again"));
-  expect(sonner.success).toHaveBeenCalledWith("Saved", expect.objectContaining({ duration: 6000 }));
-  expect(sonner.message).not.toHaveBeenCalled();
-  expect(sonner.error).toHaveBeenCalledTimes(1);
+  expect(sonner.message).toHaveBeenCalledWith("Saved", expect.objectContaining({ duration: 6000 }));
+  expect(sonner.message).toHaveBeenCalledWith("Could not save", expect.objectContaining({ description: "Try again" }));
+  expect(sonner.success).not.toHaveBeenCalled();
+  expect(sonner.error).not.toHaveBeenCalled();
   expect(readQuietNotes()).toHaveLength(2);
 });
 

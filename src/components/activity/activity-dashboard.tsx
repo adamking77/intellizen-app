@@ -112,7 +112,7 @@ export function ActivityDashboard() {
           <h1 className="font-ui text-[24px] font-light leading-tight text-[var(--text)]">
             Activity
           </h1>
-          <p className="mt-1 text-[var(--t-meta)] text-[var(--text-muted)]">
+          <p className="mt-1 text-[length:var(--t-meta)] text-[var(--text-muted)]">
             Decisions, live work, and usage across your agents.
           </p>
         </div>
@@ -154,7 +154,7 @@ export function ActivityDashboard() {
         </button>
         </div>
       </header>
-      <details className="text-[var(--t-meta)] text-[var(--text-muted)]">
+      <details className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
         <summary className="w-fit cursor-pointer rounded-[var(--r-ctl)] py-1 hover:bg-[var(--hover)]">
           {filter.agent === "all"
             ? "Filter by agent or team"
@@ -184,7 +184,7 @@ export function ActivityDashboard() {
       {errors.length ? (
         <p
           role="status"
-          className="text-[var(--t-meta)] text-[var(--text-muted)]"
+          className="text-[length:var(--t-meta)] text-[var(--text-muted)]"
         >
           Some sources could not refresh. Available data remains visible;
           timestamps identify the last successful read.
@@ -252,7 +252,7 @@ export function ActivityDashboard() {
       ) : (
         <p role="alert">Activity could not be read. Use Refresh to retry.</p>
       )}
-      <p className="font-mono text-[var(--t-count)] leading-5 text-[var(--text-muted)]">
+      <p className="font-mono text-[length:var(--t-count)] leading-5 text-[var(--text-muted)]">
         Live conversations include connected Hermes and ACP agents. External
         terminal sessions require an integration to appear. Periods use UTC
         calendar days; current work and connections are live.
@@ -265,7 +265,7 @@ export function ActivityDashboard() {
         }}
       >
         <div className="space-y-4 p-4">
-          <label className="flex flex-col gap-2 text-[var(--t-meta)]">
+          <label className="flex flex-col gap-2 text-[length:var(--t-meta)]">
             Dashboard
             <Select
               value={destination}
@@ -279,7 +279,7 @@ export function ActivityDashboard() {
               ))}
             </Select>
           </label>
-          <p className="text-[var(--t-meta)] text-[var(--text-muted)]">
+          <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
             Saves the chart display, current period and agent filter.
             {destination !== "home"
               ? " This widget will show only activity attributable to this workspace. Connections remain labeled as global configuration."
@@ -314,7 +314,7 @@ export function ActivityWidget({
     query = useActivity(filter);
   return (
     <div className="h-full overflow-auto p-4">
-      <p className="mb-3 text-[var(--t-count)] text-[var(--text-muted)]">
+      <p className="mb-3 text-[length:var(--t-count)] text-[var(--text-muted)]">
         Last {filter.days} days ·{" "}
         {filter.workspace === "all"
           ? "All workspaces"

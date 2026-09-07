@@ -88,13 +88,13 @@ function ClarifyField({
     <Surface data-decision="clarify" className="grid gap-3">
       <div>
         <Eyebrow tone="question">A question for you</Eyebrow>
-        <div className="mt-0.5 font-mono text-[var(--t-count)] text-[var(--text-dim)]">{asker} · asked {asked}</div>
+        <div className="mt-0.5 font-mono text-[length:var(--t-count)] text-[var(--text-dim)]">{asker} · asked {asked}</div>
       </div>
       {decision.questions.map((question, index) => {
         const key = keyOf(index);
         return (
           <div key={key} className="grid gap-1.5">
-            <span className="text-[var(--t-ui)] font-medium text-[var(--text)]">{question.question}</span>
+            <span className="text-[length:var(--t-ui)] font-medium text-[var(--text)]">{question.question}</span>
             {question.choices.length === 0 ? (
               <Input disabled={busy} value={typed[key] ?? ""} onChange={(event) => setTyped((current) => ({ ...current, [key]: event.target.value }))} placeholder="Your answer" />
             ) : (

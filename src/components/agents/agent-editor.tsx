@@ -40,9 +40,9 @@ function voiceLabel(service: VoiceService | undefined): string {
   return VOICE_SERVICES.find((s) => s.id === service)?.label ?? "the voice service";
 }
 
-const CAPS = "font-mono text-[var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
+const CAPS = "font-mono text-[length:var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
 const FIELD =
-  "w-full border-b border-[var(--surface-line)] bg-transparent px-0 py-[7px] font-ui text-[var(--t-ui)] text-[var(--text)] " +
+  "w-full border-b border-[var(--surface-line)] bg-transparent px-0 py-[7px] font-ui text-[length:var(--t-ui)] text-[var(--text)] " +
   "placeholder:text-[var(--text-dim)] focus-visible:outline-none focus-visible:border-[var(--line-strong)]";
 const PILL = "pill";
 const COMPACT_PILL = "pill pill-compact";
@@ -306,7 +306,7 @@ export function AgentEditor({
                         setProceduralPreview(true);
                         set({ avatarKind: undefined });
                       }}
-                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent font-ui text-[var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
+                      className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent font-ui text-[length:var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                     >
                       Auto
                     </button>
@@ -359,7 +359,7 @@ export function AgentEditor({
                       setProceduralPreview(true);
                       set({ avatarColor: undefined });
                     }}
-                    className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[var(--t-count)] text-[var(--text-muted)] transition-colors hover:bg-[var(--raised)]"
+                    className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[length:var(--t-count)] text-[var(--text-muted)] transition-colors hover:bg-[var(--raised)]"
                     style={{ boxShadow: !draft.avatarColor ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined }}
                   >
                     A
@@ -383,7 +383,7 @@ export function AgentEditor({
                     />
                   ))}
                 </div>
-                <span className="text-center font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
+                <span className="text-center font-ui text-[length:var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
                   {image
                     ? "Picture override is kept. Remove it to reveal this drawing."
                     : draft.avatarStyle === "trace"
@@ -413,7 +413,7 @@ export function AgentEditor({
                     ))}
                   </select>
                   <input
-                    className={cn(FIELD, "font-mono text-[var(--t-meta)]")}
+                    className={cn(FIELD, "font-mono text-[length:var(--t-meta)]")}
                     value={draft.voiceId ?? ""}
                     placeholder="Voice id"
                     aria-label="Voice id"
@@ -439,7 +439,7 @@ export function AgentEditor({
                     >
                       {previewing ? "Speaking…" : "Preview"}
                     </button>
-                    <span className="font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
+                    <span className="font-ui text-[length:var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
                       {draft.voiceId ? `From ${voiceLabel(draft.voiceService)}.` : "No voice yet."}
                     </span>
                   </div>
@@ -467,7 +467,7 @@ export function AgentEditor({
                   onChange={(e) => set({ name: e.target.value, displayName: hermes ? draft.displayName : e.target.value })}
                 />
                 {hermes && creating && name && !validProfileName(name) ? (
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--wait)]">A profile name is a lowercase slug: letters, digits, - and _.</span>
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--wait)]">A profile name is a lowercase slug: letters, digits, - and _.</span>
                 ) : null}
 
                 <div className="flex flex-col gap-1">
@@ -498,7 +498,7 @@ export function AgentEditor({
                       <div className={cn(FIELD, "px-[10px] py-2 text-[var(--text-muted)]")}>Reading…</div>
                     ) : (
                       <select
-                        className={cn(FIELD, "px-[10px] py-2 font-mono text-[var(--t-meta)]")}
+                        className={cn(FIELD, "px-[10px] py-2 font-mono text-[length:var(--t-meta)]")}
                         aria-label="Model"
                         value={selectedModel ? modelValue(selectedModel) : draft.model ? modelValue(visibleModels[0]!) : ""}
                         onChange={(event) => {
@@ -525,13 +525,13 @@ export function AgentEditor({
                 </div>
 
                 {!hermes && permissionMode ? (
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
                     Permissions: <span className="font-mono">{permissionMode}</span>
                   </span>
                 ) : null}
 
                 {detailError ? (
-                  <div className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
+                  <div className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[length:var(--t-meta)] text-[var(--bad)]">
                     Hermes did not describe this profile — {detailError}
                   </div>
                 ) : null}
@@ -542,9 +542,9 @@ export function AgentEditor({
               <div className="flex flex-col gap-[7px]">
                 <div className="flex items-baseline gap-2">
                   <span className={CAPS}>Identity</span>
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">voice, judgement, what it will not do</span>
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">voice, judgement, what it will not do</span>
                   <div className="grow" />
-                  <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">SOUL.md</span>
+                  <span className="font-mono text-[length:var(--t-section)] text-[var(--text-muted)]">SOUL.md</span>
                 </div>
                 <textarea
                   className={cn(FIELD, "h-auto min-h-0 resize-y px-[11px] py-2.5 leading-[1.55]")}
@@ -554,7 +554,7 @@ export function AgentEditor({
                   disabled={loadingDetail}
                   onChange={(e) => set({ identity: e.target.value })}
                 />
-                <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+                <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
                   {hermes ? (
                     <>
                       Saves to the profile's own <span className="font-mono">SOUL.md</span> through the gateway.
@@ -569,7 +569,7 @@ export function AgentEditor({
                 <div className="flex items-baseline gap-2">
                   <span className={CAPS}>Context</span>
                   <div className="grow" />
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{inherited ? "inheriting the default" : "overrides the default"}</span>
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">{inherited ? "inheriting the default" : "overrides the default"}</span>
                   {!inherited ? (
                     <button type="button" className={PILL} style={{ padding: "2px 9px", fontSize: 11 }} onClick={() => set({ context: [] })}>
                       Reset
@@ -579,7 +579,7 @@ export function AgentEditor({
                 <div className="flex flex-col gap-px">
                   {context.map((path) => (
                     <div key={path} className="flex items-center gap-[9px] rounded-[var(--r-ctl)] bg-[var(--input)] px-[10px] py-2">
-                      <span className="grow truncate font-mono text-[var(--t-meta)] text-[var(--text)]">{path}</span>
+                      <span className="grow truncate font-mono text-[length:var(--t-meta)] text-[var(--text)]">{path}</span>
                       <Pill>read</Pill>
                       <button type="button" className={PILL} style={{ padding: "2px 7px" }} title={`Remove ${path}`} onClick={() => set({ context: context.filter((p) => p !== path) })}>
                         <X size={12} strokeWidth={1.9} aria-hidden />
@@ -587,7 +587,7 @@ export function AgentEditor({
                     </div>
                   ))}
                   {context.length === 0 ? (
-                    <span className="px-0.5 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+                    <span className="px-0.5 py-2 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
                       No folders — this agent receives no additional folder context.
                     </span>
                   ) : null}
@@ -602,14 +602,14 @@ export function AgentEditor({
 
             {confirm ? (
               <div className="mx-[22px] mt-4 flex items-center gap-3 rounded-[var(--r-ctl)] border border-[var(--wait)] bg-[color-mix(in_srgb,var(--wait)_11%,transparent)] px-[10px] py-2">
-                <span className="grow font-ui text-[var(--t-meta)] text-[var(--wait)]">{confirm}</span>
+                <span className="grow font-ui text-[length:var(--t-meta)] text-[var(--wait)]">{confirm}</span>
                 <button type="button" className={PILL} disabled={busy} onClick={() => void save(true)}>
                   Use it anyway
                 </button>
               </div>
             ) : null}
             {error ? (
-              <div className="mx-[22px] mt-4 rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[var(--t-meta)] text-[var(--bad)]">
+              <div className="mx-[22px] mt-4 rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[10px] py-2 font-ui text-[length:var(--t-meta)] text-[var(--bad)]">
                 {error}
               </div>
             ) : null}
@@ -626,7 +626,7 @@ export function AgentEditor({
                 </button>
               ) : null}
               <div className="grow" />
-              {creating && !name ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
+              {creating && !name ? <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
               {hasStoredDraft ? <button type="button" className={PILL} onClick={discardDraft} disabled={busy}>Discard draft</button> : null}
               <button type="button" className={PILL} onClick={onClose} disabled={busy}>
                 Cancel

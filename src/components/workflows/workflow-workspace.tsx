@@ -54,7 +54,7 @@ export function WorkflowWorkspace({ item, autoDraftWithAgent = false, roleTarget
   const sourceQuery = useQuery({ queryKey: ["workflow-source", workflow.id, workflow.updated_at], queryFn: () => getWorkflowSource(workflow), enabled: item.state === "sop-only" });
   const sopDefinition = useMemo(() => item.state === "sop-only" && sourceQuery.data?.content ? seedSopDefinition(item, sourceQuery.data.content) : null, [item, sourceQuery.data]);
   const runsTray = <div className="max-h-64 overflow-auto p-3">
-    {!workflow.id ? <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Save and activate this workflow before its first run.</p> : runsQuery.isLoading ? <Skeleton lines={3} /> : <>
+    {!workflow.id ? <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Save and activate this workflow before its first run.</p> : runsQuery.isLoading ? <Skeleton lines={3} /> : <>
       {runsQuery.error ? <p role="alert" className="mb-2 text-[var(--danger)]">Could not refresh this workflow’s run history. <Control size="sm" onClick={() => void runsQuery.refetch()}>Retry</Control></p> : null}
       {runsQuery.data ? <RunsTable runs={runsQuery.data} onOpenRun={onOpenRun} /> : null}
     </>}

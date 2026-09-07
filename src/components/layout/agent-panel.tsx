@@ -438,13 +438,13 @@ export function AgentPanel({
                 />
               </span>
             ) : null}
-            <span className="truncate font-ui text-[var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+            <span className="truncate font-ui text-[length:var(--t-section)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
               {(selectedRoomId ? selectedRoom?.name ?? "Team" : agentName) ?? (!frameReady ? "Connecting…" : !remote && profilesQuery.isPending && engineOpen ? "Loading…" : "No profile")}
             </span>
             <ChevronsUpDown className="h-[11px] w-[11px] shrink-0 opacity-60" strokeWidth={1.6} aria-hidden />
           </button>
           {!selectedRoomId && profile?.model && !headerActions ? (
-            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-dim)]">{profile.model}</span>
+            <span className="truncate font-mono text-[length:var(--t-count)] text-[var(--text-dim)]">{profile.model}</span>
           ) : null}
           <div className="flex-1" />
           {headerActions}
@@ -490,7 +490,7 @@ export function AgentPanel({
           }}
           className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden overscroll-contain pt-1"
         >
-          {messages.length === 0 ? !frameReady ? <p role="status" className="px-1 text-[var(--t-meta)] text-[var(--text-muted)]">Connecting to the main window…</p> : (
+          {messages.length === 0 ? !frameReady ? <p role="status" className="px-1 text-[length:var(--t-meta)] text-[var(--text-muted)]">Connecting to the main window…</p> : (
             <EmptyState
               connection={isAcp ? "open" : connection}
               engineError={isAcp ? null : engineError}
@@ -532,7 +532,7 @@ export function AgentPanel({
                       }}
                     />
                     {decisionError?.requestId === decision.requestId ? (
-                      <p role="alert" className="text-[var(--t-meta)] text-[var(--bad)]">{decisionError.message}</p>
+                      <p role="alert" className="text-[length:var(--t-meta)] text-[var(--bad)]">{decisionError.message}</p>
                     ) : null}
                   </div>
                 ))}
@@ -641,10 +641,10 @@ function EmptyState({
     <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5" data-panel-state={state}>
       {failed || profilesError ? (
         <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
-          <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">
+          <p className="font-ui text-[length:var(--t-ui)] leading-normal text-[var(--bad)]">
             {failed ? "Hermes is offline." : "Hermes did not list its profiles."}
           </p>
-          <p className="mt-0.5 font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]">
+          <p className="mt-0.5 font-ui text-[length:var(--t-meta)] leading-normal text-[var(--text-muted)]">
             {failed
               ? engineError ?? "The engine is not connected. Relaunch the app to start it."
               : profilesError}
@@ -652,7 +652,7 @@ function EmptyState({
         </div>
       ) : (
         <>
-          <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">
+          <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">
             {starting
               ? "Starting Hermes…"
               : profilesPending
@@ -661,7 +661,7 @@ function EmptyState({
                   ? `Ready — ${agentName} can answer.`
                   : "No profile selected."}
           </span>
-          <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+          <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
             {starting
               ? "The engine is starting. This takes a few seconds."
               : profilesPending

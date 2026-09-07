@@ -63,6 +63,7 @@ export interface PinnedInstrumentWidgetModel {
 export type PinnedHomeWidgetModel = PinnedDatabaseWidgetModel | PinnedGenuiWidgetModel | PinnedPluginWidgetModel | PinnedInstrumentWidgetModel;
 
 export const DASHBOARD_BANDS = ["Question", "In motion", "Outputs", "Reference"] as const;
+const WIDGET_FIELD_CLASS = "rounded-none border-0 border-b border-[var(--surface-line)] bg-transparent focus-visible:border-[var(--accent)] focus-visible:!outline-none";
 export function dashboardBand(widget: PinnedHomeWidgetModel): typeof DASHBOARD_BANDS[number] {
   const saved = widget.pin.config?.band;
   if (DASHBOARD_BANDS.some((band) => band === saved)) return saved as typeof DASHBOARD_BANDS[number];
@@ -117,7 +118,7 @@ export function PinnedViewGrid({
 
   return (
     <div ref={gridShellRef} className="db-dashboard-grid-shell">
-      {workspaceName && <div className="mb-4 flex justify-end"><button type="button" aria-pressed={arranging} onClick={() => setArranging((value) => !value)} className="px-3 py-1.5 text-[var(--t-meta)] text-[var(--text-muted)] hover:text-[var(--text)]">{arranging ? "Done arranging" : "Arrange"}</button></div>}
+      {workspaceName && <div className="mb-4 flex justify-end"><button type="button" aria-pressed={arranging} onClick={() => setArranging((value) => !value)} className="px-3 py-1.5 text-[length:var(--t-meta)] text-[var(--text-muted)] hover:text-[var(--text)]">{arranging ? "Done arranging" : "Arrange"}</button></div>}
       {workspaceName && !arranging ? <div className="space-y-8">{DASHBOARD_BANDS.map((band) => {
         const items = orderedWidgets.filter((widget) => dashboardBand(widget) === band);
         return items.length ? <section key={band} aria-label={band}>
@@ -252,16 +253,16 @@ function PinnedWidgetCard({
               {workspaceName ? `${workspaceName} · ${sourceLabel}` : sourceLabel}
             </div>
             {(effectiveView?.filter.length ?? 0) > 0 ? (
-              <span className="shrink-0 rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[var(--t-count)] text-[var(--text-muted)]">
+              <span className="shrink-0 rounded-[var(--r-pill)] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">
                 {effectiveView?.filter.length} filter{effectiveView?.filter.length === 1 ? "" : "s"}
               </span>
             ) : null}
           </div>
-          <div className="mt-1 truncate font-ui text-[var(--t-ui)] font-medium leading-5 text-[var(--text)]">
+          <div className="mt-1 truncate font-ui text-[length:var(--t-ui)] font-medium leading-5 text-[var(--text)]">
             {title}
           </div>
           {widget.kind === "database-view" && widget.database.taxonomy?.entity_label ? (
-            <div className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--text-muted)]">
+            <div className="mt-0.5 truncate font-ui text-[length:var(--t-count)] text-[var(--text-muted)]">
               {widget.database.taxonomy.entity_label}
             </div>
           ) : null}
@@ -307,25 +308,25 @@ function PinnedWidgetCard({
       </div>
       {editing ? (
         <div className="border-b border-[var(--border-subtle)] bg-[var(--mantle)] px-4 py-3">
-          {workspaceName && <label className="mb-3 block font-mono text-[var(--t-meta)] text-[var(--text-muted)]">Band
-            <select aria-label="Widget band" value={bandDraft} onChange={(event) => setBandDraft(event.target.value as typeof bandDraft)} className="ml-3 bg-[var(--base)] p-1 text-[var(--text)]">{DASHBOARD_BANDS.map((band) => <option key={band}>{band}</option>)}</select>
+          {workspaceName && <label className="mb-3 block font-mono text-[length:var(--t-meta)] text-[var(--text-muted)]">Band
+            <select aria-label="Widget band" value={bandDraft} onChange={(event) => setBandDraft(event.target.value as typeof bandDraft)} className={cn(WIDGET_FIELD_CLASS, "ml-3 p-1 text-[var(--text)]")}>{DASHBOARD_BANDS.map((band) => <option key={band}>{band}</option>)}</select>
           </label>}
-          <label className="block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">
+          <label className="block font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">
             Title
             <input
               value={titleDraft}
               onChange={(event) => setTitleDraft(event.target.value)}
-              className="mt-1 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
+              className={cn(WIDGET_FIELD_CLASS, "mt-1 h-[var(--h-ctl)] w-full px-2 font-ui text-[length:var(--t-meta)] normal-case tracking-normal text-[var(--text)]")}
             />
           </label>
           {widget.kind === "database-view" ? (
             <div className="mt-3 space-y-3">
-              <label className="block font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              <label className="block font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">
                 Group by
                 <select
                   value={groupByDraft}
                   onChange={(event) => setGroupByDraft(event.target.value)}
-                  className="mt-1 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2 font-ui text-[var(--t-meta)] normal-case tracking-normal text-[var(--text)] outline-none "
+                  className={cn(WIDGET_FIELD_CLASS, "mt-1 h-[var(--h-ctl)] w-full px-2 font-ui text-[length:var(--t-meta)] normal-case tracking-normal text-[var(--text)]")}
                 >
                   <option value="">No grouping</option>
                   {widget.database.schema.map((field) => (
@@ -335,7 +336,7 @@ function PinnedWidgetCard({
               </label>
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">Filters</span>
+                  <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]">Filters</span>
                   <button
                     type="button"
                     disabled={widget.database.schema.length === 0}
@@ -344,14 +345,14 @@ function PinnedWidgetCard({
                       if (!field) return;
                       setFilterDraft((current) => [...current, { fieldId: field.id, op: "contains", value: "" }]);
                     }}
-                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-1 font-ui text-[var(--t-count)] text-[var(--accent-text)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] px-1.5 py-1 font-ui text-[length:var(--t-count)] text-[var(--accent-text)] hover:bg-[var(--accent-soft)] disabled:opacity-40"
                   >
                     <Plus className="h-3 w-3" />
                     Add filter
                   </button>
                 </div>
                 {filterDraft.length === 0 ? (
-                  <p className="mt-1 font-ui text-[var(--t-section)] text-[var(--text-muted)]">No filters applied.</p>
+                  <p className="mt-1 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">No filters applied.</p>
                 ) : (
                   <div className="mt-1.5 space-y-2">
                     {filterDraft.map((filter, index) => {
@@ -365,7 +366,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, fieldId: event.target.value } : item
                               ))}
-                              className="h-[var(--h-ctl)] min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
+                              className={cn(WIDGET_FIELD_CLASS, "h-[var(--h-ctl)] min-w-0 px-1.5 font-ui text-[length:var(--t-section)] text-[var(--text)]")}
                             >
                               {widget.database.schema.map((field) => (
                                 <option key={field.id} value={field.id}>{field.name}</option>
@@ -377,7 +378,7 @@ function PinnedWidgetCard({
                               onChange={(event) => setFilterDraft((current) => current.map((item, itemIndex) =>
                                 itemIndex === index ? { ...item, op: event.target.value } : item
                               ))}
-                              className="h-[var(--h-ctl)] min-w-0 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-1.5 font-ui text-[var(--t-section)] text-[var(--text)] outline-none "
+                              className={cn(WIDGET_FIELD_CLASS, "h-[var(--h-ctl)] min-w-0 px-1.5 font-ui text-[length:var(--t-section)] text-[var(--text)]")}
                             >
                               {FILTER_OPERATORS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select>
@@ -398,7 +399,7 @@ function PinnedWidgetCard({
                                 itemIndex === index ? { ...item, value: event.target.value } : item
                               ))}
                               placeholder={filter.op === "within_last_days" ? "Number of days" : "Value"}
-                              className="mt-1.5 h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-section)] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] "
+                              className={cn(WIDGET_FIELD_CLASS, "mt-1.5 h-[var(--h-ctl)] w-full px-2 font-ui text-[length:var(--t-section)] text-[var(--text)] placeholder:text-[var(--text-muted)]")}
                             />
                           ) : null}
                         </div>
@@ -413,14 +414,14 @@ function PinnedWidgetCard({
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--subtext-0)] hover:text-[var(--text)]"
+              className="rounded-[var(--r-pill)] border border-[var(--border)] px-2.5 py-1 font-ui text-[length:var(--t-section)] text-[var(--subtext-0)] hover:text-[var(--text)]"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={saveMetadata}
-              className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[var(--t-section)] text-[var(--accent-text)]"
+              className="rounded-[var(--r-pill)] bg-[var(--accent-soft)] px-2.5 py-1 font-ui text-[length:var(--t-section)] text-[var(--accent-text)]"
             >
               Save
             </button>
@@ -530,10 +531,10 @@ export function HomeRecordRows({
             onClick={() => onOpenRecord(record.id)}
             className="nav-node grid w-full grid-cols-[minmax(0,1fr)_minmax(88px,0.7fr)_auto_auto] items-center gap-3 px-2 text-left"
           >
-            <span className="truncate text-[var(--t-ui)] text-[var(--text)]">{getRecordTitle(record, database)}</span>
+            <span className="truncate text-[length:var(--t-ui)] text-[var(--text)]">{getRecordTitle(record, database)}</span>
             {identity ? <Identity name={identity} /> : <span className="text-[var(--text-muted)]">—</span>}
             {status && statusField ? <DatabasePill color={resolveStatusColor(status, statusField)}>{status}</DatabasePill> : <span className="text-[var(--text-muted)]">—</span>}
-            <span className="truncate font-mono text-[var(--t-count)] text-[var(--text-muted)]">{meta || "—"}</span>
+            <span className="truncate font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">{meta || "—"}</span>
           </button>
         );
       })}

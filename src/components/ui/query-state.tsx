@@ -59,8 +59,8 @@ export function QueryState({
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{errorTitle}</p>
-            <p className="mt-1 break-words font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
+            <p className="font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{errorTitle}</p>
+            <p className="mt-1 break-words font-ui text-[length:var(--t-meta)] leading-5 text-[var(--subtext-0)]">
               {errorMessage(error)}
             </p>
             {onRetry ? (
@@ -97,9 +97,9 @@ export function QueryState({
           className,
         )}
       >
-        <p className="font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{emptyTitle}</p>
+        <p className="font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{emptyTitle}</p>
         {emptyDescription ? (
-          <p className="mt-1 max-w-[440px] font-ui text-[var(--t-meta)] leading-5 text-[var(--subtext-0)]">
+          <p className="mt-1 max-w-[440px] font-ui text-[length:var(--t-meta)] leading-5 text-[var(--subtext-0)]">
             {emptyDescription}
           </p>
         ) : null}

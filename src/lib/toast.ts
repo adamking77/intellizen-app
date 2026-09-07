@@ -20,8 +20,7 @@ function present(kind: "success" | "error" | "info", message: string, opts?: Toa
   if (held || kind === "error") keepQuietNote({ kind, message, source, description: opts?.description, announced: !held }, opts?.action);
   if (held) return;
   const { source: _source, origin: _origin, ...options } = opts ?? {};
-  const show = kind === "info" ? sonner.message : sonner[kind];
-  return show(message, { ...options, id: `note:${source}`, duration: noteDuration(`${message} ${opts?.description ?? ""}`) });
+  return sonner.message(message, { ...options, id: `note:${source}`, duration: noteDuration(`${message} ${opts?.description ?? ""}`) });
 }
 
 export const toast = {

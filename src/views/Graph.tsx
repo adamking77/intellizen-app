@@ -1939,7 +1939,7 @@ export function GraphView() {
 
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden bg-[var(--crust)]">
+    <div className="relative flex h-full w-full overflow-hidden bg-[var(--ground)]">
       {/* ============================================================
           Main column: topbar + full-bleed canvas
           ============================================================ */}
@@ -1981,7 +1981,7 @@ export function GraphView() {
                 setConnectSourceId(null);
                 hasAutoFitRef.current = null;
               }}
-              className="h-[var(--h-ctl)] min-w-0 max-w-[180px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] px-2 font-ui text-[var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
+              className="h-[var(--h-ctl)] min-w-0 max-w-[180px] rounded-none border-b border-[var(--surface-line)] bg-transparent px-2 font-ui text-[length:var(--t-meta)] text-[var(--text)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus-visible:border-[var(--accent)]"
             >
               <option value="standalone">Standalone</option>
               {graphMode === "project" && graphProjectId === null ? (
@@ -2005,7 +2005,7 @@ export function GraphView() {
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
                   placeholder="Search ( / )"
-                  className="h-[var(--h-ctl)] w-[160px] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] pl-7 pr-2 font-ui text-[var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus:outline-none"
+                  className="h-[var(--h-ctl)] w-[160px] rounded-none border-b border-[var(--surface-line)] bg-transparent pl-7 pr-2 font-ui text-[length:var(--t-meta)] text-[var(--text)] placeholder:text-[var(--overlay-0)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:border-[var(--border-strong)]  focus-visible:border-[var(--accent)]"
                 />
               </div>
             )}
@@ -2015,7 +2015,7 @@ export function GraphView() {
               {overflowOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOverflowOpen(false)} />
-                  <div className="fixed bottom-14 left-4 z-50 w-[220px] rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] py-1 shadow-[var(--shadow-elevated)]">
+                  <div className="fixed bottom-14 left-4 z-50 w-[220px] rounded-[var(--r-surface)] bg-[var(--surface)] py-1">
                     <OverflowItem
                       label="Reset view"
                       onClick={() => {
@@ -2139,7 +2139,7 @@ export function GraphView() {
             {isInsightMode && graphIsLoading ? <GraphLoadingOverlay /> : null}
             {isInsightMode && !graphIsLoading && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-                <div className="w-full max-w-[480px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
+                <div className="w-full max-w-[480px] rounded-[var(--r-plane)] bg-[var(--surface)] p-6 text-center">
                   <Sparkles className="mx-auto mb-3 h-5 w-5 text-[var(--accent-text)]" />
                   <p className="text-heading">
                     {caseScopeNeedsEvidencePile ? "This case needs an evidence pile" : scopedCase ? "This case graph is empty" : "This graph is empty"}
@@ -2173,7 +2173,7 @@ export function GraphView() {
             ) : null}
           </div>
 
-          {isInsightMode && highestDegreeNode ? <p data-graph-knot className="pointer-events-none absolute left-4 top-4 z-30 max-w-sm rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-3 py-2 text-[var(--t-meta)] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{highestDegreeNode.label}</span> has the most connections.</p> : null}
+          {isInsightMode && highestDegreeNode ? <p data-graph-knot className="pointer-events-none absolute left-4 top-4 z-30 max-w-sm rounded-[var(--r-surface)] bg-[var(--surface)] px-3 py-2 text-[length:var(--t-meta)] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{highestDegreeNode.label}</span> has the most connections.</p> : null}
 
           {/* Construct mode */}
           <div
@@ -2258,7 +2258,7 @@ export function GraphView() {
                           isSelected
                             ? "var(--accent)"
                             : isOnRoute
-                              ? "var(--lavender)"
+                              ? "var(--accent)"
                               : "var(--overlay-0)"
                         }
                         strokeWidth={isSelected ? 2 : isOnRoute ? 1.5 : 1}
@@ -2320,7 +2320,7 @@ export function GraphView() {
                           <text
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            fill="var(--crust)"
+                            fill="var(--ground)"
                             fontSize="12"
                             fontWeight="700"
                             style={{ pointerEvents: "none" }}
@@ -2404,7 +2404,7 @@ export function GraphView() {
                         isConnectSource || isEdgeDragSource
                           ? "var(--accent)"
                           : isEgoCenter
-                            ? "var(--lavender)"
+                            ? "var(--accent)"
                             : isSelected
                               ? "var(--accent)"
                               : style.border,
@@ -2414,7 +2414,7 @@ export function GraphView() {
                         isSelected || isConnectSource || isEdgeDragSource
                           ? "0 0 0 1px var(--accent-border)"
                           : isOnRoute
-                            ? "0 0 0 1px color-mix(in srgb, var(--lavender) 45%, transparent)"
+                            ? "0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent)"
                             : "none",
                     }}
                   >
@@ -2472,10 +2472,10 @@ export function GraphView() {
                         })()}
                       </div>
                       <div className="pointer-events-none min-w-0 flex-1">
-                        <p className="truncate font-ui text-[var(--t-ui)] font-medium leading-tight text-[var(--text)]">
+                        <p className="truncate font-ui text-[length:var(--t-ui)] font-medium leading-tight text-[var(--text)]">
                           {node.label}
                         </p>
-                        <p className="mt-0.5 truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">
+                        <p className="mt-0.5 truncate font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">
                           {ENTITY_LABEL[node.entity_type]}
                         </p>
                       </div>
@@ -2492,7 +2492,7 @@ export function GraphView() {
                             ...getNodeConnectorHandleStyle(anchorSide),
                             zIndex: 10,
                             background: isConnectorTarget
-                              ? "var(--lavender)"
+                              ? "var(--accent)"
                               : isConnectSource || isEdgeDragSource
                                 ? "var(--accent)"
                                 : "var(--accent)",
@@ -2534,7 +2534,7 @@ export function GraphView() {
             {graphIsLoading ? <GraphLoadingOverlay /> : null}
             {!graphIsLoading && visualNodes.length === 0 ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-                <div className="w-full max-w-[480px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--mantle)] p-6 text-center">
+                <div className="w-full max-w-[480px] rounded-[var(--r-plane)] bg-[var(--surface)] p-6 text-center">
                   <p className="text-heading">
                     {caseScopeNeedsEvidencePile ? "This case needs an evidence pile" : scopedCase ? "This case graph is empty" : "This graph is empty"}
                   </p>
@@ -2571,7 +2571,7 @@ export function GraphView() {
           {!isInsightMode && showMinimap ? (
             <div
               data-graph-interactive="true"
-              className="absolute bottom-4 right-4 z-30 overflow-hidden rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--mantle)] p-1.5"
+              className="absolute bottom-4 right-4 z-30 overflow-hidden rounded-[var(--r-ctl)] bg-[var(--surface)] p-1.5"
               onPointerDown={(event) => {
                 event.stopPropagation();
                 const target = event.currentTarget.getBoundingClientRect();
@@ -2590,7 +2590,7 @@ export function GraphView() {
                 }));
               }}
             >
-              <div className="relative h-[120px] w-[180px] overflow-hidden rounded-[var(--r-ctl)] bg-[var(--crust)]">
+              <div className="relative h-[120px] w-[180px] overflow-hidden rounded-[var(--r-ctl)] bg-[var(--ground)]">
                 {renderedFilteredNodes.map((node) => (
                   <span
                     key={`mini-${node.node_id}`}
@@ -2603,7 +2603,7 @@ export function GraphView() {
                         node.node_id === selectedNodeId
                           ? "var(--accent)"
                           : shortestPathNodeIdSet.has(node.node_id)
-                            ? "var(--lavender)"
+                            ? "var(--accent)"
                             : "var(--overlay-1)",
                     }}
                   />
@@ -2619,7 +2619,7 @@ export function GraphView() {
           {/* Floating construct toolbar (construct only) */}
           {isConstructMode && (
             <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 @container">
-              <div className="flex w-fit max-w-full flex-wrap justify-center gap-1 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)] @max-[22rem]:gap-0 @max-[22rem]:rounded-[var(--r-ctl)]">
+              <div className="flex w-fit max-w-full flex-wrap justify-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[22rem]:gap-0 @max-[22rem]:rounded-[var(--r-ctl)]">
                 <ToolbarBtn
                   title="Create node"
                   onClick={() => {
@@ -2628,7 +2628,7 @@ export function GraphView() {
                   }}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span className="font-ui text-[var(--t-section)] font-medium @max-[22rem]:hidden">New</span>
+                  <span className="font-ui text-[length:var(--t-section)] font-medium @max-[22rem]:hidden">New</span>
                 </ToolbarBtn>
                 <ToolbarBtn
                   title={placeMode ? "Cancel placement" : "Place node on canvas"}
@@ -2703,7 +2703,7 @@ export function GraphView() {
           )}
 
           <div data-graph-dock className={cn("pointer-events-auto absolute left-4 z-30 w-[calc(100%-2rem)] max-w-[640px] @container", isConstructMode ? "bottom-20" : "bottom-4")}>
-            <div className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)] @max-[36rem]:rounded-[var(--r-ctl)]">
+            <div className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[36rem]:rounded-[var(--r-ctl)]">
               <ToolbarBtn title="Insight" active={isInsightMode} onClick={() => setInteractionMode("insight")}>Insight</ToolbarBtn>
               <ToolbarBtn title="Construct" active={isConstructMode} onClick={() => setInteractionMode("construct")}>Construct</ToolbarBtn>
               <div className="mx-1 h-5 w-px bg-[var(--border)]" />
@@ -2714,6 +2714,14 @@ export function GraphView() {
               <ToolbarBtn title="Path from selection" disabled={activeSelectedNodeIds.length < 2} onClick={handleUseSelectedForPath}><Route className="h-3.5 w-3.5" />Path</ToolbarBtn>
               <ToolbarBtn title="Export graph" disabled={visualNodes.length === 0} onClick={() => setOverflowOpen(true)}><Download className="h-3.5 w-3.5" />Export</ToolbarBtn>
               <ToolbarBtn title="More graph actions" onClick={() => setOverflowOpen(true)}>More</ToolbarBtn>
+              <details onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }}>
+                <summary className="flex h-[var(--h-ctl)] cursor-pointer list-none items-center px-2 font-ui text-[12.5px] text-[var(--text-dim)] [&::-webkit-details-marker]:hidden">What is this?</summary>
+                <p className="absolute bottom-full left-0 mb-2 w-full max-w-[360px] rounded-[var(--r-surface)] bg-[var(--surface)] px-4 py-3.5 font-ui text-[length:var(--t-ui)] leading-relaxed text-[var(--text)]">Graph shows connections in the selected project. Insight explores existing evidence; Construct edits nodes and connections. Select a node to inspect it, or two nodes to find a path. Agents continue their work while you explore.</p>
+              </details>
             </div>
           </div>
 
@@ -2722,10 +2730,10 @@ export function GraphView() {
             <div className={cn("pointer-events-none absolute left-4 z-30", isConstructMode ? "bottom-32" : "bottom-16")}>
               <div
                 className={cn(
-                  "rounded-[var(--r-ctl)] border px-3 py-1.5 font-ui text-[var(--t-section)]",
+                  "rounded-[var(--r-surface)] bg-[var(--surface)] px-3 py-1.5 font-ui text-[length:var(--t-section)]",
                   errorMessage
-                    ? "border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-[var(--danger)]"
-                    : "border-[color-mix(in_srgb,var(--success)_40%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]",
+                    ? "text-[var(--failed)]"
+                    : "text-[var(--text)]",
                 )}
               >
                 {errorMessage ?? statusMessage}
@@ -2741,9 +2749,9 @@ export function GraphView() {
           ============================================================ */}
       <aside
         className={cn(
-          "z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)]",
-          "transition-[width] duration-[var(--t-slow)] ease-[var(--ease)]",
-          isNarrow ? "absolute inset-y-0 right-0 z-40 shadow-[var(--shadow-elevated)]" : "relative",
+          "z-30 flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--region-plane)]",
+
+          isNarrow ? "absolute inset-y-0 right-0 z-40" : "relative",
         )}
         style={{ width: railOpen ? (isNarrow ? "min(340px, calc(100vw - 2rem))" : 340) : 0 }}
       >
@@ -2837,7 +2845,7 @@ export function GraphView() {
                             }}
                           />
                           <span
-                            className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]"
+                            className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em]"
                             style={{
                               color: ENTITY_STYLES[selectedNode.entity_type].accent,
                             }}
@@ -2958,7 +2966,7 @@ export function GraphView() {
                                   <span className="truncate">{relation.otherLabel}</span>
                                 </span>
                                 {relation.label && (
-                                  <span className="ml-2 truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">
+                                  <span className="ml-2 truncate font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">
                                     {truncateLabel(relation.label, 16)}
                                   </span>
                                 )}
@@ -3146,7 +3154,7 @@ export function GraphView() {
                               {type}
                             </span>
                           </span>
-                          <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
+                          <span className="font-mono text-[length:var(--t-section)] text-[var(--overlay-1)]">
                             {graphMetrics.typeCounts[type]}
                           </span>
                         </button>
@@ -3227,7 +3235,7 @@ export function GraphView() {
                               type="button"
                               onClick={() => setInsightLabelMode(mode)}
                               className={cn(
-                                "flex-1 rounded-[var(--r-pill)] px-2 py-1 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                                "flex-1 rounded-[var(--r-pill)] px-2 py-1 font-ui text-[length:var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                                 insightLabelMode === mode
                                   ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                                   : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -3352,7 +3360,7 @@ export function GraphView() {
           </>
         )}
       >
-        <p className="font-ui text-[var(--t-ui)] text-[var(--subtext-0)]">
+        <p className="font-ui text-[length:var(--t-ui)] text-[var(--subtext-0)]">
           {pendingInspectorDelete?.label}
         </p>
       </AppDialog>
@@ -3376,7 +3384,7 @@ export function GraphView() {
           </>
         )}
       >
-        <p className="font-ui text-[var(--t-ui)] text-[var(--subtext-0)]">
+        <p className="font-ui text-[length:var(--t-ui)] text-[var(--subtext-0)]">
           Removing {nodes.length} nodes and {edges.length} relationships does not delete supporting evidence or source files.
         </p>
       </AppDialog>
@@ -3417,7 +3425,7 @@ export function GraphView() {
             <div className="grid gap-4">
               {/* Preview */}
               <div
-                className="overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--crust)]"
+                className="overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--ground)]"
                 style={{ height: 110 }}
               >
                 <img src={exportDataUrl} alt="" className="h-full w-full object-contain" />
@@ -3425,7 +3433,7 @@ export function GraphView() {
 
               {/* Filename */}
               <label className="grid gap-1.5">
-                <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   Filename
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -3433,15 +3441,15 @@ export function GraphView() {
                     value={exportFilename}
                     onChange={(e) => setExportFilename(e.target.value)}
                     autoFocus
-                    className="h-[var(--h-ctl)] flex-1 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] flex-1 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[length:var(--t-meta)] text-[var(--text)]  focus-visible:border-[var(--accent)]"
                   />
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">.png</span>
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)]">.png</span>
                 </div>
               </label>
 
               {/* Target */}
               <div className="grid gap-1.5">
-                <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+                <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   Save to
                 </span>
                 <div className="flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--base)] p-0.5">
@@ -3458,7 +3466,7 @@ export function GraphView() {
                         );
                       }}
                       className={cn(
-                        "flex-1 rounded-[var(--r-pill)] px-3 py-1.5 font-ui text-[var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                        "flex-1 rounded-[var(--r-pill)] px-3 py-1.5 font-ui text-[length:var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
                         exportTarget === t
                           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
                           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -3472,7 +3480,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(Number(e.target.value))}
-                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[length:var(--t-meta)] text-[var(--text)]  focus-visible:border-[var(--accent)]"
                   >
                     {(projects ?? []).map((p) => (
                       <option key={p.id} value={p.id}>
@@ -3484,7 +3492,7 @@ export function GraphView() {
                   <select
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(e.target.value)}
-                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[var(--t-meta)] text-[var(--text)]  focus:outline-none"
+                    className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[length:var(--t-meta)] text-[var(--text)]  focus-visible:border-[var(--accent)]"
                   >
                     {(investigations ?? []).map((inv) => (
                       <option key={inv.case_id} value={inv.case_id}>

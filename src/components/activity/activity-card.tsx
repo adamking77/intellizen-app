@@ -74,7 +74,7 @@ function ItemList({ items, empty, onOpen }: { items: ActivityItem[]; empty: stri
           onClick={() => open(item)}
         >
           <div className="min-w-0 flex-1">
-            <p title={item.title} className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+            <p title={item.title} className="truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
               {item.title}
             </p>
             <p className={META}>
@@ -349,7 +349,7 @@ export function ActivityCardBody({
       </button>
       <div className="mt-2 max-h-40 divide-y divide-[var(--hair)] overflow-y-auto">
         {model.connections.map((connection) => <button key={connection.id} type="button" onClick={() => navigate("/settings?section=providers")} className="flex w-full flex-wrap justify-between gap-x-3 gap-y-1 py-2 text-left hover:bg-[var(--hover)]">
-          <span className="text-[var(--t-meta)]">{connection.name}</span><span className={META}>{connection.state}</span>
+          <span className="text-[length:var(--t-meta)]">{connection.name}</span><span className={META}>{connection.state}</span>
         </button>)}
       </div>
       <AppDialog open={review !== null} title="Runtime availability" initialFocus="title"
@@ -364,7 +364,7 @@ export function ActivityCardBody({
           className="flex w-full items-center gap-3 rounded-[var(--r-ctl)] px-2 py-2.5 text-left hover:bg-[var(--hover)]"
         >
           <span className="min-w-0 flex-1">
-            <span className="block font-ui text-[var(--t-ui)] text-[var(--text)]">
+            <span className="block font-ui text-[length:var(--t-ui)] text-[var(--text)]">
               {c.name}
             </span>
             <span className={META}>{c.detail}</span>

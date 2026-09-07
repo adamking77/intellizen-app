@@ -321,7 +321,7 @@ export function ViewTabBar({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 lg:flex-nowrap">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
           <div ref={filterRef} className="relative">
             <Button
               variant={filterCount > 0 ? "accent-soft" : "ghost"}
@@ -920,7 +920,7 @@ function ViewSettingsModal({
                               className={cn(
                                 "grid min-h-[76px] gap-1 rounded-md border p-3 text-left transition-colors duration-150",
                                 selected
-                                  ? "border-[var(--border)] bg-[var(--base)] text-[var(--text)]"
+                                  ? "border-transparent bg-[var(--selected)] text-[var(--text)]"
                                   : "border-transparent bg-transparent text-[var(--subtext-0)] hover:border-[var(--border-subtle)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
                               )}
                               key={option.value}
