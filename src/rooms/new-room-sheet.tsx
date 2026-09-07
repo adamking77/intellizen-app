@@ -156,7 +156,7 @@ export function NewRoomSheet({
                           avatarColor: member.avatar_color,
                         }}
                         size={22}
-                        animate={false}
+
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">

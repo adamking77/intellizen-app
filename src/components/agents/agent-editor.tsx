@@ -79,7 +79,6 @@ export interface EditorProps {
   /** SOUL.md and the model pin arrive after the modal opens. */
   loadingDetail: boolean;
   detailError: string | null;
-  image: string | null;
   defaultContext: string[];
   /** Installed/discovered runtimes. Existing agents retain their provider;
    *  new agents can choose any available one. */
@@ -88,10 +87,6 @@ export interface EditorProps {
    *  pin Hermes asked to confirm. */
   onSave: (draft: Agent, confirmModel: boolean) => Promise<void>;
   onDelete: (agent: Agent) => void;
-  onPickImage: (dataUrl: string | null) => Promise<void>;
-  onMessage?: () => void;
-  resting?: boolean;
-  onRestToggle?: () => void;
   onClose: () => void;
 }
 
@@ -100,15 +95,10 @@ export function AgentEditor({
   creating,
   loadingDetail,
   detailError,
-  image,
   defaultContext,
   providers = ENGINES.map((engine) => ({ id: engine.id, label: engine.label, available: true })),
   onSave,
   onDelete,
-  onPickImage,
-  onMessage,
-  resting = false,
-  onRestToggle,
   onClose,
 }: EditorProps) {
   const [restored] = useState(() => readAgentEditorDraft(agent.id, creating));
@@ -120,10 +110,8 @@ export function AgentEditor({
   const [picking, setPicking] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewLevel, setPreviewLevel] = useState(0);
-  const [proceduralPreview, setProceduralPreview] = useState(false);
   const [models, setModels] = useState<AgentModelOption[] | null>(null);
   const [permissionMode, setPermissionMode] = useState<string | null>(null);
-  const file = useRef<HTMLInputElement>(null);
   const protectedFields = useRef(new Set<keyof Agent>(
     restored?.touched ?? [],
   ));
@@ -157,7 +145,7 @@ export function AgentEditor({
     };
   }, [draft.engine]);
 
-  const dirty = creating || proceduralPreview || changed(draft, agent);
+  const dirty = creating || changed(draft, agent);
   const hermes = isHermes(draft);
   const accents = flavorById(loadTheme().flavor).accents;
   const context = draft.context.length > 0 ? draft.context : defaultContext;
@@ -187,16 +175,6 @@ export function AgentEditor({
       return next;
     });
     setHasStoredDraft(true);
-  };
-
-  const discardDraft = () => {
-    clearAgentEditorDraft(agent.id, creating);
-    protectedFields.current.clear();
-    setDraft(agent);
-    setProceduralPreview(false);
-    setError(null);
-    setConfirm(null);
-    setHasStoredDraft(false);
   };
 
   const chooseProvider = (engine: AgentEngine) => {
@@ -234,17 +212,6 @@ export function AgentEditor({
     }
   };
 
-  const chooseImage = (f: File | undefined) => {
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      void onPickImage(typeof reader.result === "string" ? reader.result : null)
-        .then(() => setProceduralPreview(false))
-        .catch((e) => setError(errorMessage(e)));
-    };
-    reader.readAsDataURL(f);
-  };
-
   return (
     <AppDialog
       open
@@ -261,7 +228,6 @@ export function AgentEditor({
                 <Avatar
                   agent={draft}
                   size={76}
-                  image={proceduralPreview ? null : image}
                   animate="always"
                   speaking={previewing ? previewLevel : undefined}
                 />
@@ -273,10 +239,7 @@ export function AgentEditor({
                       type="button"
                       aria-selected={draft.avatarStyle === style}
                       className={COMPACT_PILL}
-                      onClick={() => {
-                        setProceduralPreview(true);
-                        set({ avatarStyle: style });
-                      }}
+                      onClick={() => set({ avatarStyle: style })}
                     >
                       {style === "sphere" ? "Sphere" : style === "blob" ? "Blob" : "Trace"}
                     </button>
@@ -287,10 +250,7 @@ export function AgentEditor({
                   <button
                     type="button"
                     className={COMPACT_PILL}
-                    onClick={() => {
-                      setProceduralPreview(true);
-                      set({ avatarSeed: Math.floor(Math.random() * 2_147_483_648) });
-                    }}
+                    onClick={() => set({ avatarSeed: Math.floor(Math.random() * 2_147_483_648) })}
                   >
                     Generate another
                   </button>
@@ -302,10 +262,7 @@ export function AgentEditor({
                       type="button"
                       title="Auto — the name decides"
                       aria-pressed={!draft.avatarKind}
-                      onClick={() => {
-                        setProceduralPreview(true);
-                        set({ avatarKind: undefined });
-                      }}
+                      onClick={() => set({ avatarKind: undefined })}
                       className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent font-ui text-[length:var(--t-count)] text-[var(--text-muted)] hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                     >
                       Auto
@@ -317,37 +274,12 @@ export function AgentEditor({
                         title={kind}
                         aria-label={`${kind} blob`}
                         aria-pressed={draft.avatarKind === kind}
-                        onClick={() => {
-                          setProceduralPreview(true);
-                          set({ avatarKind: kind });
-                        }}
+                        onClick={() => set({ avatarKind: kind })}
                         className="flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-ctl)] bg-transparent hover:bg-[var(--hover)] aria-pressed:bg-[var(--selected)] aria-pressed:hover:bg-[var(--selected-hover)]"
                       >
-                        <Avatar agent={{ ...draft, avatarStyle: "blob", avatarKind: kind }} size={26} animate={false} />
+                        <Avatar agent={{ ...draft, avatarStyle: "blob", avatarKind: kind }} size={26} />
                       </button>
                     ))}
-                  </div>
-                ) : null}
-
-                {hermes && !creating ? (
-                  <div className={COMPACT_GROUP} role="group" aria-label="Avatar picture">
-                    <button type="button" className={COMPACT_PILL} onClick={() => file.current?.click()}>
-                      {image ? "Replace picture" : "Picture"}
-                    </button>
-                    {image ? (
-                      <button
-                        type="button"
-                        className={COMPACT_PILL}
-                        onClick={() =>
-                          void onPickImage(null)
-                            .then(() => setProceduralPreview(false))
-                            .catch((e) => setError(errorMessage(e)))
-                        }
-                      >
-                        Remove
-                      </button>
-                    ) : null}
-                    <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => chooseImage(e.target.files?.[0])} />
                   </div>
                 ) : null}
 
@@ -355,10 +287,7 @@ export function AgentEditor({
                   <button
                     type="button"
                     title="Auto — the name decides"
-                    onClick={() => {
-                      setProceduralPreview(true);
-                      set({ avatarColor: undefined });
-                    }}
+                    onClick={() => set({ avatarColor: undefined })}
                     className="h-5 w-5 rounded-[var(--r-pill)] bg-[var(--mantle)] font-ui text-[length:var(--t-count)] text-[var(--text-muted)] transition-colors hover:bg-[var(--raised)]"
                     style={{ boxShadow: !draft.avatarColor ? "inset 0 0 0 2px var(--raised), inset 0 0 0 4px var(--text)" : undefined }}
                   >
@@ -371,10 +300,7 @@ export function AgentEditor({
                       title={a.name}
                       aria-label={a.name}
                       aria-pressed={draft.avatarColor === a.hex}
-                      onClick={() => {
-                        setProceduralPreview(true);
-                        set({ avatarColor: a.hex });
-                      }}
+                      onClick={() => set({ avatarColor: a.hex })}
                       className="swatch h-5 w-5 rounded-[var(--r-pill)]"
                       style={{
                         background: a.hex,
@@ -384,13 +310,11 @@ export function AgentEditor({
                   ))}
                 </div>
                 <span className="text-center font-ui text-[length:var(--t-meta)] leading-[1.4] text-[var(--text-muted)]">
-                  {image
-                    ? "Picture override is kept. Remove it to reveal this drawing."
-                    : draft.avatarStyle === "trace"
-                      ? "A static trace is drawn from this seed."
-                      : draft.avatarKind || draft.avatarColor
-                        ? "Procedural avatar pinned."
-                        : "Drawn from the name."}
+                  {draft.avatarStyle === "trace"
+                    ? "A static trace is drawn from this seed."
+                    : draft.avatarKind || draft.avatarColor
+                      ? "Procedural avatar pinned."
+                      : "Drawn from the name."}
                 </span>
 
                 {/* Voice, at the foot of the identity column: something the
@@ -614,7 +538,7 @@ export function AgentEditor({
               </div>
             ) : null}
 
-            <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[var(--raised)] px-[22px] pb-5 pt-[18px]">
+            <div aria-label="Agent actions" className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[var(--raised)] px-[22px] pb-5 pt-[18px]">
               {!creating ? (
                 <button
                   type="button"
@@ -627,12 +551,9 @@ export function AgentEditor({
               ) : null}
               <div className="grow" />
               {creating && !name ? <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
-              {hasStoredDraft ? <button type="button" className={PILL} onClick={discardDraft} disabled={busy}>Discard draft</button> : null}
               <button type="button" className={PILL} onClick={onClose} disabled={busy}>
                 Cancel
               </button>
-              {onMessage ? <button type="button" className={PILL} onClick={onMessage} disabled={busy}>Message {draft.displayName || draft.name}</button> : null}
-              {onRestToggle ? <button type="button" className={PILL} onClick={onRestToggle} disabled={busy}>{resting ? "Restore" : "Rest for today"}</button> : null}
               <button
                 type="button"
                 disabled={!nameOk || !dirty || busy || loadingDetail}
@@ -642,7 +563,7 @@ export function AgentEditor({
                 )}
                 onClick={() => void save(false)}
               >
-                {busy ? "Saving…" : creating ? "Create" : "Save"}
+                {busy ? "Saving…" : "Save"}
               </button>
             </div>
     </AppDialog>

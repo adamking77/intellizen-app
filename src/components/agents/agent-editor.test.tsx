@@ -54,11 +54,9 @@ describe("AgentEditor avatar controls", () => {
           creating={false}
           loadingDetail={false}
           detailError={null}
-          image="data:image/png;base64,avatar"
           defaultContext={[]}
           onSave={vi.fn().mockResolvedValue(undefined)}
           onDelete={vi.fn()}
-          onPickImage={vi.fn().mockResolvedValue(undefined)}
           onClose={vi.fn()}
         />,
       );
@@ -67,9 +65,14 @@ describe("AgentEditor avatar controls", () => {
     const button = (label: string) =>
       Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label);
 
-    for (const label of ["Sphere", "Blob", "Trace", "Replace picture", "Remove"]) {
+    for (const label of ["Sphere", "Blob", "Trace"]) {
       expect(button(label)?.className).toContain("pill");
     }
+    expect(button("Picture")).toBeUndefined();
+    expect(button("Replace picture")).toBeUndefined();
+    expect(button("Remove")).toBeUndefined();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("Picture override");
     expect(button("Sphere")?.className).toContain("pill-compact");
     expect(button("Sphere")?.getAttribute("aria-selected")).toBe("true");
     expect(button("Blob")?.getAttribute("aria-selected")).toBe("false");
@@ -85,12 +88,11 @@ describe("AgentEditor avatar controls", () => {
   });
 });
 
-it("saves a generated trace seed without removing an uploaded picture", async () => {
+it("saves a generated trace seed with only the existing-agent footer actions", async () => {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   const onSave = vi.fn().mockResolvedValue(undefined);
-  const onPickImage = vi.fn().mockResolvedValue(undefined);
 
   await act(async () => {
     root.render(
@@ -99,11 +101,9 @@ it("saves a generated trace seed without removing an uploaded picture", async ()
         creating={false}
         loadingDetail={false}
         detailError={null}
-        image="data:image/png;base64,avatar"
         defaultContext={[]}
         onSave={onSave}
         onDelete={vi.fn()}
-        onPickImage={onPickImage}
         onClose={vi.fn()}
       />,
     );
@@ -113,10 +113,10 @@ it("saves a generated trace seed without removing an uploaded picture", async ()
   await act(async () => button("Trace").click());
   expect(button("Generate another")).toBeTruthy();
   await act(async () => button("Generate another").click());
+  expect(Array.from(document.querySelector('[aria-label="Agent actions"]')!.querySelectorAll("button")).map((item) => item.textContent)).toEqual(["Delete", "Cancel", "Save"]);
   await act(async () => button("Save").click());
 
   expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ avatarStyle: "trace", avatarSeed: expect.any(Number) }), false);
-  expect(onPickImage).not.toHaveBeenCalled();
   await act(async () => root.unmount());
 });
 
@@ -126,11 +126,9 @@ function editorProps(overrides: Partial<ComponentProps<typeof AgentEditor>> = {}
     creating: false,
     loadingDetail: false,
     detailError: null,
-    image: null,
     defaultContext: [],
     onSave: vi.fn().mockResolvedValue(undefined),
     onDelete: vi.fn(),
-    onPickImage: vi.fn().mockResolvedValue(undefined),
     onClose: vi.fn(),
     ...overrides,
   } satisfies ComponentProps<typeof AgentEditor>;
@@ -144,7 +142,7 @@ function replaceValue(node: Element, value: string) {
 }
 
 describe("AgentEditor draft recovery", () => {
-  it("restores edits after close and restart, then discards back to fresh details", async () => {
+  it("restores edits after close and restart", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     let root = createRoot(host);
@@ -161,11 +159,17 @@ describe("AgentEditor draft recovery", () => {
     expect((document.querySelector('[aria-label="Role"]') as HTMLInputElement).value).toBe("System design");
     expect((document.querySelector('[aria-label="Identity"]') as HTMLTextAreaElement).value).toBe("Draft identity");
     expect((document.querySelector('[aria-label="Model"]') as HTMLSelectElement).value).toBe('["anthropic","other-model"]');
+    await act(async () => root.unmount());
+  });
 
-    await act(async () => Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Discard draft")!.click());
-    expect((document.querySelector('[aria-label="Role"]') as HTMLInputElement).value).toBe("Engineering");
-    expect((document.querySelector('[aria-label="Identity"]') as HTMLTextAreaElement).value).toBe("Fresh saved identity");
-    expect(Array.from(document.querySelectorAll("button")).some((button) => button.textContent === "Discard draft")).toBe(false);
+  it("uses only Save and Cancel for a new agent", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const fresh = { ...agent, id: "hermes:new", name: "", displayName: "" };
+    await act(async () => root.render(<AgentEditor {...editorProps({ agent: fresh, creating: true })} />));
+    expect(Array.from(document.querySelector('[aria-label="Agent actions"]')!.querySelectorAll("button")).map((item) => item.textContent)).toEqual(["Cancel", "Save"]);
+    expect((document.querySelector('[aria-label="Agent actions"] button:last-child') as HTMLButtonElement).disabled).toBe(true);
     await act(async () => root.unmount());
   });
 

@@ -339,7 +339,7 @@ export function RoomView({
                     }}
                     image={profile?.avatarImage}
                     size={24}
-                    animate={false}
+
                   />
                 </span>
               );
@@ -510,7 +510,7 @@ export function RoomView({
                   }}
                   image={profileForMember(directory, member)?.avatarImage}
                   size={20}
-                  animate={false}
+
                 />
                 <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                   {displayName(member)}

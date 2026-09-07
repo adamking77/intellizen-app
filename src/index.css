@@ -5328,6 +5328,47 @@ select:not([data-select-chevron="custom"]) {
 
 /* Shared avatar behavior. Speech follows measured audio amplitude; a team
    stack dims idle members and restores anyone actively running. */
+.avatar-motion,
+.avatar-motion__visual {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-motion__visual {
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  transition: transform var(--dur-pane) var(--ease-out);
+}
+
+/* Match Blobatar's 2.8s breathing rhythm in prominent previews. */
+@keyframes avatar-breathe {
+  from { transform: translateY(0) scale(1, 1); }
+  to { transform: translateY(-1.5px) scale(1.025, 0.985); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .avatar-motion:not([data-avatar-kind="blob"])[data-avatar-motion="hover"]:hover > .avatar-motion__visual {
+    transform: translateY(-1.5px) scale(1.04);
+  }
+}
+
+.avatar-motion:not([data-avatar-kind="blob"])[data-avatar-motion="always"] > .avatar-motion__visual {
+  animation: avatar-breathe 2800ms var(--ease-in-out) infinite alternate;
+}
+
+:root[data-session="not-today"] .avatar-motion__visual,
+:root[data-session="not-today"] .avatar-motion .mo-root,
+:root[data-session="not-today"] .avatar-motion .mo-root *,
+:root[data-session="not-today"] .avatar-speaking {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+
 .avatar-speaking {
   display: inline-flex;
   flex-shrink: 0;
@@ -5419,4 +5460,6 @@ html[data-view-transition="segment"]::view-transition-new(*) {
     transform: none !important;
     filter: none !important;
   }
+
+  .avatar-motion__visual { transform: none !important; }
 }

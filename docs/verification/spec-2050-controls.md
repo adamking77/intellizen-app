@@ -94,3 +94,53 @@ Motion review of this change:
 | Hard SVG edges | Faded ends | Matches the Not today reference |
 
 Verdict: approve the bounded motion change. Existing active traces use transform-only drift; Not today and reduced-motion CSS keep them static. The added idle baseline has no animation class.
+
+## Avatar and agent-modal correction (2026-09-08)
+
+The agent editor now offers only Sphere, Blob and Trace. Picture replacement,
+removal and upload controls and their editor wiring are removed. Stored picture
+assets are retained, but the shared Avatar renderer no longer lets them override
+the selected style. Existing-agent footers contain only Delete, Cancel and Save;
+new-agent footers contain Cancel and Save. Automatic draft recovery remains.
+
+All avatar callers use the shared motion defaults. Sphere and Trace get subtle
+pointer hover feedback and a 2.8-second breathing rhythm in prominent previews;
+Blob retains its native animation. Shared speaking feedback remains available
+to all styles. Not today and reduced motion disable movement, including Blob
+and speaking feedback. No dependency was added.
+
+Independent motion review caught and corrected an input-modality latch that
+stopped avatar feedback after typing until the next click. Hover is governed by
+pointer-capability CSS; keyboard focus does not trigger it. Focused tests cover
+all three renderers, quiet-mode switching, keyboard continuity, editor action
+sets, picture-control removal and draft recovery.
+
+| Before | After | Why |
+| --- | --- | --- |
+| Keyboard input latched avatar movement off until a click | Session/reduced-motion gate with CSS hover capability checks | Moving the pointer works naturally after typing |
+| Sphere/Trace and several small avatar callers stayed static | Shared hover feedback and prominent-preview breathing | The selected style has motion wherever the identity appears |
+
+Motion review verdict: approve after the latch fix. New movement animates only
+transforms; hover uses the existing 200ms easing token and remains interruptible.
+The breathing duration intentionally matches Blobatar's ambient rhythm.
+
+Final publication checks passed: 43/43 focused tests across five suites,
+TypeScript, product/design guards and 145,110 contrast combinations. The native
+release build completed successfully (`/tmp/spec2050-native-avatars-final.log`);
+the resulting dist scan contained no service-role JWT. The local-access build
+remains private and is not a distributable artifact.
+
+The relaunched packaged app showed the exact existing-agent action set and
+all three style previews. Changing Sphere → Trace → Blob → Sphere restored
+the original selection and disabled Save; no profile was saved or deleted.
+New-agent Save remained disabled without a name, with Cancel as its only other
+footer action. Both buttons remained visible at 200% zoom while the editor body
+scrolled. Cancel and Escape closed the modals, and zoom returned to 100%.
+Shadow and backdrop blur were retained. Private screenshots are
+`avatar-modal-existing.png`, `avatar-modal-trace.png`, `avatar-modal-new.png`
+and `avatar-modal-new-200.png` in the existing local evidence directory.
+
+Native visual coverage is the editor previews and footer behavior above.
+Small-avatar caller coverage and quiet/speaking-state switching were verified
+through the shared renderer audit and focused tests; live voice playback and
+every individual avatar hover location were not exercised through the GUI.

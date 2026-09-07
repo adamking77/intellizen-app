@@ -58,6 +58,13 @@ wrap on narrow screens, but do not pull both groups into a centered cluster.
 rotation label as persistent app context, including Not today. It shares the
 existing compact header and is not a transient notification.
 
+**Agent editor and avatars, Adam 2026-09-08:** offer only Sphere, Blob and
+Trace; remove picture replacement controls. Use shared motion for all three
+styles wherever avatars appear, honoring reduced motion and Not today.
+Existing stored pictures must not override the selected generated style.
+The editor footer contains only Delete, Cancel and Save; omit Delete for a
+new agent. Do not add a secondary actions menu to this footer.
+
 ## Current v3 contract
 
 The sidebar is the shared hierarchy tree: department → workspace → project →

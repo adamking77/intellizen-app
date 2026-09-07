@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, NewCard, Tag } from "@/components/agents/agent-card";
 import { AgentEditor } from "@/components/agents/agent-editor";
 import { blankAgent, engineLabel, isHermes, profileOf, teamMembers, type Agent, type Team } from "@/components/agents/agent-model";
-import { deleteAgent, describeHermesAgent, listAgents, loadAvatar, saveAgent, setAvatar } from "@/components/agents/agents-data";
+import { deleteAgent, describeHermesAgent, listAgents, loadAvatar, saveAgent } from "@/components/agents/agents-data";
 import { Avatar, TeamStack, identityColor } from "@/components/agents/avatar";
 import { TeamSheet } from "@/components/agents/team-sheet";
 import { deleteTeam, loadTeams, newTeamId, saveTeam } from "@/components/agents/teams-store";
@@ -331,22 +331,10 @@ function AgentDirectory() {
           creating={editing!.creating}
           loadingDetail={detail.isFetching}
           detailError={detail.error ? errorMessage(detail.error) : null}
-          image={images[opened.id] ?? null}
           defaultContext={defaultContext}
           providers={providerOptions}
           onSave={(draft, confirmModel) => save.mutateAsync({ draft, confirmModel }).then(() => undefined)}
           onDelete={(a) => setConfirming({ kind: "agent", agent: a })}
-          onPickImage={async (url) => {
-            await setAvatar(client, opened, url);
-            setImages((m) => ({ ...m, [opened.id]: url }));
-            void refresh();
-          }}
-          onMessage={editing!.creating ? undefined : () => {
-            talkTo(isHermes(opened) ? profileOf(opened.id)! : opened.id);
-            setEditing(null);
-          }}
-          resting={resting.restingAgents.includes(opened.id)}
-          onRestToggle={resting.ready && !editing!.creating ? () => toggleRest(opened.id) : undefined}
           onClose={() => setEditing(null)}
         />
       ) : null}

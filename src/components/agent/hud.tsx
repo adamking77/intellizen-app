@@ -278,7 +278,7 @@ export function Hud({
                   }}
                   size={20}
                   image={profile.avatarImage}
-                  animate={false}
+
                 />
                 <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-meta)] text-[var(--text)]">
                   {profile.displayName || profile.name}
@@ -328,7 +328,7 @@ export function Hud({
               ) : m.text.trim() || m.streaming ? (
                 <div key={m.id} className="flex gap-2">
                   <div className="mt-0.5 shrink-0">
-                    <Avatar agent={face} size={20} image={face.avatarImage} animate={false} />
+                    <Avatar agent={face} size={20} image={face.avatarImage} />
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="t-section uppercase tracking-[0.14em] text-[var(--text-muted)]">{name}</span>
@@ -430,7 +430,7 @@ export function Hud({
                   <Mic className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
                 </span>
               ) : (
-                <Avatar agent={face} size={20} image={face.avatarImage} animate={false} speaking={voice.said} />
+                <Avatar agent={face} size={20} image={face.avatarImage} speaking={voice.said} />
               )}
               <div className="min-w-0 flex-1">
                 <Waveform

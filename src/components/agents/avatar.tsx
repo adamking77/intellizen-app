@@ -3,6 +3,7 @@ import { Blobatar } from "blobatar/react";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 
 import { flavorById, loadTheme, THEME_CHANGED_EVENT } from "@/lib/theme";
+import { useMotionEnabled } from "@/components/ui/motion";
 
 import type { Agent, AvatarStyle } from "./agent-model";
 
@@ -166,66 +167,56 @@ function speakingWrapper(inner: ReactNode, level: number | undefined, size: numb
  * The canonical IntelliZen/Hermes agent face.
  *
  * Mesh spheres come from @outpacelabs/avatars; blobs come from Blobatar. The
- * same saved renderer, silhouette, color, and seed are used everywhere. An
- * uploaded profile picture is a reversible override, not another identity.
+ * same saved renderer, silhouette, color, seed, and motion are used everywhere.
+ * Legacy stored pictures do not override the three generated styles.
  */
 export function Avatar({
   agent,
   size = 24,
-  image,
   className,
   animate = "hover",
   speaking,
 }: {
   agent: AvatarAgent;
   size?: number;
+  /** Accepted for legacy callers; stored pictures no longer override the style. */
   image?: string | null;
   className?: string;
-  /** Blob motion. Use always only for a single, prominent identity. */
+  /** Shared style motion. Use always only for a single, prominent identity. */
   animate?: boolean | "hover" | "always";
   /** Measured voice level, 0..1. Undefined means silent. */
   speaking?: number;
 }) {
   useThemeSnapshot();
+  const movement = useMotionEnabled();
+  const motionMode = movement && animate ? animate === true ? "hover" : animate : "none";
   const seed = agent.displayName || "agent";
-
-  if (image) {
-    return speakingWrapper(
-      <img
-        src={image}
-        alt=""
-        aria-hidden
-        width={size}
-        height={size}
-        className={className}
-        style={{ width: size, height: size, borderRadius: 999, objectFit: "cover", flexShrink: 0, display: "block" }}
-      />,
-      speaking,
-      size,
-    );
-  }
-
   const palette = identityPalette(seed, agent.avatarColor);
   const style: AvatarStyle = agent.avatarStyle === "blob" || agent.avatarStyle === "trace" ? agent.avatarStyle : "sphere";
+  const frame = (inner: ReactNode) => speakingWrapper(
+    <span className="avatar-motion" data-avatar-kind={style} data-avatar-motion={motionMode} aria-hidden style={{ width: size, height: size }}>
+      <span className="avatar-motion__visual">{inner}</span>
+    </span>,
+    movement ? speaking : undefined,
+    size,
+  );
   if (style === "blob") {
     const kind = BLOB_KINDS.includes(agent.avatarKind as BlobKind) ? (agent.avatarKind as BlobKind) : undefined;
-    return speakingWrapper(
+    return frame(
       <Blobatar
         name={seed}
         size={size}
         className={className}
         palette={{ head: palette[0] }}
         traits={kind ? { shape: KIND_TRAIT[kind] } : undefined}
-        {...(animate ? { animate: animate === true ? "hover" as const : animate } : {})}
+        {...(motionMode !== "none" ? { animate: motionMode } : {})}
       />,
-      speaking,
-      size,
     );
   }
 
   if (style === "trace") {
     const traceSeed = Number.isInteger(agent.avatarSeed) ? agent.avatarSeed! : hash(seed);
-    return speakingWrapper(
+    return frame(
       <svg
         viewBox="0 0 40 40"
         width={size}
@@ -250,15 +241,11 @@ export function Avatar({
           />
         ))}
       </svg>,
-      speaking,
-      size,
     );
   }
 
-  return speakingWrapper(
+  return frame(
     <GradientAvatar seed={seed} size={size} colors={palette} className={className} />,
-    speaking,
-    size,
   );
 }
 
@@ -286,7 +273,7 @@ export function TeamStack({
           data-running={running.includes(agent.id) || undefined}
           style={{ marginInlineStart: index ? -7 : 0 }}
         >
-          <Avatar agent={agent} size={size} image={images?.[agent.id]} animate={false} />
+          <Avatar agent={agent} size={size} image={images?.[agent.id]} />
         </span>
       ))}
     </div>

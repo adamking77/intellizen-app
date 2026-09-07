@@ -150,7 +150,7 @@ export function TargetPicker({
                 }}
                 size={20}
                 image={p.avatarImage}
-                animate={false}
+
               />
             </span>
             <span className="min-w-0 flex-1 truncate">{p.displayName || p.name}</span>
@@ -211,7 +211,7 @@ export function TargetPicker({
                       }}
                       size={18}
                       image={face.profile?.avatarImage}
-                      animate={false}
+
                     />
                   </span>
               ))}

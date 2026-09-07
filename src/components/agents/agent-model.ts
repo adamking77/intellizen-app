@@ -43,7 +43,7 @@ export interface Agent {
   identity: string;
   /** Folders this agent may read. Empty means it inherits the default. */
   context: string[];
-  /** Procedural renderer used when no uploaded profile picture is present. */
+  /** Selected generated renderer; legacy pictures do not override it. */
   avatarStyle: AvatarStyle;
   /** Stable integer for the procedural trace renderer. */
   avatarSeed?: number;
