@@ -120,17 +120,17 @@ function WorkspaceProjects({ workspaceId, rows, catalog, cardsByProject, loading
   if (loading) return <Skeleton lines={Math.max(rows.length + 1, 3)} className="px-3 py-4" />;
   return (
     <div className="mx-auto grid max-w-[960px] gap-5">
-      <p className="text-[24px] font-normal leading-snug text-[var(--text)]">{rows.length} {rows.length === 1 ? "project has" : "projects have"} a place here.</p>
+      <p className="text-[24px] font-normal leading-snug text-[var(--text)]">{rows.length} {rows.length === 1 ? "project" : "projects"} in this workspace.</p>
       {sourceNames.length ? <FailureState message={`${sourceNames.join(" and ")} could not be read; available project metadata is still shown.`} action={{ label: "Retry", onClick: onRetry }} /> : null}
       <div className="divide-y divide-[var(--hair)] border-y border-[var(--hair)]">
         {rows.map((row) => <WorkspaceProjectRow key={row.id} row={row} catalog={catalog} cards={cardsByProject.get(row.id) ?? []} onOpen={onOpen} />)}
       </div>
-      <section aria-label="What you are keeping out">
-        <h2 className="border-b border-[var(--hair)] pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">What you are keeping out</h2>
-        {tasks.isLoading ? <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">Reading this workspace’s choices.</p>
+      <section aria-label="Work kept out of scope">
+        <h2 className="border-b border-[var(--hair)] pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Work kept out of scope</h2>
+        {tasks.isLoading ? <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">Loading out-of-scope work…</p>
           : tasks.error ? <FailureState message="The not-doing list could not be read." action={{ label: "Retry", onClick: () => void tasks.refetch() }} />
           : keepingOut.length ? <div className="divide-y divide-[var(--hair)]">{keepingOut.map((task) => <Link key={task.id} to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.tasks}?record=${encodeURIComponent(task.id)}`} className="block py-3 text-[var(--t-ui)] hover:bg-[var(--hover)]">{task.title}</Link>)}</div>
-          : <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">No choices recorded for this workspace.</p>}
+          : <p className="py-3 text-[var(--t-meta)] text-[var(--text-muted)]">No out-of-scope work recorded for this workspace.</p>}
         {tasks.data && !tasks.data.complete && <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Only the first 5,000 task records were read; this list may be incomplete.</p>}
       </section>
     </div>

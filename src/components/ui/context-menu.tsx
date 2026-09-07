@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { useInputModality, useMotionEnabled } from "./motion";
 
 export interface ContextMenuItem {
   label: string;
@@ -18,6 +19,8 @@ interface ContextMenuProps {
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const enabled = useMotionEnabled();
+  const modality = useInputModality();
 
   useEffect(() => {
     function handleDown(e: MouseEvent) {
@@ -42,7 +45,8 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     <div
       ref={ref}
       style={{ top: clampedY, left: clampedX }}
-      className="fixed z-[9999] min-w-[160px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--base)] p-1.5 shadow-[var(--shadow-elevated)]"
+      data-motion={modality === "keyboard" ? "instant" : enabled ? "full" : "reduced"}
+      className="motion-popover fixed z-[9999] min-w-[160px] rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--base)] p-1.5 shadow-[var(--shadow-elevated)]"
     >
       {items.map((item) => (
         <button

@@ -41,6 +41,15 @@ describe("session availability lifecycle", () => {
     expect(JSON.parse(window.localStorage.getItem(SESSION_MODE_KEY)!)).toEqual({ launchId: "launch-1", mode: "thinking", lastAvailabilityAnswer: "executing" });
   });
 
+  it("applies the quiet motion attribute and clears it on a new launch", async () => {
+    await initializeSessionMode(async () => "launch-1");
+    setSessionMode("not_today");
+    expect(document.documentElement.dataset.session).toBe("not-today");
+    resetSessionModeForTests();
+    await initializeSessionMode(async () => "launch-2");
+    expect(document.documentElement.dataset.session).toBe("thinking");
+  });
+
   it("keeps valid resting agents through webview reloads in one launch", async () => {
     window.localStorage.setItem(RESTING_AGENTS_KEY, JSON.stringify({ launchId: "launch-1", agents: ["hermes:fiona", "acp:keel"] }));
     await initializeSessionMode(async () => "launch-1");

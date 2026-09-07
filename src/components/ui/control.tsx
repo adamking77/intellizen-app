@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
+import { motionIsEnabled } from "./motion";
 
 export const controlVariants = cva(
   "inline-flex h-[var(--h-ctl)] items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--r-ctl)] " +
@@ -35,12 +36,36 @@ export interface ControlProps
 }
 
 export const Control = forwardRef<HTMLButtonElement, ControlProps>(
-  ({ children, className, disabled, loading = false, variant, size, ...props }, ref) => (
+  ({ children, className, disabled, loading = false, variant, size, onBlur, onKeyDown, onPointerCancel, onPointerDown, onPointerLeave, onPointerUp, ...props }, ref) => (
     <button
       ref={ref}
-      className={cn(controlVariants({ variant, size }), className)}
+      className={cn(controlVariants({ variant, size }), "motion-control", className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      onPointerDown={(event) => {
+        if (motionIsEnabled()) event.currentTarget.dataset.pointerPressed = "true";
+        onPointerDown?.(event);
+      }}
+      onPointerUp={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerUp?.(event);
+      }}
+      onPointerCancel={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerCancel?.(event);
+      }}
+      onPointerLeave={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerLeave?.(event);
+      }}
+      onBlur={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onBlur?.(event);
+      }}
+      onKeyDown={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onKeyDown?.(event);
+      }}
       {...props}
     >
       {loading ? <span aria-hidden className="control-running-dot" /> : null}

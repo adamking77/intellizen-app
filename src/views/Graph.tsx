@@ -2146,7 +2146,7 @@ export function GraphView() {
                   </p>
                   <p className="text-meta mt-2 text-[var(--subtext-0)]">
                     {caseScopeNeedsEvidencePile
-                      ? "Link an evidence pile in Intel so this case has a durable place for graph nodes and supporting signals."
+                      ? "Link an evidence pile in Intel to store this case’s graph nodes and supporting signals."
                       : "Create the first node yourself, or generate a starting map from the saved evidence."}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -2173,7 +2173,7 @@ export function GraphView() {
             ) : null}
           </div>
 
-          {isInsightMode && highestDegreeNode ? <p data-graph-knot className="pointer-events-none absolute left-4 top-4 z-30 max-w-sm rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-3 py-2 text-[var(--t-meta)] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{highestDegreeNode.label}</span> is the knot with the most links.</p> : null}
+          {isInsightMode && highestDegreeNode ? <p data-graph-knot className="pointer-events-none absolute left-4 top-4 z-30 max-w-sm rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-3 py-2 text-[var(--t-meta)] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{highestDegreeNode.label}</span> has the most connections.</p> : null}
 
           {/* Construct mode */}
           <div
@@ -2540,7 +2540,7 @@ export function GraphView() {
                   </p>
                   <p className="text-meta mt-2 text-[var(--subtext-0)]">
                     {caseScopeNeedsEvidencePile
-                      ? "Link an evidence pile in Intel so the case graph has a durable scope."
+                      ? "Link an evidence pile in Intel to store this case graph."
                       : "Start with a person, organisation, location, or event. You can connect the evidence as the map grows."}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -2618,8 +2618,8 @@ export function GraphView() {
 
           {/* Floating construct toolbar (construct only) */}
           {isConstructMode && (
-            <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 -translate-x-1/2">
-              <div className="flex items-center gap-1 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)]">
+            <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 @container">
+              <div className="flex w-fit max-w-full flex-wrap justify-center gap-1 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--mantle)] p-1 shadow-[var(--shadow-elevated)] @max-[22rem]:gap-0 @max-[22rem]:rounded-[var(--r-ctl)]">
                 <ToolbarBtn
                   title="Create node"
                   onClick={() => {
@@ -2628,7 +2628,7 @@ export function GraphView() {
                   }}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span className="font-ui text-[var(--t-section)] font-medium">New</span>
+                  <span className="font-ui text-[var(--t-section)] font-medium @max-[22rem]:hidden">New</span>
                 </ToolbarBtn>
                 <ToolbarBtn
                   title={placeMode ? "Cancel placement" : "Place node on canvas"}
@@ -2641,7 +2641,7 @@ export function GraphView() {
                 >
                   <Crosshair className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Start link from selected"
                   disabled={!selectedNode && activeSelectedNodeIds.length === 0}
@@ -2668,7 +2668,7 @@ export function GraphView() {
                 >
                   <Unlink className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Undo"
                   disabled={historyStats.undoCount === 0}
@@ -2683,7 +2683,7 @@ export function GraphView() {
                 >
                   <Redo2 className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Delete selected"
                   disabled={
@@ -2702,8 +2702,8 @@ export function GraphView() {
             </div>
           )}
 
-          <div data-graph-dock className={cn("pointer-events-auto absolute left-4 z-30 max-w-[calc(100%-2rem)]", isConstructMode ? "bottom-20" : "bottom-4")}>
-            <div className="flex max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)]">
+          <div data-graph-dock className={cn("pointer-events-auto absolute left-4 z-30 w-[calc(100%-2rem)] max-w-[640px] @container", isConstructMode ? "bottom-20" : "bottom-4")}>
+            <div className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-elevated)] @max-[36rem]:rounded-[var(--r-ctl)]">
               <ToolbarBtn title="Insight" active={isInsightMode} onClick={() => setInteractionMode("insight")}>Insight</ToolbarBtn>
               <ToolbarBtn title="Construct" active={isConstructMode} onClick={() => setInteractionMode("construct")}>Construct</ToolbarBtn>
               <div className="mx-1 h-5 w-px bg-[var(--border)]" />

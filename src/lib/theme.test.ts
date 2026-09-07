@@ -3,15 +3,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  CONTRAST_LEVEL_KEY,
   DEFAULT_SELECTION_STRENGTH,
   FOLLOW_SYSTEM_KEY,
   SELECTION_STRENGTH_KEY,
   SYSTEM_DARK_FLAVOR_KEY,
   SYSTEM_LIGHT_FLAVOR_KEY,
   THEME_CHANGED_EVENT,
+  applyContrastLevel,
   applySavedTheme,
   applySelectionStrength,
   applyTheme,
+  loadContrastLevel,
   loadSystemThemePreferences,
   loadSelectionStrength,
   normalizeSelectionStrength,
@@ -61,6 +64,31 @@ describe("selection strength", () => {
     applyTheme("latte", "#3a5fa8", false);
     expect(document.documentElement.style.getPropertyValue("--accent-fg")).toBe("#ffffff");
     expect(document.documentElement.style.getPropertyValue("--accent-contrast")).toBe("#000000");
+  });
+});
+
+describe("contrast level", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute("style");
+    delete document.documentElement.dataset.contrast;
+  });
+
+  it("persists independently from accent strength and restores at theme boot", () => {
+    applyContrastLevel("strong");
+
+    expect(localStorage.getItem(CONTRAST_LEVEL_KEY)).toBe("strong");
+    expect(loadContrastLevel()).toBe("strong");
+    expect(document.documentElement.dataset.contrast).toBe("strong");
+
+    document.documentElement.dataset.contrast = "calm";
+    applyTheme("mocha", "#7fa6e6", false);
+    expect(document.documentElement.dataset.contrast).toBe("strong");
+  });
+
+  it("falls back to Calm for a malformed saved value", () => {
+    localStorage.setItem(CONTRAST_LEVEL_KEY, "loud");
+    expect(loadContrastLevel()).toBe("calm");
   });
 });
 

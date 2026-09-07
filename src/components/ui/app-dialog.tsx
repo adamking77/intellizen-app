@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { useInputModality, useMotionEnabled } from "./motion";
 
 interface AppDialogProps {
   open: boolean;
@@ -33,6 +34,8 @@ export function AppDialog({
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const enabled = useMotionEnabled();
+  const modality = useInputModality();
 
   useEffect(() => {
     const node = dialog.current;
@@ -52,8 +55,9 @@ export function AppDialog({
       ref={dialog}
       role={role}
       aria-label={title}
+      data-motion={modality === "keyboard" ? "instant" : enabled ? "full" : "reduced"}
       className={cn(
-        "app-dialog modal-surface m-auto max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] overflow-hidden p-0 text-[var(--text)]",
+        "app-dialog motion-modal modal-surface m-auto max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] overflow-hidden p-0 text-[var(--text)]",
         className,
       )}
       onCancel={(event) => {

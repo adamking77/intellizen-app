@@ -28,7 +28,7 @@ it("shows the scoped not-doing list even without projects and excludes unscoped 
   const root = createRoot(container);
   await act(async () => root.render(<MemoryRouter initialEntries={["/unit/workspace"]}><QueryClientProvider client={query}><Routes><Route path="/unit/:id" element={<UnitView />} /></Routes></QueryClientProvider></MemoryRouter>));
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-  expect(container.textContent).toContain("0 projects have a place here.");
+  expect(container.textContent).toContain("0 projects in this workspace.");
   expect(container.textContent).toContain("Keep this out");
   expect(container.textContent).not.toContain("Private elsewhere");
   expect(container.textContent).not.toContain("Unscoped choice");

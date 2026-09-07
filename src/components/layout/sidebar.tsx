@@ -120,7 +120,7 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
     <aside
       style={{
         width: collapsed ? WIDTH_COLLAPSED : width,
-        background: "var(--crust)",
+        background: "var(--rail-plane)",
       }}
       className={cn(
         "pane relative z-10 flex shrink-0 flex-col overflow-hidden",

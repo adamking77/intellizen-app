@@ -76,10 +76,10 @@ export function ProjectSessions({
         isEmpty={sessions.length === 0 && !selectedKey}
         loadingLabel="Loading project sessions"
         errorTitle="Session history unavailable"
-        emptyTitle="No sessions filed here"
+        emptyTitle="No project sessions"
         emptyDescription={folders.length === 0
-          ? "Add a project folder so Hermes sessions can file here by working directory."
-          : "Hermes sessions appear here when their working directory is inside this project."}
+          ? "Add a project folder to match Hermes sessions by working directory."
+          : "No Hermes session has a working directory inside this project."}
         onRetry={() => void projectSessions.refetch()}
       >
         {!transcriptOnly ? <aside className="w-64 shrink-0 overflow-y-auto border-r border-[var(--border)] p-3">

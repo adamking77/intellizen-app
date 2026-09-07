@@ -86,7 +86,7 @@ export function ProjectBoard({ folders }: { folders: string[] }) {
         emptyTitle="No board linked to this project"
         emptyDescription={folders.length === 0
           ? "Add a project folder to connect its Hermes board."
-          : "Hermes boards linked to this project's folder appear here."}
+          : "No Hermes board matches this project's folders."}
         onRetry={() => void (boards.error ? boards.refetch() : boardData.refetch())}
       >
         <div className="space-y-6">

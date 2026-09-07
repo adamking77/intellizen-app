@@ -92,7 +92,7 @@ export function ContextSettings() {
       {error ? <p className="text-xs text-[var(--danger)]">{error}</p> : null}
       <div className="flex items-center gap-3">
         <button type="button" className="action" onClick={() => void add()} disabled={busy}>{busy ? "Choosing…" : "Add folder"}</button>
-        <span className="text-[var(--t-section)] text-[var(--overlay-1)]">Databases and APIs reach agents through each provider’s own connections — never duplicated here.</span>
+        <span className="text-[var(--t-section)] text-[var(--overlay-1)]">Database and API access stays in each provider’s own connection settings.</span>
       </div>
     </div>
   );

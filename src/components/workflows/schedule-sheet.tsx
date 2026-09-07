@@ -320,7 +320,7 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
               ))}
             </div>
           ) : (
-            <p className="px-3 py-4 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">Schedules you create will appear here.</p>
+            <p className="px-3 py-4 font-ui text-[var(--t-section)] text-[var(--overlay-1)]">No schedules yet. Create one to run this workflow automatically.</p>
           )}
         </section>
       </div>

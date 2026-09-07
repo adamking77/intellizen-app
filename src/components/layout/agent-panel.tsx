@@ -305,7 +305,7 @@ export function AgentPanel({
     const picked = usingDraft ? attachments : [];
     if ((!trimmed && picked.length === 0) || !selectedProfile || !targetReady || running) return;
     atBottom.current = true;
-    send(selectedProfile, trimmed, picked).catch((error) => toastError("Could not send", error));
+    send(selectedProfile, trimmed, picked).catch((error) => toastError(`Could not send to ${agentName ?? selectedProfile}`, error, { source: `${selectedProfile}:send` }));
   };
 
   const attach = async () => {
@@ -320,7 +320,7 @@ export function AgentPanel({
 
   const onStop = () => {
     if (!selectedProfile) return;
-    stop(selectedProfile).catch((error) => toastError("Could not stop the turn", error));
+    stop(selectedProfile).catch((error) => toastError(`Could not stop ${agentName ?? selectedProfile}`, error, { source: `${selectedProfile}:stop` }));
   };
 
   const voice = useVoice({
@@ -346,7 +346,7 @@ export function AgentPanel({
       onEdit: (message: Message, text: string) => {
         if (!selectedProfile) return;
         atBottom.current = true;
-        editAndSend(selectedProfile, message.id, text).catch((error) => toastError("Could not send", error));
+        editAndSend(selectedProfile, message.id, text).catch((error) => toastError(`Could not send to ${agentName ?? selectedProfile}`, error, { source: `${selectedProfile}:send` }));
       },
       onDocument: (message: Message) => {
         const preview = previewAgentMessageDocument({
@@ -521,13 +521,13 @@ export function AgentPanel({
                       onApprove={(d, choice) => {
                         if (!selectedProfile) return;
                         decideApproval(selectedProfile, d, choice).catch((error) =>
-                          toastError("Could not answer the approval", error),
+                          toastError(`Could not answer ${agentName ?? selectedProfile}'s approval request`, error, { source: `${selectedProfile}:approval:${d.requestId}` }),
                         );
                       }}
                       onClarify={(d, answers) => {
                         if (!selectedProfile) return;
                         decideClarify(selectedProfile, d, answers).catch((error) =>
-                          toastError("Could not send the answer", error),
+                          toastError(`Could not send the answer to ${agentName ?? selectedProfile}`, error, { source: `${selectedProfile}:clarification:${d.requestId}` }),
                         );
                       }}
                     />

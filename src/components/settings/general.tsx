@@ -54,7 +54,7 @@ export function GeneralSettings() {
     <div>
       <header className="pb-3">
         <h1 className={SETTINGS_TITLE}>General</h1>
-        <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Startup and defaults.</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Set the default workspace, startup connections, and conversation behavior.</p>
       </header>
       <div className="max-w-[660px]">
         <SettingRow label="Default workspace" detail="Where a new conversation starts when its agent has no context folder.">

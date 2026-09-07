@@ -97,7 +97,7 @@ it("shows truthful unsourced metadata and lets reading focus change and restore 
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => root.render(<MemoryRouter><QueryClientProvider client={client}><DocumentPage record={{ id: "focus", doc_title: "Focus report" }} projects={[]} initialEdit={false} savingTemplate={false} isCramped={false} onBack={vi.fn()} onSaveTemplate={vi.fn()} onDelete={vi.fn()} onMakeRunnable={vi.fn()} /></QueryClientProvider></MemoryRouter>));
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
-  expect(host.textContent).toContain("Verification unavailable · Done when not recorded");
+  expect(host.textContent).toContain("Verification unavailable · Completion criteria not recorded");
   expect(host.textContent).toContain("1 section");
   expect(host.textContent).not.toContain("§1 of");
   const focus = [...host.querySelectorAll("button")].find((button) => button.textContent === "Reading focus")!;

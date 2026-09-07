@@ -1,3 +1,5 @@
+import { readInputModality } from "@/components/ui/motion";
+
 export type ViewTransitionKind = "room" | "drawer" | "segment";
 let activeTransition = 0;
 
@@ -12,6 +14,8 @@ type TransitionDocument = Document & {
 function allowed() {
   return typeof document !== "undefined"
     && typeof (document as TransitionDocument).startViewTransition === "function"
+    && readInputModality() !== "keyboard"
+    && document.documentElement.dataset.session !== "not-today"
     && !(typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 

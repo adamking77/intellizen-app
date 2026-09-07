@@ -173,7 +173,7 @@ export function ProjectView() {
           <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.error || graphNodes.isLoading ? null : graphNodes.data?.length ?? 0} investigation={investigation} />
         </QueryState>
       ) : view === "table" || view === "evidence" ? (
-        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading || investigationSignals.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error ?? investigationSignals.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) + (investigationSignals.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Signals, workspace documents, linked records, and files in this project's folder appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch(), investigationSignals.refetch()])}>
+        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading || investigationSignals.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error ?? investigationSignals.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) + (investigationSignals.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Link a signal, workspace document, record, or file to add evidence to this project." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch(), investigationSignals.refetch()])}>
           <ProjectEvidenceTable files={files} folderFiles={folderFiles.data} linkedRecords={linkedRecords} signals={investigationSignals.data} onOpenDocument={(record) => setSelected({ kind: "document", record })} onOpenFile={(file) => setSelected({ kind: "file", file })} onOpenRecord={(record) => setSelected({ kind: "record", record })} onOpenSignal={(signal) => setSelected({ kind: "signal", signal })} />
         </QueryState>
       ) : view === "entities" ? (
@@ -191,7 +191,7 @@ export function ProjectView() {
       ) : view === "timeline" ? (
         <ProjectTimeline files={files} investigation={investigation} onOpenDocument={(record) => setSelected({ kind: "document", record })} />
       ) : (
-        <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">This view will appear when the project has linked material.</p>
+        <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">No linked material is available for this view.</p>
       )}
       </div>
 

@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useVoicePrefs, type SpeechService } from "@/voice/voice-prefs";
 
 import { SettingSwitch } from "./setting-switch";
+import { SETTINGS_TITLE } from "./settings-style";
 
 interface Catalog {
   id: string;
@@ -107,7 +108,7 @@ function Half({
               <span className={caps}>Service id</span>
               <Input className="h-8 text-[var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
               <span className={meta}>
-                Recorded, not yet spoken through — this app has code for {catalog.map((p) => p.label).join(" and ")} only, and answers anything else by saying so rather than failing quietly.
+                Custom services are saved for future use. Only {catalog.map((p) => p.label).join(" and ")} {title === "Speaking" ? "can speak" : "works for dictation"} in the current app.
               </span>
             </label>
           ) : null}
@@ -148,7 +149,7 @@ function Half({
               <span className={caps}>API key</span>
               <Input className="h-8 text-[var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
               <span className={meta}>
-                Credentials come from the environment — the same variable the service's own CLI reads. What is typed here is stored but not yet used.
+                The app reads credentials from the service’s environment variable. A key entered here is saved but is not used yet.
               </span>
             </label>
           ) : null}
@@ -171,16 +172,19 @@ export function VoiceSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* An explanation, in the quiet register — not a notice. */}
+      <div>
+        <h1 className={SETTINGS_TITLE}>Voice</h1>
+        <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">Choose the local dictation model and the service agents use to read replies aloud.</p>
+      </div>
       <div className="flex items-start rounded-[var(--r-plane)] bg-[var(--input)] px-3 py-[9px]">
         <span className={cn(meta, "leading-[1.5]")}>
-          Both halves run on this machine — dictation through a local model, and speaking through the service you connect below. Nothing is sent anywhere you did not choose.
+          Dictation uses a model installed on this Mac. Speaking uses the service you choose below.
         </span>
       </div>
 
       <Half
         title="Dictation"
-        explain="The microphone in the composer — what it sends, and to whom."
+        explain="Choose the model that turns microphone audio into text in the composer."
         value={voice.dictation}
         catalog={DICTATION_SERVICES}
         found={found}
@@ -190,7 +194,7 @@ export function VoiceSettings() {
 
       <Half
         title="Speaking"
-        explain="An agent reading its reply aloud, in its own identity colour."
+        explain="Choose the service and voice agents use to read replies aloud."
         value={voice.speaking}
         catalog={SPEAKING_SERVICES}
         onChange={(speaking) => setVoice({ ...voice, speaking })}

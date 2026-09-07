@@ -33,7 +33,7 @@ it("switches between cards and a compact list, and creates from the library dock
   expect(create).toHaveBeenCalledOnce();
 });
 it("provides an actionable empty library and restores filters", async () => {
-  await render([]); expect(host.textContent).toContain("Build your first workflow");
+  await render([]); expect(host.textContent).toContain("No workflows yet");
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "New workflow")!.click()); expect(create).toHaveBeenCalledOnce();
   await render(); await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "Needs attention")!.click()); expect(host.textContent).toContain("No matching workflows");
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "Clear filters")!.click()); expect(host.querySelectorAll('[aria-label^="Edit "]')).toHaveLength(2);
@@ -47,5 +47,5 @@ it("shows purpose, owner, readiness and the concrete first blocker on the card",
   const card = host.querySelector('[aria-label="Edit Research brief"]')!;
   expect(card.textContent).toContain("A brief with attributed evidence."); expect(card.textContent).toContain("Chief Engineer");
   expect(card.textContent).toContain("Needs attention"); expect(card.textContent).toContain("Prepare findings: Chief Engineer has no active occupant. (1 more issue)");
-  expect(card.querySelector('[aria-label="Workflow steps"]')?.textContent).toBe("1 steps · 1 roles"); expect(card.querySelector("svg")).toBeNull();
+  expect(card.querySelector('[aria-label="Workflow steps"]')?.textContent).toBe("1 step · 1 role"); expect(card.querySelector("svg")).toBeNull();
 });

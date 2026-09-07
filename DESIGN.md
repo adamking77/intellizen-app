@@ -386,8 +386,10 @@ filters belong to the list or table they affect.
 - **Don't** use gradients as chrome; procedural avatars and analytical canvas
   rendering are the intentional exceptions.
 - **Don't** pulse, spin, or shimmer to communicate waiting. State is explicit text.
-- **Don't** animate content entrance. Controls may acknowledge interaction; the
-  listening waveform and measured speaking avatar are the only ambient motion.
+- **Don't** animate frequent or keyboard-driven entrances. Controls may acknowledge interaction; the
+  listening waveform and measured speaking avatar remain state-driven. Adam's
+  2026-09-07 follow-up below also permits the specified activity Pulse and motion
+  that preserves spatial continuity.
 - **Don't** add a route, sidebar item, default view, or persistent surface without
   Adam's approval.
 
@@ -418,3 +420,32 @@ Settings sections remain labeled. The menu uses the same CollapsibleRail and Col
 Plugins is reserved exclusively for IntelliZen SDK extensions built for this app. CLI plugins, skills, commands and MCP connections belong together in Capabilities: one provider selector, one search field and collapsible type sections. Provider details link to a filtered view. Do not move CLI inventories into Plugins or create separate Skills/MCP pages.
 
 New capability switches are scoped to IntelliZen sessions and disclose when reconnection is needed. Existing Hermes profile controls must clearly identify their shared scope. Long capability descriptions expand separately from the switch and wrap fully, including at 200% zoom. Unsupported adapter controls are labeled provider managed rather than displayed as functional switches.
+
+### Follow-up direction — Adam, 2026-09-07
+
+This direction supersedes conflicting earlier visual and motion restrictions.
+Connected uses one ground for the sidebar, work area and attached agent panel;
+Segmented uses the existing arrangement with a recessed rail and panel. Keep the
+accepted attached, detached and HUD geometry and calmer page typography.
+
+Offer Calm, Clear and Strong contrast independently of Accent Strength. Calm
+keeps the calibrated palette; meaningful small text and semantic labels retain
+the existing 4.5:1 floor in every mode and theme. Reference dim colors that fail
+this floor are not copied. Strong moves primary ink toward black or white.
+
+Bottom navigation pills share compact readable sizing and wrap within their own
+container at narrow widths and 200% zoom. Filled floating surfaces do not need
+decorative outlines; focus indicators and structural separators stay visible.
+
+Motion may clarify list changes, pointer-selected navigation, in-place completion
+and newly arriving content. Use CSS first and the existing motion library for
+layout/exit handling. Transforms and opacity use the short shared timing tokens;
+keyboard actions stay immediate. Pulse alone may loop as a slow solid strand
+while actual work is active. Idle, reduced-motion and Not today states are still.
+Chart arrival may happen once, never replay on refresh. These permissions do not
+require animating every surface or replacing existing approval controls with a
+hold gesture. Apply Emil's installed animation skills and review the result.
+
+All pages and dashboards use clear, practical headings and descriptions grounded
+in actual behavior. Names identify the material; descriptions explain what can
+be seen or done. Preserve precise approval, failure and historical state meaning.

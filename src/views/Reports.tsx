@@ -384,8 +384,8 @@ export function ReportsView() {
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
               <p className="text-label">{allRecords.length === 0 ? "No documents" : "Select a document"}</p>
               <p className="max-w-[440px] text-ui text-[var(--subtext-0)]">
-                Your documents, notes, and workflow sources live here.
-                Choose a document, create one from a template, or capture a quick note.
+                Docs includes notes, saved reports, and workflow sources.
+                Choose one from the list, create one from a template, or add a quick note.
               </p>
             </div>
           )}

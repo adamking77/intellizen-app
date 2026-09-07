@@ -25,7 +25,7 @@ export function ProjectCanvases({ canvases }: { canvases: CanvasDocumentSummary[
             <Pill>canvas</Pill>
           </button>
         ))}
-        {!canvases.length ? <p className="bg-[var(--base)] py-2 text-[var(--t-ui)] text-[var(--text-muted)]">Canvases linked to this project will appear here.</p> : null}
+        {!canvases.length ? <p className="bg-[var(--base)] py-2 text-[var(--t-ui)] text-[var(--text-muted)]">No canvases are linked to this project.</p> : null}
       </div>
     </ProjectTabFrame>
   );

@@ -83,7 +83,7 @@ export function ProjectBrief({
         <BriefLine term="Latest document by">
           {author ? <Attribution name={author} /> : "—"}
         </BriefLine>
-        <BriefLine term="Evidence">{linkedRecords.length} records · {files.length} documents · {graphCount === null ? "Entities unavailable" : `${graphCount} entities`}</BriefLine>
+        <BriefLine term="Evidence">{linkedRecords.length} {linkedRecords.length === 1 ? "record" : "records"} · {files.length} {files.length === 1 ? "document" : "documents"} · {graphCount === null ? "Entities unavailable" : `${graphCount} ${graphCount === 1 ? "entity" : "entities"}`}</BriefLine>
         <BriefLine term="Last movement">
           {latest ? <Receipt className="ml-0" verb="wrote" object={`${title(latest)} · ${date(latest.updated_at)}`} /> : "—"}
         </BriefLine>
@@ -213,7 +213,7 @@ export function ProjectTimeline({ files, investigation, onOpenDocument }: { file
           <Pill>case</Pill>
         </div>
       ))}
-      {!events.length ? <p className="text-[var(--t-ui)] text-[var(--text-muted)]">Case and document movement will appear here.</p> : null}
+      {!events.length ? <p className="text-[var(--t-ui)] text-[var(--text-muted)]">No case or document activity yet.</p> : null}
     </div>
   );
 }

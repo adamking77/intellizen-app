@@ -56,7 +56,7 @@ describe("project session continuity", () => {
   it("shows a missing explicit session honestly even when the returned list is empty", async () => {
     mocks.sessions.mockResolvedValue([]); await render("fiona:missing");
     expect(host.textContent).toContain("Selected session unavailable");
-    expect(host.textContent).not.toContain("No sessions filed here");
+    expect(host.textContent).not.toContain("No project sessions");
     expect(mocks.messages).not.toHaveBeenCalled();
   });
   it("follows a changed tree selection and resets local selection for another project", async () => {

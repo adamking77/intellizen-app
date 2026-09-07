@@ -34,7 +34,7 @@ export function CollapsibleRail({
       style={{ width: collapsed ? 0 : width }}
       aria-hidden={collapsed ? true : undefined}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden bg-[var(--mantle)]",
+        "relative flex shrink-0 flex-col overflow-hidden bg-[var(--ground)]",
         "transition-[width] duration-[var(--t-slow)] ease-[var(--ease)]",
         !collapsed && "border-r border-[var(--border)]",
         collapsed && "invisible",

@@ -29,6 +29,11 @@ import {
   type VoiceService,
 } from "./agent-model";
 import { previewVoice } from "./agents-data";
+import {
+  clearAgentEditorDraft,
+  readAgentEditorDraft,
+  writeAgentEditorDraft,
+} from "./agent-editor-draft";
 import { Avatar, BLOB_KINDS } from "./avatar";
 
 function voiceLabel(service: VoiceService | undefined): string {
@@ -106,7 +111,9 @@ export function AgentEditor({
   onRestToggle,
   onClose,
 }: EditorProps) {
-  const [draft, setDraft] = useState<Agent>(agent);
+  const [restored] = useState(() => readAgentEditorDraft(agent.id, creating));
+  const [draft, setDraft] = useState<Agent>(() => restored?.draft ?? agent);
+  const [hasStoredDraft, setHasStoredDraft] = useState(restored !== null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -117,19 +124,22 @@ export function AgentEditor({
   const [models, setModels] = useState<AgentModelOption[] | null>(null);
   const [permissionMode, setPermissionMode] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
+  const protectedFields = useRef(new Set<keyof Agent>(
+    restored?.touched ?? [],
+  ));
 
   // The detail read lands after mount; take it once, without clobbering
   // what the person has already typed.
   useEffect(() => {
-    setDraft((d) => ({
-      ...d,
-      identity: agent.identity,
-      provider: agent.provider,
-      model: agent.model,
-      voiceId: agent.voiceId,
-      voiceService: agent.voiceService,
-    }));
-  }, [agent.identity, agent.provider, agent.model, agent.voiceId, agent.voiceService]);
+    setDraft((current) => {
+      const next = { ...current };
+      for (const field of ["identity", "provider", "model", "voiceId", "voiceService"] as const) {
+        if (!protectedFields.current.has(field)) Object.assign(next, { [field]: agent[field] });
+      }
+      if (hasStoredDraft) writeAgentEditorDraft(agent.id, creating, next, protectedFields.current);
+      return next;
+    });
+  }, [agent.id, agent.identity, agent.provider, agent.model, agent.voiceId, agent.voiceService, creating, hasStoredDraft]);
 
   useEffect(() => {
     let live = true;
@@ -170,7 +180,23 @@ export function AgentEditor({
   const set = (patch: Partial<Agent>) => {
     setError(null);
     setConfirm(null);
-    setDraft((d) => ({ ...d, ...patch }));
+    for (const field of Object.keys(patch) as (keyof Agent)[]) protectedFields.current.add(field);
+    setDraft((current) => {
+      const next = { ...current, ...patch };
+      writeAgentEditorDraft(agent.id, creating, next, protectedFields.current);
+      return next;
+    });
+    setHasStoredDraft(true);
+  };
+
+  const discardDraft = () => {
+    clearAgentEditorDraft(agent.id, creating);
+    protectedFields.current.clear();
+    setDraft(agent);
+    setProceduralPreview(false);
+    setError(null);
+    setConfirm(null);
+    setHasStoredDraft(false);
   };
 
   const chooseProvider = (engine: AgentEngine) => {
@@ -184,6 +210,7 @@ export function AgentEditor({
     setError(null);
     try {
       await onSave({ ...draft, name, displayName: draft.displayName.trim() || name }, confirmModel);
+      clearAgentEditorDraft(agent.id, creating, draft);
       onClose();
     } catch (e) {
       if (e instanceof Error && e.name === "ModelConfirmRequired") setConfirm(e.message);
@@ -431,6 +458,7 @@ export function AgentEditor({
 
                 <input
                   className={FIELD}
+                  aria-label="Agent name"
                   autoFocus={creating}
                   placeholder={hermes ? "profile-name" : "Agent name"}
                   value={draft.name}
@@ -444,7 +472,7 @@ export function AgentEditor({
 
                 <div className="flex flex-col gap-1">
                   <span className={CAPS}>Role</span>
-                  <input className={cn(FIELD, "text-[var(--text-muted)]")} value={draft.role} onChange={(e) => set({ role: e.target.value })} />
+                  <input aria-label="Role" className={cn(FIELD, "text-[var(--text-muted)]")} value={draft.role} onChange={(e) => set({ role: e.target.value })} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-[11px]">
@@ -520,6 +548,7 @@ export function AgentEditor({
                 </div>
                 <textarea
                   className={cn(FIELD, "h-auto min-h-0 resize-y px-[11px] py-2.5 leading-[1.55]")}
+                  aria-label="Identity"
                   rows={5}
                   value={draft.identity}
                   disabled={loadingDetail}
@@ -559,7 +588,7 @@ export function AgentEditor({
                   ))}
                   {context.length === 0 ? (
                     <span className="px-0.5 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
-                      No folders — this agent sees only what it is told in the prompt.
+                      No folders — this agent receives no additional folder context.
                     </span>
                   ) : null}
                 </div>
@@ -598,6 +627,7 @@ export function AgentEditor({
               ) : null}
               <div className="grow" />
               {creating && !name ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">A name is needed — the avatar is drawn from it.</span> : null}
+              {hasStoredDraft ? <button type="button" className={PILL} onClick={discardDraft} disabled={busy}>Discard draft</button> : null}
               <button type="button" className={PILL} onClick={onClose} disabled={busy}>
                 Cancel
               </button>

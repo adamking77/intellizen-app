@@ -10,7 +10,7 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(
     <div
       ref={ref}
       className={cn(
-        "rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)] px-4 py-3",
+        "rounded-[var(--r-surface)] bg-[var(--surface)] px-4 py-3",
         className,
       )}
       {...props}

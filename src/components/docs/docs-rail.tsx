@@ -97,7 +97,7 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
         <ul aria-label="Vault folders">{tree.folders.map(node => folder(node))}{tree.records.map(record => <li key={record.id}>{row(record)}</li>)}</ul>
         {collection('remote', 'Saved in workspace', remote)}{collection('templates', 'Templates', templates)}
       </> : quickResults.map(record => row(record, 0, true))}
-      {!filtered.length && !tree.folders.length && !loadingVault ? <p className="px-2 py-3 text-[var(--t-meta)] text-[var(--text-muted)]">{searchQuery ? 'No documents match this search.' : view === 'favorites' ? 'Star a document to keep it here.' : 'No documents in this view.'}</p> : null}
+      {!filtered.length && !tree.folders.length && !loadingVault ? <p className="px-2 py-3 text-[var(--t-meta)] text-[var(--text-muted)]">{searchQuery ? 'No documents match this search.' : view === 'favorites' ? 'Star a document to add it to Favorites.' : 'No documents in this view.'}</p> : null}
     </div>
     <p className="truncate px-3 pb-2 text-[var(--t-meta)] text-[var(--text-muted)]" title={activeFolder || 'journal'}>New notes → {activeFolder || 'journal'}</p>
   </aside>;

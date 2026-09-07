@@ -64,6 +64,7 @@ function readStoredRestingAgents(): StoredRestingAgents | null {
 }
 
 function emit() {
+  if (typeof document !== "undefined") document.documentElement.dataset.session = current.mode?.replace("_", "-") ?? "thinking";
   for (const listener of listeners) listener();
 }
 

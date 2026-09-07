@@ -14,7 +14,7 @@ import { isTauriRuntime, PANE_BG, useWindowDrag, WindowResizeHandles } from "./w
 import { Sidebar } from "./sidebar";
 import { PaneDivider, usePaneResize } from "./pane-resize";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
-import { dismissToasts, toast, toastError } from "@/lib/toast";
+import { dismissToasts, syncQuietToasts, toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { contextForRoute, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
@@ -86,7 +86,7 @@ export function AppShell() {
   }, [focusMode]);
 
   useEffect(() => {
-    if (sessionMode.ready && sessionMode.mode === "not_today") dismissToasts();
+    if (sessionMode.ready) syncQuietToasts();
   }, [sessionMode.ready, sessionMode.mode]);
 
   useEffect(() => {
@@ -194,17 +194,19 @@ export function AppShell() {
     void recoverInterruptedLocalWorkflowsOnLaunch()
       .then((report) => {
         if (report.abandoned.length) {
-          toast.info("Interrupted local workflow recovered", {
+          toast.info("Interrupted workflows checked", {
+            origin: "background", source: "workflow-recovery",
             description: `${report.abandoned.length} run${report.abandoned.length === 1 ? "" : "s"} marked abandoned with receipts; none were retried.`,
           });
         }
         if (report.failures.length) {
-          toast.error("Workflow recovery needs attention", {
+          toast.error("Some workflows could not be recovered", {
+            origin: "background", source: "workflow-recovery",
             description: `${report.failures.length} run${report.failures.length === 1 ? "" : "s"} could not be reconciled.`,
           });
         }
       })
-      .catch((error) => toastError("Workflow recovery failed", error));
+      .catch((error) => toastError("Workflow recovery failed", error, { origin: "background", source: "workflow-recovery" }));
   }, []);
 
   const dragWindow = useWindowDrag();
@@ -304,14 +306,16 @@ export function AppShell() {
         )}
       </div>
       <WindowResizeHandles sides={agentPanelHidden || agentPanelDetached || focusMode || isNarrow} />
-      {sessionMode.ready && sessionMode.mode !== "not_today" ? <Toaster
+      {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
         theme="dark"
         closeButton
+        visibleToasts={3}
         toastOptions={{
           style: {
-            background: "var(--mantle)",
-            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            border: "none",
+            boxShadow: "none",
             color: "var(--text)",
             fontFamily: "var(--font-ui, inherit)",
             fontSize: "13px",
@@ -356,19 +360,22 @@ export function AgentPanelWindow() {
   useEngineBoot();
   const sessionMode = useSessionMode();
   useEffect(() => {
-    if (sessionMode.ready && sessionMode.mode === "not_today") dismissToasts();
+    // Home's window owns return summaries; the detached panel only quiets its lane.
+    if (sessionMode.ready && (sessionMode.mode === null || sessionMode.mode === "not_today" || sessionMode.mode === "thinking")) dismissToasts();
   }, [sessionMode.ready, sessionMode.mode]);
   return (
     <>
       <EjectedPanel />
-      {sessionMode.ready && sessionMode.mode !== "not_today" ? <Toaster
+      {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
         theme="dark"
         closeButton
+        visibleToasts={3}
         toastOptions={{
           style: {
-            background: "var(--mantle)",
-            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            border: "none",
+            boxShadow: "none",
             color: "var(--text)",
             fontFamily: "var(--font-ui, inherit)",
             fontSize: "13px",

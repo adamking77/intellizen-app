@@ -252,11 +252,11 @@ export function activitySentence(input: {
     meanwhile: eventsState === "unseen"
       ? "No earlier Home visit is recorded yet."
       : eventsState === "loading"
-        ? "Work events since your last visit are still loading."
+        ? "Updates since your last visit are still loading."
       : eventCount
-      ? `${eventCount >= 100 ? "At least 100" : eventCount} work ${eventCount === 1 ? "event has" : "events have"} landed since your last visit.`
-      : "No work events have landed since your last visit.",
-    counts: `${activeConversations.length} active conversations · ${questions.length} questions · ${eventsState === "ready" && eventCount >= 100 ? "100+" : eventCount} new events`,
+      ? `${eventCount >= 100 ? "At least 100" : eventCount} ${eventCount === 1 ? "update was" : "updates were"} recorded since your last visit.`
+      : "No updates were recorded since your last visit.",
+    counts: `${activeConversations.length} active conversations · ${questions.length} questions · ${eventsState === "ready" && eventCount >= 100 ? "100+" : eventCount} new updates`,
   };
 }
 

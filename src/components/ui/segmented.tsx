@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 
 import { Control } from "@/components/ui/control";
+import { useInputModality, useMotionEnabled } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { runViewTransition, type ViewTransitionKind } from "@/lib/view-transitions";
 
@@ -31,9 +32,12 @@ export function Segmented<T extends string>({
 }: SegmentedProps<T>) {
   const controls = useRef<(HTMLButtonElement | null)[]>([]);
   const transitionName = `segmented-${useId().replaceAll(":", "")}`;
+  const motionEnabled = useMotionEnabled();
+  const modality = useInputModality();
 
-  function select(next: T) {
-    runViewTransition(transitionKind, () => onValueChange(next));
+  function select(next: T, animate = true) {
+    if (!animate || !motionEnabled || modality === "keyboard") onValueChange(next);
+    else runViewTransition(transitionKind, () => onValueChange(next));
   }
 
   function move(from: number, direction: -1 | 1 | "first" | "last") {
@@ -45,7 +49,7 @@ export function Segmented<T extends string>({
       : direction === "last"
         ? enabled.at(-1)!
         : enabled[(current + direction + enabled.length) % enabled.length];
-    select(target.option.value);
+    select(target.option.value, false);
     controls.current[target.index]?.focus();
   }
 

@@ -199,7 +199,7 @@ export function ActivityDashboard() {
           {ACTIVITY_CARDS.map((id) => (
             <div
               key={id}
-              className="h-48 animate-pulse rounded-[var(--r-plane)] bg-[var(--mantle)]"
+              className="h-48 rounded-[var(--r-plane)] bg-[var(--mantle)]"
             />
           ))}
         </div>

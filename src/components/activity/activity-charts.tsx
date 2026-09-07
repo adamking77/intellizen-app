@@ -1,4 +1,6 @@
 import { curveLinear } from "d3-shape";
+import type { Transition } from "motion/react";
+import { useEffect, useRef } from "react";
 import { BarChart } from "@/components/charts/bar-chart";
 import { Bar } from "@/components/charts/bar";
 import { BarXAxis } from "@/components/charts/bar-x-axis";
@@ -12,12 +14,18 @@ import { ChartTooltip } from "@/components/charts/tooltip/chart-tooltip";
 import { PieChart } from "@/components/charts/pie-chart";
 import { PieSlice } from "@/components/charts/pie-slice";
 import { PieCenter } from "@/components/charts/pie-center";
+import { useInputModality, useMotionEnabled } from "@/components/ui/motion";
 import type { ActivityDashboardModel } from "@/lib/activity-dashboard";
 import type { ActivityChartStyle } from "@/lib/activity-pins";
 
 const COLORS: Record<string, string> = {
-  Completed: "var(--accent)", Failed: "color-mix(in srgb,var(--accent) 85%,var(--ground))", Cancelled: "color-mix(in srgb,var(--accent) 70%,var(--ground))",
-  Blocked: "color-mix(in srgb,var(--accent) 55%,var(--ground))", Deferred: "color-mix(in srgb,var(--accent) 40%,var(--ground))", Open: "color-mix(in srgb,var(--accent) 25%,var(--ground))",
+  Completed: "var(--chart-line-primary)",
+  Verified: "var(--ok)",
+  Failed: "var(--bad)",
+  Blocked: "var(--chart-line-secondary)",
+  Cancelled: "var(--chart-line-secondary)",
+  Deferred: "var(--chart-line-secondary)",
+  Open: "var(--chart-line-secondary)",
 };
 const cost = (n: unknown) => typeof n === "number" ? new Intl.NumberFormat(undefined, {
   style: "currency", currency: "USD", maximumFractionDigits: 4,
@@ -26,8 +34,22 @@ const SERIES = [
   { key: "reported", label: "Reported", color: "var(--chart-line-primary)" },
   { key: "estimated", label: "Estimated", color: "var(--chart-line-primary)" },
 ];
+const CHART_ARRIVAL: Transition = {
+  type: "tween",
+  duration: 0.24,
+  ease: [0.23, 1, 0.32, 1],
+};
+
+function useChartArrival() {
+  const motionEnabled = useMotionEnabled();
+  const modality = useInputModality();
+  const arrived = useRef(false);
+  useEffect(() => { arrived.current = true; }, []);
+  return motionEnabled && modality === "pointer" && !arrived.current ? 240 : 0;
+}
 
 export function UsageChart({ model, style }: { model: ActivityDashboardModel; style: ActivityChartStyle }) {
+  const animationDuration = useChartArrival();
   const series = SERIES.filter((s) => model.usageDays.some((d) => d[s.key as "reported" | "estimated"] !== null))
     .map((s) => ({ ...s, color: style === "bar" && s.key === "estimated" ? "var(--chart-line-secondary)" : s.color }));
   const rows = (point: Record<string, unknown>) => series.map((s) => ({ color: s.color, label: s.label, value: cost(point[s.key]) }));
@@ -37,13 +59,13 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
       {series.map((s) => <span key={s.key} className="inline-flex items-center gap-2"><svg aria-hidden width="18" height="6"><path d="M0 3H18" stroke={s.color} strokeWidth={style === "bar" ? 6 : 2} strokeDasharray={style !== "bar" && s.key === "estimated" ? "4 3" : undefined} /></svg>{s.label}</span>)}
     </div>
     <div className="h-[200px]" role="img" aria-label="Daily session cost in USD. Missing reports remain gaps. Exact values available in daily reports below.">
-      {style === "bar" ? <BarChart data={data} xDataKey="label" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={0}>
+      {style === "bar" ? <BarChart data={data} xDataKey="label" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={animationDuration} enterTransition={CHART_ARRIVAL}>
         <Grid horizontal fadeHorizontal={false} />
         {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={s.color} animate={false} lineCap={3} maxWidth={16} />)}
         <YAxis numTicks={4} formatValue={(v) => cost(v)} />
         <BarXAxis maxLabels={4} tickerHalfWidth={30} />
         <ChartTooltip rows={rows} showDots={false} showDatePill={false} />
-      </BarChart> : <LineChart data={data} aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={0}>
+      </BarChart> : <LineChart data={data} aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 30, left: 56, right: 16 }} animationDuration={animationDuration} enterTransition={CHART_ARRIVAL}>
         <Grid horizontal fadeHorizontal={false} />
         {series.map((s) => <Line key={s.key} dataKey={s.key} stroke={s.color} dashFromIndex={s.key === "estimated" ? 0 : undefined} showHighlight={false} animate={false} curve={curveLinear} fadeEdges={false} showMarkers markers={{ radius: 2.5, strokeWidth: 0, ringGap: 0, inactiveBlur: 0, enterBlur: 0, showActiveHighlight: false }} strokeWidth={2} />)}
         <YAxis numTicks={4} formatValue={(v) => cost(v)} />
@@ -55,10 +77,11 @@ export function UsageChart({ model, style }: { model: ActivityDashboardModel; st
 }
 
 export function OutcomesChart({ model, style }: { model: ActivityDashboardModel; style: ActivityChartStyle }) {
+  const animationDuration = useChartArrival();
   const data = model.outcomes.filter((o) => o.count > 0);
   return <div className="@container">
     <div role="img" aria-label={model.outcomes.map((o) => `${o.name}: ${o.count}`).join(", ")} className={style === "bar" ? "h-[220px]" : "flex flex-wrap items-center justify-center gap-x-6 gap-y-2"}>
-      {style === "bar" ? <BarChart data={data} xDataKey="name" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 12, left: 96, right: 24 }} animationDuration={0} orientation="horizontal">
+      {style === "bar" ? <BarChart data={data} xDataKey="name" aspectRatio="auto" className="h-full" margin={{ top: 12, bottom: 12, left: 96, right: 24 }} animationDuration={animationDuration} enterTransition={CHART_ARRIVAL} orientation="horizontal">
         <Grid horizontal={false} vertical numTicksColumns={4} fadeVertical={false} />
         <Bar dataKey="count" animate={false} fill={(d) => COLORS[String(d.name)]} lineCap={4} maxWidth={28} />
         <BarYAxis maxLabels={6} />

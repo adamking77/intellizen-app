@@ -115,7 +115,7 @@ function token(block, name) {
 function contrastAudit() {
   const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
   const panelContracts = [
-    ["src/components/agent/agent-panel-shell.tsx", ['background: "var(--mantle)"', "bg-transparent"]],
+    ["src/components/agent/agent-panel-shell.tsx", ['background: "var(--region-plane)"', "bg-transparent"]],
     ["src/components/ui/receipt.tsx", ["text-[var(--text-muted)]"]],
     ["src/components/agent/target-picker.tsx", ["text-[var(--text-muted)]"]],
     ["src/components/agent/ejected-panel.tsx", ["text-[var(--text-muted)] transition-colors"]],
@@ -151,6 +151,10 @@ function contrastAudit() {
     "--bad: #893a4a;",
     "--runtime: #325586;",
     "--agent-bubble-weight: 11%;",
+    "--rail-plane: var(--ground);",
+    "--region-plane: var(--ground);",
+    ':root[data-panes="segmented"] {\n  --rail-plane: var(--crust);\n  --region-plane: var(--mantle);\n}',
+    ':root[data-session="not-today"] .pulse-trace { animation: none; }',
   ]) if (!css.includes(token)) throw new Error(`2050 token contract needs updating: ${token}`);
   // Assert the modeled formulas so changing CSS cannot silently leave this audit stale.
   for (const formula of [
@@ -164,6 +168,12 @@ function contrastAudit() {
     "--accent-text: color-mix(in srgb, var(--accent) 50%, black);",
     "--user-bubble: color-mix(in srgb, var(--accent) 15%, var(--raised));",
     "--user-bubble: color-mix(in srgb, var(--accent) 9%, #fff);",
+    "--text-muted: color-mix(in srgb, var(--text-muted-calm) 55%, var(--text));",
+    "--text-muted: color-mix(in srgb, var(--text-muted-calm) 20%, var(--text));",
+    "--text: color-mix(in srgb, var(--text-calm) 60%, var(--strong-text-target));",
+    "--chart-line-primary: var(--text);",
+    "--line: color-mix(in srgb, var(--text) 20%, var(--base));",
+    "--line: color-mix(in srgb, var(--text) 30%, var(--base));",
     "--go-bg: var(--selected);", "--go-hover: var(--selected-hover);", "--go-fg: var(--text);",
     "--go-bg: var(--accent);", "--go-hover: var(--accent-hover);", "--go-fg: var(--accent-fg);",
   ]) if (!css.includes(formula)) throw new Error(`Contrast model needs updating: ${formula}`);
@@ -190,8 +200,8 @@ function contrastAudit() {
     const surface = flavor === "mocha" ? rgb(token(block, "surface")) : rgb(token(block, "raised"));
     const planes = [...basePlanes, surface];
     const [base, raised] = planes;
-    const text = rgb(token(block, "text"));
-    const muted = rgb(token(block, "text-muted"));
+    const calmText = rgb(token(block, "text-calm"));
+    const calmMuted = rgb(token(block, "text-muted-calm"));
     const light = flavor === "latte" || flavor === "flat";
     const semanticForegrounds = light ? lightSemantics : darkSemantics;
     let minimum = Infinity, checks = 0;
@@ -200,42 +210,49 @@ function contrastAudit() {
       if (ratio < 4.5) throw new Error(`${flavor}/${accent}/${strength} ${state}: ${ratio.toFixed(2)} < 4.5`);
       minimum = Math.min(minimum, ratio); checks++;
     };
-    for (const plane of planes) {
-      check(muted, plane, "meaningful mid metadata", "base", 0);
-      check(muted, plane, "meaningful dim metadata", "base", 0);
-    }
-    for (const [role, hex] of Object.entries(semanticForegrounds)) {
-      for (const plane of planes) check(rgb(hex), plane, `${role} semantic text`, "base", 0);
-    }
-    for (const accentName of accents) {
+    const contrastLevels = [
+      ["calm", calmText, calmMuted],
+      ["clear", calmText, mix(calmMuted, calmText, 0.45)],
+      ["strong", mix(calmText, light ? [0, 0, 0] : [1, 1, 1], 0.4), null],
+    ].map(([level, text, muted]) => [level, text, muted ?? mix(calmMuted, text, 0.8)]);
+    for (const [level, text, muted] of contrastLevels) {
+      for (const plane of planes) {
+        check(muted, plane, "meaningful mid metadata", level, 0);
+        check(muted, plane, "meaningful dim metadata", level, 0);
+      }
+      for (const [role, hex] of Object.entries(semanticForegrounds)) {
+        for (const plane of planes) check(rgb(hex), plane, `${role} semantic text`, level, 0);
+      }
+      for (const accentName of accents) {
       const hex = token(block, accentName), accent = rgb(hex);
       const ink = rgb(accentForeground(hex));
       const hover = mix(accent, ink.map((channel) => 1 - channel), 0.08);
       const accentText = mix(accent, light ? [0, 0, 0] : [1, 1, 1], light ? 0.5 : 0.4);
       const userBubble = mix(light ? [1, 1, 1] : raised, accent, light ? 0.09 : 0.15);
-      check(text, userBubble, "user bubble text", accentName, light ? 0.09 : 0.15);
+      check(text, userBubble, "user bubble text", `${level}/${accentName}`, light ? 0.09 : 0.15);
       for (const plane of planes) {
-        check(text, mix(plane, accent, 0.11), "agent bubble text", accentName, 0.11);
+        check(text, mix(plane, accent, 0.11), "agent bubble text", `${level}/${accentName}`, 0.11);
       }
       for (let step = 4; step <= 14; step++) {
         const strength = step / 100, weight = strength * 0.6;
         for (const extra of [0, 0.02]) {
           const selected = mix(mix(base, raised, 0.25), accent, weight + extra);
-          check(text, selected, "selected text", accentName, strength);
-          check(muted, selected, "selected muted", accentName, strength);
-          check(light ? ink : text, light ? (extra ? hover : accent) : selected, "primary", accentName, strength);
-          check(ink, extra ? hover : accent, "solid accent", accentName, strength);
+          check(text, selected, "selected text", `${level}/${accentName}`, strength);
+          check(muted, selected, "selected muted", `${level}/${accentName}`, strength);
+          check(light ? ink : text, light ? (extra ? hover : accent) : selected, "primary", `${level}/${accentName}`, strength);
+          check(ink, extra ? hover : accent, "solid accent", `${level}/${accentName}`, strength);
           for (const plane of planes) {
             const wash = mix(plane, accent, weight + extra);
-            check(text, wash, "hover text", accentName, strength);
+            check(text, wash, "hover text", `${level}/${accentName}`, strength);
             // Muted labels on hovered controls adopt normal text; static muted labels use their plane.
-            check(accentText, wash, "accent text", accentName, strength);
-            check(accentText, mix(plane, accent, 0.2), "accent-soft text", accentName, strength);
+            check(accentText, wash, "accent text", `${level}/${accentName}`, strength);
+            check(accentText, mix(plane, accent, 0.2), "accent-soft text", `${level}/${accentName}`, strength);
           }
         }
       }
+      }
     }
-    results.push({ flavor, accents: accents.length, strengths: 11, checks, minimum: minimum.toFixed(2) });
+    results.push({ flavor, accents: accents.length, strengths: 33, checks, minimum: minimum.toFixed(2) });
   }
   console.table(results);
   console.log(`${results.reduce((sum, row) => sum + row.checks, 0)} actual foreground/state contrast pairs passed.`);

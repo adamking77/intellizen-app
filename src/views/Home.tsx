@@ -10,6 +10,7 @@ import { Control } from "@/components/ui/control";
 import { DecisionCard } from "@/components/agent/decision-card";
 import { Pulse, type PulseTrace } from "@/components/activity/pulse";
 import { Sentence } from "@/components/home/sentence";
+import { QuietUpdates } from "@/components/home/quiet-updates";
 import { Dock } from "@/components/layout/dock";
 
 import {
@@ -165,7 +166,10 @@ export function HomeView() {
   const rawHierarchy = activity.data?.hierarchy.data ?? null;
   const activeTraces = useMemo<PulseTrace[]>(() => {
     const seen = new Set<string>();
+    const pausedRooms = new Set(questions.flatMap((question) => question.source === "room" ? [question.roomId] : []));
     return visibleActivity?.progress.flatMap((item) => {
+      if (item.state === "Waiting on you") return [];
+      if (item.target.type === "room" && pausedRooms.has(item.target.id)) return [];
       if (item.target.type === "profile") {
         const id = `profile:${item.target.id}`;
         if (seen.has(id)) return [];
@@ -184,7 +188,7 @@ export function HomeView() {
       }
       return [];
     }) ?? [];
-  }, [visibleActivity, profiles, rooms]);
+  }, [visibleActivity, profiles, rooms, questions]);
   const [taskScope, setTaskScope] = useState<string | null>(null);
   const setAsideProjectId = useMemo(
     () => rawHierarchy?.find((node) => node.id === taskScope && node.kind === "project")?.id ?? null,
@@ -376,7 +380,8 @@ export function HomeView() {
       }
     }).catch((migrationError) => {
       legacyGenuiMigrationStartedRef.current = false;
-      toast.error("Generated widgets could not be moved to shared Home Pins", {
+      toast.error("Generated widgets could not be restored to Home", {
+        origin: "background", source: "home-widget-migration",
         description: errorDescription(migrationError),
       });
     });
@@ -392,7 +397,8 @@ export function HomeView() {
       return [...next, createPluginHomePin(next, { ...widget, title: widget.widgetId })];
     }, current)).then(clearLegacyPluginWidgetKeys).catch((migrationError) => {
       legacyPluginMigrationStartedRef.current = false;
-      toast.error("Plugin widgets could not be moved to shared Home Pins", {
+      toast.error("Plugin widgets could not be restored to Home", {
+        origin: "background", source: "home-plugin-migration",
         description: errorDescription(migrationError),
       });
     });
@@ -531,22 +537,6 @@ export function HomeView() {
     });
   }
 
-  if (error || pinsError) {
-    return (
-      <div className="flex h-full flex-col overflow-hidden">
-        <div className="bg-[var(--base)] px-3 py-4 sm:px-6">
-          <span className="t-title text-[var(--text)]">Home unavailable</span>
-          <p className="mt-2 font-ui text-[var(--t-ui)] text-[var(--danger)]">
-            {error instanceof Error
-              ? error.message
-              : pinsError instanceof Error
-                ? pinsError.message
-                : "The dashboard could not be loaded."}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--base)]">
@@ -587,6 +577,14 @@ export function HomeView() {
             onRestoreProject={restoreSetAsideMaterial}
             onShowGrid={() => setGridOpen(true)}
           />
+          {sessionMode.ready && mode !== "not_today" && !availabilityOpen ? <QuietUpdates /> : null}
+          {error || pinsError ? <div role="alert" className="mt-4 text-[var(--t-ui)] text-[var(--text-muted)]">
+            <p>Pinned views could not be refreshed. Your session and saved updates are still available.</p>
+            <Control size="sm" variant="text" onClick={() => {
+              void queryClient.invalidateQueries({ queryKey: ["home-pins"] });
+              void queryClient.invalidateQueries({ queryKey: ["workspace-database-catalog"] });
+            }}>Retry pinned views</Control>
+          </div> : null}
           {gridOpen ? (
             <>
               <div className="mb-3 mt-8 flex items-center justify-between border-t border-[var(--surface-line)] pt-4">
@@ -596,6 +594,7 @@ export function HomeView() {
           <div className="relative mb-3 flex justify-end">
             <button
               type="button"
+              disabled={Boolean(error || pinsError)}
               onClick={() => setWidgetPickerOpen((open) => !open)}
               aria-expanded={widgetPickerOpen}
               aria-haspopup="menu"
@@ -690,7 +689,7 @@ function errorDescription(err: unknown) {
   if (typeof err === "object" && err !== null && "message" in err) {
     return String((err as { message: unknown }).message);
   }
-  return "The shared Home Pins database did not accept the change.";
+  return "Your dashboard changes could not be saved.";
 }
 
 function HomeAvailability({
@@ -764,18 +763,18 @@ function HomeAvailability({
     return (
       <div className="mx-auto flex min-h-[min(620px,72dvh)] w-full max-w-[780px] flex-col justify-center py-10">
         <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-dim)]">A new session</p>
-        <h1 className="mt-5 font-ui text-[clamp(24px,3vw,28px)] font-light leading-[1.18] text-[var(--text)]">What is actually available today?</h1>
-        <p className="mt-5 max-w-[620px] font-ui text-[var(--t-body)] leading-relaxed text-[var(--text-muted)]">Choose a shape for this session. Agents keep working, and a pending question stays in its conversation.</p>
+        <h1 className="mt-5 font-ui text-[clamp(24px,3vw,28px)] font-light leading-[1.18] text-[var(--text)]">Choose how to work</h1>
+        <p className="mt-5 max-w-[620px] font-ui text-[var(--t-body)] leading-relaxed text-[var(--text-muted)]">Choose a mode for this session. Agents continue working, and pending questions stay in their conversations.</p>
         {lastAvailabilityAnswer ? <p className="mt-3 font-ui text-[var(--t-meta)] text-[var(--text-dim)]">Last time: {lastAvailabilityAnswer.replace("_", " ")}.</p> : null}
         <div className="mt-8 border-y border-[var(--surface-line)]">
           <Choices
             className="grid gap-0 [&>button]:min-h-[var(--h-row)] [&>button]:justify-start [&>button]:whitespace-normal [&>button]:py-2 [&>button]:text-left"
             label="What is available today"
             choices={[
-              { id: "thinking", label: "Thinking · reading, wandering, no decisions" },
-              { id: "deciding", label: "Deciding · one question at a time" },
-              { id: "executing", label: "Executing · the move menu" },
-              { id: "not_today", label: "Not today · the app keeps working and asks nothing" },
+              { id: "thinking", label: "Thinking · read and review" },
+              { id: "deciding", label: "Deciding · review pending questions" },
+              { id: "executing", label: "Executing · work on tasks" },
+              { id: "not_today", label: "Not today · quiet notifications while work continues" },
             ]}
             onChoose={(choice) => onModeChange(choice as SessionMode)}
           />
@@ -793,8 +792,8 @@ function HomeAvailability({
   if (mode === "not_today") {
     return (
       <div className="mx-auto flex min-h-[min(620px,72dvh)] max-w-[760px] flex-col items-center justify-center text-center">
-        <h1 className="font-ui text-[clamp(24px,3vw,28px)] font-light leading-[1.18] text-[var(--text)]">Not today. Everything keeps running.</h1>
-        <p className="mt-5 max-w-[680px] font-ui text-[var(--t-body)] leading-relaxed text-[var(--text-muted)]">Anything that needs you remains in its conversation without a clock. Notifications, HUD and toasts are quiet for this session.</p>
+        <h1 className="font-ui text-[clamp(24px,3vw,28px)] font-light leading-[1.18] text-[var(--text)]">Notifications are quiet.</h1>
+        <p className="mt-5 max-w-[680px] font-ui text-[var(--t-body)] leading-relaxed text-[var(--text-muted)]">Work continues. Actions that need your approval remain paused. Questions and updates are kept for your return.</p>
         <Pulse traces={traces} questions={questions.map((question) => question.key)} state={activityState} className="mt-12" />
         <Control size="sm" variant="text" className="mt-6" onClick={onShowGrid}>Show pinned views</Control>
         <div className="mt-auto pt-10">{dock}</div>
@@ -825,7 +824,7 @@ function HomeAvailability({
       <div className="mx-auto flex h-[min(620px,72dvh)] w-full max-w-[920px] flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto py-10">
           <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-dim)]">Executing · move menu</p>
-          <Sentence className="mt-3">{tasksState === "loading" ? "Task moves are still loading." : tasksState === "error" ? "Task moves could not be read." : moveCount ? `${moveCount} ${moveCount === 1 ? "move" : "moves"} you may make.` : "No described moves are available."}</Sentence>
+          <Sentence className="mt-3">{tasksState === "loading" ? "Tasks are loading." : tasksState === "error" ? "Tasks could not be loaded." : moveCount ? `${moveCount} ${moveCount === 1 ? "task" : "tasks"} with a next action.` : "No tasks with next actions are available."}</Sentence>
           <p className="mt-3 font-ui text-[var(--t-body)] text-[var(--text-muted)]">{tasksState === "partial" ? "Only the first 5,000 task records were read; this menu and its count are incomplete." : "Pick by the condition that fits, not by a date."}</p>
         <label className="mt-7 flex w-fit items-center gap-2 font-mono text-[var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-dim)]">
           Scope
@@ -851,7 +850,7 @@ function HomeAvailability({
             </section>
           ))}
           {keepingOut.length ? <section>
-            <p className="border-b border-[var(--surface-line)] pb-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-dim)]">What you are keeping out right now</p>
+            <p className="border-b border-[var(--surface-line)] pb-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-dim)]">Work kept out of scope</p>
             <div className="divide-y divide-[var(--surface-line)]">{keepingOut.map((task) => <TaskMove key={task.id} task={task} />)}</div>
           </section> : null}
         </div> : null}
@@ -868,7 +867,6 @@ function HomeAvailability({
         <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-dim)]">Thinking</p>
         <Sentence className="mt-3" counts={counts}>{sentence}</Sentence>
         <p className="mt-4 max-w-[760px] font-ui text-[var(--t-body)] leading-relaxed text-[var(--text-muted)]">{meanwhile}</p>
-        {firstQuestion ? <div className="mt-8"><HomeQuestionCard question={firstQuestion} meanwhile={meanwhile} busy={questionAttempt === firstQuestion.key} error={questionError?.key === firstQuestion.key ? questionError.message : null} onAnswer={onAnswer} compact /></div> : null}
         <Pulse traces={traces} questions={questions.map((question) => question.key)} state={activityState} className="mt-10" />
         <Control size="sm" variant="text" className="mt-4 w-fit" onClick={onShowGrid}>Show pinned views</Control>
       </div>

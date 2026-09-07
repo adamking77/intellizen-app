@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Segmented } from "@/components/ui/segmented";
 import {
   FLAVORS,
   DEFAULT_SELECTION_STRENGTH,
   MAX_SELECTION_STRENGTH,
   MIN_SELECTION_STRENGTH,
+  applyContrastLevel,
   applyPanes,
   applySavedTheme,
   applySelectionStrength,
   applyTheme,
   flavorById,
   isLight,
+  loadContrastLevel,
   loadPanes,
   loadSelectionStrength,
   loadSystemThemePreferences,
@@ -23,6 +26,7 @@ import {
   saveTheme,
   systemAppearance,
   SYSTEM_APPEARANCE_CHANGED_EVENT,
+  type ContrastLevel,
   type Flavor,
   type Panes,
   type SystemAppearance,
@@ -165,6 +169,7 @@ export function AppearanceSection() {
   const [systemTheme, setSystemTheme] = useState(loadSystemThemePreferences);
   const [theme, setTheme] = useState(() => resolveTheme(appearance));
   const [panes, setPanes] = useState(loadPanes);
+  const [contrastLevel, setContrastLevel] = useState(loadContrastLevel);
   const [selectionStrength, setSelectionStrength] = useState(loadSelectionStrength);
   const [picking, setPicking] = useState(false);
   const active = flavorById(theme.flavor);
@@ -215,11 +220,16 @@ export function AppearanceSection() {
     applySelectionStrength(next);
   }
 
+  function commitContrastLevel(next: ContrastLevel) {
+    setContrastLevel(next);
+    applyContrastLevel(next);
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <h1 className={SETTINGS_TITLE}>Appearance</h1>
       <p className="pb-2.5 text-[var(--t-ui)] leading-normal text-[var(--text-muted)]">
-        Calmppuccin, seven flavors. Each carries its own fourteen accents.
+        Choose the app’s colors, accent, contrast, and pane arrangement.
       </p>
 
       <div className="flex items-center gap-3 rounded-[var(--r-ctl)] bg-[var(--mantle)] px-3 py-2.5">
@@ -300,6 +310,18 @@ export function AppearanceSection() {
         <span className="text-xs text-[var(--text-muted)]">
           Switching flavor keeps this choice, in that flavor's own palette.
         </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 pt-[18px]">
+        <span className={cn(caps, "text-[var(--t-count)]")}>Readability</span>
+        <Segmented
+          kind="choice"
+          label="Readability"
+          value={contrastLevel}
+          options={[{ value: "calm", label: "Calm" }, { value: "clear", label: "Clear" }, { value: "strong", label: "Strong" }]}
+          onValueChange={commitContrastLevel}
+        />
+        <span className="text-xs text-[var(--text-muted)]">Raises metadata and separator contrast without changing the accent.</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-[18px]">

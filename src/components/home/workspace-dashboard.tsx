@@ -145,7 +145,7 @@ export function WorkspaceDashboard({ workspaceId, workspaceName }: { workspaceId
           onUpdateWidgetMetadata={(widget, metadata) => void mutate((current) => patchHomePinMetadata(current, widget.pin.id, { ...metadata, config: configForDashboard(metadata.config, scope) })).catch((error) => toast.error("Widget settings were not saved", { description: errorMessage(error) }))}
         />
       ) : (
-        <EmptyState title="No widgets yet" description="Pin an existing database view here for this workspace." action={{ label: "Add widget", onClick: () => setPickerOpen(true) }} />
+        <EmptyState title="No dashboard widgets yet" description="Add a saved database view to this workspace dashboard." action={{ label: "Add widget", onClick: () => setPickerOpen(true) }} />
       )}
     </section>
   );

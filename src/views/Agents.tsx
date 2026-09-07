@@ -13,6 +13,7 @@ import { Avatar, TeamStack, identityColor } from "@/components/agents/avatar";
 import { TeamSheet } from "@/components/agents/team-sheet";
 import { deleteTeam, loadTeams, newTeamId, saveTeam } from "@/components/agents/teams-store";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { MotionList, MotionListItem } from "@/components/ui/motion";
 import { useEngineStore } from "@/engine/engine-store";
 import { discoverAcpProviders } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
@@ -189,21 +190,21 @@ function AgentDirectory() {
       {offline ? (
         <Notice tone="bad">Hermes is offline{engineError ? ` — ${engineError}` : ""}. Hermes profiles are unavailable; ACP agents and teams remain editable.</Notice>
       ) : list.error ? (
-        <Notice tone="bad">Your agents could not be read — {errorMessage(list.error)}. Nothing below is missing; the app cannot see it.</Notice>
+        <Notice tone="bad">Agents could not be loaded — {errorMessage(list.error)}. Retry before creating or changing agents.</Notice>
       ) : acpTrouble ? (
         <Notice tone="wait">The ACP registry could not be read — {acpTrouble}. Hermes profiles are listed; command-line agents are not.</Notice>
       ) : null}
 
       {list.isSuccess && agents.length === 0 ? (
         <p className="max-w-[520px] pb-4 font-ui text-[var(--t-meta)] leading-[1.5] text-[var(--text-muted)]">
-          No agents yet. Make one below — a Hermes profile or any installed ACP command-line agent.
+          No agents yet. Create a Hermes profile or add an installed command-line agent.
         </p>
       ) : null}
 
       <div className="flex flex-wrap items-end gap-3.5 pb-5">
         <div>
           <p className={EYEBROW}>Agents{list.isSuccess ? ` · ${agents.length} configured` : ""}</p>
-          <h1 className={TITLE}>The inventory of who can work for you.</h1>
+          <h1 className={TITLE}>Agents and teams available for work.</h1>
         </div>
         <div className="grow" />
         <div className="flex items-center gap-1 rounded-[var(--r-pill)] border border-[var(--surface-line)] bg-[var(--surface)] p-1" role="group" aria-label="Agent view">
@@ -222,40 +223,45 @@ function AgentDirectory() {
           ))}
         </div>
       ) : agentView === "cards" ? (
-        <div className={GRID}>
+        <MotionList className={GRID}>
           {agents.map((a) => {
             const state = agentState(a);
-            return <Card
-              key={a.id}
-              label={a.displayName}
-              onOpen={() => setEditing({ agent: a, creating: false })}
-              items={[
-                { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
-                { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
-                ...(resting.ready ? [{ label: resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today", onSelect: () => toggleRest(a.id) }] : []),
-                { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
-              ]}
-            >
-              <Avatar agent={a} size={44} image={images[a.id]} />
-              <div className="flex flex-col gap-[3px]">
-                <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{a.displayName}</span>
-                <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
-                <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>{a.role || "No role recorded."}</span>
-                <span className="font-ui text-[var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {resting.restingAgents.includes(a.id) ? <Tag>Resting today · Restore in actions</Tag> : null}
-                {a.isDefault ? <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span> : null}
-              </div>
-            </Card>;
+            return (
+              <MotionListItem key={a.id} className="h-full [&>*]:h-full">
+                <Card
+                  label={a.displayName}
+                  onOpen={() => setEditing({ agent: a, creating: false })}
+                  items={[
+                    { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
+                    { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
+                    ...(resting.ready ? [{ label: resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today", onSelect: () => toggleRest(a.id) }] : []),
+                    { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
+                  ]}
+                >
+                  <Avatar agent={a} size={44} image={images[a.id]} />
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{a.displayName}</span>
+                    <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
+                    <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>{a.role || "No role recorded."}</span>
+                    <span className="font-ui text-[var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {resting.restingAgents.includes(a.id) ? <Tag>Resting today · Restore in actions</Tag> : null}
+                    {a.isDefault ? <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span> : null}
+                  </div>
+                </Card>
+              </MotionListItem>
+            );
           })}
-          <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
-        </div>
+          <MotionListItem key="new-agent" className="h-full [&>*]:h-full">
+            <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
+          </MotionListItem>
+        </MotionList>
       ) : (
-        <div className="divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
+        <MotionList className="divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
           {agents.map((a) => {
             const state = agentState(a);
-            return <div key={a.id} className="flex flex-wrap items-center gap-3 py-3">
+            return <MotionListItem key={a.id} className="flex flex-wrap items-center gap-3 py-3">
               <button type="button" className="flex min-w-0 grow items-center gap-3 text-left" onClick={() => setEditing({ agent: a, creating: false })}>
                 <Avatar agent={a} size={26} image={images[a.id]} />
                 <span className="min-w-0">
@@ -268,9 +274,9 @@ function AgentDirectory() {
               <button type="button" className={ACTION} onClick={() => talkTo(isHermes(a) ? profileOf(a.id)! : a.id)}>Message</button>
               {resting.ready ? <button type="button" className={ACTION} onClick={() => toggleRest(a.id)}>{resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today"}</button> : null}
               <button type="button" className={ACTION} onClick={() => setEditing({ agent: a, creating: false })}>Edit</button>
-            </div>;
+            </MotionListItem>;
           })}
-        </div>
+        </MotionList>
       )}
 
       {/* Teams: below the agents, because a team is made of them. */}

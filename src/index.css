@@ -39,7 +39,9 @@
   --raised: #252539;
   --input: #11111a;
   --text: #dfe4f0;
+  --text-calm: #dfe4f0;
   --text-muted: #9ca4bd;
+  --text-muted-calm: #9ca4bd;
   --line: #2a2a3d;
   --line-strong: #3a3a52;
   --ground: #1b1b29;
@@ -68,7 +70,9 @@
   --raised: #20202f;
   --input: #0d0d14;
   --text: #a7aec5;
+  --text-calm: #a7aec5;
   --text-muted: #989fb6;
+  --text-muted-calm: #989fb6;
   --line: #232334;
   --line-strong: #32324a;
   --ground: var(--base);
@@ -97,7 +101,9 @@
   --raised: #2c2f44;
   --input: #171825;
   --text: #c2cae9;
+  --text-calm: #c2cae9;
   --text-muted: #aeb6d4;
+  --text-muted-calm: #aeb6d4;
   --line: #2f3247;
   --line-strong: #3f4360;
   --ground: var(--base);
@@ -126,7 +132,9 @@
   --raised: #3a3e52;
   --input: #222532;
   --text: #c6d0f5;
+  --text-calm: #c6d0f5;
   --text-muted: #b2bcdf;
+  --text-muted-calm: #b2bcdf;
   --line: #3a3e52;
   --line-strong: #4a4f68;
   --ground: var(--base);
@@ -155,7 +163,9 @@
   --raised: #15151d;
   --input: #000000;
   --text: #a7adc1;
+  --text-calm: #a7adc1;
   --text-muted: #979db1;
+  --text-muted-calm: #979db1;
   --line: #17171f;
   --line-strong: #383844;
   --ground: var(--base);
@@ -186,7 +196,9 @@
   --raised: #c6c8cd;
   --input: #cfd1d4;
   --text: #474a63;
+  --text-calm: #474a63;
   --text-muted: #4c5068;
+  --text-muted-calm: #4c5068;
   --line: #b8bac0;
   --line-strong: #8d9099;
   --ground: var(--base);
@@ -215,7 +227,9 @@
   --raised: #e6e3de;
   --input: #eceae7;
   --text: #4a4a52;
+  --text-calm: #4a4a52;
   --text-muted: #62626b;
+  --text-muted-calm: #62626b;
   --line: #d8d5d0;
   --line-strong: #aaa69f;
   --ground: var(--base);
@@ -247,6 +261,7 @@
   --ok: #a6cfa1;
   --bad: #de96aa;
   --runtime: #8cabdc;
+  --strong-text-target: white;
 
   /* User preference. Selection, focus, active nav, links. Set by
      applyTheme(); this is only the pre-JS fallback (Mocha blue). */
@@ -292,6 +307,9 @@
 
   --surface-wash: var(--hover);
   --surface-wash-strong: var(--hover-strong);
+  /* Connected panes share the work plane; segmented panes restore the rail and panel. */
+  --rail-plane: var(--ground);
+  --region-plane: var(--ground);
 
   /* Status */
   --success: var(--ok);
@@ -320,12 +338,22 @@
   --hud-bg: var(--mantle);
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.44);
 
-  /* Motion */
+  /* Motion: reserved for continuity, never ambient decoration. */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-out: var(--ease);
-  --t-fast: 90ms;
-  --t-base: 120ms;
-  --t-slow: 200ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-hover: ease;
+  --dur-fast: 90ms;
+  --dur-base: 140ms;
+  --dur-pane: 200ms;
+  --dur-sheet: 240ms;
+  --dur-return: 200ms;
+  --dur-cap: 300ms;
+  --press-scale: 0.98;
+  --t-fast: var(--dur-fast);
+  --t-base: var(--dur-base);
+  --t-slow: var(--dur-pane);
 
   /* Closed shape and type roles shared with Hermes. */
   --r-plane: 12px;
@@ -378,8 +406,8 @@
   --chart-background: var(--mantle);
   --chart-foreground: var(--text);
   --chart-foreground-muted: var(--subtext-0);
-  --chart-line-primary: var(--chart-1);
-  --chart-line-secondary: var(--chart-2);
+  --chart-line-primary: var(--text-muted);
+  --chart-line-secondary: var(--overlay-2);
   --chart-crosshair: var(--accent);
   --chart-grid: var(--border-subtle);
   --chart-tooltip-background: color-mix(in srgb, var(--mantle) 92%, transparent);
@@ -389,7 +417,7 @@
   --chart-marker-border: var(--border-strong);
   --chart-marker-foreground: var(--text);
   --chart-ring-background: color-mix(in srgb, var(--text) 8%, transparent);
-  --chart-label: var(--overlay-1);
+  --chart-label: var(--text-muted);
   --legend: oklch(1 0 0);
   --legend-foreground: oklch(0.141 0.005 285.823);
   --legend-muted: oklch(0.967 0.001 286.375);
@@ -414,6 +442,31 @@
   --user-bubble: color-mix(in srgb, var(--accent) 9%, #fff);
   --hud-bg: var(--base);
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  --strong-text-target: black;
+}
+
+/* Readability is independent from the accent and selection-strength preferences. */
+:root[data-contrast="clear"] {
+  --text-muted: color-mix(in srgb, var(--text-muted-calm) 55%, var(--text));
+  --line: color-mix(in srgb, var(--text) 20%, var(--base));
+  --line-strong: color-mix(in srgb, var(--text) 32%, var(--base));
+  --hair: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+:root[data-contrast="strong"] {
+  --text: color-mix(in srgb, var(--text-calm) 60%, var(--strong-text-target));
+  --text-muted: color-mix(in srgb, var(--text-muted-calm) 20%, var(--text));
+  --line: color-mix(in srgb, var(--text) 30%, var(--base));
+  --line-strong: color-mix(in srgb, var(--text) 44%, var(--base));
+  --hair: color-mix(in srgb, var(--text) 14%, transparent);
+  --chart-line-primary: var(--text);
+  --chart-line-secondary: var(--text-muted);
+}
+
+/* Segmented panes deliberately restore their separate rail and panel fills. */
+:root[data-panes="segmented"] {
+  --rail-plane: var(--crust);
+  --region-plane: var(--mantle);
 }
 
 /* Panes: the window ground is the seam. Connected is the default and uses a
@@ -424,7 +477,7 @@
   padding: 0;
   overflow: hidden;
   border-radius: var(--r-plane);
-  background: var(--edge) !important;
+  background: var(--line) !important;
 }
 
 :root[data-panes="connected"] .app-shell > .pane {
@@ -4983,6 +5036,18 @@ dialog.app-dialog::backdrop {
   backdrop-filter: blur(3px);
 }
 
+@keyframes pulse-drift {
+  to { transform: translateX(-640px); }
+}
+
+.pulse-trace {
+  animation: pulse-drift 9s linear infinite;
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+:root[data-session="not-today"] .pulse-trace { animation: none; }
+
 @keyframes control-running {
   from { opacity: 0.35; transform: translateX(-1px); }
   to { opacity: 1; transform: translateX(1px); }
@@ -5008,6 +5073,7 @@ dialog.app-dialog::backdrop {
 
 @media (prefers-reduced-motion: reduce) {
   .control-running-dot,
+  .pulse-trace,
   .kit-drawer,
   .skeleton-line { animation: none; }
 }
@@ -5304,13 +5370,13 @@ html[data-view-transition="room"]::view-transition-group(project-room-view) {
 }
 
 html[data-view-transition="drawer"]::view-transition-group(kit-drawer) {
-  animation-duration: 200ms;
-  animation-timing-function: var(--ease);
+  animation-duration: var(--dur-sheet);
+  animation-timing-function: var(--ease-sheet);
 }
 
 html[data-view-transition="segment"]::view-transition-group(*) {
-  animation-duration: 120ms;
-  animation-timing-function: var(--ease);
+  animation-duration: var(--dur-pane);
+  animation-timing-function: var(--ease-in-out);
 }
 
 html[data-view-transition="segment"]::view-transition-old(*),

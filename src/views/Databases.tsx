@@ -230,7 +230,7 @@ export function DatabasesView() {
             {isLoading ? (
               <div className="flex items-center gap-2 p-4 font-ui text-[13px] text-[var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Loading databases...</span>
+                <span>Loading databases…</span>
               </div>
             ) : safeDatabases.length === 0 ? (
               <div className="p-4">
@@ -280,7 +280,7 @@ export function DatabasesView() {
                 <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-3 px-6 py-10 text-center">
                   <p className="text-label">No databases yet</p>
                   <p className="max-w-xl font-ui text-[12px] text-[var(--text-muted)]">
-                    Create your first database to get started.
+                    Create a database for records, fields, and saved views.
                   </p>
                   <Button size="sm" onClick={handleCreateDatabase} disabled={isCreating} className="gap-1.5">
                     {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
@@ -342,12 +342,12 @@ function DatabaseWayIn({ databases, lastVisit, onOpen }: {
     <h1 className="mt-4 max-w-[760px] font-ui text-[26px] font-normal leading-[1.3] text-[var(--text)]">
       {countKnown ? `${databases.length} ${databases.length === 1 ? "database" : "databases"}.` : "Database counts are unavailable."}{revisionsKnown && changed ? ` ${changed} ${changed === 1 ? "database changed" : "databases changed"} since your last visit.` : ""}
     </h1>
-    <p className="mt-3 max-w-[660px] text-[var(--t-ui)] leading-6 text-[var(--text-mid)]">Open one and the editor takes over. Your data stays in the workspace tables where you put it.</p>
+    <p className="mt-3 max-w-[660px] text-[var(--t-ui)] leading-6 text-[var(--text-mid)]">Choose a database to view its records, fields, and saved views.</p>
     <div className="mt-9 divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
       {databases.map((database) => <button key={database.id} type="button" onClick={() => onOpen(database.id)} className="grid w-full gap-x-5 gap-y-1 py-4 text-left hover:bg-[var(--selected-hover)] @min-[720px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
         <span className="text-[var(--t-ui)] text-[var(--text)]">{database.name}</span>
         <span className="font-mono text-[10px] text-[var(--text-muted)]">{database.recordCount === null ? "Record count unavailable" : `${database.recordCount} ${database.recordCount === 1 ? "record" : "records"}`} · {database.entity || "Unscoped"}</span>
-        <span className="text-[var(--t-meta)] text-[var(--text-mid)]">{!lastVisit ? "No earlier visit recorded." : database.revisionCount === null ? "Changes unavailable." : `${database.revisionCountCapped ? "At least " : ""}${database.revisionCount} ${database.revisionCount === 1 ? "change" : "changes"} since your last visit.`}</span>
+        <span className="text-[var(--t-meta)] text-[var(--text-mid)]">{!lastVisit ? "No earlier visit recorded." : database.revisionCount === null ? "Changes unavailable." : database.revisionCount === 0 ? "No changes since your last visit." : `${database.revisionCountCapped ? "At least " : ""}${database.revisionCount} ${database.revisionCount === 1 ? "change" : "changes"} since your last visit.`}</span>
       </button>)}
     </div>
   </section>;

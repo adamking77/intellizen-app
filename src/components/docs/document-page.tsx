@@ -218,7 +218,7 @@ function LoadedDocument({ record, workflow, projects, initialEdit, isCramped, sa
     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 md:px-10">
       <article className="mx-auto max-w-[65ch]">
         {mode === "edit" ? <input aria-label="Document title" autoFocus={initialEdit} value={editingTitle} onChange={(event) => { setEditingTitle(event.target.value); edit(event.target.value, page.body); }} className="w-full bg-transparent font-ui text-[24px] font-normal leading-tight text-[var(--text)] outline-none" /> : <h1 className="font-ui text-[24px] font-normal leading-tight text-[var(--text)]">{page.title}</h1>}
-        <p className="mt-2 font-mono text-[10px] leading-relaxed text-[var(--text-muted)]">Verification unavailable · Done when not recorded · {proposalLabel}</p>
+        <p className="mt-2 font-mono text-[10px] leading-relaxed text-[var(--text-muted)]">Verification unavailable · Completion criteria not recorded · {proposalLabel}</p>
         <p className="mb-6 mt-2 text-[var(--t-meta)] text-[var(--text-muted)]">{workflow ? `Maintained by ${workflow.owner_role || "the workflow owner"}` : documentFieldString(record, DOCUMENTS_DB_FIELDS.author) ? `${/^(adam|you)$/i.test(documentFieldString(record, DOCUMENTS_DB_FIELDS.author)) ? "You" : documentFieldString(record, DOCUMENTS_DB_FIELDS.author)} wrote it` : "Document"}{updatedDate ? ` · Updated ${updatedDate}` : ""}{project || attachment ? ` · linked to ${project?.name || attachment}` : ""}</p>
         {filing && !workflow ? <div className="mb-5"><Select aria-label="Document project" value={projectId} onChange={async (event) => {
           try { setFilingError(null); await updateWorkspaceRecord(record.id, { fieldId: DOCUMENTS_DB_FIELDS.project, value: event.target.value || null }); await client.invalidateQueries({ queryKey: ["docs-workspace-bundle"] }); setFiling(false); } catch (error) { setFilingError(String(error)); }
@@ -232,7 +232,7 @@ function LoadedDocument({ record, workflow, projects, initialEdit, isCramped, sa
     <DocumentDock mode={mode} onModeChange={changeMode} positionLabel={`${sectionCount} section${sectionCount === 1 ? "" : "s"} · ${wordCount.toLocaleString()} words`} readingFocus={readingFocus} onReadingFocus={toggleReadingFocus} proposalCount={proposalCount} readOnly={Boolean(workflow)} decisionBusy={decisionBusy} />
     <Drawer open={history} onClose={() => setHistory(false)} label="Document history" className="max-w-[calc(100%-16px)]">
       <div className="p-4"><div className="mb-4 flex items-center justify-between"><span>History</span><Control onClick={() => setHistory(false)}>Close</Control></div>
-        <QueryState isLoading={revisions.isLoading} error={revisions.error} isEmpty={!revisions.data?.length} emptyTitle="No earlier revisions" emptyDescription="Saved changes will appear here." onRetry={() => void revisions.refetch()}>
+        <QueryState isLoading={revisions.isLoading} error={revisions.error} isEmpty={!revisions.data?.length} emptyTitle="No earlier revisions" emptyDescription="This document has no earlier saved version." onRetry={() => void revisions.refetch()}>
           {revisions.data?.map((item) => <Control key={item.id} variant={revisionId === item.id ? "selected" : "quiet"} className="mb-1 w-full justify-start" onClick={() => setRevisionId(item.id)}>{new Date(item.revised_at).toLocaleString()}</Control>)}
           {revision ? <MarkdownBody content={revision.body ?? ""} /> : null}
         </QueryState>

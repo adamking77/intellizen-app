@@ -4,6 +4,9 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { ActivityDashboardModel } from "@/lib/activity-dashboard";
+
+const rooms = vi.hoisted(() => ({ chats: {} as Record<string, unknown>, prompts: {} as Record<string, unknown> }));
 
 const api = vi.hoisted(() => ({
   catalog: vi.fn().mockResolvedValue([]),
@@ -12,7 +15,7 @@ const api = vi.hoisted(() => ({
   workflowRuns: vi.fn().mockResolvedValue([]),
   workflowApproval: vi.fn(),
   workflowCommitWarning: vi.fn(),
-  activity: { model: { progress: [], openWorkflows: [] }, data: { runs: { data: [] as unknown[] }, connections: {}, hierarchy: { data: [] }, profiles: {}, sessionFolders: {}, usage: {} } },
+  activity: { model: { progress: [] as ActivityDashboardModel["progress"], openWorkflows: [] as ActivityDashboardModel["openWorkflows"] }, data: { runs: { data: [] as unknown[] }, connections: {}, hierarchy: { data: [] }, profiles: {}, sessionFolders: {}, usage: {} } },
   decideApproval: vi.fn(),
   decideClarify: vi.fn(),
   threads: {} as Record<string, unknown>,
@@ -53,13 +56,14 @@ vi.mock("@/engine/session-store", () => ({
     { getState: () => ({ threads: api.threads, decideApproval: api.decideApproval, decideClarify: api.decideClarify }) },
   ),
 }));
-vi.mock("@/rooms/group-chat", () => ({ $groupChats: {}, $groupClarify: {} }));
-vi.mock("@/rooms/store", () => ({ useValue: () => ({}) }));
+vi.mock("@/rooms/group-chat", () => ({ $groupChats: rooms.chats, $groupClarify: rooms.prompts }));
+vi.mock("@/rooms/store", () => ({ useValue: (source: unknown) => source === rooms.chats ? rooms.chats : rooms.prompts }));
 vi.mock("@/components/agent/panel-room", () => ({ runRoomAction: vi.fn() }));
 vi.mock("@/lib/data/work-receipts", () => ({ listWorkEvents: vi.fn().mockResolvedValue([]) }));
 
 import { HomeView } from "./Home";
-import { resetSessionModeForTests, SESSION_MODE_KEY, setRestingAgents } from "@/lib/session-mode";
+import { resetSessionModeForTests, SESSION_MODE_KEY, setRestingAgents, setSessionMode } from "@/lib/session-mode";
+import { keepQuietNote } from "@/lib/quiet-notes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -75,6 +79,8 @@ beforeEach(() => {
   root = createRoot(host);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   api.threads = {};
+  api.catalog.mockResolvedValue([]);
+  api.pins.mockResolvedValue([]);
   api.tasks.mockResolvedValue({ records: [] });
   api.profiles = {};
   api.decideApproval.mockReset();
@@ -82,6 +88,8 @@ beforeEach(() => {
   api.workflowRuns.mockReset();
   api.workflowApproval.mockReset();
   api.workflowCommitWarning.mockReset();
+  for (const key of Object.keys(rooms.chats)) delete rooms.chats[key];
+  for (const key of Object.keys(rooms.prompts)) delete rooms.prompts[key];
   api.activity = { model: { progress: [], openWorkflows: [] }, data: { runs: { data: [] }, connections: {}, hierarchy: { data: [] }, profiles: {}, sessionFolders: {}, usage: {} } };
 });
 afterEach(async () => {
@@ -92,7 +100,7 @@ afterEach(async () => {
 
 it("opens Thinking from availability and keeps the pinned grid behind Cmd+.", async () => {
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
-  expect(host.textContent).toContain("What is actually available today?");
+  expect(host.textContent).toContain("Choose how to work");
   const thinking = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"));
   expect(thinking).toBeTruthy();
   await act(async () => thinking!.click());
@@ -108,6 +116,30 @@ it("opens an Executing move in its actual task record", async () => {
   await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Executing"))!.click());
   expect([...host.querySelectorAll("a")].find((link) => link.textContent === "Review the brief")?.getAttribute("href")).toBe("/databases/tasks?record=task-1");
   expect(host.textContent).toContain("this menu and its count are incomplete");
+});
+
+it("keeps Thinking free of approval actions without losing the pending request", async () => {
+  const decision = { kind: "approval", requestId: "request-quiet", command: "Save", description: "Save the report", choices: ["once"], messageId: "message-quiet", at: 1 };
+  api.threads = { fiona: { profile: "fiona", transcript: { pending: [decision] } } };
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"))!.click());
+  expect([...host.querySelectorAll("button")].some((button) => button.textContent?.includes("Allow once"))).toBe(false);
+  await act(async () => setSessionMode("deciding"));
+  expect([...host.querySelectorAll("button")].some((button) => button.textContent?.includes("Allow once"))).toBe(true);
+  expect(api.decideApproval).not.toHaveBeenCalled();
+});
+
+it("retains the session and saved failures when pinned views cannot load", async () => {
+  api.pins.mockRejectedValue(new Error("Offline"));
+  keepQuietNote({ kind: "error", message: "Could not save report", source: "report", description: "Connection closed", announced: false });
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  expect(host.textContent).toContain("Choose how to work");
+  expect(host.textContent).toContain("Retry pinned views");
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"))!.click());
+  expect(host.textContent).toContain("Could not save report");
+  expect(host.textContent).toContain("Connection closed");
+  await act(async () => setSessionMode("not_today"));
+  expect(host.textContent).not.toContain("Could not save report");
 });
 
 it("answers a profile question through its owning session", async () => {
@@ -145,6 +177,40 @@ it("uses Thinking in the dock after restart while showing the remembered answer 
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
   expect(host.textContent).toContain("Last time: not today.");
   expect(host.querySelector('[data-home-dock] button[aria-pressed="true"]')?.textContent).toBe("Thinking");
+});
+
+it("keeps a paused profile turn out of moving Pulse traces", async () => {
+  api.activity = {
+    ...api.activity,
+    model: {
+      ...api.activity.model,
+      progress: [
+        { id: "waiting", title: "Paused", owner: "Paused", state: "Waiting on you", since: null, updated: null, target: { type: "profile", id: "paused" } },
+        { id: "working", title: "Active", owner: "Active", state: "Working", since: null, updated: null, target: { type: "profile", id: "active" } },
+      ],
+    },
+  };
+  api.profiles = {
+    paused: { name: "paused", displayName: "Paused" },
+    active: { name: "active", displayName: "Active" },
+  };
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"))!.click());
+  // Thinking renders the same factual trace once in its body and once in Dock.
+  expect(host.querySelectorAll(".pulse-trace")).toHaveLength(2);
+});
+
+it("keeps a room with a pending prompt out of moving Pulse traces", async () => {
+  Object.assign(rooms.chats, { room: { members: [{ name: "blocked", door: "hermes" }], log: [] } });
+  Object.assign(rooms.prompts, { prompt: { group: "room", memberKey: "blocked", member: "Blocked", decision: { kind: "approval", requestId: "wait", command: "Save", description: "Save", choices: ["once"], messageId: "m", at: 1 } } });
+  api.activity = {
+    ...api.activity,
+    model: { ...api.activity.model, progress: [{ id: "room", title: "Team", owner: "Team", state: "blocked is working", since: null, updated: null, target: { type: "room", id: "room" } }] },
+  };
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><HomeView /></MemoryRouter></QueryClientProvider>));
+  await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Thinking"))!.click());
+  expect(host.querySelectorAll(".pulse-trace")).toHaveLength(0);
+  expect(host.querySelectorAll("circle")).toHaveLength(2);
 });
 
 it("rechecks and resolves a workflow approval by its run identity", async () => {
