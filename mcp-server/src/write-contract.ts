@@ -1,4 +1,42 @@
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+
 export const DRY_RUN_BANNER = "⛔ DRY RUN — NOTHING WRITTEN ⛔";
+
+/** Add scalar metadata only; existing field definitions are never rewritten. */
+export function additiveDatabaseFields(current: Array<{ id: string }>, additions: unknown) {
+  if (!Array.isArray(additions) || additions.length === 0) throw new Error("add_fields must be a non-empty array.");
+  const ids = new Set<string>();
+  const added: Array<{ id: string; name: string; type: "text" | "select"; options?: string[] }> = [];
+  for (const field of additions) {
+    if (!field || typeof field !== "object" || Array.isArray(field)
+      || typeof field.id !== "string" || !field.id.trim()
+      || typeof field.name !== "string" || !field.name.trim()
+      || !["text", "select"].includes(field.type)
+      || Object.keys(field).some((key) => !["id", "name", "type", "options"].includes(key))) {
+      throw new Error("Each added field requires id, name and type (text or select), with optional select options only.");
+    }
+    if (ids.has(field.id)) throw new Error(`Duplicate added field id: ${field.id}`);
+    ids.add(field.id);
+    if (field.type === "select") {
+      if (!Array.isArray(field.options) || !field.options.length
+        || field.options.some((option: unknown) => typeof option !== "string" || !option.trim())
+        || new Set(field.options).size !== field.options.length) {
+        throw new Error(`Select field ${field.id} requires unique non-empty string options.`);
+      }
+    } else if (field.options !== undefined) throw new Error("Text fields cannot have options.");
+    const matches = current.filter((existing) => existing.id === field.id);
+    if (matches.length > 1 || (matches.length === 1 && !isDeepStrictEqual(matches[0], field))) {
+      throw new Error(`Field ${field.id} already exists with a different definition; additive writes cannot replace it.`);
+    }
+    if (!matches.length) added.push(field);
+  }
+  return { added, schema: [...current, ...added] };
+}
+
+export function databaseFieldsPreviewToken(databaseId: string, updatedAt: string, schema: unknown) {
+  return createHash("sha256").update(JSON.stringify([databaseId, updatedAt, schema])).digest("hex");
+}
 
 export function dryRunPreview(
   action: string,

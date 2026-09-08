@@ -27,11 +27,11 @@ it("saves a real card pin through read/write/read and leaves a failed save open 
     expect(button).toBeTruthy(); await act(async () => button!.click());
   }
   try {
-    await click("Pin Needs attention to a dashboard");
+    await click("Pin Questions and issues to a dashboard");
     storage.fail = true;
     await click("Pin widget");
     expect(storage.pins).toHaveLength(0);
-    expect(host.querySelector('dialog[aria-label="Pin Needs attention"]')?.hasAttribute("open")).toBe(true);
+    expect(host.querySelector('dialog[aria-label="Pin Questions and issues"]')?.hasAttribute("open")).toBe(true);
     storage.fail = false;
     await click("Pin widget");
     expect(storage.pins).toHaveLength(1);
@@ -91,5 +91,18 @@ it("opens stored workflow records in a dismissible dialog and closes it before n
     expect(host.querySelector('dialog[open]')).toBeNull();
     expect(host.querySelector("output")?.textContent).toBe("/workflows?run=old-run");
     expect(storage.pins).toHaveLength(0);
+  } finally { await act(async () => root.unmount()); }
+});
+
+it("shows a recorded update time rather than elapsed time in activity rows", async () => {
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  const data: ActivitySources = { at: 10, runs: { data: [], at: 10 }, hierarchy: { data: [], at: 10 }, profiles: { data: [], at: 10 }, connections: { data: [], at: 10 }, sessionFolders: { data: {}, at: 10 }, usage: {} };
+  const model = { ...buildActivityDashboard(data, DEFAULT_ACTIVITY_FILTER, {}, {}, {}), progress: [{ id: "profile:codex", title: "Review", owner: "Codex", state: "Working", since: null, updated: Date.parse("2026-09-08T10:30:00Z"), target: { type: "profile" as const, id: "codex" } }] };
+  try {
+    await act(async () => root.render(<MemoryRouter><ActivityCardBody id="progress" sources={data} model={model} /></MemoryRouter>));
+    await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("View live conversations"))!.click());
+    expect(host.querySelector("dialog[open]")?.textContent).toContain("updated");
+    expect(host.querySelector("dialog[open]")?.textContent).not.toContain("ago");
   } finally { await act(async () => root.unmount()); }
 });

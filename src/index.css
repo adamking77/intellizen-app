@@ -35,13 +35,17 @@
 :root[data-flavor="mocha"] {
   --crust: #11111a;
   --mantle: #171724;
-  --base: #1d1d2c;
+  --base: #1b1b29;
   --raised: #252539;
   --input: #11111a;
-  --text: #aeb6cf;
+  --text: #dfe4f0;
+  --text-calm: #dfe4f0;
   --text-muted: #9ca4bd;
+  --text-muted-calm: #9ca4bd;
   --line: #2a2a3d;
   --line-strong: #3a3a52;
+  --ground: #1b1b29;
+  --surface: #20202f;
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e2cfcb;
   --flamingo: #e9c5c5;
@@ -66,9 +70,13 @@
   --raised: #20202f;
   --input: #0d0d14;
   --text: #a7aec5;
+  --text-calm: #a7aec5;
   --text-muted: #989fb6;
+  --text-muted-calm: #989fb6;
   --line: #232334;
   --line-strong: #32324a;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #dcc9c5;
   --flamingo: #e3bfbf;
@@ -93,9 +101,13 @@
   --raised: #2c2f44;
   --input: #171825;
   --text: #c2cae9;
+  --text-calm: #c2cae9;
   --text-muted: #aeb6d4;
+  --text-muted-calm: #aeb6d4;
   --line: #2f3247;
   --line-strong: #3f4360;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e4d0cc;
   --flamingo: #eac6c6;
@@ -120,9 +132,13 @@
   --raised: #3a3e52;
   --input: #222532;
   --text: #c6d0f5;
+  --text-calm: #c6d0f5;
   --text-muted: #b2bcdf;
+  --text-muted-calm: #b2bcdf;
   --line: #3a3e52;
   --line-strong: #4a4f68;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #e6d2ce;
   --flamingo: #ecc8c8;
@@ -147,9 +163,13 @@
   --raised: #15151d;
   --input: #000000;
   --text: #a7adc1;
+  --text-calm: #a7adc1;
   --text-muted: #979db1;
+  --text-muted-calm: #979db1;
   --line: #17171f;
   --line-strong: #383844;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(255, 255, 255, 0.045);
   --rosewater: #c9b7b3;
   --flamingo: #d0adad;
@@ -176,9 +196,13 @@
   --raised: #c6c8cd;
   --input: #cfd1d4;
   --text: #474a63;
-  --text-muted: #555970;
+  --text-calm: #474a63;
+  --text-muted: #4c5068;
+  --text-muted-calm: #4c5068;
   --line: #b8bac0;
   --line-strong: #8d9099;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(0, 0, 0, 0.09);
   --rosewater: #a8817a;
   --flamingo: #b07070;
@@ -203,9 +227,13 @@
   --raised: #e6e3de;
   --input: #eceae7;
   --text: #4a4a52;
+  --text-calm: #4a4a52;
   --text-muted: #62626b;
+  --text-muted-calm: #62626b;
   --line: #d8d5d0;
   --line-strong: #aaa69f;
+  --ground: var(--base);
+  --surface: var(--raised);
   --hair: rgba(0, 0, 0, 0.08);
   --rosewater: #a07b74;
   --flamingo: #a86a6a;
@@ -231,8 +259,9 @@
      could make failure look like success. */
   --wait: #e2a47d;
   --ok: #a6cfa1;
-  --bad: #d47b95;
-  --runtime: #789cd6;
+  --bad: #de96aa;
+  --runtime: #8cabdc;
+  --strong-text-target: white;
 
   /* User preference. Selection, focus, active nav, links. Set by
      applyTheme(); this is only the pre-JS fallback (Mocha blue). */
@@ -244,6 +273,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --user-bubble: color-mix(in srgb, var(--accent) 15%, var(--raised));
+  --agent-bubble-weight: 11%;
 
   /* Accent wash shared by interaction states; status colors stay independent. */
   --hover: color-mix(in srgb, var(--accent) var(--sel-accent-weight), transparent);
@@ -266,8 +296,20 @@
   --overlay-1: color-mix(in srgb, var(--text) 60%, var(--base));
   --overlay-0: color-mix(in srgb, var(--text) 48%, var(--base));
 
+  /* 2050 semantic text roles. Mid and dim carry information; faint is only
+     decorative and must not be used for labels, actions, or receipts. */
+  --text-mid: var(--text-muted);
+  --text-dim: var(--text-muted);
+  --text-faint: var(--overlay-0);
+  --surface-line: var(--line);
+  --row-line: var(--hair);
+  --question: var(--wait);
+
   --surface-wash: var(--hover);
   --surface-wash-strong: var(--hover-strong);
+  /* Connected panes share the work plane; segmented panes restore the rail and panel. */
+  --rail-plane: var(--ground);
+  --region-plane: var(--ground);
 
   /* Status */
   --success: var(--ok);
@@ -279,12 +321,12 @@
   /* Graph entity palette — follows the flavor's named accents */
   --entity-person: var(--teal);
   --entity-org: var(--sky);
-  --entity-location: var(--peach);
-  --entity-event: var(--red);
-  --entity-topic: var(--mauve);
+  --entity-location: var(--mauve);
+  --entity-event: var(--flamingo);
+  --entity-topic: var(--pink);
   --entity-signal: var(--yellow);
   --entity-investigation: var(--lavender);
-  --entity-report: var(--green);
+  --entity-report: var(--sapphire);
 
   /* Borders */
   --border: var(--line);
@@ -296,15 +338,26 @@
   --hud-bg: var(--mantle);
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.44);
 
-  /* Motion */
+  /* Motion: reserved for continuity, never ambient decoration. */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-out: var(--ease);
-  --t-fast: 90ms;
-  --t-base: 120ms;
-  --t-slow: 200ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-hover: ease;
+  --dur-fast: 90ms;
+  --dur-base: 140ms;
+  --dur-pane: 200ms;
+  --dur-sheet: 240ms;
+  --dur-return: 200ms;
+  --dur-cap: 300ms;
+  --press-scale: 0.98;
+  --t-fast: var(--dur-fast);
+  --t-base: var(--dur-base);
+  --t-slow: var(--dur-pane);
 
   /* Closed shape and type roles shared with Hermes. */
   --r-plane: 12px;
+  --r-surface: 10px;
   --r-ctl: 8px;
   --r-pill: 999px;
   --r-sm: var(--r-ctl);
@@ -328,7 +381,6 @@
   --background: var(--base);
   --background-elevated: var(--mantle);
   --panel: var(--mantle);
-  --surface: var(--mantle);
   --surface-strong: var(--mantle);
   --surface-glass: var(--mantle);
   --foreground: var(--text);
@@ -354,8 +406,8 @@
   --chart-background: var(--mantle);
   --chart-foreground: var(--text);
   --chart-foreground-muted: var(--subtext-0);
-  --chart-line-primary: var(--chart-1);
-  --chart-line-secondary: var(--chart-2);
+  --chart-line-primary: var(--text-muted);
+  --chart-line-secondary: var(--overlay-2);
   --chart-crosshair: var(--accent);
   --chart-grid: var(--border-subtle);
   --chart-tooltip-background: color-mix(in srgb, var(--mantle) 92%, transparent);
@@ -365,7 +417,7 @@
   --chart-marker-border: var(--border-strong);
   --chart-marker-foreground: var(--text);
   --chart-ring-background: color-mix(in srgb, var(--text) 8%, transparent);
-  --chart-label: var(--overlay-1);
+  --chart-label: var(--text-muted);
   --legend: oklch(1 0 0);
   --legend-foreground: oklch(0.141 0.005 285.823);
   --legend-muted: oklch(0.967 0.001 286.375);
@@ -378,10 +430,10 @@
 :root[data-flavor="latte"],
 :root[data-flavor="flat"] {
   color-scheme: light;
-  --wait: #b06d33;
-  --ok: #4a7c4e;
-  --bad: #b04a5f;
-  --runtime: #3f6ba8;
+  --wait: #774a22;
+  --ok: #375c3a;
+  --bad: #893a4a;
+  --runtime: #325586;
   --go-bg: var(--accent);
   --go-fg: var(--accent-fg);
   --go-hover: var(--accent-hover);
@@ -390,6 +442,31 @@
   --user-bubble: color-mix(in srgb, var(--accent) 9%, #fff);
   --hud-bg: var(--base);
   --hud-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  --strong-text-target: black;
+}
+
+/* Readability is independent from the accent and selection-strength preferences. */
+:root[data-contrast="clear"] {
+  --text-muted: color-mix(in srgb, var(--text-muted-calm) 55%, var(--text));
+  --line: color-mix(in srgb, var(--text) 20%, var(--base));
+  --line-strong: color-mix(in srgb, var(--text) 32%, var(--base));
+  --hair: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+:root[data-contrast="strong"] {
+  --text: color-mix(in srgb, var(--text-calm) 60%, var(--strong-text-target));
+  --text-muted: color-mix(in srgb, var(--text-muted-calm) 20%, var(--text));
+  --line: color-mix(in srgb, var(--text) 30%, var(--base));
+  --line-strong: color-mix(in srgb, var(--text) 44%, var(--base));
+  --hair: color-mix(in srgb, var(--text) 14%, transparent);
+  --chart-line-primary: var(--text);
+  --chart-line-secondary: var(--text-muted);
+}
+
+/* Segmented panes deliberately restore their separate rail and panel fills. */
+:root[data-panes="segmented"] {
+  --rail-plane: var(--crust);
+  --region-plane: var(--mantle);
 }
 
 /* Panes: the window ground is the seam. Connected is the default and uses a
@@ -400,7 +477,7 @@
   padding: 0;
   overflow: hidden;
   border-radius: var(--r-plane);
-  background: var(--edge) !important;
+  background: var(--line) !important;
 }
 
 :root[data-panes="connected"] .app-shell > .pane {
@@ -561,18 +638,18 @@ pre {
   --bn-colors-editor-text: var(--text);
   --bn-colors-editor-background: transparent;
   --bn-colors-menu-text: var(--text);
-  --bn-colors-menu-background: var(--raised);
+  --bn-colors-menu-background: var(--surface);
   --bn-colors-tooltip-text: var(--text);
-  --bn-colors-tooltip-background: var(--raised);
+  --bn-colors-tooltip-background: var(--surface);
   --bn-colors-hovered-text: var(--text);
   --bn-colors-hovered-background: var(--surface-wash);
   --bn-colors-selected-text: var(--text);
   --bn-colors-selected-background: var(--selected);
   --bn-colors-disabled-text: var(--overlay-1);
   --bn-colors-disabled-background: var(--surface-0);
-  --bn-colors-shadow: var(--shadow-elevated);
-  --bn-colors-border: var(--border);
-  --bn-colors-side-menu: var(--accent);
+  --bn-colors-shadow: none;
+  --bn-colors-border: transparent;
+  --bn-colors-side-menu: var(--text-muted);
 }
 
 .intelizen-live-markdown .bn-editor {
@@ -892,9 +969,9 @@ pre {
 .bn-panel-popover,
 .bn-emoji-picker-popover {
   border: 0 !important;
-  border-radius: var(--r-plane) !important;
-  background: var(--raised) !important;
-  box-shadow: var(--shadow-elevated) !important;
+  border-radius: var(--r-surface) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -1034,9 +1111,9 @@ pre {
 .bn-root .bn-panel-popover,
 .bn-root .bn-emoji-picker-popover {
   border: 0 !important;
-  border-radius: var(--r-plane) !important;
-  background: var(--raised) !important;
-  box-shadow: var(--shadow-elevated) !important;
+  border-radius: var(--r-surface) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
   color: var(--text) !important;
   font-family: var(--font-ui) !important;
 }
@@ -1324,6 +1401,7 @@ pre {
   box-shadow: none !important;
 }
 
+.shared-checkbox > input:focus-visible + div,
 .focus-ring:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 2px;
@@ -1631,8 +1709,8 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 }
 
 .db-row-active {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--selected);
+  box-shadow: none;
 }
 
 .db-td {
@@ -3048,8 +3126,8 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
 .narrative-editor .bn-toolbar,
 .narrative-editor [data-content-type="formattingToolbar"] {
   border: none;
-  box-shadow: var(--shadow-elevated);
-  background: var(--mantle);
+  box-shadow: none;
+  background: var(--surface);
 }
 
 /* ─── Relation prop ─────────────────────────────────────── */
@@ -4951,18 +5029,25 @@ dialog.db-app-dialog[role="alertdialog"]::backdrop {
   flex: 0 0 auto;
   border-radius: var(--r-pill);
   background: currentColor;
-  animation: control-running 900ms ease-in-out infinite alternate;
+  opacity: 0.7;
 }
 
 dialog.app-dialog::backdrop {
-  background: color-mix(in srgb, var(--crust) 76%, transparent);
+  background: color-mix(in srgb, var(--crust) 60%, transparent);
   backdrop-filter: blur(3px);
 }
 
-@keyframes control-running {
-  from { opacity: 0.35; transform: translateX(-1px); }
-  to { opacity: 1; transform: translateX(1px); }
+@keyframes pulse-drift {
+  to { transform: translateX(-640px); }
 }
+
+.pulse-trace {
+  animation: pulse-drift 9s linear infinite;
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+:root[data-session="not-today"] .pulse-trace { animation: none; }
 
 .kit-drawer {
   animation: drawer-enter var(--t-slow) var(--ease) both;
@@ -4974,19 +5059,39 @@ dialog.app-dialog::backdrop {
 }
 
 .skeleton-line {
-  animation: skeleton-sheen 1.4s ease-in-out infinite alternate;
-}
-
-@keyframes skeleton-sheen {
-  from { opacity: 0.45; }
-  to { opacity: 1; }
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .control-running-dot,
-  .kit-drawer,
-  .skeleton-line { animation: none; }
+  .pulse-trace,
+  .kit-drawer { animation: none; }
 }
+
+.note {
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  gap: 6px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--r-surface);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--t-ui);
+  box-shadow: none;
+  transition: opacity var(--dur-pane) var(--ease-out), transform var(--dur-pane) var(--ease-out);
+}
+
+.note[data-mounted="false"] { opacity: 0; transform: translateY(8px); }
+.note[data-removed="true"] { opacity: 0; transform: translateY(8px); transition-duration: 150ms; }
+.note-meta { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--t-mono); }
+.note-choice { justify-self: end; border: 0; border-bottom: 1px solid var(--surface-line); background: none; color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .note { transition-property: opacity; }
+}
+
+:root[data-session="not-today"] .note { transition-property: opacity; }
 
 .nav-node:hover {
   background: var(--hover);
@@ -5056,17 +5161,17 @@ dialog.app-dialog::backdrop {
   white-space: nowrap;
 }
 
-/* Hermes modal contract: one raised plane over a soft blurred veil. Feature
-   dialogs own their width and height cap, but not their surface treatment. */
+/* Pop-up modals keep depth over the scrim; feature dialogs own their compact
+   geometry, while the shared primitive owns the material. */
 .modal-backdrop {
-  background: color-mix(in srgb, var(--crust) 42%, transparent);
+  background: color-mix(in srgb, var(--crust) 60%, transparent);
   backdrop-filter: blur(7px);
 }
 
 .modal-surface {
   border: 0;
   border-radius: var(--r-plane);
-  background: var(--raised);
+  background: var(--surface);
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
   outline: none;
 }
@@ -5224,6 +5329,47 @@ select:not([data-select-chevron="custom"]) {
 
 /* Shared avatar behavior. Speech follows measured audio amplitude; a team
    stack dims idle members and restores anyone actively running. */
+.avatar-motion,
+.avatar-motion__visual {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-motion__visual {
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  transition: transform var(--dur-pane) var(--ease-out);
+}
+
+/* Match Blobatar's 2.8s breathing rhythm in prominent previews. */
+@keyframes avatar-breathe {
+  from { transform: translateY(0) scale(1, 1); }
+  to { transform: translateY(-1.5px) scale(1.025, 0.985); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .avatar-motion:not([data-avatar-kind="blob"])[data-avatar-motion="hover"]:hover > .avatar-motion__visual {
+    transform: translateY(-1.5px) scale(1.04);
+  }
+}
+
+.avatar-motion:not([data-avatar-kind="blob"])[data-avatar-motion="always"] > .avatar-motion__visual {
+  animation: avatar-breathe 2800ms var(--ease-in-out) infinite alternate;
+}
+
+:root[data-session="not-today"] .avatar-motion__visual,
+:root[data-session="not-today"] .avatar-motion .mo-root,
+:root[data-session="not-today"] .avatar-motion .mo-root *,
+:root[data-session="not-today"] .avatar-speaking {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+
 .avatar-speaking {
   display: inline-flex;
   flex-shrink: 0;
@@ -5280,13 +5426,13 @@ html[data-view-transition="room"]::view-transition-group(project-room-view) {
 }
 
 html[data-view-transition="drawer"]::view-transition-group(kit-drawer) {
-  animation-duration: 200ms;
-  animation-timing-function: var(--ease);
+  animation-duration: var(--dur-sheet);
+  animation-timing-function: var(--ease-sheet);
 }
 
 html[data-view-transition="segment"]::view-transition-group(*) {
-  animation-duration: 120ms;
-  animation-timing-function: var(--ease);
+  animation-duration: var(--dur-pane);
+  animation-timing-function: var(--ease-in-out);
 }
 
 html[data-view-transition="segment"]::view-transition-old(*),
@@ -5315,4 +5461,6 @@ html[data-view-transition="segment"]::view-transition-new(*) {
     transform: none !important;
     filter: none !important;
   }
+
+  .avatar-motion__visual { transform: none !important; }
 }

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { OPERATOR_ACTOR, startWorkflow } from "@/lib/data";
-import type { StartWorkflowInput } from "@/lib/types";
+import type { StartWorkflowInput, WorkflowStartAttempt } from "@/lib/types";
 import { toast, toastError } from "@/lib/toast";
 import { dispatchWorkflowRun } from "@/services/workflow-dispatch";
 
@@ -17,16 +17,39 @@ type StartWorkflowRequest = Omit<StartWorkflowInput, "requestedBy" | "confirmWri
 export function useStartWorkflow(options: { onStarted?: () => Promise<unknown> | void } = {}) {
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const dispatchControllerRef = useRef<AbortController | null>(null);
+  const startingRef = useRef(false);
+  const pendingAttemptRef = useRef<{
+    request: string;
+    attempt: WorkflowStartAttempt;
+  } | null>(null);
 
   async function start(request: StartWorkflowRequest) {
-    if (isStartingWorkflow) return null;
+    if (startingRef.current) return null;
+    startingRef.current = true;
     try {
       setIsStartingWorkflow(true);
-      const result = await startWorkflow({
+      const startInput = {
         ...request,
         requestedBy: request.requestedBy ?? OPERATOR_ACTOR,
+      };
+      const requestKey = JSON.stringify(startInput);
+      let startAttempt = pendingAttemptRef.current?.request === requestKey
+        ? pendingAttemptRef.current.attempt
+        : null;
+      if (!startAttempt) {
+        const preview = await startWorkflow({ ...startInput, confirmWrite: false });
+        const confirmation = "schema_v1" in preview
+          ? (preview.schema_v1 as { confirmation?: { start_attempt?: WorkflowStartAttempt } | null } | null)?.confirmation
+          : undefined;
+        startAttempt = confirmation?.start_attempt ?? null;
+        if (startAttempt) pendingAttemptRef.current = { request: requestKey, attempt: startAttempt };
+      }
+      const result = await startWorkflow({
+        ...startInput,
         confirmWrite: true,
+        ...(startAttempt ? { startAttempt } : {}),
       });
+      pendingAttemptRef.current = null;
       const runName = "run" in result && result.run ? result.run.name : undefined;
       const runId = "workflow_run_id" in result ? result.workflow_run_id : undefined;
       toast.success("Workflow run created", { description: runName ?? runId });
@@ -63,18 +86,23 @@ export function useStartWorkflow(options: { onStarted?: () => Promise<unknown> |
           }
         } catch (dispatchError) {
           toastError(
-            "Workflow Run created, but dispatch did not start",
+            "Workflow run needs attention",
             dispatchError,
           );
         }
       }
-      await options.onStarted?.();
+      try {
+        await options.onStarted?.();
+      } catch (refreshError) {
+        toastError("Workflow run created, but the view could not refresh", refreshError);
+      }
       return returned;
     } catch (startError) {
       toastError("Workflow start failed", startError);
       return null;
     } finally {
       dispatchControllerRef.current = null;
+      startingRef.current = false;
       setIsStartingWorkflow(false);
     }
   }

@@ -38,4 +38,16 @@ describe("listProfiles", () => {
     expect(defaultProfile(profiles)?.name).toBe("x");
     expect(defaultProfile([])).toBeNull();
   });
+
+  it("reads only valid trace identity metadata", async () => {
+    const client = new FakeGatewayClient();
+    client.respondWith((call) => call.method === "profiles.list" ? { profiles: [
+      { name: "trace", ui_meta: { intellizen: { avatar_style: "trace", avatar_seed: 73 } } },
+      { name: "invalid", ui_meta: { intellizen: { avatar_style: "trace", avatar_seed: "73" } } },
+    ] } : undefined);
+    const profiles = await listProfiles(client);
+    expect(profiles[0]).toMatchObject({ avatarStyle: "trace", avatarSeed: 73 });
+    expect(profiles[1]).toMatchObject({ avatarStyle: "trace" });
+    expect(profiles[1].avatarSeed).toBeUndefined();
+  });
 });

@@ -4,6 +4,7 @@ import { Pin, RefreshCw } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
 import { ActivityCardBody } from "./activity-card";
 import { useActivity } from "./use-activity";
 import {
@@ -109,10 +110,10 @@ export function ActivityDashboard() {
     <div className="@container space-y-5 pb-5">
       <header className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 grow">
-          <h1 className="font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+          <h1 className="font-ui text-[24px] font-light leading-tight text-[var(--text)]">
             Activity
           </h1>
-          <p className="mt-1 text-[var(--t-meta)] text-[var(--text-muted)]">
+          <p className="mt-1 text-[length:var(--t-meta)] text-[var(--text-muted)]">
             Decisions, live work, and usage across your agents.
           </p>
         </div>
@@ -144,17 +145,18 @@ export function ActivityDashboard() {
             </option>
           ))}
         </Select>
-        <button
-          className="action p-2"
+        <Control
+          size="icon"
+          variant="quiet"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
           aria-label="Refresh activity"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-        </button>
+        </Control>
         </div>
       </header>
-      <details className="text-[var(--t-meta)] text-[var(--text-muted)]">
+      <details className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
         <summary className="w-fit cursor-pointer rounded-[var(--r-ctl)] py-1 hover:bg-[var(--hover)]">
           {filter.agent === "all"
             ? "Filter by agent or team"
@@ -184,7 +186,7 @@ export function ActivityDashboard() {
       {errors.length ? (
         <p
           role="status"
-          className="text-[var(--t-meta)] text-[var(--text-muted)]"
+          className="text-[length:var(--t-meta)] text-[var(--text-muted)]"
         >
           Some sources could not refresh. Available data remains visible;
           timestamps identify the last successful read.
@@ -199,7 +201,7 @@ export function ActivityDashboard() {
           {ACTIVITY_CARDS.map((id) => (
             <div
               key={id}
-              className="h-48 animate-pulse rounded-[var(--r-plane)] bg-[var(--mantle)]"
+              className="h-48 rounded-[var(--r-plane)] bg-[var(--mantle)]"
             />
           ))}
         </div>
@@ -209,12 +211,12 @@ export function ActivityDashboard() {
             <section
               key={id}
               aria-labelledby={`activity-${id}`}
-              className={`min-w-0 rounded-[var(--r-plane)] bg-[var(--mantle)] p-4 ${id === "usage" || id === "outcomes" ? "@[560px]:col-span-6 @[1000px]:col-span-3" : "@[560px]:col-span-2"}`}
+              className={`min-w-0 border-t border-[var(--surface-line)] px-1 py-4 ${id === "usage" || id === "outcomes" ? "@[560px]:col-span-6 @[1000px]:col-span-3" : "@[560px]:col-span-2 @[560px]:border-r @[560px]:pr-4"}`}
             >
               <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2
                   id={`activity-${id}`}
-                  className="mr-auto font-ui text-[var(--t-ui)] text-[var(--text-muted)]"
+                  className="mr-auto font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
                 >
                   {ACTIVITY_TITLES[id]}
                 </h2>
@@ -224,9 +226,12 @@ export function ActivityDashboard() {
                   options={(id === "usage" ? ["line", "bar"] : ["ring", "bar"]).map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))}
                   onValueChange={(style) => saveCharts(JSON.stringify({ ...charts, [id]: style }))}
                 /> : null}
-                <button
-                  className="action p-1.5"
+                <Control
+                  size="icon"
+                  variant="quiet"
                   aria-label={`Pin ${ACTIVITY_TITLES[id]} to a dashboard`}
+                  aria-haspopup="dialog"
+                  aria-expanded={pinning === id}
                   onClick={(event) => {
                     pinTrigger.current = event.currentTarget;
                     setPinning(id);
@@ -238,7 +243,7 @@ export function ActivityDashboard() {
                   }}
                 >
                   <Pin className="h-3.5 w-3.5" />
-                </button>
+                </Control>
               </header>
               <ActivityCardBody
                 id={id}
@@ -252,7 +257,7 @@ export function ActivityDashboard() {
       ) : (
         <p role="alert">Activity could not be read. Use Refresh to retry.</p>
       )}
-      <p className="text-[var(--t-count)] leading-5 text-[var(--overlay-1)]">
+      <p className="font-mono text-[length:var(--t-count)] leading-5 text-[var(--text-muted)]">
         Live conversations include connected Hermes and ACP agents. External
         terminal sessions require an integration to appear. Periods use UTC
         calendar days; current work and connections are live.
@@ -265,7 +270,7 @@ export function ActivityDashboard() {
         }}
       >
         <div className="space-y-4 p-4">
-          <label className="flex flex-col gap-2 text-[var(--t-meta)]">
+          <label className="flex flex-col gap-2 text-[length:var(--t-meta)]">
             Dashboard
             <Select
               value={destination}
@@ -279,23 +284,23 @@ export function ActivityDashboard() {
               ))}
             </Select>
           </label>
-          <p className="text-[var(--t-meta)] text-[var(--text-muted)]">
+          <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
             Saves the chart display, current period and agent filter.
             {destination !== "home"
               ? " This widget will show only activity attributable to this workspace. Connections remain labeled as global configuration."
               : " The current workspace filter is preserved."}
           </p>
           <div className="flex justify-end gap-2">
-            <button className="action" disabled={saving} onClick={closePin}>
+            <Control variant="quiet" disabled={saving} onClick={closePin}>
               Cancel
-            </button>
-            <button
-              className="action"
-              disabled={saving}
+            </Control>
+            <Control
+              variant="primary"
+              loading={saving}
               onClick={() => void pin()}
             >
-              {saving ? "Saving…" : "Pin widget"}
-            </button>
+              Pin widget
+            </Control>
           </div>
         </div>
       </AppDialog>
@@ -314,7 +319,7 @@ export function ActivityWidget({
     query = useActivity(filter);
   return (
     <div className="h-full overflow-auto p-4">
-      <p className="mb-3 text-[var(--t-count)] text-[var(--text-muted)]">
+      <p className="mb-3 text-[length:var(--t-count)] text-[var(--text-muted)]">
         Last {filter.days} days ·{" "}
         {filter.workspace === "all"
           ? "All workspaces"

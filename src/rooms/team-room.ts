@@ -25,6 +25,7 @@ export async function openTeamRoom(
         model: profile.model,
         provider: profile.provider,
         avatar_style: profile.avatarStyle,
+        avatar_seed: profile.avatarSeed,
         avatar_kind: profile.avatarKind,
         avatar_color: profile.avatarColor,
       };

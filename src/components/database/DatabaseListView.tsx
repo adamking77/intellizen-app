@@ -96,8 +96,7 @@ export function DatabaseListView({
             key={record.id}
             className="db-list-record"
             style={{
-              borderColor: activeRecordId === record.id ? "var(--accent)" : undefined,
-              backgroundColor: activeRecordId === record.id ? "var(--surface-wash)" : undefined,
+              backgroundColor: activeRecordId === record.id ? "var(--selected)" : undefined,
             }}
             onClick={() => onOpenRecord(record.id)}
           >

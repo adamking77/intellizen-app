@@ -46,7 +46,7 @@ export function PluginWidgetMenuItems({
   return (
     <>
       <div className="mt-1 px-2 pb-1 pt-2">
-        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
           Plugin widgets
         </span>
       </div>
@@ -63,10 +63,10 @@ export function PluginWidgetMenuItems({
             onClick={() => onAdd({ pluginId: widget.pluginId, widgetId: widget.id, title: widget.label })}
             className="block w-full rounded-[var(--r-plane)] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-wash)] disabled:opacity-50"
           >
-            <span className="block font-ui text-[var(--t-meta)] font-medium text-[var(--text)]">
+            <span className="block font-ui text-[length:var(--t-meta)] font-medium text-[var(--text)]">
               {widget.label}{added ? " · Added" : ""}
             </span>
-            <span className="mt-0.5 block font-ui text-[var(--t-count)] leading-4 text-[var(--overlay-1)]">
+            <span className="mt-0.5 block font-ui text-[length:var(--t-count)] leading-4 text-[var(--overlay-1)]">
               {widget.description ?? widget.pluginName}
             </span>
           </button>
@@ -84,13 +84,13 @@ export function PluginWidgetSurface({ pluginId, widgetId }: { pluginId: string; 
   const plugin = plugins.find((item) => item.id === pluginId);
   if (widget) return (
     <div className="flex h-full min-h-0 flex-col">
-      {plugin?.author ? <span className="shrink-0 px-1 pb-1 text-[var(--t-count)] text-[var(--text-muted)]">Written by {plugin.author}</span> : null}
+      {plugin?.author ? <span className="shrink-0 px-1 pb-1 text-[length:var(--t-count)] text-[var(--text-muted)]">Written by {plugin.author}</span> : null}
       <div className="min-h-0 flex-1"><PluginSlot name={widget.pluginName} render={widget.render} resetKey={plugin?.loadedAt} /></div>
     </div>
   );
   if (plugin?.status === "error") return <PluginErrorBox name={plugin.name} error={plugin.error ?? "unknown error"} />;
   return (
-    <p className="font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+    <p className="font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)]">
       Waiting for plugin “{pluginId}” to load.
     </p>
   );

@@ -1,17 +1,19 @@
-import type { ReactNode } from "react";
+import type { KeyboardEventHandler, MouseEventHandler, ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 export function GraphLoadingOverlay() {
-  return <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--base)]/80"><div className="flex items-center gap-2 font-ui text-[var(--t-ui)] text-[var(--subtext-0)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading graph</div></div>;
+  return <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--base)]/80"><div className="flex items-center gap-2 font-ui text-[length:var(--t-ui)] text-[var(--subtext-0)]"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading graph</div></div>;
 }
 
 interface ButtonProps {
   children: ReactNode;
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
   title: string;
   disabled?: boolean;
+  expanded?: boolean;
+  controls?: string;
 }
 
 export function GraphTopbarIconButton({
@@ -19,6 +21,8 @@ export function GraphTopbarIconButton({
   onClick,
   title,
   disabled,
+  expanded,
+  controls,
 }: ButtonProps) {
   return (
     <button
@@ -26,6 +30,8 @@ export function GraphTopbarIconButton({
       onClick={onClick}
       title={title}
       aria-label={title}
+      aria-expanded={expanded}
+      aria-controls={controls}
       disabled={disabled}
       className={cn(
         "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)]",
@@ -51,10 +57,11 @@ export function GraphOverflowItem({
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[var(--t-meta)] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "flex w-full items-center px-3 py-1.5 text-left font-ui text-[length:var(--t-meta)] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         disabled
           ? "cursor-not-allowed text-[var(--overlay-0)]"
           : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -66,20 +73,32 @@ export function GraphOverflowItem({
 }
 
 export function GraphRailTab({
+  id,
   label,
   active,
+  controls,
   onClick,
+  onKeyDown,
 }: {
+  id: string;
   label: string;
   active: boolean;
+  controls: string;
   onClick: () => void;
+  onKeyDown: KeyboardEventHandler<HTMLButtonElement>;
 }) {
   return (
     <button
+      id={id}
       type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       className={cn(
-        "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[length:var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         active
           ? "bg-[var(--surface-wash-strong)] text-[var(--text)]"
           : "text-[var(--subtext-0)] hover:text-[var(--text)]",
@@ -96,15 +115,21 @@ export function GraphToolbarButton({
   title,
   active,
   disabled,
+  expanded,
+  controls,
 }: ButtonProps & { active?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
+      aria-pressed={active}
+      aria-expanded={expanded}
+      aria-controls={controls}
       disabled={disabled}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-[var(--r-pill)] px-2 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+        "inline-flex h-[var(--h-ctl)] items-center gap-1.5 rounded-[var(--r-pill)] px-2 font-ui text-[12.5px] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         active
           ? "bg-[var(--selected)] text-[var(--text)] hover:bg-[var(--selected-hover)]"
           : "text-[var(--subtext-0)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]",
@@ -145,10 +170,10 @@ export function GraphSettingToggle({
       >
         <span
           className={cn(
-            "absolute top-0.5 h-3.5 w-3.5 rounded-[var(--r-pill)] transition-[left,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
+            "absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-[var(--r-pill)] transition-[transform,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
             checked
-              ? "left-[17px] bg-[var(--accent)]"
-              : "left-0.5 bg-[var(--overlay-1)]",
+              ? "translate-x-[15px] bg-[var(--accent)]"
+              : "translate-x-0 bg-[var(--overlay-1)]",
           )}
         />
       </span>
@@ -176,7 +201,7 @@ export function GraphStatChip({
     >
       <span
         className={cn(
-          "font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em]",
+          "font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em]",
           accent ? "text-[var(--accent-text)]" : "text-[var(--overlay-1)]",
         )}
       >
@@ -184,7 +209,7 @@ export function GraphStatChip({
       </span>
       <span
         className={cn(
-          "font-mono text-[var(--t-section)] tabular-nums",
+          "font-mono text-[length:var(--t-section)] tabular-nums",
           accent ? "text-[var(--accent-text)]" : "text-[var(--text)]",
         )}
       >
@@ -203,10 +228,10 @@ export function GraphStatBlock({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+      <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
         {label}
       </span>
-      <span className="font-mono text-[var(--t-title)] tabular-nums text-[var(--text)]">
+      <span className="font-mono text-[length:var(--t-title)] tabular-nums text-[var(--text)]">
         {value}
       </span>
     </div>
@@ -234,7 +259,7 @@ export function GraphSlider({
     <label className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <span className="text-meta">{label}</span>
-        <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
+        <span className="font-mono text-[length:var(--t-section)] text-[var(--overlay-1)]">
           {displayValue}
         </span>
       </div>

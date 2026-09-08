@@ -1,7 +1,6 @@
 import { forwardRef, type KeyboardEvent } from "react";
 import { ArrowUp, Check, Paperclip, PictureInPicture2, Square, X } from "lucide-react";
 
-import { doneIn } from "@/components/agent/turn-time";
 import { Control } from "@/components/ui/control";
 import { Pill } from "@/components/ui/status-pill";
 import type { SessionAttachment } from "@/engine/session";
@@ -14,6 +13,13 @@ export type RunState =
   | { kind: "waiting" }
   | { kind: "done"; outcome: TurnOutcome }
   | { kind: "failed"; reason: string };
+
+export function permissionLabel(mode: "manual" | "smart" | "off" | null | undefined) {
+  if (mode === "manual") return "Ask first";
+  if (mode === "smart") return "Ask when unsure";
+  if (mode === "off") return "Never ask";
+  return null;
+}
 
 /** Where a run says how it ended. Directly above the composer, so the
  *  answer to "is it still going" is next to the place you would type again.
@@ -28,19 +34,19 @@ export function RunStatus({ run, agent }: { run: RunState; agent: string }) {
       {run.kind === "opening" ? (
         <>
           {dot("var(--text-muted)")}
-          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Opening a session with {agent}…</span>
+          <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Opening a session with {agent}…</span>
         </>
       ) : run.kind === "working" ? (
         <>
           {dot("var(--text-muted)")}
-          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+          <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
             {run.label ? `${agent} · ${run.label}` : `${agent} is working…`}
           </span>
         </>
       ) : run.kind === "waiting" ? (
         <>
-          <Pill variant="waiting">waiting on you</Pill>
-          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{agent} needs a decision above.</span>
+          <Pill variant="waiting">a question for you</Pill>
+          <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">{agent} asked above.</span>
         </>
       ) : run.kind === "done" ? (
         <>
@@ -49,14 +55,14 @@ export function RunStatus({ run, agent }: { run: RunState; agent: string }) {
           ) : (
             <Check className="h-3 w-3 shrink-0 text-[var(--ok)]" strokeWidth={1.5} aria-hidden />
           )}
-          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
-            {run.outcome.status === "interrupted" ? "Stopped" : `Done in ${doneIn(run.outcome.tookMs)}`}
+          <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
+            {run.outcome.status === "interrupted" ? "Stopped" : "Done"}
           </span>
         </>
       ) : (
         <>
           {dot("var(--bad)")}
-          <span className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Failed · {run.reason}</span>
+          <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Failed · {run.reason}</span>
         </>
       )}
     </div>
@@ -77,8 +83,8 @@ export interface ComposerProps {
   ready: boolean;
   running: boolean;
   agent: string | null;
-  /** Permission stated as a word, from the session; absent until known. */
-  permission: string | null;
+  /** Compact permission control; absent until the target exposes settings. */
+  permission: React.ReactNode;
   /** Beside the controls: the microphone. In the send slot when the draft is
    *  empty: the conversation toggle. Both from the surface's one `useVoice`. */
   dictate?: React.ReactNode;
@@ -132,16 +138,16 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
   };
   const canSend = ready && !running && (draft.trim().length > 0 || attachments.length > 0);
   return (
-    <div className="flex shrink-0 flex-col gap-2 rounded-[var(--r-ctl)] border-t border-[var(--hair)] bg-[var(--base)] px-[11px] py-2.5">
+    <div className="flex shrink-0 flex-col gap-2 rounded-[var(--r-ctl)] border-t border-[var(--surface-line)] bg-[var(--ground)] px-[11px] py-2.5">
       {note ? (
-        <p role="status" className="font-ui text-[var(--t-section)] leading-snug text-[var(--bad)]">
+        <p role="status" className="font-ui text-[length:var(--t-section)] leading-snug text-[var(--bad)]">
           {note}
         </p>
       ) : null}
       {attachments.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="Attachments">
           {attachments.map((attachment) => (
-            <span key={attachment.path} className="flex max-w-full items-center gap-1 rounded-[var(--r-pill)] bg-[var(--raised)] px-2 py-1 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+            <span key={attachment.path} className="flex max-w-full items-center gap-1 rounded-[var(--r-pill)] bg-[var(--raised)] px-2 py-1 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
               <span className="truncate">{attachment.name}</span>
               <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment?.(attachment.path)} className="rounded-[var(--r-pill)] hover:text-[var(--text)] focus-visible:text-[var(--text)]">
                 <X className="h-3 w-3" strokeWidth={1.8} aria-hidden />
@@ -160,7 +166,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         disabled={!agent}
         readOnly={dictating}
         aria-label={agent ? `Message ${agent}` : "Message"}
-        className="w-full resize-none border-0 bg-transparent p-0 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full resize-none border-0 bg-transparent p-0 font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)] outline-none placeholder:text-[var(--text-mid)] disabled:cursor-not-allowed disabled:opacity-60"
       />
       <div className="flex items-center gap-2">
         {onEject ? (
@@ -180,7 +186,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           </Control>
         ) : null}
         {dictate}
-        {permission ? <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{permission}</span> : null}
+        {permission ? <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-mid)]">{permission}</span> : null}
         <div className="flex-1" />
         {/* The send slot: the conversation toggle while there is nothing to
             send, Send once there is. A composer with text has an obvious next

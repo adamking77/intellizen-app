@@ -38,7 +38,7 @@ export function Receipt({ verb, object, className, ...props }: ReceiptProps) {
   return (
     <div className={cn("ml-3.5 flex min-h-[var(--h-row)] min-w-0 items-center gap-1.5 font-mono text-[11px]", className)} {...props}>
       <span className="text-[var(--text-muted)]">{verb}</span>
-      <span className="min-w-0 flex-1 truncate text-[var(--overlay-1)]">{object}</span>
+      <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">{object}</span>
     </div>
   );
 }

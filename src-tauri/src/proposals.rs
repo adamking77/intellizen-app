@@ -136,7 +136,7 @@ impl Store {
         let mut out: Vec<Proposal> = self
             .files()
             .into_iter()
-            .filter(|f| f.doc_path == doc_path)
+            .filter(|f| self.resolve(&f.doc_path).ok().as_ref() == Some(&doc))
             .map(|f| render(f, &current))
             .filter(|p| !p.hunks.is_empty())
             .collect();
@@ -188,7 +188,7 @@ impl Store {
         let dropping = select(&fresh, dropped)?;
         let kept: Vec<Hunk> = fresh
             .iter()
-            .filter(|h| !dropping.iter().any(|d| d.old == h.old && d.new == h.new))
+            .filter(|h| !dropping.contains(h))
             .cloned()
             .collect();
         if kept.is_empty() {
@@ -211,9 +211,10 @@ impl Store {
     }
 
     fn read_one(&self, doc_path: &str, id: &str) -> Result<ProposalFile, String> {
+        let doc = self.resolve(doc_path)?;
         self.files()
             .into_iter()
-            .find(|f| f.id == id && f.doc_path == doc_path)
+            .find(|f| f.id == id && self.resolve(&f.doc_path).ok().as_ref() == Some(&doc))
             .ok_or_else(|| "That proposal is no longer waiting.".to_string())
     }
 
@@ -242,6 +243,17 @@ impl Store {
     fn resolve(&self, doc_path: &str) -> Result<PathBuf, String> {
         if doc_path.is_empty() || doc_path.split(['/', '\\']).any(|s| s == "..") {
             return Err(format!("unusable document path: {doc_path}"));
+        }
+        if let Some(relative) = doc_path.strip_prefix("vault:") {
+            if relative.is_empty()
+                || relative.split(['/', '\\']).any(|s| s == "..")
+                || relative.starts_with(['/', '\\'])
+                || relative.as_bytes().get(1) == Some(&b':')
+            {
+                return Err(format!("unusable document path: {doc_path}"));
+            }
+            let vault = self.vault.parent().ok_or_else(|| "vault root is unavailable".to_string())?;
+            return Ok(vault.join(relative));
         }
         let path = Path::new(doc_path);
         Ok(if path.is_absolute() { path.to_path_buf() } else { self.vault.join(path) })
@@ -327,16 +339,23 @@ pub fn diff(a: &str, b: &str) -> Vec<Hunk> {
 /// One that no longer appears has had the lines it was written against edited
 /// away, and is refused rather than forced.
 fn select(fresh: &[Hunk], chosen: &[Hunk]) -> Result<Vec<Hunk>, String> {
-    let mut out = Vec::new();
+    let mut out: Vec<Hunk> = Vec::new();
     for c in chosen {
-        match fresh.iter().find(|h| h.old == c.old && h.new == c.new) {
-            Some(h) => out.push(h.clone()),
-            None => {
-                return Err("This document changed since that was proposed, so those edits no longer fit. \
-                            Nothing was written — the changes have been re-read against the file as it is now."
-                    .into())
-            }
-        }
+        let matches: Vec<&Hunk> = fresh
+            .iter()
+            .filter(|h| h.old == c.old && h.new == c.new && !out.contains(*h))
+            .collect();
+        let matched = matches
+            .iter()
+            .find(|h| h.at == c.at)
+            .copied()
+            .or_else(|| (matches.len() == 1).then(|| matches[0]));
+        let Some(matched) = matched else {
+            return Err("This document changed since that was proposed, so those edits no longer fit. \
+                        Nothing was written — the changes have been re-read against the file as it is now."
+                .into());
+        };
+        out.push(matched.clone());
     }
     out.sort_by_key(|h| h.at);
     Ok(out)
@@ -406,6 +425,24 @@ mod tests {
     }
 
     #[test]
+    fn proposal_paths_share_identity_across_absolute_legacy_and_vault_aliases() {
+        let (store, root) = scratch("aliases");
+        doc(&root, "before\n");
+        let absolute = root.join("vault/Report.md").to_string_lossy().into_owned();
+        let proposal = create(&store, &absolute, "after\n");
+        assert_eq!(store.list("Report.md").unwrap().len(), 1);
+        let virtual_path = "vault:vault/Report.md";
+        assert_eq!(store.list(virtual_path).unwrap().len(), 1);
+        store.accept(virtual_path, &proposal.id, &proposal.hunks).unwrap();
+        assert_eq!(body(&root), "after\n");
+        assert!(store.list(&absolute).unwrap().is_empty());
+        let next = create(&store, "Report.md", "next\n");
+        store.reject(&absolute, &next.id, &next.hunks).unwrap();
+        assert!(store.list(virtual_path).unwrap().is_empty());
+        assert_eq!(body(&root), "after\n");
+    }
+
+    #[test]
     fn the_hunks_are_the_changes_and_nothing_else() {
         let hunks = diff(
             "keep one\nreplace me\nkeep two\ndelete me\nkeep three\n",
@@ -432,6 +469,22 @@ mod tests {
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].hunks.len(), 1, "the other hunk is still offered");
         assert_eq!(left[0].hunks[0].new, vec!["ONE".to_string()]);
+    }
+
+    #[test]
+    fn identical_hunks_keep_the_position_that_was_reviewed() {
+        let (store, root) = scratch("duplicate-hunks");
+        let path = doc(&root, "repeat\nkeep\nrepeat\nkeep\n");
+        let p = create(&store, &path, "changed\nkeep\nchanged\nkeep\n");
+        assert_eq!(p.hunks.len(), 2);
+
+        let after = store.accept(&path, &p.id, &[p.hunks[1].clone()]).unwrap();
+        assert_eq!(after, "repeat\nkeep\nchanged\nkeep\n");
+
+        let left = store.list(&path).unwrap();
+        assert_eq!(left[0].hunks.len(), 1);
+        store.reject(&path, &p.id, &left[0].hunks).unwrap();
+        assert!(store.list(&path).unwrap().is_empty());
     }
 
     #[test]
@@ -503,6 +556,17 @@ mod tests {
             .is_err());
         assert!(store.list("../etc/passwd").is_err());
         assert!(store.reject(&path, "../secret", &[]).is_err());
+    }
+
+    #[test]
+    fn vault_paths_resolve_above_intelligence_without_widening_traversal() {
+        let (store, root) = scratch("vault-prefix");
+        let store = Store::at(store.dir, root.join("vault").join("intelligence"));
+        assert_eq!(store.resolve("vault:journal/Note.md").unwrap(), root.join("vault/journal/Note.md"));
+        assert_eq!(store.resolve("Report.md").unwrap(), root.join("vault/intelligence/Report.md"));
+        assert_eq!(store.resolve("/tmp/Report.md").unwrap(), PathBuf::from("/tmp/Report.md"));
+        assert!(store.resolve("vault:../outside.md").is_err());
+        assert!(store.resolve("vault:/outside.md").is_err());
     }
 
     #[test]

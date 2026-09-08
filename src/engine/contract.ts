@@ -33,6 +33,8 @@ export const GATEWAY_METHODS = [
   "profiles.create",
   "profiles.get_asset",
   "profiles.set_asset",
+  "config.get",
+  "config.set",
   "gateway.capabilities",
   // Durable Hermes-only rooms (tui_gateway/methods_groups.py).
   "groups.capabilities",

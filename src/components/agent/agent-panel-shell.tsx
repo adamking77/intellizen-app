@@ -20,12 +20,12 @@ export function AgentPanelShell({
       style={
         standalone
           ? undefined
-          : { width: pane?.width ?? 336, background: "var(--mantle)" }
+          : { width: pane?.width ?? 336, background: "var(--region-plane)" }
       }
       className={cn(
         "pane relative flex shrink-0 flex-col",
         standalone
-          ? "h-full w-full rounded-none bg-[var(--mantle)]"
+          ? "h-full w-full rounded-none bg-transparent"
           : "h-full",
       )}
       onFocusCapture={onInteraction}

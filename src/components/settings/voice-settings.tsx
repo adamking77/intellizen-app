@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useVoicePrefs, type SpeechService } from "@/voice/voice-prefs";
 
 import { SettingSwitch } from "./setting-switch";
+import { SETTINGS_TITLE } from "./settings-style";
 
 interface Catalog {
   id: string;
@@ -33,14 +34,14 @@ const SPEAKING_SERVICES: Catalog[] = [
   { id: "minimax", label: "MiniMax", models: ["speech-02-hd", "speech-02-turbo"], needsKey: false },
 ];
 
-const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
-const meta = "font-ui text-[var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
+const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]";
+const meta = "font-ui text-[length:var(--t-section)] leading-[1.45] text-[var(--text-muted)]";
 
 function Row({ label, detail, children }: { label: string; detail: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-4 border-b border-[var(--hair)] px-0.5 py-3">
       <div className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{label}</span>
+        <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">{label}</span>
         <span className={meta}>{detail}</span>
       </div>
       {children}
@@ -55,6 +56,7 @@ function Half({
   value,
   catalog,
   found,
+  modelsUnavailable = false,
   language = false,
   onChange,
 }: {
@@ -64,6 +66,7 @@ function Half({
   catalog: Catalog[];
   /** Models discovered on this machine, when the chosen service has any. */
   found?: { id: string; label: string }[];
+  modelsUnavailable?: boolean;
   language?: boolean;
   onChange: (next: SpeechService) => void;
 }) {
@@ -105,9 +108,9 @@ function Half({
           {custom ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>Service id</span>
-              <Input className="h-8 text-[var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
+              <Input className="text-[length:var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
               <span className={meta}>
-                Recorded, not yet spoken through — this app has code for {catalog.map((p) => p.label).join(" and ")} only, and answers anything else by saying so rather than failing quietly.
+                Custom services are saved for future use. Only {catalog.map((p) => p.label).join(" and ")} {title === "Speaking" ? "can speak" : "works for dictation"} in the current app.
               </span>
             </label>
           ) : null}
@@ -117,7 +120,7 @@ function Half({
               <span className={caps}>{title === "Speaking" ? "Voice" : "Model"}</span>
               {chosen ? (
                 <Select controlSize="sm" value={value.model} onChange={(e) => onChange({ ...value, model: e.target.value })}>
-                  <option value="">{options.length === 0 ? "Nothing installed" : "Choose…"}</option>
+                  <option value="">{modelsUnavailable ? "Models unavailable" : options.length === 0 ? "Nothing installed" : "Choose…"}</option>
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.label}
@@ -125,8 +128,9 @@ function Half({
                   ))}
                 </Select>
               ) : (
-                <Input className="h-8 text-[var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
+                <Input className="text-[length:var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
               )}
+              {modelsUnavailable && title === "Dictation" ? <span role="alert" className={meta}>The local dictation models could not be read.</span> : null}
             </label>
           ) : null}
 
@@ -134,7 +138,7 @@ function Half({
             <label className="flex flex-col gap-1">
               <span className={caps}>Language</span>
               <Input
-                className="h-8 text-[var(--t-meta)]"
+                className="text-[length:var(--t-meta)]"
                 value={value.language}
                 placeholder="en"
                 onChange={(e) => onChange({ ...value, language: e.target.value })}
@@ -146,9 +150,9 @@ function Half({
           {needsKey ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>API key</span>
-              <Input className="h-8 text-[var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
+              <Input className="text-[length:var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
               <span className={meta}>
-                Credentials come from the environment — the same variable the service's own CLI reads. What is typed here is stored but not yet used.
+                The app reads credentials from the service’s environment variable. A key entered here is saved but is not used yet.
               </span>
             </label>
           ) : null}
@@ -163,34 +167,39 @@ export function VoiceSettings() {
   const setVoice = useVoicePrefs((s) => s.setVoice);
   // What is actually installed, asked once when the page opens.
   const [found, setFound] = useState<{ id: string; label: string }[]>([]);
+  const [modelsUnavailable, setModelsUnavailable] = useState(false);
   useEffect(() => {
     void invoke<{ id: string; label: string }[]>("voice_models")
-      .then(setFound)
-      .catch(() => setFound([]));
+      .then((models) => { setFound(models); setModelsUnavailable(false); })
+      .catch(() => { setFound([]); setModelsUnavailable(true); });
   }, []);
 
   return (
     <div className="flex flex-col gap-5">
-      {/* An explanation, in the quiet register — not a notice. */}
+      <div>
+        <h1 className={SETTINGS_TITLE}>Voice</h1>
+        <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--subtext-0)]">Choose the local dictation model and the service agents use to read replies aloud.</p>
+      </div>
       <div className="flex items-start rounded-[var(--r-plane)] bg-[var(--input)] px-3 py-[9px]">
         <span className={cn(meta, "leading-[1.5]")}>
-          Both halves run on this machine — dictation through a local model, and speaking through the service you connect below. Nothing is sent anywhere you did not choose.
+          Dictation uses a model installed on this Mac. Speaking uses the service you choose below.
         </span>
       </div>
 
       <Half
         title="Dictation"
-        explain="The microphone in the composer — what it sends, and to whom."
+        explain="Choose the model that turns microphone audio into text in the composer."
         value={voice.dictation}
         catalog={DICTATION_SERVICES}
         found={found}
+        modelsUnavailable={modelsUnavailable}
         language
         onChange={(dictation) => setVoice({ ...voice, dictation })}
       />
 
       <Half
         title="Speaking"
-        explain="An agent reading its reply aloud, in its own identity colour."
+        explain="Choose the service and voice agents use to read replies aloud."
         value={voice.speaking}
         catalog={SPEAKING_SERVICES}
         onChange={(speaking) => setVoice({ ...voice, speaking })}

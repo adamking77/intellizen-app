@@ -71,6 +71,10 @@ export type WorkflowApprovalStep = {
   title: string;
   gate: string;
   payloadRef: string;
+  /** Explicit, side-only role steps that may run while this answer is pending. */
+  meanwhile?: string[];
+  /** M6 has no reminder scheduler. Omission and `never` are equivalent. */
+  reminder?: "never";
   next: string | null;
 };
 

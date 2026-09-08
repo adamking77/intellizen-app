@@ -46,8 +46,6 @@ import { readVaultFile, removeVaultFile, writeVaultFile, listVaultDocuments, cre
 import { useProposalCounts } from "@/proposals/use-proposals";
 import { useAppStore } from "@/store";
 
-const DOCS_RAIL_STORAGE_KEY = "intelizen:docs-rail";
-
 function normalizeModelRecord(record: WorkspaceDatabaseRecord): WorkspaceDatabaseRecordModel {
   return {
     id: record.id,
@@ -91,14 +89,6 @@ export function ReportsView() {
   const selectedRecordId = searchParams.get("record");
   const [pendingDelete, setPendingDelete] = useState<WorkspaceDatabaseRecordModel | null>(null);
   const [railHidden, setRailHidden] = useState(false);
-  const [railWidth, setRailWidth] = useState(() => {
-    try {
-      const stored = Number(window.localStorage.getItem(DOCS_RAIL_STORAGE_KEY));
-      return Number.isFinite(stored) && stored >= 180 && stored <= 480 ? stored : 300;
-    } catch {
-      return 300;
-    }
-  });
   const vaultSyncStartedRef = useRef(false);
   const editAfterCreateRef = useRef<string | null>(null);
 
@@ -185,16 +175,11 @@ export function ReportsView() {
       : { kind: "document", documentId: selectedRecord.id, label: documentDisplayTitle(selectedRecord) }] });
   }, [selectedRecord, searchParams, sopRecordIds]);
   useEffect(() => {
-    try {
-      window.localStorage.setItem(DOCS_RAIL_STORAGE_KEY, String(railWidth));
-    } catch {
-      /* keep the mounted preference */
-    }
-  }, [railWidth]);
-
-  useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
-      if (event.metaKey && event.key === "\\") {
+      const target = event.target;
+      const editing = target instanceof HTMLElement
+        && (target.isContentEditable || Boolean(target.closest("input, textarea, select, [contenteditable='true']")));
+      if (!event.defaultPrevented && !editing && event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !event.isComposing && event.key === "[") {
         event.preventDefault();
         setRailHidden((hidden) => !hidden);
       }
@@ -356,7 +341,7 @@ export function ReportsView() {
           proposalCounts={proposalCounts}
           selectedRecordId={selectedRecordId}
           searchQuery={searchQuery}
-          width={isCramped ? "100%" : railWidth}
+          width={isCramped ? "100%" : 232}
           creating={createMutation.isPending}
           inventory={vaultQuery.data}
           loadingVault={vaultQuery.isLoading}
@@ -374,7 +359,6 @@ export function ReportsView() {
           onSearch={setSearchQuery}
           onSelect={selectDocument}
           onCreate={(template) => createMutation.mutate(template)}
-          onResize={setRailWidth}
         />
       ) : null}
         <section className={cn(
@@ -400,8 +384,8 @@ export function ReportsView() {
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
               <p className="text-label">{allRecords.length === 0 ? "No documents" : "Select a document"}</p>
               <p className="max-w-[440px] text-ui text-[var(--subtext-0)]">
-                Your documents, notes, and workflow sources live here.
-                Choose a document, create one from a template, or capture a quick note.
+                Docs includes notes, saved reports, and workflow sources.
+                Choose one from the list, create one from a template, or add a quick note.
               </p>
             </div>
           )}

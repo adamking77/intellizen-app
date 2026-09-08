@@ -6,6 +6,7 @@ export interface ExecutionTarget {
   ref: string;
   agentKey: string;
   kind: "hermes" | "acp";
+  engine: string;
   targetId: string;
   model: string | null;
   execution: "durable" | "ephemeral";
@@ -20,6 +21,7 @@ export function executionTargets(
       ref: `hermes:${profile.name}`,
       agentKey: profile.name,
       kind: "hermes" as const,
+      engine: "hermes",
       targetId: profile.name,
       model: profile.model,
       execution: "durable" as const,
@@ -28,6 +30,7 @@ export function executionTargets(
       ref: `acp:${agent.id}`,
       agentKey: agent.id,
       kind: "acp" as const,
+      engine: agent.engine,
       targetId: agent.id,
       model: agent.model ?? null,
       execution: "ephemeral" as const,

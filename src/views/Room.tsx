@@ -1,14 +1,13 @@
 import { requestAction } from "@/components/agent/panel-window";
 import { runRoomAction, type PanelRoomSnapshot } from "@/components/agent/panel-room";
 import { usePanelDraft } from "@/components/agent/panel-draft";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Trash2, Users, X } from "lucide-react";
 
 import { DecisionCard } from "@/components/agent/decision-card";
 import { RunStatus } from "@/components/agent/agent-composer";
 import { ReplyMarkdown } from "@/components/agent/reply-markdown";
-import { clock } from "@/components/agent/turn-time";
 import { Avatar, identityColor } from "@/components/agents/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -38,6 +37,10 @@ import type { GroupMember, GroupMessage } from "@/rooms/types";
  *  (DESIGN.md), applied to the room log. */
 const GAP_MS = 15 * 60_000;
 
+function absoluteTime(at: number) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function Turn({
   entry,
   members,
@@ -56,6 +59,7 @@ function Turn({
   const face = {
     displayName: who,
     avatarStyle: profile?.avatarStyle ?? member?.avatar_style ?? "sphere",
+    avatarSeed: profile?.avatarSeed ?? member?.avatar_seed,
     avatarKind: profile?.avatarKind ?? member?.avatar_kind,
     avatarColor: profile?.avatarColor ?? member?.avatar_color,
   };
@@ -66,16 +70,16 @@ function Turn({
       {showTime ? (
         <div className="my-1 flex items-center gap-2 px-1">
           <span className="h-px flex-1 bg-[var(--hair)]" />
-          <span className="font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
-            {clock(entry.at)}
+          <span className="font-ui text-[length:var(--t-section)] tabular-nums text-[var(--text-muted)]">
+            {absoluteTime(entry.at)}
           </span>
           <span className="h-px flex-1 bg-[var(--hair)]" />
         </div>
       ) : null}
       {isUser ? (
         <div className="group flex max-w-[82%] flex-col gap-1 self-end">
-          <span className="text-right font-ui text-[var(--t-meta)] text-[var(--text-muted)]">You</span>
-          <p className="whitespace-pre-wrap break-words rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2 font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">
+          <span className="text-right font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">You</span>
+          <p className="whitespace-pre-wrap break-words rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2 font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]">
             {entry.text}
           </p>
         </div>
@@ -85,7 +89,7 @@ function Turn({
             <Avatar agent={face} size={24} image={profile?.avatarImage} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="font-ui text-[var(--t-ui)] text-[var(--text)]">{who}</span>
+            <span className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">{who}</span>
             <div
               className="rounded-[var(--r-ctl)] px-[11px] py-2"
               style={{ background: `color-mix(in srgb, ${hue} 12%, transparent)` }}
@@ -115,6 +119,7 @@ export function RoomView({
   onEject,
   voice,
   showVoiceControls = true,
+  trailingContent,
 }: {
   roomId?: string;
   panel?: boolean;
@@ -125,6 +130,7 @@ export function RoomView({
   onEject?: () => void;
   voice?: VoiceHandle;
   showVoiceControls?: boolean;
+  trailingContent?: ReactNode;
 } = {}) {
   const { id: routeId = "" } = useParams();
   const id = roomId ?? routeId;
@@ -138,6 +144,11 @@ export function RoomView({
   const [sheet, setSheet] = useState(false);
   const [confirmDisband, setConfirmDisband] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const decisionAttempt = useRef(0);
+  const decisionInFlight = useRef<string | null>(null);
+  const activeRoom = useRef(id);
+  activeRoom.current = id;
   const logRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -158,7 +169,13 @@ export function RoomView({
     () => remote ? snapshot.pending : Object.values(clarify).find((p) => p.group === id) ?? null,
     [remote, snapshot, clarify, id],
   );
-  const pendingMember = pending ? members.find((m) => m.name === pending.member) ?? null : null;
+  const pendingMember = pending ? members.find((m) => groupMemberKey(m) === pending.memberKey) ?? null : null;
+
+  useEffect(() => {
+    decisionAttempt.current += 1;
+    setBusy(false);
+    setDecisionError(null);
+  }, [id, pending?.memberKey, pending?.decision.requestId]);
 
   const syncHosted = async () => {
     if (remote) { requestAction({ type: "room-refresh", roomId: id }); return; }
@@ -194,33 +211,53 @@ export function RoomView({
     } else {
       setBehind(true);
     }
-  }, [log.length, activity.length]);
+  }, [log.length, activity.length, pending?.memberKey, pending?.decision.requestId]);
 
   const onApprove = async (decision: ApprovalDecision, choice: ApprovalChoice) => {
     if (!pending || !pendingMember) return;
-    if (remote) { requestAction({ type: "room-approve", roomId: id, requestId: decision.requestId, choice }); return; }
+    const identity = `${id}:${pending.memberKey}:${decision.requestId}`;
+    if (decisionInFlight.current?.startsWith(`${id}:`)) return;
+    decisionInFlight.current = identity;
+    const attempt = ++decisionAttempt.current;
     setBusy(true);
+    setDecisionError(null);
     try {
-      if (pending.hosted) await approveHostedRoom(id, pending, choice);
+      if (remote) await requestAction({ type: "room-approve", roomId: id, memberKey: pending.memberKey, requestId: decision.requestId, choice });
+      else if (pending.hosted) await approveHostedRoom(id, pending, choice);
       else await respondGroupApproval(id, pendingMember, decision.requestId, choice);
     } catch (error) {
+      if (activeRoom.current === id && decisionAttempt.current === attempt) {
+        setDecisionError(error instanceof Error ? error.message : String(error));
+      }
       toastError("Couldn't answer that request", error);
     } finally {
-      setBusy(false);
+      if (decisionInFlight.current === identity) decisionInFlight.current = null;
+      if (activeRoom.current === id && decisionAttempt.current === attempt) setBusy(false);
     }
   };
 
   const onClarify = async (decision: ClarifyDecision, answers: Record<string, string[]>) => {
     if (!pending || !pendingMember) return;
-    if (remote) { requestAction({ type: "room-clarify", roomId: id, requestId: decision.requestId, answers }); return; }
+    const identity = `${id}:${pending.memberKey}:${decision.requestId}`;
+    if (decisionInFlight.current?.startsWith(`${id}:`)) return;
+    decisionInFlight.current = identity;
+    const attempt = ++decisionAttempt.current;
     setBusy(true);
+    setDecisionError(null);
     try {
-      await answerClarify(clientFor(pendingMember), decision, answers);
-      clearGroupPrompt(id, pendingMember);
+      if (remote) await requestAction({ type: "room-clarify", roomId: id, memberKey: pending.memberKey, requestId: decision.requestId, answers });
+      else {
+        await answerClarify(clientFor(pendingMember), decision, answers);
+        clearGroupPrompt(id, pendingMember);
+      }
     } catch (error) {
+      if (activeRoom.current === id && decisionAttempt.current === attempt) {
+        setDecisionError(error instanceof Error ? error.message : String(error));
+      }
       toastError("Couldn't answer that question", error);
     } finally {
-      setBusy(false);
+      if (decisionInFlight.current === identity) decisionInFlight.current = null;
+      if (activeRoom.current === id && decisionAttempt.current === attempt) setBusy(false);
     }
   };
 
@@ -256,10 +293,10 @@ export function RoomView({
                   onClick={() => navigate(`/room/${other.roomId}`)}
                   className="flex w-full items-baseline justify-between gap-2 px-3 py-2 text-left hover:bg-[var(--hover)]"
                 >
-                  <span className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+                  <span className="truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                     {other.name}
                   </span>
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">
                     {(other.members || []).length} members
                   </span>
                 </button>
@@ -296,22 +333,23 @@ export function RoomView({
                     agent={{
                       displayName: displayName(member),
                       avatarStyle: profile?.avatarStyle ?? member.avatar_style,
+                      avatarSeed: profile?.avatarSeed ?? member.avatar_seed,
                       avatarKind: profile?.avatarKind ?? member.avatar_kind,
                       avatarColor: profile?.avatarColor ?? member.avatar_color,
                     }}
                     image={profile?.avatarImage}
                     size={24}
-                    animate={false}
+
                   />
                 </span>
               );
             })}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
+            <h1 className="truncate font-ui text-[length:var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]">
               {room.name}
             </h1>
-            <p className="truncate font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <p className="truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               {room.turn
                 ? `${displayName(members.find((m) => m.name === room.turn) ?? { name: room.turn })} is thinking…`
                 : `${members.length} members${room.running ? " · running" : ""} · ${room.owner === "hermes" ? "Hermes durable log" : "ACP-compatible local room"}`}
@@ -330,7 +368,7 @@ export function RoomView({
               <X className="h-3.5 w-3.5" />
             </Button>
           ) : null}
-        </header> : <details className="shrink-0 px-0.5 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+        </header> : <details className="shrink-0 px-0.5 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
           <summary className="w-fit cursor-pointer rounded-[var(--r-ctl)] hover:text-[var(--text)] focus-visible:bg-[var(--hover)]">{members.length} members</summary>
           <p className="pt-1">{members.map(displayName).join(" · ")}</p>
         </details>}
@@ -348,8 +386,8 @@ export function RoomView({
         >
           {log.length === 0 ? (
             <div className="mt-auto flex flex-col gap-1.5 px-0.5 pb-2.5">
-              <p className="font-ui text-[var(--t-ui)] text-[var(--text)]">Message the team to begin.</p>
-              <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Everyone can respond. Use @name to address one member.</p>
+              <p className="font-ui text-[length:var(--t-ui)] text-[var(--text)]">Message the team to begin.</p>
+              <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Everyone can respond. Use @name to address one member.</p>
             </div>
           ) : (
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
@@ -367,21 +405,24 @@ export function RoomView({
           {pending ? (
             <div className="py-2">
               <DecisionCard
+                key={`${id}:${pending.memberKey}:${pending.decision.requestId}`}
                 decision={pending.decision}
                 asker={pendingMember ? displayName(pendingMember) : pending.member}
                 busy={busy}
                 onApprove={(decision, choice) => void onApprove(decision, choice)}
                 onClarify={(decision, answers) => void onClarify(decision, answers)}
               />
+              {decisionError ? <p role="alert" className="mt-1.5 text-[length:var(--t-meta)] text-[var(--bad)]">{decisionError}</p> : null}
             </div>
           ) : null}
+          {trailingContent ? <div className="shrink-0">{trailingContent}</div> : null}
         </div>
 
         {behind ? (
           <div className="flex shrink-0 justify-center pb-1.5">
             <button
               type="button"
-              className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[var(--t-meta)] text-[var(--text)]"
+              className="rounded-[var(--r-pill)] bg-[var(--hover-strong)] px-3 py-0.5 text-[length:var(--t-meta)] text-[var(--text)]"
               onClick={() => {
                 const el = logRef.current;
                 if (!el) return;
@@ -396,7 +437,7 @@ export function RoomView({
         ) : null}
 
         {room.owner === "hermes" && room.synced !== true ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5 py-2 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5 py-2 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
             <span>Hermes durable room is offline{room.syncError ? ` — ${room.syncError}` : ""}.</span>
             <Button
               size="sm"
@@ -446,10 +487,10 @@ export function RoomView({
         </div>
       </div>
 
-      <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--mantle)] lg:flex", panel && "lg:hidden")}>
+      <aside className={cn("hidden w-60 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--region-plane)] lg:flex", panel && "lg:hidden")}>
         <div className="flex items-center gap-2 px-4 py-3">
           <Users className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Members</span>
+          <span className="font-ui text-[length:var(--t-meta)] font-medium text-[var(--text-muted)]">Members</span>
         </div>
         <ul className="shrink-0 py-1">
           {members.map((member) => {
@@ -463,20 +504,21 @@ export function RoomView({
                   agent={{
                     displayName: displayName(member),
                     avatarStyle: profileForMember(directory, member)?.avatarStyle ?? member.avatar_style,
+                    avatarSeed: profileForMember(directory, member)?.avatarSeed ?? member.avatar_seed,
                     avatarKind: profileForMember(directory, member)?.avatarKind ?? member.avatar_kind,
                     avatarColor: profileForMember(directory, member)?.avatarColor ?? member.avatar_color,
                   }}
                   image={profileForMember(directory, member)?.avatarImage}
                   size={20}
-                  animate={false}
+
                 />
-                <span className="min-w-0 flex-1 truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+                <span className="min-w-0 flex-1 truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
                   {displayName(member)}
                 </span>
                 {room.turn === member.name ? (
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--accent-text)]">on turn</span>
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--accent-text)]">on turn</span>
                 ) : held ? (
-                  <span className="shrink-0 font-ui text-[var(--t-section)] text-[var(--text-muted)]">held</span>
+                  <span className="shrink-0 font-ui text-[length:var(--t-section)] text-[var(--text-muted)]">held</span>
                 ) : null}
               </li>
             );
@@ -484,21 +526,21 @@ export function RoomView({
         </ul>
 
         <div className="border-t border-[var(--border-subtle)] px-4 py-3">
-          <span className="font-ui text-[var(--t-meta)] font-medium text-[var(--text-muted)]">Receipts</span>
+          <span className="font-ui text-[length:var(--t-meta)] font-medium text-[var(--text-muted)]">Receipts</span>
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto pb-3">
           {activity.length === 0 ? (
-            <li className="px-4 font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <li className="px-4 font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               Nothing running.
             </li>
           ) : (
             activity.map((event, index) => (
               <li key={`${event.at}-${index}`} className="flex gap-2 px-4 py-0.5">
-                <span className="shrink-0 font-ui text-[var(--t-section)] tabular-nums text-[var(--text-muted)]">
-                  {clock(event.at)}
+                <span className="shrink-0 font-ui text-[length:var(--t-section)] tabular-nums text-[var(--text-muted)]">
+                  {absoluteTime(event.at)}
                 </span>
                 <span
-                  className="min-w-0 flex-1 font-ui text-[var(--t-section)] leading-4"
+                  className="min-w-0 flex-1 font-ui text-[length:var(--t-section)] leading-4"
                   style={{ color: groupActivityTone(event.kind) }}
                   title={event.reason}
                 >

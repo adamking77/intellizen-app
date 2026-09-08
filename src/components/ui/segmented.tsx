@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 
 import { Control } from "@/components/ui/control";
+import { useInputModality, useMotionEnabled } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import { runViewTransition, type ViewTransitionKind } from "@/lib/view-transitions";
 
@@ -31,9 +32,14 @@ export function Segmented<T extends string>({
 }: SegmentedProps<T>) {
   const controls = useRef<(HTMLButtonElement | null)[]>([]);
   const transitionName = `segmented-${useId().replaceAll(":", "")}`;
+  const motionEnabled = useMotionEnabled();
+  const modality = useInputModality();
+  const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled);
+  const focusIndex = selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled);
 
-  function select(next: T) {
-    runViewTransition(transitionKind, () => onValueChange(next));
+  function select(next: T, animate = true) {
+    if (!animate || !motionEnabled || modality === "keyboard") onValueChange(next);
+    else runViewTransition(transitionKind, () => onValueChange(next));
   }
 
   function move(from: number, direction: -1 | 1 | "first" | "last") {
@@ -45,7 +51,7 @@ export function Segmented<T extends string>({
       : direction === "last"
         ? enabled.at(-1)!
         : enabled[(current + direction + enabled.length) % enabled.length];
-    select(target.option.value);
+    select(target.option.value, false);
     controls.current[target.index]?.focus();
   }
 
@@ -53,7 +59,7 @@ export function Segmented<T extends string>({
     <div
       role={kind === "tabs" ? "tablist" : "radiogroup"}
       aria-label={label}
-      className={cn("inline-flex h-[var(--h-ctl)] gap-0.5 rounded-[var(--r-ctl)] bg-[var(--crust)] p-0.5", className)}
+      className={cn("inline-flex min-h-[var(--h-ctl)] max-w-full flex-wrap gap-0.5 rounded-[var(--r-ctl)] bg-[var(--crust)] p-0.5", className)}
     >
       {options.map((option, index) => {
         const selected = option.value === value;
@@ -64,11 +70,11 @@ export function Segmented<T extends string>({
             role={kind === "tabs" ? "tab" : "radio"}
             aria-selected={kind === "tabs" ? selected : undefined}
             aria-checked={kind === "choice" ? selected : undefined}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={index === focusIndex ? 0 : -1}
             disabled={option.disabled}
             variant="quiet"
             size="sm"
-            className={cn("group relative h-full", selected && "font-[450] text-[var(--text)]")}
+            className={cn("group relative", selected && "font-[450] text-[var(--text)]")}
             onClick={() => select(option.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowLeft" || event.key === "ArrowUp") move(index, -1);

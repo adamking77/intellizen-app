@@ -10,22 +10,33 @@ vi.mock("@/lib/view-transitions", () => ({ runViewTransition: (_: unknown, actio
 let root: ReturnType<typeof createRoot>; let host: HTMLDivElement;
 const open = vi.fn(); const create = vi.fn();
 const items = ["Research brief", "Publish report"].map((name, i) => ({ workflow: { id: String(i), name, workflow_id: `workflow-${i}`, owner_role: "chief_engineer" }, definition: createWorkflowDesignerDraft({ id: `workflow-${i}`, name }), state: i ? "draft" : "runnable", blockers: [], runnable: !i, executable: true }) as unknown as WorkflowCatalogItem);
-beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
+beforeEach(() => { localStorage.clear(); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.clearAllMocks(); });
-async function render(data = items) { await act(async () => root.render(<WorkflowLibrary items={data} onOpen={open} onCreate={create} />)); }
+async function render(data = items) { await act(async () => root.render(<WorkflowLibrary items={data} onOpen={open} onCreate={create} onDraftWithAgent={create} />)); }
 it("opens an exact workflow from a semantic card, without rendering run history", async () => {
   await render();
   const card = host.querySelector<HTMLButtonElement>('[aria-label="Edit Publish report"]')!;
   await act(async () => card.click()); expect(open).toHaveBeenCalledWith(items[1]);
   expect(host.querySelector("table")).toBeNull(); expect(host.textContent).not.toContain("Last ran");
+  expect(card.querySelector("div,h1,h2,h3,h4,h5,h6,p,section")).toBeNull();
 });
 it("filters drafts without selecting or starting any workflow", async () => {
   await render();
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "Drafts")!.click());
   expect(host.querySelector('[aria-label="Edit Publish report"]')).toBeTruthy(); expect(host.querySelector('[aria-label="Edit Research brief"]')).toBeNull(); expect(open).not.toHaveBeenCalled();
 });
+it("switches between cards and a compact list, and creates from the library dock", async () => {
+  await render();
+  await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "List")!.click());
+  expect(host.querySelector('[aria-label="Workflow library controls"]')).toBeTruthy();
+  expect(host.querySelector('[role="tablist"][aria-label="Workflow library view"]')).toBeTruthy();
+  expect(localStorage.getItem("intelizen:workflow-library-view")).toBe("list");
+  expect(host.querySelector('[aria-label="Edit Research brief"]')?.parentElement?.className).toContain("divide-y");
+  await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "New workflow")!.click());
+  expect(create).toHaveBeenCalledOnce();
+});
 it("provides an actionable empty library and restores filters", async () => {
-  await render([]); expect(host.textContent).toContain("Build your first workflow");
+  await render([]); expect(host.textContent).toContain("No workflows yet");
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "New workflow")!.click()); expect(create).toHaveBeenCalledOnce();
   await render(); await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "Needs attention")!.click()); expect(host.textContent).toContain("No matching workflows");
   await act(async () => [...host.querySelectorAll("button")].find((el) => el.textContent === "Clear filters")!.click()); expect(host.querySelectorAll('[aria-label^="Edit "]')).toHaveLength(2);
@@ -39,5 +50,5 @@ it("shows purpose, owner, readiness and the concrete first blocker on the card",
   const card = host.querySelector('[aria-label="Edit Research brief"]')!;
   expect(card.textContent).toContain("A brief with attributed evidence."); expect(card.textContent).toContain("Chief Engineer");
   expect(card.textContent).toContain("Needs attention"); expect(card.textContent).toContain("Prepare findings: Chief Engineer has no active occupant. (1 more issue)");
-  expect(card.querySelector('[aria-label="Workflow steps"]')).toBeNull(); expect(card.querySelector("svg")).toBeNull();
+  expect(card.querySelector('[aria-label="Workflow steps"]')?.textContent).toBe("1 step · 1 role"); expect(card.querySelector("svg")).toBeNull();
 });

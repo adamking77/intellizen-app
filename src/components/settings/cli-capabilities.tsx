@@ -5,6 +5,7 @@ import { SettingSwitch } from "./setting-switch";
 import { useSearchParams } from "react-router-dom";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Control } from "@/components/ui/control";
 import { errorMessage } from "@/lib/toast";
 
 export type CliCapability = {
@@ -61,7 +62,7 @@ export function CliCapabilities({ hermesControls }: { hermesControls?: (query: s
           {provider !== "all" && !PROVIDERS[provider] ? <option value={provider}>{provider}</option> : null}
         </Select>
         <Input className="min-w-0 flex-1 basis-40" aria-label="Search CLI capabilities" placeholder="Search capabilities…" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <button type="button" className="action" disabled={inventory.isFetching} onClick={() => void inventory.refetch()}>{inventory.isFetching ? "Reading…" : "Refresh"}</button>
+        <Control size="sm" disabled={inventory.isFetching} onClick={() => void inventory.refetch()}>{inventory.isFetching ? "Reading…" : "Refresh"}</Control>
       </div>
       {toggle.error ? <p role="alert" className="text-xs text-[var(--danger)]">Selection was not saved. {errorMessage(toggle.error)}</p> : null}
       {toggle.isSuccess ? <p role="status" className="text-xs text-[var(--subtext-0)]">Saved for new chats. Existing chats keep their current capabilities until reconnected.</p> : null}
@@ -85,7 +86,7 @@ export function CliCapabilities({ hermesControls }: { hermesControls?: (query: s
       })}
       {inventory.isSuccess && !rows.length ? <p className="text-xs text-[var(--subtext-0)]">{provider !== "all" && !PROVIDERS[provider] ? "Local inventory is not supported for this provider yet." : "No matching capabilities in the supported local sources."}</p> : null}
       {provider === "hermes" ? hermesControls?.(query) : null}
-      <details className="text-[var(--t-meta)] leading-5 text-[var(--overlay-1)]">
+      <details className="text-[length:var(--t-meta)] leading-5 text-[var(--overlay-1)]">
         <summary className="cursor-pointer">What this inventory includes</summary>
         <p className="pt-2">
         Reads user-level skills, Claude commands and Codex prompts; Hermes plugin manifests, Claude’s installation registry and Codex’s configured plugins; Claude, Codex, Gemini and Qwen MCP configuration. Project overrides, bundled plugin skills, remote installs and other CLI formats are not included. Codex skills, CLI plugins and MCP connections support session switches. Claude CLI plugins support session switches; its MCP switches block tool access without disconnecting the server. Other entries remain provider managed. Select Hermes to manage its shared profile settings below.

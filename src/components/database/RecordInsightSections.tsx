@@ -116,7 +116,7 @@ export function RecordHistorySection({ recordId }: { recordId: string }) {
         </p>
       ) : revisions.length === 0 ? (
         <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
-          No prior versions captured yet. Edits from here on are versioned automatically.
+          No prior versions captured yet. Future edits are versioned automatically.
         </p>
       ) : (
         <ul className="space-y-1">
@@ -203,7 +203,7 @@ export function DatabaseTrashPanel({
         </p>
       ) : deleted.length === 0 ? (
         <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 font-ui text-[12px] text-[var(--overlay-1)]">
-          No deleted records. Deletions from here on land in the trash automatically.
+          No deleted records. Deleted records are moved to trash automatically.
         </p>
       ) : (
         <ul className="space-y-1">

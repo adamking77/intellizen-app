@@ -149,8 +149,7 @@ export function DatabaseCalendarView({
                     key={record.id}
                     className="db-calendar-event"
                     style={{
-                      backgroundColor: activeRecordId === record.id ? "var(--accent)" : undefined,
-                      color: activeRecordId === record.id ? "var(--crust)" : undefined,
+                      backgroundColor: activeRecordId === record.id ? "var(--selected)" : undefined,
                     }}
                     onClick={() => onOpenRecord(record.id)}
                   >

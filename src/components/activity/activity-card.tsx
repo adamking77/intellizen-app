@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
 import { UsageChart, OutcomesChart } from "./activity-charts";
 import type { ActivityChartStyle } from "@/lib/activity-pins";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
-import { formatDuration } from "@/lib/activity";
 import {
   finite,
   type ActivityCardId,
@@ -16,7 +16,10 @@ import {
   type SourceRead,
 } from "@/lib/activity-dashboard";
 
-const META = "font-ui text-[var(--t-meta)] leading-5 text-[var(--text-muted)]";
+const META = "font-mono text-[12px] leading-5 text-[var(--text-muted)]";
+function updatedAt(at: number) {
+  return new Date(at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
 export function money(amount: number | null, currency = "USD") {
   if (amount === null) return "Not reported";
   try {
@@ -74,17 +77,17 @@ function ItemList({ items, empty, onOpen }: { items: ActivityItem[]; empty: stri
           onClick={() => open(item)}
         >
           <div className="min-w-0 flex-1">
-            <p title={item.title} className="truncate font-ui text-[var(--t-ui)] text-[var(--text)]">
+            <p title={item.title} className="truncate font-ui text-[length:var(--t-ui)] text-[var(--text)]">
               {item.title}
             </p>
             <p className={META}>
               {item.owner} · {item.state}
-              {item.updated ? ` · updated ${formatDuration(Date.now() - item.updated)} ago` : ""}
+              {item.updated ? ` · updated ${updatedAt(item.updated)}` : ""}
             </p>
           </div>
           <ArrowUpRight
             aria-hidden
-            className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--overlay-1)]"
+            className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]"
           />
         </button>
       ))}
@@ -128,8 +131,8 @@ export function ActivityCardBody({
   if (id === "attention" || id === "progress")
     return (
       <>
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="font-mono text-3xl font-light tabular-nums">
+        <div className="mb-2 flex flex-col gap-1">
+          <span className="font-ui text-[30px] font-light leading-tight tabular-nums">
             {(id === "attention" ? model.attention : model.progress).length}
           </span>
           <span className={META}>
@@ -149,10 +152,10 @@ export function ActivityCardBody({
           ) : null}
         </div>
         <AppDialog open={review !== null}
-          title={review === "workflows" ? "Open workflow records" : id === "attention" ? "Needs attention" : "Live conversations"}
+          title={review === "workflows" ? "Open workflow records" : id === "attention" ? "Questions and issues" : "Live conversations"}
           onOpenChange={(open) => { if (!open) closeReview(); }}
           initialFocus="title"
-          footer={<button className="action" onClick={closeReview}>Close</button>}>
+          footer={<Control variant="quiet" onClick={closeReview}>Close</Control>}>
           {review === "workflows" ? <p className={`${META} mb-3`}>Stored queued / in-progress states. These do not confirm a live process.</p> : null}
           <ItemList key={review} items={review === "workflows" ? model.openWorkflows : id === "attention" ? model.attention : model.progress}
             empty={id === "attention" ? "Nothing waiting in the available sources." : "No live conversations running."}
@@ -177,7 +180,7 @@ export function ActivityCardBody({
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-mono text-3xl font-light tabular-nums">
                 {model.outcomes[0].count}
-                <span className="text-lg text-[var(--overlay-1)]">
+                <span className="text-lg text-[var(--text-muted)]">
                   {" "}
                   / {model.periodRuns.length}
                 </span>
@@ -340,16 +343,21 @@ export function ActivityCardBody({
     );
   return (
     <>
-      <div className="mb-2 flex items-baseline gap-2">
-        <span className="font-mono text-3xl font-light tabular-nums">{sources.connections.data ? model.connections.filter((c) => c.state !== "Unavailable").length : "—"}</span>
+      <div className="mb-2 flex flex-col gap-1">
+        <span className="font-ui text-[30px] font-light leading-tight tabular-nums">{sources.connections.data ? model.connections.filter((c) => c.state !== "Unavailable").length : "—"}</span>
         <span className={META}>{sources.connections.data ? `of ${model.connections.length} ready${model.workspaceScoped ? " · global" : ""}` : "Not reported"}</span>
       </div>
       <button className={`${reviewAction} mt-3`} onClick={(event) => openReview("current", event.currentTarget)}>
         View runtimes <ChevronRight aria-hidden className="h-3 w-3 shrink-0" />
       </button>
+      <div className="mt-2 max-h-40 divide-y divide-[var(--hair)] overflow-y-auto">
+        {model.connections.map((connection) => <button key={connection.id} type="button" onClick={() => navigate("/settings?section=providers")} className="flex w-full flex-wrap justify-between gap-x-3 gap-y-1 py-2 text-left hover:bg-[var(--hover)]">
+          <span className="text-[length:var(--t-meta)]">{connection.name}</span><span className={META}>{connection.state}</span>
+        </button>)}
+      </div>
       <AppDialog open={review !== null} title="Runtime availability" initialFocus="title"
         onOpenChange={(open) => { if (!open) closeReview(); }}
-        footer={<button className="action" onClick={closeReview}>Close</button>}>
+        footer={<Control variant="quiet" onClick={closeReview}>Close</Control>}>
         <p className={`${META} mb-3`}>Global configuration · available runtimes connect on demand.</p>
 
       {model.connections.map((c) => (
@@ -359,7 +367,7 @@ export function ActivityCardBody({
           className="flex w-full items-center gap-3 rounded-[var(--r-ctl)] px-2 py-2.5 text-left hover:bg-[var(--hover)]"
         >
           <span className="min-w-0 flex-1">
-            <span className="block font-ui text-[var(--t-ui)] text-[var(--text)]">
+            <span className="block font-ui text-[length:var(--t-ui)] text-[var(--text)]">
               {c.name}
             </span>
             <span className={META}>{c.detail}</span>

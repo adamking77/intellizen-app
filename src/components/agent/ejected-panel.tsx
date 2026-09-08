@@ -21,17 +21,23 @@ import type { PanelFrame } from "./panel-window";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { Minimize2, PanelRight } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open as pickFiles } from "@tauri-apps/plugin-dialog";
 
 import { AgentPanel } from "@/components/layout/agent-panel";
 import { useWindowDrag, WindowResizeHandles } from "@/components/layout/window-chrome";
 import { emptyThread, type ProfileThread } from "@/engine/session-store";
 import { joinVoiceText, useVoice } from "@/voice/use-voice";
 import { Hud, type HudOpen } from "./hud";
+import { ApprovalSettings } from "./approval-settings";
+import type { ApprovalChoice } from "@/engine/contract";
+import type { ApprovalDecision, ClarifyDecision } from "@/engine/transcript";
 import {
   closePanelWindow,
+  isTauri,
   leaveHudHandoff,
   panelModeReducer,
   requestAction,
+  requestRemoteApprovalMode,
   resizePanelWindow,
   sizeFor,
   takeHudHandoff,
@@ -42,13 +48,13 @@ import { runStateOf } from "./run-state";
 import { usePanelFrame } from "./use-panel-session";
 import { usePanelDraft } from "./panel-draft";
 import type { HermesProfile } from "@/engine/profiles";
+import { toastError } from "@/lib/toast";
 
 const ICON =
-  "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--overlay-1)] transition-colors " +
+  "inline-flex h-[var(--h-ctl)] w-[var(--h-ctl)] items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors " +
   "hover:bg-[var(--surface-wash)] hover:text-[var(--text)]";
 
 const NO_THREADS: Record<string, ProfileThread> = {};
-
 export function EjectedPanel() {
   const frame = usePanelFrame();
   const [mode, dispatch] = useReducer(panelModeReducer, undefined, (): PanelMode => ({
@@ -87,6 +93,15 @@ export function EjectedPanel() {
   }, []);
 
   const dragWindow = useWindowDrag();
+  const quietHud = mode.hud && frame?.sessionMode === "not_today";
+  const wasQuietHud = useRef(false);
+  useEffect(() => {
+    if (!isTauri) return;
+    const panelWindow = getCurrentWindow();
+    if (quietHud) void panelWindow.hide();
+    else if (wasQuietHud.current) void panelWindow.show();
+    wasQuietHud.current = quietHud;
+  }, [quietHud]);
 
   const selected = frame?.selectedProfile ?? null;
   const identity = selected ? frame?.profileDirectory?.[selected] ?? null : null;
@@ -97,6 +112,7 @@ export function EjectedPanel() {
   );
 
   if (mode.hud) {
+    if (quietHud) return null;
     return (
       <HudWindow
         frame={frame}
@@ -114,11 +130,11 @@ export function EjectedPanel() {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-transparent p-2">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-plane)] bg-[var(--hud-bg)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-surface)] border border-[var(--surface-line)] bg-[var(--surface)]">
         <AgentPanel mode="standalone" panelFrame={frame} onHeaderMouseDown={dragWindow} headerActions={<>
-          <button type="button" onClick={() => setMode({ type: "reduce" })} aria-label="Reduce to the HUD" title="Reduce to the HUD" className={`${ICON} shrink-0`}>
+          {frame?.sessionMode !== "not_today" ? <button type="button" onClick={() => setMode({ type: "reduce" })} aria-label="Reduce to the HUD" title="Reduce to the HUD" className={`${ICON} shrink-0`}>
             <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-          </button>
+          </button> : null}
           <button type="button" onClick={redock} aria-label="Put the panel back in the main window" title="Redock" className={`${ICON} shrink-0`}>
             <PanelRight className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
           </button>
@@ -158,7 +174,29 @@ function HudWindow({
   const messages = useMemo(() => room ? [] : thread?.transcript.messages ?? [], [room, thread]);
   const run = room ? room.pending ? { kind: "waiting" as const } : room.room?.running ? { kind: "working" as const, label: room.room.turn ?? null } : { kind: "idle" as const } : runStateOf(thread);
   const sending = run.kind === "working" || run.kind === "opening";
-  const { draft, setDraft, attachments } = usePanelDraft(room ? `room:${room.id}` : profile);
+  const { draft, setDraft, attachments, setAttachments } = usePanelDraft(room ? `room:${room.id}` : profile);
+  const decision = room ? null : thread?.transcript.pending[0] ?? null;
+  const approvalMode = thread?.transcript.approvalMode;
+  const permission = !room && profile && !profile.startsWith("acp:") && approvalMode ? (
+    <ApprovalSettings
+      key={`${profile}:${thread?.sessionId ?? ""}`}
+      profile={profile}
+      sessionId={thread?.sessionId ?? null}
+      effectiveMode={approvalMode}
+      read={(target, sessionId) => requestRemoteApprovalMode(target, sessionId)}
+      save={(target, sessionId, mode) => requestRemoteApprovalMode(target, sessionId, mode)}
+    />
+  ) : null;
+
+  const attach = useCallback(async () => {
+    if (!profile) return;
+    const chosen = await pickFiles({ multiple: true, directory: false });
+    const paths = typeof chosen === "string" ? [chosen] : (chosen ?? []);
+    setAttachments((current) => {
+      const known = new Set(current.map((attachment) => attachment.path));
+      return [...current, ...paths.filter((path) => !known.has(path)).map((path) => ({ path, name: path.split(/[\\/]/).pop() || path }))];
+    });
+  }, [profile, setAttachments]);
 
   const send = useCallback(
     (text: string) => {
@@ -186,6 +224,12 @@ function HudWindow({
       target={room ? `team:${teamForRoom(teamsQuery.data ?? [], room.room)?.id ?? room.id}` : profile}
       messages={messages}
       run={run}
+      decision={decision}
+      onApprove={profile ? (pending: ApprovalDecision, choice: ApprovalChoice) => requestAction({ type: "approve", profile, decision: pending, choice }) : undefined}
+      onClarify={profile ? (pending: ClarifyDecision, answers: Record<string, string[]>) => requestAction({ type: "clarify", profile, decision: pending, answers }) : undefined}
+      attachments={room ? undefined : attachments}
+      onAttach={room ? undefined : () => void attach().catch((error) => toastError("Could not attach files", error))}
+      onRemoveAttachment={room ? undefined : (path) => setAttachments((current) => current.filter((attachment) => attachment.path !== path))}
       voice={voice}
       open={open}
       onOpen={onOpen}
@@ -198,6 +242,7 @@ function HudWindow({
       onRedock={onRedock}
       sending={sending}
       ready={Boolean(room?.room || profile)}
+      permission={permission}
     />
   );
 }

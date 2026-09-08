@@ -25,8 +25,8 @@ describe("execution targets", () => {
     } satisfies AcpAgent;
 
     expect(executionTargets([profile], [agent])).toEqual([
-      { ref: "hermes:fiona", agentKey: "fiona", kind: "hermes", targetId: "fiona", model: "m1", execution: "durable" },
-      { ref: "acp:keel", agentKey: "keel", kind: "acp", targetId: "keel", model: "m2", execution: "ephemeral" },
+      { ref: "hermes:fiona", agentKey: "fiona", kind: "hermes", engine: "hermes", targetId: "fiona", model: "m1", execution: "durable" },
+      { ref: "acp:keel", agentKey: "keel", kind: "acp", engine: "codex", targetId: "keel", model: "m2", execution: "ephemeral" },
     ]);
   });
 });

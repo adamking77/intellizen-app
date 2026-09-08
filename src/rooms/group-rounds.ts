@@ -39,6 +39,10 @@ import {
   type GroupHoldStamp,
 } from "./group-chat";
 import {
+  promptWithConversationContext,
+  type ConversationContextSnapshot,
+} from "@/lib/conversation-context";
+import {
   botFriendlyNames,
   botHandle,
   durableGroupChatMembers,
@@ -151,6 +155,7 @@ export function formatGroupChatLine(entry: GroupMessage, viewerName: string): st
 }
 
 interface GroupChatTurnPromptInput {
+  context?: ConversationContextSnapshot | null;
   deltaLines: string[];
   groupName: string;
   members: GroupMember[];
@@ -161,6 +166,7 @@ interface GroupChatTurnPromptInput {
  *  delta. Rules travel in the turn payload (not the profile's identity) so any
  *  existing agent can join a room without being reconfigured. */
 export function buildGroupChatTurnPrompt({
+  context,
   groupName,
   members,
   viewer,
@@ -173,7 +179,7 @@ export function buildGroupChatTurnPrompt({
     .map((m) => (m.title ? `${m.title} (@${botHandle(m.name, m)})` : `@${botHandle(m.name, m)}`))
     .join(", ");
 
-  return [
+  return promptWithConversationContext([
     `[Group chat: "${groupName}"] You are @${botHandle(viewer.name, viewer)}, one participant in a group chat with ${peerNames || "no one else yet"} and the user.`,
     "",
     "New messages in the room since your last turn (oldest first):",
@@ -184,7 +190,7 @@ export function buildGroupChatTurnPrompt({
     '- If you have nothing new to add, reply with exactly "(pass)". Passing is good — it lets the conversation settle.',
     "- Mention a teammate as @name to pull them in; mention @user only for a judgment call or a result the user needs. Do not repeat points already made.",
     "- Never reveal content from your private 1:1 chats. Your reply text goes to the room verbatim — no preamble, no meta-commentary.",
-  ].join("\n");
+  ].join("\n"), context ?? null);
 }
 
 // --- member-hold helpers — pure, unit-tested ---
@@ -399,6 +405,7 @@ export async function runGroupChatRounds(
   group: string,
   members: GroupMember[],
   thread: string,
+  context: ConversationContextSnapshot | null = null,
 ): Promise<void> {
   const startEpoch = $groupChats.get()[group]?.epoch || 0;
   const isCurrent = () => ($groupChats.get()[group]?.epoch || 0) === startEpoch;
@@ -443,6 +450,7 @@ export async function runGroupChatRounds(
     }
 
     const prompt = buildGroupChatTurnPrompt({
+      context,
       groupName: $groupChats.get()[group]?.name || group,
       members,
       viewer: member,
@@ -697,6 +705,7 @@ export function sendToGroupChat(
   members: GroupMember[],
   text: string,
   thread?: null | string,
+  context: ConversationContextSnapshot | null = null,
 ): null | string {
   const trimmed = String(text || "").trim();
   if (!trimmed || !members.length) return null;
@@ -733,7 +742,7 @@ export function sendToGroupChat(
   recordGroupActivity(group, { kind: "queued", member: "You", thread: target });
 
   const drive = () =>
-    void runGroupChatRounds(group, members, target).catch(() => {
+    void runGroupChatRounds(group, members, target, context).catch(() => {
       updateGroupChat(group, (r) => {
         r.running = false;
         return r;

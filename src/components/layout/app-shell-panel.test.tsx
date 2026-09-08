@@ -12,7 +12,7 @@ vi.mock("@/engine/use-engine", () => ({ useEngineBoot: () => undefined }));
 vi.mock("@/lib/use-hierarchy", () => ({ useHierarchy: () => ({ tree: [] }) }));
 vi.mock("./sidebar", () => ({ Sidebar: () => null }));
 vi.mock("@/components/home/home-pin-sync", () => ({ HomePinSync: () => null }));
-vi.mock("sonner", () => ({ Toaster: () => null }));
+vi.mock("sonner", () => ({ Toaster: () => null, toast: { dismiss: vi.fn(), message: vi.fn() } }));
 vi.mock("./command-palette", () => ({ CommandPaletteProvider: ({ children }: { children: React.ReactNode }) => children, SHELL_COMMAND_EVENT: "fixture-shell-command" }));
 vi.mock("./window-chrome", () => ({ isTauriRuntime: false, PANE_BG: "", PANE_BG_RAISED: "", PaneResizeEdges: () => null, WindowResizeHandles: () => null, useWindowDrag: () => () => undefined }));
 const ejection = vi.hoisted(() => ({ ejected: false, busy: false, eject: vi.fn(), redock: vi.fn() }));
@@ -24,6 +24,8 @@ vi.mock("./agent-panel", () => ({ AgentPanel: ({ overlay, onOverlayClose, onColl
   return <section aria-label="Fixture existing agent panel"><button onClick={onOverlayClose}>Collapse conversation</button><input aria-label="Fixture composer" value={draft} onChange={(event) => setDraft(event.target.value)} /></section>;
 } }));
 import { AppShell } from "./app-shell";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 it("releases the panel space when detached and focuses it from the existing header control", async () => {
   window.innerWidth = 1440;

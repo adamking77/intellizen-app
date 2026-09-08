@@ -21,7 +21,7 @@ export function SaveState({ state, onRetry, className }: SaveStateProps) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-5 items-center gap-2 font-mono text-[var(--t-count)]",
+        "inline-flex min-h-5 items-center gap-2 font-mono text-[length:var(--t-count)]",
         state === "saved"
           ? "text-[var(--success)]"
           : state === "error"

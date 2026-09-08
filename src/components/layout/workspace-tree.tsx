@@ -142,7 +142,7 @@ function NameField({
         aria-label={initial ? "Rename" : "Name"}
         className={cn(
           "h-[var(--h-ctl)] w-full rounded-[var(--r-ctl)] border border-[var(--accent-border)] bg-[var(--base)] px-2",
-          "font-ui text-[var(--t-ui)] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
+          "font-ui text-[length:var(--t-ui)] text-[var(--text)] placeholder:text-[var(--overlay-0)]",
           "focus:outline-none ",
         )}
         placeholder="Name"
@@ -553,7 +553,7 @@ export function WorkspaceTree() {
   return (
     <div className="flex flex-col">
       <div className="flex h-7 items-center justify-between pl-4 pr-1">
-        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">
           Workspace
         </span>
         <button
@@ -571,12 +571,12 @@ export function WorkspaceTree() {
       </div>
 
       {error ? (
-        <p role="alert" className="px-4 py-1.5 font-ui text-[var(--t-meta)] leading-4 text-[var(--danger)]">
+        <p role="alert" className="px-4 py-1.5 font-ui text-[length:var(--t-meta)] leading-4 text-[var(--danger)]">
           Couldn't load the tree: {error.message}
         </p>
       ) : null}
       {isLoading ? (
-        <p className="px-4 py-1.5 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">Loading…</p>
+        <p className="px-4 py-1.5 font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)]">Loading…</p>
       ) : null}
 
       <div
@@ -593,7 +593,7 @@ export function WorkspaceTree() {
           <button
             type="button"
             onClick={() => startAdding(null)}
-            className="rounded-[var(--r-ctl)] px-4 py-1.5 text-left font-ui text-[var(--t-meta)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
+            className="rounded-[var(--r-ctl)] px-4 py-1.5 text-left font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
           >
             Add a department to begin
           </button>

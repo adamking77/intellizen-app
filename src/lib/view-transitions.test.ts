@@ -8,6 +8,8 @@ afterEach(() => {
   Reflect.deleteProperty(document, "startViewTransition");
   Reflect.deleteProperty(window, "matchMedia");
   delete document.documentElement.dataset.viewTransition;
+  delete document.documentElement.dataset.session;
+  window.dispatchEvent(new Event("pointerdown"));
 });
 
 describe("view transitions", () => {
@@ -24,6 +26,32 @@ describe("view transitions", () => {
     const update = vi.fn();
 
     runViewTransition("segment", update);
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("does not animate during Not today", () => {
+    const start = vi.fn();
+    Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: () => ({ matches: false }) });
+    document.documentElement.dataset.session = "not-today";
+    const update = vi.fn();
+
+    runViewTransition("segment", update);
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("does not animate a keyboard-triggered transition", () => {
+    const start = vi.fn();
+    Object.defineProperty(document, "startViewTransition", { configurable: true, value: start });
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: () => ({ matches: false }) });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    const update = vi.fn();
+
+    runViewTransition("drawer", update);
 
     expect(update).toHaveBeenCalledOnce();
     expect(start).not.toHaveBeenCalled();

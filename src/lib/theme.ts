@@ -77,7 +77,7 @@ export const FLAVORS: Flavor[] = [
   {
     id: "mocha",
     name: "Mocha",
-    planes: ["#11111a", "#171724", "#1d1d2c"],
+    planes: ["#11111a", "#171724", "#1b1b29"],
     accents: accents([
       "#e2cfcb", "#e9c5c5", "#e4b5d7", "#ba9ae2", "#e4829e", "#d8939f", "#e2a37b",
       "#e7d1a2", "#99cf94", "#8cd3c7", "#80ccda", "#70b7d8", "#7fa6e6", "#a6afe9",
@@ -107,6 +107,7 @@ export const FLAVOR_KEY = "intelizen:flavor";
 export const ACCENT_KEY = "intelizen:accent";
 export const PANES_KEY = "intelizen:panes";
 export const SELECTION_STRENGTH_KEY = "intelizen:selection-strength";
+export const CONTRAST_LEVEL_KEY = "intelizen:contrast";
 export const THEME_CHANGED_EVENT = "intelizen:theme-changed";
 export const SYSTEM_APPEARANCE_CHANGED_EVENT = "intelizen:system-appearance-changed";
 export const FOLLOW_SYSTEM_KEY = "intelizen:follow-system";
@@ -144,6 +145,26 @@ function setSelectionStrength(value: number) {
 export function applySelectionStrength(value: number) {
   const strength = setSelectionStrength(value);
   writePreference(SELECTION_STRENGTH_KEY, String(strength));
+  window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+}
+
+/** Readability changes text and separator contrast without changing the accent. */
+export type ContrastLevel = "calm" | "clear" | "strong";
+export const DEFAULT_CONTRAST_LEVEL: ContrastLevel = "calm";
+
+export function loadContrastLevel(): ContrastLevel {
+  const value = readPreference(CONTRAST_LEVEL_KEY, DEFAULT_CONTRAST_LEVEL);
+  return value === "clear" || value === "strong" ? value : DEFAULT_CONTRAST_LEVEL;
+}
+
+function setContrastLevel(level: ContrastLevel) {
+  document.documentElement.dataset.contrast = level;
+  return level;
+}
+
+export function applyContrastLevel(level: ContrastLevel) {
+  const resolved = setContrastLevel(level);
+  writePreference(CONTRAST_LEVEL_KEY, resolved);
   window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
 }
 
@@ -187,6 +208,7 @@ export function applyTheme(flavorId: string, accentHex: string, syncNative = tru
   document.documentElement.dataset.flavor = flavorId;
   document.documentElement.dataset.panes = loadPanes();
   setSelectionStrength(loadSelectionStrength());
+  setContrastLevel(loadContrastLevel());
   // Every accent use in the app reads --accent, so setting it here moves
   // selection, focus, active nav, links and primary actions together.
   document.documentElement.style.setProperty("--accent", accentHex);

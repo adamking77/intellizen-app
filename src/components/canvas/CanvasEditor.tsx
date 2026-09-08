@@ -22,6 +22,7 @@ import {
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { MarkdownBody } from "@/components/ui/markdown-body";
+import { ToolbarIcon } from "@/components/canvas/toolbar-icon";
 import type { CanvasDocumentData, CanvasEdgeData, CanvasLineStyle, CanvasNodeData, CanvasNodeType, CanvasSide } from "@/lib/types";
 import {
   alignOptions,
@@ -218,120 +219,6 @@ function resolveInlineAsset(path?: string): string | undefined {
   }
 
   return undefined;
-}
-
-function ToolbarIcon({ name }: { name: string }) {
-  switch (name) {
-    case "text":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4.5" y="6" width="15" height="12" rx="3" />
-          <path d="M8 10h8" />
-          <path d="M8 14h5.5" />
-        </svg>
-      );
-    case "group":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="5" y="7" width="9" height="9" rx="2" />
-          <rect x="10" y="10" width="9" height="9" rx="2" />
-        </svg>
-      );
-    case "file":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M8 4.5h6l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 7 19V6A1.5 1.5 0 0 1 8 4.5Z" />
-          <path d="M14 4.5V9h4" />
-        </svg>
-      );
-    case "image":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4.5" y="6" width="15" height="12" rx="2" />
-          <circle cx="10" cy="10" r="1.5" />
-          <path d="M7 16l3.5-3.5L13 15l2.5-2.5L17.5 15" />
-        </svg>
-      );
-    case "background":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="7" cy="7" r="1.25" />
-          <circle cx="12" cy="7" r="1.25" />
-          <circle cx="17" cy="7" r="1.25" />
-          <circle cx="7" cy="12" r="1.25" />
-          <circle cx="12" cy="12" r="1.25" />
-          <circle cx="17" cy="12" r="1.25" />
-          <circle cx="7" cy="17" r="1.25" />
-          <circle cx="12" cy="17" r="1.25" />
-          <circle cx="17" cy="17" r="1.25" />
-        </svg>
-      );
-    case "delete":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 7h14" />
-          <path d="M9 7V5.5h6V7" />
-          <path d="M8 9.5v8" />
-          <path d="M12 9.5v8" />
-          <path d="M16 9.5v8" />
-          <path d="M6.5 7l1 11.5a1 1 0 0 0 1 .9h7a1 1 0 0 0 1-.9l1-11.5" />
-        </svg>
-      );
-    case "color":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 5.5a6.5 6.5 0 1 0 0 13c1.2 0 1.9-.6 1.9-1.4 0-.7-.3-1.2-.3-1.8 0-1 1-1.3 1.8-1.3h.8A3.8 3.8 0 0 0 20 10.2 4.7 4.7 0 0 0 15.3 5.5Z" />
-          <circle cx="8.5" cy="11" r="1" />
-          <circle cx="11.5" cy="8.5" r="1" />
-          <circle cx="15" cy="9.5" r="1" />
-        </svg>
-      );
-    case "shape":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 7h10l-2 10H5l2-10Z" />
-        </svg>
-      );
-    case "edit":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 18l3.5-.5L18 9l-3-3-8.5 8.5L6 18Z" />
-          <path d="M13.5 7.5l3 3" />
-        </svg>
-      );
-    case "align":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 8h12" />
-          <path d="M8 12h8" />
-          <path d="M6 16h12" />
-        </svg>
-      );
-    case "border":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="5" y="6" width="14" height="12" rx="2" />
-          <path d="M5 10h14" />
-        </svg>
-      );
-    case "line":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h3" />
-          <path d="M10 12h4" />
-          <path d="M16 12h3" />
-        </svg>
-      );
-    case "arrow":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h11" />
-          <path d="M13.5 8.5 19 12l-5.5 3.5" />
-        </svg>
-      );
-    default:
-      return null;
-  }
 }
 
 function CanvasNodeComponent({ data, selected }: NodeProps) {
@@ -814,7 +701,23 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (event.key === "Escape" && (selectionPanel || edgePanel || bottomPanel)) {
+        const trigger = shellRef.current?.querySelector<HTMLButtonElement>("button[aria-expanded='true']");
+        event.preventDefault();
+        setSelectionPanel(null);
+        setEdgePanel(null);
+        setBottomPanel(null);
+        window.requestAnimationFrame(() => trigger?.focus());
+        return;
+      }
+
+      if (target?.closest("input, textarea, select, button, a[href], [contenteditable='true']")) {
+        return;
+      }
+
       if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
         handleDeleteSelection();
       }
 
@@ -833,7 +736,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editingNodeId, selectedNode]);
+  }, [bottomPanel, edgePanel, editingNodeId, selectedNode, selectionPanel]);
 
   function setSelectedNodeIdSafe(next: string | null): void {
     setSelectedNodeId((current) => (current === next ? current : next));
@@ -1309,7 +1212,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           type: "bezier",
           style: {
             stroke: "var(--canvas-edge)",
-            strokeWidth: 2,
+            strokeWidth: 1,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
@@ -1436,7 +1339,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
 
       {showSelectionTools && toolbarPosition ? (
         <div className="contextual-toolbar-stack" style={{ left: toolbarPosition.left, top: toolbarPosition.top }}>
-          <div className="contextual-toolbar">
+          <div className="contextual-toolbar" role="toolbar" aria-label="Selected card actions">
             <div className="toolbar-group">
               <button title="Delete" aria-label="Delete" className="toolbar-command" onClick={handleDeleteSelection}>
                 <ToolbarIcon name="delete" />
@@ -1444,6 +1347,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Color"
                 aria-label="Color"
+                aria-expanded={selectionPanel === "color"}
                 className={["toolbar-command", selectionPanel === "color" ? "is-active" : ""].join(" ")}
                 onClick={() => toggleSelectionPanel("color")}
               >
@@ -1452,6 +1356,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Border"
                 aria-label="Border"
+                aria-expanded={selectionPanel === "border"}
                 className={["toolbar-command", selectionPanel === "border" ? "is-active" : ""].join(" ")}
                 onClick={() => toggleSelectionPanel("border")}
               >
@@ -1460,6 +1365,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Align"
                 aria-label="Align"
+                aria-expanded={selectionPanel === "align"}
                 className={["toolbar-command", selectionPanel === "align" ? "is-active" : ""].join(" ")}
                 onClick={() => toggleSelectionPanel("align")}
               >
@@ -1468,6 +1374,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Shape"
                 aria-label="Shape"
+                aria-expanded={selectionPanel === "shape"}
                 className={["toolbar-command", selectionPanel === "shape" ? "is-active" : ""].join(" ")}
                 onClick={() => toggleSelectionPanel("shape")}
               >
@@ -1487,7 +1394,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           </div>
 
           {selectedNode && selectionPanel ? (
-            <div className="contextual-tray">
+            <div className="contextual-tray" role="toolbar" aria-label={`${selectionPanel} options`}>
               {selectionPanel === "color" ? (
                 <div className="toolbar-group">
                   {colorOptions.map((color) => (
@@ -1509,6 +1416,10 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                           : updateSelectedNode((node) => ({ ...node, color }))
                       }
                       title={color === "rainbow" ? "Custom color" : color}
+                      aria-label={color === "rainbow" ? "Custom color" : color}
+                      aria-pressed={color === "rainbow"
+                        ? normalizeColor(selectedNode.color) === "rainbow" || isCustomColor(normalizeColor(selectedNode.color))
+                        : normalizeColor(selectedNode.color) === color}
                     >
                       <span className={`color-swatch color-swatch-${color}`} />
                     </button>
@@ -1540,6 +1451,8 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                         }))
                       }
                       title={shape}
+                      aria-label={shape}
+                      aria-pressed={normalizeShape(selectedNode.sogo?.shape) === shape}
                     >
                       <span className={`shape-preview shape-preview-${shape}`} />
                     </button>
@@ -1567,6 +1480,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                         }))
                       }
                       title={border}
+                      aria-pressed={(selectedNode.sogo?.border ?? "subtle") === border}
                     >
                       {border}
                     </button>
@@ -1590,6 +1504,8 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                         }))
                       }
                       title={align}
+                      aria-label={`${align} align`}
+                      aria-pressed={(selectedNode.sogo?.textAlign ?? "left") === align}
                     >
                       <span className={`align-preview align-preview-${align}`}>
                         <span />
@@ -1607,7 +1523,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
 
       {selectedEdge && edgeToolbarPosition ? (
         <div className="contextual-toolbar-stack edge-toolbar-stack" style={{ left: edgeToolbarPosition.left, top: edgeToolbarPosition.top }}>
-          <div className="contextual-toolbar">
+          <div className="contextual-toolbar" role="toolbar" aria-label="Selected connector actions">
             <div className="toolbar-group">
               <button title="Delete connector" aria-label="Delete connector" className="toolbar-command" onClick={handleDeleteSelection}>
                 <ToolbarIcon name="delete" />
@@ -1615,6 +1531,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Color"
                 aria-label="Color"
+                aria-expanded={edgePanel === "color"}
                 className={["toolbar-command", edgePanel === "color" ? "is-active" : ""].join(" ")}
                 onClick={() => setEdgePanel((current) => (current === "color" ? null : "color"))}
               >
@@ -1623,6 +1540,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Toggle dashed line"
                 aria-label="Toggle dashed line"
+                aria-pressed={selectedEdge.lineStyle === "dashed"}
                 className={["toolbar-command", selectedEdge.lineStyle === "dashed" ? "is-active" : ""].join(" ")}
                 onClick={() =>
                   updateSelectedEdge((edge) => ({
@@ -1636,6 +1554,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               <button
                 title="Toggle arrowhead"
                 aria-label="Toggle arrowhead"
+                aria-pressed={selectedEdge.arrow}
                 className={["toolbar-command", selectedEdge.arrow ? "is-active" : ""].join(" ")}
                 onClick={() =>
                   updateSelectedEdge((edge) => ({
@@ -1650,7 +1569,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           </div>
 
           {edgePanel === "color" ? (
-            <div className="contextual-tray">
+            <div className="contextual-tray" role="toolbar" aria-label="Connector color options">
               <div className="toolbar-group">
                 {colorOptions.map((color) => (
                   <button
@@ -1671,6 +1590,10 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                         : updateSelectedEdge((edge) => ({ ...edge, color }))
                     }
                     title={color === "rainbow" ? "Custom color" : color}
+                    aria-label={color === "rainbow" ? "Custom color" : color}
+                    aria-pressed={color === "rainbow"
+                      ? normalizeColor(selectedEdge.color) === "rainbow" || isCustomColor(normalizeColor(selectedEdge.color))
+                      : normalizeColor(selectedEdge.color) === color}
                   >
                     <span className={`color-swatch color-swatch-${color}`} />
                   </button>
@@ -1711,6 +1634,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
               className="canvas-prompt-input"
               value={addPromptDraft}
               placeholder={addPrompt === "file" ? "File path or label" : "Image URL or path"}
+              aria-label={addPrompt === "file" ? "File path or label" : "Image URL or path"}
               onChange={(e) => setAddPromptDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); commitAddPrompt(); }
@@ -1753,6 +1677,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                     })
                   }
                   title={`Canvas background: ${mode}`}
+                  aria-pressed={canvasMeta?.background === mode}
                 >
                   <span className={`background-chip background-chip-${mode}`} />
                   <span>{mode}</span>
@@ -1772,6 +1697,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
                 }
                 title="Snap to grid"
                 aria-label="Snap to grid"
+                aria-pressed={canvasMeta?.snapToGrid ?? false}
               >
                 <span className="snap-chip" aria-hidden="true" />
                 <span>snap</span>
@@ -1780,7 +1706,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           </div>
         ) : null}
 
-        <div className="bottom-toolbar">
+        <div className="bottom-toolbar" role="toolbar" aria-label="Canvas tools">
           <div className="toolbar-group">
             <button title="Add card" aria-label="Add card" className="insert-button" onClick={() => addNodeOfType("text")}>
               <ToolbarIcon name="text" />
@@ -1799,6 +1725,7 @@ export function CanvasEditor({ initialDocument, onChange }: CanvasEditorProps) {
           <button
             title="Edit canvas background"
             aria-label="Edit canvas background"
+            aria-expanded={bottomPanel === "background"}
             className={["toolbar-command", bottomPanel === "background" ? "is-active" : ""].join(" ")}
             onClick={() => setBottomPanel((current) => (current === "background" ? null : "background"))}
           >

@@ -46,6 +46,16 @@ describe("agentFromProfileRow", () => {
     expect(a.context).toEqual(["~/a"]);
     expect(toUiMeta(a)).toEqual({ role: "Editor", avatar_style: "sphere", avatar_color: "#123456", context: ["~/a"] });
   });
+
+  it("round-trips a validated trace seed through Hermes ui metadata", () => {
+    const agent = agentFromProfileRow({
+      name: "trace",
+      ui_meta: { intellizen: { avatar_style: "trace", avatar_seed: 42, avatar_kind: "cloud" } },
+    })!;
+    expect(agent).toMatchObject({ avatarStyle: "trace", avatarSeed: 42, avatarKind: "cloud" });
+    expect(toUiMeta(agent)).toMatchObject({ avatar_style: "trace", avatar_seed: 42, avatar_kind: "cloud" });
+    expect(agentFromProfileRow({ name: "bad", ui_meta: { intellizen: { avatar_style: "trace", avatar_seed: 4.2 } } })?.avatarSeed).toBeUndefined();
+  });
 });
 
 describe("acp round trip", () => {
@@ -58,6 +68,8 @@ describe("acp round trip", () => {
       args: ["claude-code-acp"],
       cwd: "/x",
       role: "Coder",
+      avatarStyle: "trace" as const,
+      avatarSeed: 73,
       voice: { service: "elevenlabs", voiceId: "el1" },
     };
     const agent = agentFromAcp(entry);
@@ -73,6 +85,8 @@ describe("acp round trip", () => {
       model: "opus",
       identity: "soul",
       role: "Coder",
+      avatarStyle: "trace",
+      avatarSeed: 73,
       voice: { service: "elevenlabs", voiceId: "el1" },
     });
     expect(acpFromAgent({ ...agent, voiceId: undefined }, entry).voice).toBeUndefined();

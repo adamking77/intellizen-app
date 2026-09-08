@@ -29,8 +29,7 @@ export function FieldShell({
   return (
     <section
       className={cn(
-        "rounded-[var(--r-plane)] border border-[var(--border-subtle)] bg-[var(--mantle)]/55",
-        "transition-[border-color,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
+        "rounded-[var(--r-surface)] bg-[var(--surface)]",
         className,
       )}
       aria-labelledby={labelId}
@@ -40,7 +39,7 @@ export function FieldShell({
           {label}
         </span>
         <div className="flex min-w-0 items-center gap-2">
-          {meta ? <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{meta}</span> : null}
+          {meta ? <span className="font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{meta}</span> : null}
           <SaveState state={status} onRetry={onRetry} />
           {actions}
         </div>

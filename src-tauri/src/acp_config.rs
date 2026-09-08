@@ -71,8 +71,8 @@ pub struct AcpCommandProbe {
     pub path: Option<String>,
 }
 
-pub fn session_key(agent_id: &str, caller: &str, cwd: &Path) -> String {
-    serde_json::to_string(&(agent_id, caller, cwd.to_string_lossy())).unwrap_or_default()
+pub fn session_key(agent_id: &str, caller: &str, cwd: &Path, mode: Option<&str>) -> String {
+    serde_json::to_string(&(agent_id, caller, cwd.to_string_lossy(), mode)).unwrap_or_default()
 }
 
 pub fn registry_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -220,9 +220,10 @@ mod tests {
 
     #[test]
     fn live_session_key_separates_places() {
-        let panel = session_key("cc", "panel", Path::new("/work/app"));
-        assert_ne!(panel, session_key("cc", "room:alpha", Path::new("/work/app")));
-        assert_ne!(panel, session_key("cc", "panel", Path::new("/work/other")));
+        let panel = session_key("cc", "panel", Path::new("/work/app"), None);
+        assert_ne!(panel, session_key("cc", "room:alpha", Path::new("/work/app"), None));
+        assert_ne!(panel, session_key("cc", "panel", Path::new("/work/other"), None));
+        assert_ne!(panel, session_key("cc", "panel", Path::new("/work/app"), Some("read-only")));
     }
 
     #[test]

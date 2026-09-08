@@ -120,7 +120,7 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
     <aside
       style={{
         width: collapsed ? WIDTH_COLLAPSED : width,
-        background: "var(--crust)",
+        background: "var(--rail-plane)",
       }}
       className={cn(
         "pane relative z-10 flex shrink-0 flex-col overflow-hidden",
@@ -157,7 +157,7 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
         ) : (
           <div className="flex items-center gap-2">
             <AppMark size={24} />
-            <span className="font-ui text-[var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent-text)]">
+            <span className="font-ui text-[length:var(--t-ui)] font-light uppercase tracking-[0.16em] text-[var(--accent-text)]">
               InteliZen
             </span>
           </div>
@@ -168,7 +168,7 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
             onClick={toggle}
             className={cn(
             "inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)]",
-              "font-ui text-[var(--t-ui)] text-[var(--overlay-1)]",
+              "font-ui text-[length:var(--t-ui)] text-[var(--overlay-1)]",
               "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
               "hover:text-[var(--text)] hover:bg-[var(--surface-wash)]",
             )}
@@ -206,7 +206,7 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
           </div>
         )}
         <div className={cn("shrink-0", collapsed ? "mt-auto grid gap-0.5" : "mt-3 border-t border-[var(--border-subtle)] pt-2")}>
-          {!collapsed ? <div className="flex h-[26px] items-center px-2 font-ui text-[var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">Places</div> : null}
+          {!collapsed ? <div className="flex h-[26px] items-center px-2 font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.18em] text-[var(--overlay-1)]">Places</div> : null}
         {PLACE_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -245,8 +245,8 @@ export function Sidebar({ width = 216, onCollapsedChange }: { width?: number; on
           <span title={engineTitle} aria-label={engineTag} className={cn("h-1.5 w-1.5 rounded-[var(--r-pill)]", ENGINE_DOT_CLASS[engineTag])} />
         ) : (
           <div title={engineTitle} className="flex min-w-0 items-center gap-2">
-            <span className={cn("shrink-0 whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[var(--t-section)] leading-4", ENGINE_TAG_CLASS[engineTag])}>{engineTag}</span>
-            {engineInfo ? <span className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{engineInfo.version}</span> : null}
+            <span className={cn("shrink-0 whitespace-nowrap rounded-[var(--r-pill)] px-2 py-px font-ui text-[length:var(--t-section)] leading-4", ENGINE_TAG_CLASS[engineTag])}>{engineTag}</span>
+            {engineInfo ? <span className="truncate font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{engineInfo.version}</span> : null}
           </div>
         )}
       </div>

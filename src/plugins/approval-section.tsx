@@ -43,7 +43,7 @@ export function PluginApprovalSection({
         <div className="db-record-section-title mb-0">Plugin review</div>
         <span className="db-workflow-run-status">{state}</span>
       </div>
-      <div className="space-y-2 text-[var(--t-meta)] text-[var(--text-muted)]">
+      <div className="space-y-2 text-[length:var(--t-meta)] text-[var(--text-muted)]">
         <p><span className="text-[var(--text)]">{approval.name}</span> · v{approval.version} · written by {approval.author}</p>
         {approval.capabilities.length ? approval.capabilities.map((capability) => (
           <div key={capability} className="flex items-center justify-between gap-3 rounded-[var(--r-ctl)] bg-[var(--raised)] px-3 py-2">

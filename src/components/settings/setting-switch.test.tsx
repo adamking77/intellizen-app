@@ -15,12 +15,16 @@ describe("SettingSwitch", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
-    await act(async () => root.render(<SettingSwitch on label="Reconnect" onToggle={vi.fn()} />));
+    const onToggle = vi.fn();
+    await act(async () => root.render(<SettingSwitch on label="Reconnect" onToggle={onToggle} />));
 
     const control = host.querySelector<HTMLButtonElement>('[role="switch"]')!;
     expect(control.className).toContain("var(--accent)_55%");
     expect(control.firstElementChild?.className).toContain("bg-[var(--accent)]");
     expect(control.getAttribute("aria-checked")).toBe("true");
+    expect(control.className).toContain("h-[var(--h-ctl)]");
+    await act(async () => control.click());
+    expect(onToggle).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });

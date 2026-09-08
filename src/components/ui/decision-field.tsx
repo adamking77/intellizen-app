@@ -1,4 +1,6 @@
-import { Control } from "@/components/ui/control";
+import { Choices } from "@/components/ui/choices";
+import { Eyebrow } from "@/components/ui/eyebrow";
+import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 
 export interface DecisionChoice {
@@ -17,31 +19,19 @@ interface DecisionFieldProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function DecisionField({ question, why, choices, onChoose, className, ...props }: DecisionFieldProps) {
   return (
-    <div
+    <Surface
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--wait)_10%,transparent)] px-[13px] py-[11px]",
+        "grid gap-3",
         className,
       )}
       {...props}
     >
       <div className="min-w-0">
-        <div className="font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--wait)]">Waiting on you</div>
-        <div className="mt-1 text-[var(--t-ui)] font-medium text-[var(--text)]">{question}</div>
-        {why ? <div className="mt-0.5 truncate text-[var(--t-meta)] text-[var(--text-muted)]">{why}</div> : null}
+        <Eyebrow tone="question">A question for you</Eyebrow>
+        <div className="mt-1 text-[17px] font-light leading-[1.4] text-[var(--text)]">{question}</div>
+        {why ? <div className="mt-0.5 break-words text-[length:var(--t-meta)] text-[var(--text-mid)]">{why}</div> : null}
       </div>
-      <div className="flex flex-wrap justify-end gap-1.5">
-        {choices.map((choice) => (
-          <Control
-            key={choice.id}
-            size="sm"
-            variant={choice.recommended ? "primary" : "default"}
-            disabled={choice.disabled}
-            onClick={() => onChoose(choice.id)}
-          >
-            {choice.label}
-          </Control>
-        ))}
-      </div>
-    </div>
+      <Choices choices={choices} onChoose={onChoose} label={question} />
+    </Surface>
   );
 }

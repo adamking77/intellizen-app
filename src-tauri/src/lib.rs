@@ -10,6 +10,7 @@ mod acp_discovery;
 mod acp_paths;
 mod acp_wire;
 mod agent_models;
+mod app_lifecycle;
 mod cli_capabilities;
 mod cli_capability_policy;
 mod engine;
@@ -514,6 +515,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_exa_search,
+            app_lifecycle::app_launch_id,
             agent_models::agent_models,
             acp::acp_start,
             acp::acp_prompt,

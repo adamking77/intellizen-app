@@ -115,11 +115,11 @@ export function WorkspaceDashboard({ workspaceId, workspaceName }: { workspaceId
         const added = scopedPins.some((pin) => isDatabaseViewHomePin(pin) && pin.databaseId === database.id && pin.viewId === view.id);
         return (
           <button key={`${database.id}:${view.id}`} type="button" role="menuitem" disabled={added || saving} onClick={() => addView(database.id, view.id)} className="block w-full rounded-[var(--r-ctl)] px-2 py-2 text-left hover:bg-[var(--hover)] disabled:opacity-50">
-            <span className="block truncate text-[var(--t-meta)] text-[var(--text)]">{view.name}{added ? " · Added" : ""}</span>
-            <span className="mt-0.5 block truncate text-[var(--t-count)] text-[var(--text-muted)]">{database.name} · {view.type}</span>
+            <span className="block truncate text-[length:var(--t-meta)] text-[var(--text)]">{view.name}{added ? " · Added" : ""}</span>
+            <span className="mt-0.5 block truncate text-[length:var(--t-count)] text-[var(--text-muted)]">{database.name} · {view.type}</span>
           </button>
         );
-      }) : <p className="px-2 py-3 text-[var(--t-meta)] text-[var(--text-muted)]">No pinnable database views are available.</p>}
+      }) : <p className="px-2 py-3 text-[length:var(--t-meta)] text-[var(--text-muted)]">No pinnable database views are available.</p>}
     </div>
   ) : null;
 
@@ -134,6 +134,7 @@ export function WorkspaceDashboard({ workspaceId, workspaceName }: { workspaceId
       </div>
       {widgets.length ? (
         <PinnedViewGrid
+          workspaceName={workspaceName}
           widgets={widgets}
           catalog={catalog.data ?? []}
           layout={layout}
@@ -144,7 +145,7 @@ export function WorkspaceDashboard({ workspaceId, workspaceName }: { workspaceId
           onUpdateWidgetMetadata={(widget, metadata) => void mutate((current) => patchHomePinMetadata(current, widget.pin.id, { ...metadata, config: configForDashboard(metadata.config, scope) })).catch((error) => toast.error("Widget settings were not saved", { description: errorMessage(error) }))}
         />
       ) : (
-        <EmptyState title="No widgets yet" description="Pin an existing database view here for this workspace." action={{ label: "Add widget", onClick: () => setPickerOpen(true) }} />
+        <EmptyState title="No dashboard widgets yet" description="Add a saved database view to this workspace dashboard." action={{ label: "Add widget", onClick: () => setPickerOpen(true) }} />
       )}
     </section>
   );

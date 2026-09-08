@@ -3,6 +3,7 @@
 // profile or an ACP agent, named once, and rooms are keyed by their roomId.
 
 import type { Decision } from "@/engine/transcript";
+import type { AvatarStyle } from "@/components/agents/agent-model";
 
 /** Which door a member is reached through. */
 export type DoorKind = "gateway" | "acp";
@@ -21,7 +22,8 @@ export interface GroupMember {
   display_name?: string;
   model?: null | string;
   provider?: null | string;
-  avatar_style?: "sphere" | "blob";
+  avatar_style?: AvatarStyle;
+  avatar_seed?: number;
   avatar_kind?: string;
   avatar_color?: string;
 }

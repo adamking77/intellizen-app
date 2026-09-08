@@ -41,3 +41,12 @@ test("a no-op, a missing file, and a path that walks out are refused", () => {
   assert.throws(() => proposeDocumentEdit({ doc_path: "Nope.md", new_text: "x", author: "a" }, deps));
   assert.throws(() => resolveDocPath("../etc/passwd", deps.vaultBase));
 });
+
+test("vault paths resolve beside intelligence while legacy and absolute paths stay compatible", () => {
+  const deps = setup();
+  assert.equal(resolveDocPath("vault:journal/Note.md", join(deps.vaultBase, "intelligence")), join(deps.vaultBase, "journal/Note.md"));
+  assert.equal(resolveDocPath("Report.md", deps.vaultBase), join(deps.vaultBase, "Report.md"));
+  assert.equal(resolveDocPath("/tmp/Report.md", deps.vaultBase), "/tmp/Report.md");
+  assert.throws(() => resolveDocPath("vault:../outside.md", deps.vaultBase));
+  assert.throws(() => resolveDocPath("vault:/outside.md", deps.vaultBase));
+});

@@ -12,6 +12,21 @@ import {
   type WorkflowStep,
 } from "@/lib/workflow-schema";
 import type { WorkflowRunStatus } from "@/lib/types";
+import {
+  contextSourcesForStep,
+  runApprovalMeanwhile,
+} from "@/services/workflow-meanwhile-runtime";
+import {
+  dispatchFailure,
+  failureEventKind,
+  failureStepState,
+} from "@/services/workflow-dispatch-errors";
+import {
+  attachWorkflowTransitionContinuation,
+  type WorkflowExecutionIdentity,
+} from "@/lib/workflow-continuation";
+export { WorkflowDispatchError } from "@/services/workflow-dispatch-errors";
+export type { WorkflowDispatchFailureReason } from "@/services/workflow-dispatch-errors";
 
 export type WorkflowStepState =
   | "queued"
@@ -40,6 +55,7 @@ export type ResolvedWorkflowRole = {
   agentRecordId: string;
   bindingRef: string;
   adapterId: "hermes" | "acp";
+  providerEngine?: string;
   resolvedModel: string | null;
   execution: "ephemeral" | "durable";
   providerAuthority: string;
@@ -123,36 +139,6 @@ export type WorkflowRuntimeResult = {
   } | null;
 };
 
-export type WorkflowDispatchFailureReason =
-  | "auth_lost"
-  | "parent_lost"
-  | "orphaned_child"
-  | "resume_unsupported"
-  | "ambiguous_delivery"
-  | "timed_out"
-  | "cancelled"
-  | "runtime_failed"
-  | "persistence_rejected";
-
-export class WorkflowDispatchError extends Error {
-  readonly reason: WorkflowDispatchFailureReason;
-  readonly retryable: boolean;
-  readonly resultKnown: boolean;
-
-  constructor(input: {
-    reason: WorkflowDispatchFailureReason;
-    message: string;
-    retryable?: boolean;
-    resultKnown?: boolean;
-  }) {
-    super(input.message);
-    this.name = "WorkflowDispatchError";
-    this.reason = input.reason;
-    this.retryable = input.retryable ?? false;
-    this.resultKnown = input.resultKnown ?? false;
-  }
-}
-
 export type WorkflowApproval = {
   approvalId: string;
   runId: string;
@@ -189,6 +175,39 @@ export type WorkflowTransitionRequest = {
   approvalMutation?: Record<string, unknown> | null;
 };
 
+export type WorkflowSideTransitionRequest = {
+  runId: string;
+  expectedRunVersion: number;
+  approvalStepId: string;
+  expectedApprovalState: "running" | "completed";
+  sideStepId: string;
+  expectedSideStepState: WorkflowStepState;
+  nextSideStepState: WorkflowStepState;
+  dispatcherSession: string;
+  fencingToken: number;
+  idempotencyKey: string;
+  requestHash: string;
+  actor: string;
+  eventKind: string;
+  eventSummary: string;
+  eventPayload: Record<string, unknown>;
+};
+
+export type WorkflowSideSettlementRequest = {
+  runId: string;
+  approvalStepId: string;
+  sideStepId: string;
+  expectedSideStepState: "running";
+  nextSideStepState: "completed" | "blocked" | "cancelled" | "abandoned";
+  assignmentId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  actor: string;
+  eventKind: string;
+  eventSummary: string;
+  eventPayload: Record<string, unknown>;
+};
+
 export type WorkflowRunnerPort = {
   now(): string;
   newId(): string;
@@ -204,6 +223,11 @@ export type WorkflowRunnerPort = {
     runVersion: number;
     fencingToken: number;
   }>;
+  transitionSideStep?(input: WorkflowSideTransitionRequest): Promise<{
+    runVersion: number;
+    fencingToken: number;
+  }>;
+  settleSideStep?(input: WorkflowSideSettlementRequest): Promise<{ runVersion: number }>;
   releaseLease(input: {
     runId: string;
     dispatcherSession: string;
@@ -220,6 +244,7 @@ export type WorkflowRunnerPort = {
     step: WorkflowRoleAssignStep;
     assignment: WorkflowAssignmentSnapshot;
     renderedContext: string; signal?: AbortSignal;
+    readOnly?: boolean;
   }): Promise<WorkflowRuntimeResult>;
   decideApproval(
     approval: WorkflowApproval,
@@ -246,6 +271,12 @@ export type WorkflowRunnerInput = {
   sourceTools?: string[];
   contextSources?: ContextSource[];
   maxContextBytes?: number; signal?: AbortSignal;
+  currentStepId?: string | null;
+  stepStates?: Record<string, WorkflowStepState>;
+  stepResults?: Record<string, unknown>;
+  assignments?: Record<string, WorkflowAssignmentSnapshot>;
+  approvals?: Record<string, WorkflowApproval>;
+  executionIdentity?: WorkflowExecutionIdentity;
 };
 
 export type WorkflowRunnerResult = {
@@ -327,62 +358,6 @@ function isTerminalTarget(value: string | null) {
   return value == null || ["complete", "blocked", "escalate"].includes(value);
 }
 
-function safeFailureMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "Runtime dispatch failed.";
-  try {
-    assertPersistenceSafe({ message });
-    return message;
-  } catch {
-    return "Runtime dispatch failed with redacted unsafe detail.";
-  }
-}
-
-function dispatchFailure(error: unknown): WorkflowDispatchError {
-  if (error instanceof WorkflowDispatchError) {
-    return new WorkflowDispatchError({
-      reason: error.reason,
-      message: safeFailureMessage(error),
-      retryable: error.retryable,
-      resultKnown: error.resultKnown,
-    });
-  }
-  if (
-    error instanceof Error &&
-    error.message.startsWith("Persistence rejected:")
-  ) {
-    return new WorkflowDispatchError({
-      reason: "persistence_rejected",
-      message: "Runtime output was rejected before persistence.",
-      retryable: false,
-      resultKnown: false,
-    });
-  }
-  return new WorkflowDispatchError({
-    reason: "ambiguous_delivery",
-    message: safeFailureMessage(error),
-    retryable: false,
-    resultKnown: false,
-  });
-}
-
-function failureStepState(
-  reason: WorkflowDispatchFailureReason,
-): Extract<WorkflowStepState, "abandoned" | "blocked" | "cancelled"> {
-  if (reason === "parent_lost" || reason === "orphaned_child") return "abandoned";
-  if (reason === "cancelled") return "cancelled";
-  return "blocked";
-}
-
-function failureEventKind(reason: WorkflowDispatchFailureReason) {
-  if (reason === "timed_out") return "runtime_timed_out";
-  if (reason === "cancelled") return "runtime_cancelled";
-  if (reason === "parent_lost" || reason === "orphaned_child") {
-    return "runtime_abandoned";
-  }
-  if (reason === "persistence_rejected") return "persistence_rejected";
-  return "runtime_blocked";
-}
-
 async function transitionHash(request: Omit<WorkflowTransitionRequest, "requestHash">) {
   return workflowDefinitionHash(request);
 }
@@ -403,47 +378,6 @@ function verificationProducer(
       candidate.verification.required &&
       candidate.verification.method === `verifier-step:${verifierStepId}`,
   );
-}
-
-function contextSourcesForStep(
-  step: WorkflowRoleAssignStep,
-  input: WorkflowRunnerInput,
-  stepResults: Record<string, unknown>,
-  retrievedAt: string,
-) {
-  const sources = [...(input.contextSources ?? [])];
-  for (const reference of step.contextRefs ?? []) {
-    if (reference.startsWith("input.")) {
-      const key = reference.slice("input.".length);
-      if (!(key in input.inputs)) {
-        throw new Error(`Required workflow input is missing: ${reference}`);
-      }
-      sources.push({
-        reference,
-        version: `workflow:${input.definition.version}`,
-        retrievedAt,
-        content: JSON.stringify(input.inputs[key]),
-        required: true,
-      });
-      continue;
-    }
-    const stepResult = /^steps\.([a-z][a-z0-9_-]*)\.result$/.exec(reference)?.[1];
-    if (stepResult) {
-      if (!(stepResult in stepResults)) {
-        throw new Error(`Required workflow step result is missing: ${reference}`);
-      }
-      sources.push({
-        reference,
-        version: `run:${input.runId}`,
-        retrievedAt,
-        content: JSON.stringify(stepResults[stepResult]),
-        required: true,
-      });
-      continue;
-    }
-    throw new Error(`Unsupported workflow context reference: ${reference}`);
-  }
-  return sources;
 }
 
 export async function runWorkflow(
@@ -474,13 +408,15 @@ export async function runWorkflow(
 
   let runVersion = lease.runVersion;
   const fencingToken = lease.fencingToken;
-  const stepStates = stepStateSeed(input.definition);
-  const stepResults: Record<string, unknown> = {};
-  const assignments: Record<string, WorkflowAssignmentSnapshot> = {};
-  const approvals: Record<string, WorkflowApproval> = {};
+  const stepStates = { ...stepStateSeed(input.definition), ...(input.stepStates ?? {}) };
+  const stepResults: Record<string, unknown> = { ...(input.stepResults ?? {}) };
+  const assignments: Record<string, WorkflowAssignmentSnapshot> = { ...(input.assignments ?? {}) };
+  const approvals: Record<string, WorkflowApproval> = { ...(input.approvals ?? {}) };
   const verification: WorkflowRunnerResult["verification"] = [];
   const steps = new Map(input.definition.steps.map((step) => [step.id, step]));
-  let currentStepId: string | null = validation.entryStepId;
+  let currentStepId: string | null = input.currentStepId === undefined
+    ? validation.entryStepId
+    : input.currentStepId;
   let finalStatus: WorkflowRunnerResult["status"] = "completed";
 
   const transition = async (
@@ -504,10 +440,55 @@ export async function runWorkflow(
     stepStates[request.nextStepId] = request.nextStepState;
   };
 
+  const transitionSideStep = async (
+    request: Omit<
+      WorkflowSideTransitionRequest,
+      "runId" | "expectedRunVersion" | "dispatcherSession" | "fencingToken" | "requestHash"
+    >,
+  ) => {
+    if (!port.transitionSideStep) {
+      throw new Error("This runtime cannot persist approval meanwhile work.");
+    }
+    const fullWithoutHash = {
+      ...request,
+      runId: input.runId,
+      expectedRunVersion: runVersion,
+      dispatcherSession,
+      fencingToken,
+    };
+    const committed = await port.transitionSideStep({
+      ...fullWithoutHash,
+      requestHash: await workflowDefinitionHash(fullWithoutHash),
+    });
+    runVersion = committed.runVersion;
+    stepStates[request.sideStepId] = request.nextSideStepState;
+  };
+
   try {
     while (currentStepId && !isTerminalTarget(currentStepId)) {
       const step = steps.get(currentStepId);
       if (!step) throw new Error(`Workflow step not found: ${currentStepId}`);
+      if (stepStates[step.id] === "completed") {
+        const target = nextStepId(step, stepStates);
+        if (isTerminalTarget(target)) {
+          currentStepId = null;
+          continue;
+        }
+        await transition({
+          expectedStepId: step.id,
+          expectedStepState: "completed",
+          nextStepId: target as string,
+          nextStepState: "queued",
+          nextRunStatus: "In progress",
+          idempotencyKey: `run:${input.runId}:resume:${step.id}:v${runVersion}:advance:${target}`,
+          actor: input.actor,
+          eventKind: "workflow_step_resumed",
+          eventSummary: `${step.id} resumed at ${target}`,
+          eventPayload: { fromStepId: step.id, toStepId: target },
+        });
+        currentStepId = target;
+        continue;
+      }
       const stepVersion = runVersion;
       let stepForcesBlock = false;
 
@@ -774,42 +755,52 @@ export async function runWorkflow(
         const payload = payloadForReference(step.payloadRef, stepResults);
         assertPersistenceSafe({ approvalPayload: payload });
         const payloadHash = await workflowDefinitionHash(payload);
-        const approvalId = port.newId();
-        const approval: WorkflowApproval = {
-          approvalId,
-          runId: input.runId,
-          stepId: step.id,
-          approvalType: "workflow-payload",
-          requiredRole: step.gate,
-          payloadRef: step.payloadRef,
-          payloadHash,
-          payloadSnapshot: payload,
-          requester: input.actor,
-          requestedAt: port.now(),
-          decision: null,
-          decisionMaker: null,
-        };
-        approvals[step.id] = approval;
-        await transition({
-          expectedStepId: step.id,
-          expectedStepState: "queued",
-          nextStepId: step.id,
-          nextStepState: "running",
-          nextRunStatus: "Needs approval",
-          idempotencyKey: `run:${input.runId}:step:${step.id}:v${stepVersion}:requested`,
-          actor: input.actor,
-          eventKind: "approval_requested",
-          eventSummary: `${step.gate} approval requested`,
-          eventPayload: {
+        let approval = approvals[step.id] ?? Object.values(approvals).find((item) => item.stepId === step.id);
+        if (stepStates[step.id] === "queued") {
+          const approvalId = port.newId();
+          approval = {
             approvalId,
+            runId: input.runId,
+            stepId: step.id,
+            approvalType: "workflow-payload",
+            requiredRole: step.gate,
             payloadRef: step.payloadRef,
             payloadHash,
-          },
-          approvalMutation: {
-            operation: "request",
-            approvalId,
-            approval,
-          },
+            payloadSnapshot: payload,
+            requester: input.actor,
+            requestedAt: port.now(),
+            decision: null,
+            decisionMaker: null,
+          };
+          approvals[step.id] = approval;
+          await transition({
+            expectedStepId: step.id,
+            expectedStepState: "queued",
+            nextStepId: step.id,
+            nextStepState: "running",
+            nextRunStatus: "Needs approval",
+            idempotencyKey: `run:${input.runId}:step:${step.id}:v${stepVersion}:requested`,
+            actor: input.actor,
+            eventKind: "approval_requested",
+            eventSummary: `${step.gate} approval requested`,
+            eventPayload: { approvalId, payloadRef: step.payloadRef, payloadHash },
+            approvalMutation: { operation: "request", approvalId, approval },
+          });
+        }
+        if (!approval || approval.payloadHash !== payloadHash || approval.requiredRole !== step.gate) {
+          throw new Error("Stored workflow approval does not match the current step payload and role.");
+        }
+
+        await runApprovalMeanwhile({
+          approvalStep: step,
+          steps,
+          stepStates,
+          stepResults,
+          assignments,
+          runner: input,
+          port,
+          transitionSideStep,
+          dispatchFailure,
         });
         const decision = await port.decideApproval(approval);
         if (!decision) {
@@ -830,7 +821,7 @@ export async function runWorkflow(
           eventKind: approved ? "approval_granted" : "approval_denied",
           eventSummary: `${step.gate} ${decision.decision} the exact payload`,
           eventPayload: {
-            approvalId,
+            approvalId: approval.approvalId,
             payloadRef: step.payloadRef,
             payloadHash,
             decision: decision.decision,
@@ -838,7 +829,7 @@ export async function runWorkflow(
           },
           approvalMutation: {
             operation: "decide",
-            approvalId,
+            approvalId: approval.approvalId,
             payloadHash,
             decision: decision.decision,
             decisionMaker: decision.decisionMaker,
@@ -1044,14 +1035,14 @@ export function approvalPayloadHash(
 type CoordinatedRun = {
   fingerprint: string;
   promise: Promise<WorkflowRunnerResult>;
+  settled: boolean;
+  runVersion: number;
 };
 
 /**
  * App-process idempotency boundary for runtime starts. Repeated starts with the
- * same run payload share one execution; reuse of a run ID with different input
- * is rejected. Completed entries remain cached for the app lifetime so a late
- * duplicate UI or realtime delivery cannot dispatch the consequential step
- * twice.
+ * same run payload share one execution. A later durable version may resume only
+ * after the prior dispatch settles; the database CAS remains the replay guard.
  */
 export class WorkflowDispatchCoordinator {
   private readonly runs = new Map<string, CoordinatedRun>();
@@ -1060,21 +1051,23 @@ export class WorkflowDispatchCoordinator {
     const fingerprint = await workflowDefinitionHash(input);
     const existing = this.runs.get(input.runId);
     if (existing) {
-      if (existing.fingerprint !== fingerprint) {
+      if (existing.fingerprint === fingerprint) return existing.promise;
+      if (!existing.settled || input.runVersion <= existing.runVersion) {
         throw new Error(
           `Workflow run ${input.runId} was started with different input.`,
         );
       }
-      return existing.promise;
     }
 
     const promise = runWorkflow(input, port);
-    this.runs.set(input.runId, { fingerprint, promise });
-    void promise.catch(() => {
+    const coordinated = { fingerprint, promise, settled: false, runVersion: input.runVersion };
+    this.runs.set(input.runId, coordinated);
+    void promise.then(() => {
       const current = this.runs.get(input.runId);
-      if (current?.promise === promise) {
-        this.runs.delete(input.runId);
-      }
+      if (current?.promise === promise) current.settled = true;
+    }, () => {
+      const current = this.runs.get(input.runId);
+      if (current?.promise === promise) this.runs.delete(input.runId);
     });
     return promise;
   }
@@ -1087,6 +1080,7 @@ export type InterruptedWorkflowSnapshot = {
   currentStepState: WorkflowStepState;
   leaseExpiresAt: string | null;
   definition: WorkflowDefinitionV1;
+  identity: WorkflowExecutionIdentity;
 };
 
 export type WorkflowRecoveryResult =
@@ -1163,9 +1157,13 @@ export async function recoverInterruptedWorkflow(
       execution: "ephemeral",
     },
   };
+  const transitionWithContinuation = attachWorkflowTransitionContinuation(
+    transitionWithoutHash,
+    snapshot.identity,
+  );
   const transitioned = await port.transition({
-    ...transitionWithoutHash,
-    requestHash: await transitionHash(transitionWithoutHash),
+    ...transitionWithContinuation,
+    requestHash: await transitionHash(transitionWithContinuation),
   });
   const releaseRequest = {
     runId: snapshot.runId,

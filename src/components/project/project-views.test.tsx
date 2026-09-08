@@ -23,7 +23,7 @@ describe("project room views", () => {
     const root = createRoot(host);
     await act(async () => root.render(<ProjectBrief clientCase files={[file]} linkedRecords={[]} graphCount={4} investigation={investigation} />));
     expect(host.querySelector('[aria-label="Case stage"]')?.textContent).toContain("3Analysenow");
-    expect(host.textContent).toContain("0 records · 1 documents · 4 entities");
+    expect(host.textContent).toContain("0 records · 1 document · 4 entities");
     expect(host.textContent).toContain("you");
     await act(async () => root.unmount());
   });
@@ -33,7 +33,10 @@ describe("project room views", () => {
     const host = document.body.appendChild(document.createElement("div"));
     const root = createRoot(host);
     await act(async () => root.render(<ProjectEvidenceTable files={[file]} linkedRecords={[]} onOpenDocument={open} onOpenRecord={vi.fn()} />));
+    const table = host.querySelector<HTMLElement>('[role="table"]')!;
     const row = host.querySelector<HTMLButtonElement>('button[role="row"]')!;
+    expect(table.className).toContain("min-w-[620px]");
+    expect(table.parentElement?.className).toContain("overflow-x-auto");
     expect(row.className).toContain("h-[var(--h-line)]");
     await act(async () => row.click());
     expect(open).toHaveBeenCalledWith(file);

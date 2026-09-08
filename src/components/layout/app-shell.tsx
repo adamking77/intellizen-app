@@ -14,7 +14,7 @@ import { isTauriRuntime, PANE_BG, useWindowDrag, WindowResizeHandles } from "./w
 import { Sidebar } from "./sidebar";
 import { PaneDivider, usePaneResize } from "./pane-resize";
 import { CommandPaletteProvider, SHELL_COMMAND_EVENT, type ShellCommand } from "./command-palette";
-import { toast, toastError } from "@/lib/toast";
+import { dismissToasts, syncQuietToasts, toast, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { contextForRoute, publishConversationContext } from "@/lib/conversation-context";
 import { HomePinSync } from "@/components/home/home-pin-sync";
@@ -24,8 +24,12 @@ import { AGENT_PANEL_COLLAPSED_KEY, AGENT_PANEL_OPEN_EVENT, readAgentPanelCollap
 import { useWindowSize } from "@/lib/use-window-size";
 import { discoverAcpProviders, reconnectAcpProviders } from "@/engine/acp-registry";
 import { readPreference, RECONNECT_ON_LAUNCH_KEY, SCAN_ON_LAUNCH_KEY } from "@/lib/settings-preferences";
+import { useSessionMode } from "@/lib/session-mode";
+import { DocumentProposalProvider, useDocumentProposalBridge } from "@/proposals/document-review-context";
+import { WeekTheme } from "./week-theme";
 
 const FOCUS_MODE_KEY = "intelizen:focus-mode";
+const FOCUS_MODE_CHANGE_EVENT = "intelizen:focus-mode-change";
 // Owned by sidebar.tsx; ⌘\ writes it and remounts the sidebar so it re-reads.
 const SIDEBAR_COLLAPSED_KEY = "intelizen:sidebar-collapsed";
 
@@ -61,10 +65,12 @@ function isEditableTarget(target: EventTarget | null) {
 
 export function AppShell() {
   useEngineBoot();
+  const sessionMode = useSessionMode();
   const queryClient = useQueryClient();
   const location = useLocation();
   const { tree: contextTree } = useHierarchy();
-  const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject();
+  const documentProposal = useDocumentProposalBridge();
+  const { ejected: agentPanelDetached, busy: agentPanelEjecting, eject, redock } = useEject(documentProposal.review, documentProposal.decide);
   const [focusMode, setFocusMode] = useState(() => readFlag(FOCUS_MODE_KEY));
   const [sidebarKey, setSidebarKey] = useState(0);
   const [agentPanelOpenRequest, setAgentPanelOpenRequest] = useState(0);
@@ -75,7 +81,14 @@ export function AppShell() {
   const sidebarPane = usePaneResize("intelizen:sidebar-width", 216, 160, Math.min(360, windowWidth - 680));
   const panelPane = usePaneResize("intelizen:agent-panel-width", 336, 300, Math.min(560, windowWidth - (sidebarCollapsed ? 56 : sidebarPane.width) - 352));
 
-  useEffect(() => writeFlag(FOCUS_MODE_KEY, focusMode), [focusMode]);
+  useEffect(() => {
+    writeFlag(FOCUS_MODE_KEY, focusMode);
+    window.dispatchEvent(new CustomEvent<boolean>(FOCUS_MODE_CHANGE_EVENT, { detail: focusMode }));
+  }, [focusMode]);
+
+  useEffect(() => {
+    if (sessionMode.ready) syncQuietToasts();
+  }, [sessionMode.ready, sessionMode.mode]);
 
   useEffect(() => {
     if (!isTauriRuntime || readPreference(SCAN_ON_LAUNCH_KEY, "1") === "0") return;
@@ -182,23 +195,26 @@ export function AppShell() {
     void recoverInterruptedLocalWorkflowsOnLaunch()
       .then((report) => {
         if (report.abandoned.length) {
-          toast.info("Interrupted local workflow recovered", {
+          toast.info("Interrupted workflows checked", {
+            origin: "background", source: "workflow-recovery",
             description: `${report.abandoned.length} run${report.abandoned.length === 1 ? "" : "s"} marked abandoned with receipts; none were retried.`,
           });
         }
         if (report.failures.length) {
-          toast.error("Workflow recovery needs attention", {
+          toast.error("Some workflows could not be recovered", {
+            origin: "background", source: "workflow-recovery",
             description: `${report.failures.length} run${report.failures.length === 1 ? "" : "s"} could not be reconciled.`,
           });
         }
       })
-      .catch((error) => toastError("Workflow recovery failed", error));
+      .catch((error) => toastError("Workflow recovery failed", error, { origin: "background", source: "workflow-recovery" }));
   }, []);
 
   const dragWindow = useWindowDrag();
 
   return (
     <CommandPaletteProvider>
+      <DocumentProposalProvider register={documentProposal.register}>
       <HomePinSync />
       {/* Clicks landing on the transparent gutters (this element itself, not
           a pane) move the window. */}
@@ -233,7 +249,9 @@ export function AppShell() {
                 ⌘⇧F to leave focus
               </span>
             )}
-            <div className="flex-1" />
+            <div className="min-w-0 flex-1 px-3">
+              <WeekTheme />
+            </div>
             <div className="flex items-center gap-0.5 pr-3 text-[var(--overlay-1)]">
               <ChromeButton label="Toggle sidebar" onClick={toggleSidebar}>
                 <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -257,13 +275,13 @@ export function AppShell() {
                   >
                     <PictureInPicture2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </ChromeButton>
-                  <ChromeButton
+                  {sessionMode.mode !== "not_today" ? <ChromeButton
                     label="Reduce agent panel to HUD"
                     onClick={() => eject(true)}
                     disabled={agentPanelEjecting}
                   >
                     <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </ChromeButton>
+                  </ChromeButton> : null}
                 </>
               ) : null}
             </div>
@@ -276,7 +294,7 @@ export function AppShell() {
         </main>
         {focusMode || agentPanelDetached ? null : isNarrow ? (
           <Drawer open={!agentPanelHidden} onClose={closeNarrowPanel} label="Agent conversation" className="w-[390px] max-w-[calc(100vw-16px)] overflow-hidden">
-            <AgentPanel overlay onOverlayClose={closeNarrowPanel} onEject={() => eject()} openRequest={agentPanelOpenRequest} />
+            <AgentPanel overlay onOverlayClose={closeNarrowPanel} onEject={() => eject()} openRequest={agentPanelOpenRequest} documentReview={documentProposal.review} onDocumentProposalDecision={documentProposal.decide} />
           </Drawer>
         ) : (
           <AgentPanel
@@ -285,25 +303,27 @@ export function AppShell() {
             onCollapsedChange={setAgentPanelHidden}
             openRequest={agentPanelOpenRequest}
             toggleRequest={agentPanelToggleRequest}
+            documentReview={documentProposal.review}
+            onDocumentProposalDecision={documentProposal.decide}
           />
         )}
       </div>
       <WindowResizeHandles sides={agentPanelHidden || agentPanelDetached || focusMode || isNarrow} />
-      <Toaster
+      {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
-        theme="dark"
-        closeButton
+        theme="system"
+        offset={{ bottom: 72, right: 24 }}
+        gap={8}
+        expand={false}
+        closeButton={false}
+        richColors={false}
+        visibleToasts={3}
         toastOptions={{
-          style: {
-            background: "var(--mantle)",
-            border: "1px solid var(--border)",
-            color: "var(--text)",
-            fontFamily: "var(--font-ui, inherit)",
-            fontSize: "13px",
-          },
-          className: "intelizen-toast",
+          unstyled: true,
+          classNames: { toast: "note", title: "note-sentence", description: "note-meta", actionButton: "note-choice" },
         }}
-      />
+      /> : null}
+      </DocumentProposalProvider>
     </CommandPaletteProvider>
   );
 }
@@ -338,24 +358,28 @@ function ChromeButton({
 
 export function AgentPanelWindow() {
   useEngineBoot();
+  const sessionMode = useSessionMode();
+  useEffect(() => {
+    // Home's window owns return summaries; the detached panel only quiets its lane.
+    if (sessionMode.ready && (sessionMode.mode === null || sessionMode.mode === "not_today" || sessionMode.mode === "thinking")) dismissToasts();
+  }, [sessionMode.ready, sessionMode.mode]);
   return (
     <>
       <EjectedPanel />
-      <Toaster
+      {sessionMode.ready && (sessionMode.mode === "deciding" || sessionMode.mode === "executing") ? <Toaster
         position="bottom-right"
-        theme="dark"
-        closeButton
+        theme="system"
+        offset={{ bottom: 72, right: 24 }}
+        gap={8}
+        expand={false}
+        closeButton={false}
+        richColors={false}
+        visibleToasts={3}
         toastOptions={{
-          style: {
-            background: "var(--mantle)",
-            border: "1px solid var(--border)",
-            color: "var(--text)",
-            fontFamily: "var(--font-ui, inherit)",
-            fontSize: "13px",
-          },
-          className: "intelizen-toast",
+          unstyled: true,
+          classNames: { toast: "note", title: "note-sentence", description: "note-meta", actionButton: "note-choice" },
         }}
-      />
+      /> : null}
     </>
   );
 }

@@ -113,4 +113,12 @@ describe("project-center", () => {
       waiting: "Approve copy",
     });
   });
+
+  it("does not attribute another project's state from a matching name", () => {
+    const [project] = childrenOf(tree, "w1");
+    expect(unitProjectSummary({ ...project, legacyProjectId: null }, [{
+      id: "0b4edfb0-d632-4e4e-987f-3e6ec24b57b3", name: "Biz Ops", schema: [], headerFieldIds: [], views: [],
+      records: [{ id: "other", initiative_name: project.name, initiative_agent_owner: "Other owner", initiative_stage: "In progress" }],
+    }])).toEqual({ holder: null, state: null, blocker: null, waiting: null });
+  });
 });

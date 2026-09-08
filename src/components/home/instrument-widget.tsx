@@ -30,7 +30,7 @@ function LegacyInstrumentWidget({ pin }: { pin: HomeInstrumentPin }) {
   }
   if (error || !metric) {
     return (
-      <div className="flex h-full items-center px-4 font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">
+      <div className="flex h-full items-center px-4 font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)]">
         This activity measure is unavailable.
       </div>
     );
@@ -54,11 +54,11 @@ export function InstrumentFigure({ metric, compact = false }: { metric: Activity
         >
           {metric.value}
         </span>
-        <span className="truncate font-ui text-[var(--t-meta)] text-[var(--overlay-1)]">{metric.word}</span>
+        <span className="truncate font-ui text-[length:var(--t-meta)] text-[var(--overlay-1)]">{metric.word}</span>
       </div>
       {metric.sparkline.length > 1 ? <Sparkline values={metric.sparkline} /> : <div className="h-8" />}
       {!compact && metric.detail ? (
-        <p className="truncate font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{metric.detail}</p>
+        <p className="truncate font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">{metric.detail}</p>
       ) : null}
     </div>
   );

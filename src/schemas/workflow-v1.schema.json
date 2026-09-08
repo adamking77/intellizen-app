@@ -144,6 +144,12 @@
             "title": { "type": "string", "minLength": 1, "maxLength": 160 },
             "gate": { "type": "string", "minLength": 1 },
             "payloadRef": { "type": "string", "pattern": "^steps\\.[a-z][a-z0-9_-]*\\.result$" },
+            "meanwhile": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/stepId" },
+              "uniqueItems": true
+            },
+            "reminder": { "const": "never" },
             "next": { "$ref": "#/$defs/next" }
           }
         }

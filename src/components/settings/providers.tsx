@@ -14,6 +14,7 @@ import { useEngineStore } from "@/engine/engine-store";
 import { connectEngine, disconnectEngine } from "@/engine/use-engine";
 import { errorMessage } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { Control } from "@/components/ui/control";
 
 import { SETTINGS_TITLE } from "./settings-style";
 
@@ -100,13 +101,13 @@ export function ProvidersSettings() {
             Hermes is the engine. Installed command-line agents that expose ACP join on demand.
           </p>
         </div>
-        <button type="button" className="action" onClick={() => void rescan()} disabled={rescanning}>
+        <Control size="sm" onClick={() => void rescan()} disabled={rescanning}>
           {rescanning ? "Scanning…" : "Rescan"}
-        </button>
+        </Control>
       </header>
 
       {scanStatus ? (
-        <p className={cn("pb-1 text-[var(--t-meta)]", scanStatus.startsWith("Scan failed") ? "text-[var(--bad)]" : "text-[var(--ok)]")} role="status">
+        <p className={cn("pb-1 text-[length:var(--t-meta)]", scanStatus.startsWith("Scan failed") ? "text-[var(--bad)]" : "text-[var(--ok)]")} role="status">
           {scanStatus}
         </p>
       ) : null}
@@ -131,7 +132,7 @@ export function ProvidersSettings() {
       />
 
       {providers.isPending ? [0, 1, 2, 3].map((row) => <div key={row} className="mt-1 h-14 rounded-[var(--r-ctl)] bg-[var(--line)] opacity-40" />) : null}
-      {providers.error ? <p className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">ACP discovery failed — {errorMessage(providers.error)}</p> : null}
+      {providers.error ? <p role="alert" className="rounded-[var(--r-ctl)] border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">ACP discovery failed. {errorMessage(providers.error)}</p> : null}
       {(providers.data ?? []).map((provider) => {
         const live = (statuses.data ?? []).filter((status) => provider.agentIds.includes(status.agentId));
         const connected = live.length > 0;
@@ -179,10 +180,10 @@ export function ProvidersSettings() {
         );
       })}
 
-      <p className="pt-3 text-[var(--t-section)] leading-5 text-[var(--overlay-1)]">
+      <p className="pt-3 text-[length:var(--t-section)] leading-5 text-[var(--overlay-1)]">
         Credentials remain with Hermes or the provider CLI. IntelliZen stores no provider credential here.
       </p>
-      <p className="text-[var(--t-section)] leading-5 text-[var(--overlay-1)]">
+      <p className="text-[length:var(--t-section)] leading-5 text-[var(--overlay-1)]">
         Discovery matches the official ACP registry against executable paths from your login shell and local ACP adapters. Use Rescan after installing or moving a CLI.
       </p>
     </div>
@@ -231,11 +232,11 @@ function ProviderLine({
   const [open, setOpen] = useState(false);
   return (
     <div className="border-b border-[var(--hair)]">
-      <div className="hoverable flex min-h-14 flex-wrap items-center gap-3 px-0.5 py-4">
+      <div className="flex min-h-14 flex-wrap items-center gap-3 px-0.5 py-4 hover:bg-[var(--hover)]">
         <ProviderIcon src={icon} hermes={kindTone === "runtime"} />
-        <span className="w-[118px] shrink-0 font-ui text-[var(--t-ui)] text-[var(--text)]">{name}</span>
+        <span className="w-[118px] shrink-0 font-ui text-[length:var(--t-ui)] text-[var(--text)]">{name}</span>
         <span className={cn(
-          "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)]",
+          "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[length:var(--t-count)]",
           kindTone === "runtime"
             ? "bg-[color-mix(in_srgb,var(--runtime)_14%,transparent)] text-[var(--runtime)]"
             : "bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-[var(--text)]",
@@ -243,46 +244,46 @@ function ProviderLine({
           {kindTone === "itself" ? <span aria-hidden className="mr-1 inline-block h-1.5 w-1.5 rounded-[var(--r-pill)] bg-[var(--runtime)] align-px" /> : null}
           {kind}
         </span>
-        <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-2 py-0.5 font-ui text-[var(--t-count)] text-[var(--overlay-1)]">{tier}</span>
+        <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_9%,transparent)] px-2 py-0.5 font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">{tier}</span>
         <div className="min-w-0 flex-1 max-[900px]:order-last max-[900px]:basis-full">
-          <p className="truncate font-mono text-[var(--t-count)] text-[var(--overlay-1)]">{path}</p>
-          <p className={cn("mt-0.5 truncate text-[var(--t-meta)]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
+          <p className="truncate font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{path}</p>
+          <p className={cn("mt-0.5 truncate text-[length:var(--t-meta)]", bad ? "text-[var(--danger)]" : "text-[var(--subtext-0)]")}>{detail}</p>
         </div>
-        {connecting ? <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[var(--t-count)] text-[var(--overlay-1)]">connecting…</span> : null}
+        {connecting ? <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 text-[length:var(--t-count)] text-[var(--overlay-1)]">connecting…</span> : null}
         {!connecting && connected && onDisconnect ? (
           <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] px-2 py-0.5 font-ui text-[var(--t-count)] text-[var(--ok)]">connected</span>
-            <button type="button" className="action" onClick={(event) => { event.stopPropagation(); onDisconnect(); }}>Disconnect</button>
+            <span className="rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] px-2 py-0.5 font-ui text-[length:var(--t-count)] text-[var(--ok)]">connected</span>
+            <Control size="sm" onClick={(event) => { event.stopPropagation(); onDisconnect(); }}>Disconnect</Control>
           </div>
         ) : null}
-        {!connecting && !connected && onConnect ? <button type="button" className="action" onClick={(event) => { event.stopPropagation(); onConnect(); }}>Connect</button> : null}
+        {!connecting && !connected && onConnect ? <Control size="sm" onClick={(event) => { event.stopPropagation(); onConnect(); }}>Connect</Control> : null}
         {!onConnect && !connected && (
           <span className={cn(
-            "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[var(--t-count)]",
+            "shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 font-ui text-[length:var(--t-count)]",
             bad ? "bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] text-[var(--bad)]" : "bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] text-[var(--ok)]",
           )}>{state}</span>
         )}
-        {onManage ? <button type="button" className="action" onClick={(event) => { event.stopPropagation(); onManage(); }}>Agents</button> : null}
-        <button
-          type="button"
-          className="icon-button"
+        {onManage ? <Control size="sm" onClick={(event) => { event.stopPropagation(); onManage(); }}>Agents</Control> : null}
+        <Control
+          size="icon"
+          variant="quiet"
           aria-label={`${open ? "Collapse" : "Expand"} ${name} details`}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
-          <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-180")} strokeWidth={2.2} aria-hidden />
-        </button>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} strokeWidth={1.5} aria-hidden />
+        </Control>
       </div>
       {open ? (
-        <div className="flex flex-col gap-2.5 px-3 pb-4 pl-9 pt-1 text-[var(--t-meta)]">
+        <div className="flex flex-col gap-2.5 px-3 pb-4 pl-9 pt-1 text-[length:var(--t-meta)]">
           <div>
-            <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Connections</span>
+            <span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Connections</span>
             <div className="mt-1 flex flex-wrap gap-1">
               {connections.length ? connections.map((connection) => <span key={connection} className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-1 text-[var(--subtext-0)]">{connection}</span>) : <span className="text-[var(--overlay-1)]">None configured.</span>}
             </div>
           </div>
-          <div className="flex flex-wrap items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Capabilities</span><button type="button" className="text-left text-[var(--subtext-0)] hover:text-[var(--text)] hover:underline" onClick={onCapabilities}>View {capabilities.toLowerCase()}</button></div>
-          <div className="flex items-baseline gap-2"><span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">Invoked as</span><span className="font-mono text-[var(--subtext-0)]">{invocation}</span></div>
+          <div className="flex flex-wrap items-baseline gap-2"><span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Capabilities</span><Control size="sm" variant="text" className="text-left text-[var(--subtext-0)] hover:text-[var(--text)]" onClick={onCapabilities}>View {capabilities.toLowerCase()}</Control></div>
+          <div className="flex items-baseline gap-2"><span className="font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]">Invoked as</span><span className="font-mono text-[var(--subtext-0)]">{invocation}</span></div>
           <p className="max-w-[62ch] leading-[1.45] text-[var(--overlay-1)]">Credentials and connection configuration stay with Hermes or the provider CLI; IntelliZen never stores them here.</p>
         </div>
       ) : null}
@@ -295,11 +296,11 @@ function ProviderIcon({ src, hermes }: { src?: string; hermes?: boolean }) {
     return (
       <svg
         aria-hidden
-        className="h-5 w-5 shrink-0 text-[var(--runtime)]"
+        className="h-4 w-4 shrink-0 text-[var(--runtime)]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -312,7 +313,7 @@ function ProviderIcon({ src, hermes }: { src?: string; hermes?: boolean }) {
     return (
       <span
         aria-hidden
-        className="h-5 w-5 shrink-0 bg-[var(--accent)]"
+        className="h-4 w-4 shrink-0 bg-[var(--accent)]"
         data-provider-icon="registry"
         style={{
           maskImage: `url("${src}")`,
@@ -328,5 +329,5 @@ function ProviderIcon({ src, hermes }: { src?: string; hermes?: boolean }) {
       />
     );
   }
-  return <SquareTerminal aria-hidden className="h-5 w-5 shrink-0 text-[var(--overlay-1)]" strokeWidth={1.6} />;
+  return <SquareTerminal aria-hidden className="h-4 w-4 shrink-0 text-[var(--overlay-1)]" strokeWidth={1.5} />;
 }

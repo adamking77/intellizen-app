@@ -40,6 +40,7 @@ const PROTECTED_FIELDS = new Map<string, ReadonlySet<string>>([
       "run_schema_version",
       "run_definition_snapshot",
       "run_definition_hash",
+      "run_execution_version",
       "run_current_step_id",
       "run_version",
       "run_step_states",
@@ -81,7 +82,7 @@ const WORKER_ENV_EXEMPTIONS = new Set([
 ]);
 
 const FORBIDDEN_WORKER_ENV_NAME =
-  /^(?:SUPABASE_|VITE_SUPABASE_|VITE_INTELLIZEN_|OPENAI_|ANTHROPIC_|CLAUDE_|HERMES_|GITHUB_|NOTION_|GOOGLE_|TELEGRAM_|BWS_)|(?:_API_KEY|_ACCESS_TOKEN|_AUTH_TOKEN|_WEBHOOK_SECRET|_SESSION_TOKEN)$/i;
+  /^(?:SUPABASE_|VITE_SUPABASE_|INTELLIZEN_|VITE_INTELLIZEN_|OPENAI_|ANTHROPIC_|CLAUDE_|HERMES_|GITHUB_|NOTION_|GOOGLE_|TELEGRAM_|BWS_)|(?:_API_KEY|_ACCESS_TOKEN|_AUTH_TOKEN|_WEBHOOK_SECRET|_SESSION_TOKEN)$/i;
 
 export function parseMcpPlane(args: string[]): McpPlane {
   const inline = args.find((argument) => argument.startsWith("--plane="));
@@ -93,6 +94,23 @@ export function parseMcpPlane(args: string[]): McpPlane {
     throw new Error(`Unsupported MCP plane "${plane}". Expected admin or worker.`);
   }
   return plane;
+}
+
+export function adminSupabaseClientOptions(
+  plane: McpPlane,
+  environment: Record<string, string | undefined>,
+  fileEnvironment: Record<string, string | undefined>,
+) {
+  if (plane !== "admin") return undefined;
+  const localAccessKey = (
+    environment.INTELLIZEN_LOCAL_ACCESS_KEY
+    ?? fileEnvironment.INTELLIZEN_LOCAL_ACCESS_KEY
+    ?? environment.VITE_INTELLIZEN_LOCAL_ACCESS_KEY
+    ?? fileEnvironment.VITE_INTELLIZEN_LOCAL_ACCESS_KEY
+  )?.trim();
+  return localAccessKey
+    ? { global: { headers: { "x-intellizen-local-access": localAccessKey } } }
+    : undefined;
 }
 
 export function filterToolsForPlane<T extends { name: string }>(

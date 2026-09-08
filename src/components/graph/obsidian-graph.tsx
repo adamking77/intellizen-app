@@ -73,13 +73,13 @@ function readPalette() {
   const style = getComputedStyle(document.documentElement);
   const v = (name: string) => style.getPropertyValue(name).trim();
   return {
-    crust: v("--crust"),
-    mantle: v("--mantle"),
+    ground: v("--ground"),
+    surface: v("--surface"),
     text: v("--text"),
     muted: v("--text-muted"),
     line: v("--line-strong"),
     accent: v("--accent"),
-    path: v("--lavender"),
+    path: v("--accent"),
     font: v("--font-ui") || "system-ui, sans-serif",
   };
 }
@@ -104,7 +104,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
 
   useEffect(() => {
     const observer = new MutationObserver(() => setPalette(readPalette()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-flavor", "style"] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-flavor", "data-contrast", "data-panes", "style"] });
     return () => observer.disconnect();
   }, []);
   const lastLayoutTickRef = useRef(props.layoutTick);
@@ -331,13 +331,13 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
         out.height = canvas.height;
         const ctx = out.getContext("2d");
         if (!ctx) return canvas.toDataURL("image/png");
-        ctx.fillStyle = palette.crust;
+        ctx.fillStyle = palette.ground;
         ctx.fillRect(0, 0, out.width, out.height);
         ctx.drawImage(canvas, 0, 0);
         return out.toDataURL("image/png");
       },
     }),
-    [nodeLookup, palette.crust],
+    [nodeLookup, palette.ground],
   );
 
   function shouldShowLabel(node: GraphNode) {
@@ -364,7 +364,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
           width={size.width}
           height={size.height}
           graphData={graphData}
-          backgroundColor={palette.crust}
+          backgroundColor={palette.ground}
           nodeId="id"
           nodeRelSize={5.2}
           nodeVal={(node) => node.val}
@@ -409,7 +409,7 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
               const h = fontSize + padY * 2;
               const px = x - w / 2;
               const py = y + radius + 6;
-              ctx.fillStyle = palette.mantle;
+              ctx.fillStyle = palette.surface;
               ctx.strokeStyle = withAlpha(palette.line, 0.6);
               ctx.lineWidth = 1;
               ctx.beginPath();
@@ -426,11 +426,10 @@ export const ObsidianGraph = forwardRef<ObsidianGraphRef, ObsidianGraphProps>((p
               ctx.quadraticCurveTo(px, py, px + r, py);
               ctx.closePath();
               ctx.fill();
-              ctx.stroke();
               ctx.fillStyle = palette.text;
               ctx.fillText(label, x, py + padY);
             } else {
-              ctx.fillStyle = withAlpha(palette.muted, 0.55);
+              ctx.fillStyle = palette.muted;
               ctx.fillText(label, x, y + radius + 6);
             }
           }}

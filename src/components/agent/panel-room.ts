@@ -12,6 +12,8 @@ import type { ApprovalChoice } from "@/engine/contract";
 import { clearPanelDraft, readPanelDraft } from "./panel-draft";
 import { loadTeams } from "@/components/agents/teams-store";
 import { openTeamRoom } from "@/rooms/team-room";
+import { readConversationContext, type ConversationContextSnapshot } from "@/lib/conversation-context";
+import { groupMemberKey } from "@/rooms/group-membership";
 
 export interface PanelRoomSnapshot {
   id: string;
@@ -20,12 +22,17 @@ export interface PanelRoomSnapshot {
   activity: GroupActivityEntry[];
 }
 
+export interface RoomSendReceipt {
+  messageId: string;
+  thread: string;
+}
+
 export type PanelRoomAction =
-  | { type: "room-send"; roomId: string; text: string }
+  | { type: "room-send"; roomId: string; text: string; context?: ConversationContextSnapshot | null; preservePanelDraft?: boolean }
   | { type: "room-stop"; roomId: string }
   | { type: "room-refresh"; roomId: string }
-  | { type: "room-approve"; roomId: string; requestId: string; choice: ApprovalChoice }
-  | { type: "room-clarify"; roomId: string; requestId: string; answers: Record<string, string[]> }
+  | { type: "room-approve"; roomId: string; memberKey: string; requestId: string; choice: ApprovalChoice; receiptId?: string }
+  | { type: "room-clarify"; roomId: string; memberKey: string; requestId: string; answers: Record<string, string[]>; receiptId?: string }
   | { type: "select-team"; teamId: string };
 
 export function roomSnapshot(id: string | null): PanelRoomSnapshot | null {
@@ -36,7 +43,9 @@ export function roomSnapshot(id: string | null): PanelRoomSnapshot | null {
     activity: currentGroupActivity(id) };
 }
 
-export async function runRoomAction(action: PanelRoomAction) {
+const roomDecisions = new Set<string>();
+
+export async function runRoomAction(action: PanelRoomAction): Promise<RoomSendReceipt | void> {
   if (action.type === "select-team") {
     const team = (await loadTeams()).find((item) => item.id === action.teamId);
     if (!team) throw new Error("That team is no longer available.");
@@ -50,11 +59,22 @@ export async function runRoomAction(action: PanelRoomAction) {
   if (action.type === "room-refresh") { await refreshHostedRoom(id); return; }
   if (action.type === "room-send") {
     if (!action.text.trim()) return;
-    const key = `room:${id}`, draft = readPanelDraft(key);
-    if (room.owner === "hermes") await sendHostedRoom(id, action.text);
-    else await sendToGroupChat(id, members, action.text);
-    if (draft.text.trim() === action.text.trim()) clearPanelDraft(key, draft);
-    return;
+    const context = action.context === undefined ? readConversationContext() : action.context;
+    const key = `room:${id}`, draft = action.preservePanelDraft ? null : readPanelDraft(key);
+    let receipt: RoomSendReceipt | null = null;
+    if (room.owner === "hermes") {
+      const sent = await sendHostedRoom(id, action.text, undefined, context);
+      receipt = { messageId: sent.eventId, thread: sent.threadId };
+    } else {
+      const thread = await sendToGroupChat(id, members, action.text, null, context);
+      const sent = [...($groupChats.get()[id]?.log ?? [])].reverse().find((message) =>
+        message.from.kind === "user" && message.thread === thread,
+      );
+      if (sent?.id && thread) receipt = { messageId: sent.id, thread };
+    }
+    if (draft?.text.trim() === action.text.trim()) clearPanelDraft(key, draft);
+    if (!receipt) throw new Error("The room accepted the question without a readable message receipt.");
+    return receipt;
   }
   if (action.type === "room-stop") {
     if (room.owner === "hermes") await stopHostedRoom(id);
@@ -62,16 +82,24 @@ export async function runRoomAction(action: PanelRoomAction) {
     return;
   }
   const pending = snapshot.pending;
-  if (!pending || pending.decision.requestId !== action.requestId) throw new Error("That request is no longer pending.");
-  const member = members.find((item) => item.name === pending.member);
+  if (!pending || pending.memberKey !== action.memberKey || pending.decision.requestId !== action.requestId) {
+    throw new Error("That request is no longer pending.");
+  }
+  if (roomDecisions.has(id)) throw new Error("Another answer is already being sent for this room.");
+  const member = members.find((item) => groupMemberKey(item) === pending.memberKey);
   if (!member) throw new Error("The requesting member is no longer in this room.");
-  if (action.type === "room-approve") {
-    if (pending.decision.kind !== "approval") throw new Error("This request is not an approval.");
-    if (pending.hosted) await approveHostedRoom(id, pending, action.choice);
-    else await respondGroupApproval(id, member, action.requestId, action.choice);
-  } else {
-    if (pending.decision.kind !== "clarify") throw new Error("This request does not accept answers.");
-    await answerClarify(clientFor(member), pending.decision, action.answers);
-    clearGroupPrompt(id, member);
+  roomDecisions.add(id);
+  try {
+    if (action.type === "room-approve") {
+      if (pending.decision.kind !== "approval") throw new Error("This request is not an approval.");
+      if (pending.hosted) await approveHostedRoom(id, pending, action.choice);
+      else await respondGroupApproval(id, member, action.requestId, action.choice);
+    } else {
+      if (pending.decision.kind !== "clarify") throw new Error("This request does not accept answers.");
+      await answerClarify(clientFor(member), pending.decision, action.answers);
+      clearGroupPrompt(id, member);
+    }
+  } finally {
+    roomDecisions.delete(id);
   }
 }

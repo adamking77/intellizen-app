@@ -33,6 +33,7 @@ export interface AgentPanelRoleTarget {
   agentRecordId: string | null;
   bindingRef: string | null;
   adapterId: ExecutionTarget["kind"] | null;
+  engine?: string | null;
   model: string | null;
   execution: "ephemeral" | "durable" | null;
   state: "ready" | "unavailable";
@@ -89,6 +90,7 @@ export function buildAgentPanelRoleTargets(input: {
         agentRecordId: agent?.id ?? null,
         bindingRef: target?.ref ?? null,
         adapterId: target?.kind ?? null,
+        engine: target?.engine ?? null,
         model: target?.model ?? null,
         execution: target?.execution ?? null,
         state: agent && target ? "ready" : "unavailable",

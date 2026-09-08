@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
+import { motionIsEnabled } from "./motion";
 
 export const controlVariants = cva(
   "inline-flex h-[var(--h-ctl)] items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--r-ctl)] " +
@@ -14,6 +15,7 @@ export const controlVariants = cva(
         selected: "bg-[var(--selected)] font-[450] hover:bg-[var(--selected-hover)]",
         primary: "bg-[var(--go-bg)] text-[var(--go-fg)] hover:bg-[var(--go-hover)]",
         quiet: "bg-transparent text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
+        text: "h-auto rounded-none bg-transparent px-0 text-[var(--text)] underline decoration-[var(--surface-line)] underline-offset-4 hover:decoration-[var(--text)]",
         danger:
           "bg-[color-mix(in_srgb,var(--bad)_18%,transparent)] text-[var(--bad)] hover:shadow-[inset_0_0_0_999px_var(--hover)]",
       },
@@ -34,12 +36,38 @@ export interface ControlProps
 }
 
 export const Control = forwardRef<HTMLButtonElement, ControlProps>(
-  ({ children, className, disabled, loading = false, variant, size, ...props }, ref) => (
+  ({ children, className, disabled, loading = false, variant, size, title, type = "button", onBlur, onKeyDown, onPointerCancel, onPointerDown, onPointerLeave, onPointerUp, ...props }, ref) => (
     <button
       ref={ref}
-      className={cn(controlVariants({ variant, size }), className)}
+      type={type}
+      title={title ?? (size === "icon" ? props["aria-label"] : undefined)}
+      className={cn(controlVariants({ variant, size }), "motion-control", className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      onPointerDown={(event) => {
+        if (motionIsEnabled()) event.currentTarget.dataset.pointerPressed = "true";
+        onPointerDown?.(event);
+      }}
+      onPointerUp={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerUp?.(event);
+      }}
+      onPointerCancel={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerCancel?.(event);
+      }}
+      onPointerLeave={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onPointerLeave?.(event);
+      }}
+      onBlur={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onBlur?.(event);
+      }}
+      onKeyDown={(event) => {
+        delete event.currentTarget.dataset.pointerPressed;
+        onKeyDown?.(event);
+      }}
       {...props}
     >
       {loading ? <span aria-hidden className="control-running-dot" /> : null}

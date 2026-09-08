@@ -166,9 +166,18 @@ export interface WorkflowRunItem {
   current_step_id: string | null;
   step_states: unknown | null;
   approvals: unknown | null;
+  execution_version: number | null;
   run_version: number | null;
   body_preview: string;
   updated_at: string;
+}
+
+/** A frozen schema-v1 start request, minted by preview and replayed on confirm. */
+export interface WorkflowStartAttempt {
+  idempotency_key: string;
+  run_name: string;
+  run_started_at: string;
+  request_hash: string;
 }
 
 export interface StartWorkflowInput {
@@ -184,6 +193,8 @@ export interface StartWorkflowInput {
   config?: Record<string, unknown>;
   requiresApproval?: boolean;
   confirmWrite?: boolean;
+  /** Required when confirming a schema-v1 start; returned by the preview. */
+  startAttempt?: WorkflowStartAttempt | null;
   /** Runtime prompt forwarded on dispatch; defaults to the generic run prompt. */
   dispatchPrompt?: string | null;
 }

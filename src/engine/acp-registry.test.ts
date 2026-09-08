@@ -83,6 +83,15 @@ describe("ACP registry rows", () => {
     expect(normalizeAcpAgent({ id: "kimi", name: "Kimi", engine: "kimi", command: "kimi", args: ["acp"] }))
       .toMatchObject({ engine: "kimi", command: "kimi" });
   });
+
+  it("accepts trace identity aliases and rejects non-integer seeds", () => {
+    expect(normalizeAcpAgent({ id: "trace", engine: "codex", command: "codex-acp", avatar_style: "trace", avatar_seed: 73 }))
+      .toMatchObject({ avatarStyle: "trace", avatarSeed: 73 });
+    expect(normalizeAcpAgent({ id: "camel", engine: "codex", command: "codex-acp", avatarStyle: "trace", avatarSeed: -4 }))
+      .toMatchObject({ avatarStyle: "trace", avatarSeed: -4 });
+    expect(normalizeAcpAgent({ id: "bad", engine: "codex", command: "codex-acp", avatarStyle: "trace", avatarSeed: 2.5 })?.avatarSeed)
+      .toBeUndefined();
+  });
 });
 
 describe("ACP launch defaults", () => {
@@ -207,13 +216,14 @@ describe("ACP launch defaults", () => {
 
 describe("offline roster", () => {
   it("saves and lists ACP agents without calling Hermes", async () => {
-    await saveAcpAgent(claude);
+    await saveAcpAgent({ ...claude, avatarStyle: "trace", avatarSeed: 73 });
     const request = vi.fn();
     const client = { request } as unknown as GatewayClientLike;
     const result = await listAgents(client, false);
 
     expect(request).not.toHaveBeenCalled();
     expect(result.agents.map((agent) => agent.displayName)).toEqual(["Claude Code"]);
+    expect(result.agents[0]).toMatchObject({ avatarStyle: "trace", avatarSeed: 73 });
   });
 
   it("does not erase a malformed registry", async () => {

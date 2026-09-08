@@ -119,7 +119,7 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
           role="status"
           aria-live="polite"
         >
-          <p className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">Loading generated view…</p>
+          <p className="font-ui text-[length:var(--t-section)] text-[var(--overlay-1)]">Loading generated view…</p>
         </div>
       ) : null}
       {currentState.status === "error" ? (
@@ -127,8 +127,8 @@ export function SandboxedGenui({ html, title }: { html: string; title?: string }
           className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-3 py-3"
           role="alert"
         >
-          <p className="font-ui text-[var(--t-meta)] font-medium text-[var(--danger)]">Generated view unavailable</p>
-          <p className="mt-1 font-ui text-[var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
+          <p className="font-ui text-[length:var(--t-meta)] font-medium text-[var(--danger)]">Generated view unavailable</p>
+          <p className="mt-1 font-ui text-[length:var(--t-count)] leading-relaxed text-[var(--subtext-0)]">
             {currentState.message}
           </p>
           <button

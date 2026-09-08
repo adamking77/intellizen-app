@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WorkflowDesigner } from "./workflow-designer";
 import { RunsTable, WorkflowSource } from "./workflow-detail";
@@ -26,8 +26,9 @@ function seedSopDefinition(item: WorkflowCatalogItem, content: string) {
   return { ...definition, inputs: sourceId ? [{ key: "source_document", type: "document-ref" as const }] : [], steps: [{ ...first, title: "Run this SOP", instructions: content, contextRefs: sourceId ? [`document:${sourceId}`] : [] }] };
 }
 
-export function WorkflowWorkspace({ item, roleTargets, rolesUnavailable, onRetryRoles, onSaved, onOpenRun, onBack }: {
+export function WorkflowWorkspace({ item, autoDraftWithAgent = false, roleTargets, rolesUnavailable, onRetryRoles, onSaved, onOpenRun, onBack }: {
   item: WorkflowCatalogItem;
+  autoDraftWithAgent?: boolean;
   roleTargets: AgentPanelRoleTarget[];
   rolesUnavailable: boolean;
   onRetryRoles: () => void;
@@ -42,12 +43,18 @@ export function WorkflowWorkspace({ item, roleTargets, rolesUnavailable, onRetry
   const [selectedStepId, setSelectedStepId] = useState(draft.steps[0]?.id ?? "");
   const onDraftChange = useCallback((definition: WorkflowDefinitionV1, stepId: string) => { setDraft(definition); setSelectedStepId(stepId); }, []);
   const bridge = useWorkflowAgentDraft({ draftKey: workflow.id || workflow.workflow_id, currentDefinition: draft, selectedStepId });
+  const autoDraftRequested = useRef(false);
+  useEffect(() => {
+    if (!autoDraftWithAgent || autoDraftRequested.current) return;
+    autoDraftRequested.current = true;
+    void bridge.requestWithAgent().then(() => requestAgentPanelOpen()).catch(() => {});
+  }, [autoDraftWithAgent, bridge.requestWithAgent]);
   const runsQuery = useQuery({ queryKey: ["workflow-runs", workflow.id], queryFn: () => listWorkflowRuns({ workflowId: workflow.id, includeCompleted: true, limit: 100 }), enabled: Boolean(workflow.id), refetchInterval: 15_000 });
   const starter = useStartWorkflow({ onStarted: () => runsQuery.refetch() });
   const sourceQuery = useQuery({ queryKey: ["workflow-source", workflow.id, workflow.updated_at], queryFn: () => getWorkflowSource(workflow), enabled: item.state === "sop-only" });
   const sopDefinition = useMemo(() => item.state === "sop-only" && sourceQuery.data?.content ? seedSopDefinition(item, sourceQuery.data.content) : null, [item, sourceQuery.data]);
   const runsTray = <div className="max-h-64 overflow-auto p-3">
-    {!workflow.id ? <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Save and activate this workflow before its first run.</p> : runsQuery.isLoading ? <Skeleton lines={3} /> : <>
+    {!workflow.id ? <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Save and activate this workflow before its first run.</p> : runsQuery.isLoading ? <Skeleton lines={3} /> : <>
       {runsQuery.error ? <p role="alert" className="mb-2 text-[var(--danger)]">Could not refresh this workflow’s run history. <Control size="sm" onClick={() => void runsQuery.refetch()}>Retry</Control></p> : null}
       {runsQuery.data ? <RunsTable runs={runsQuery.data} onOpenRun={onOpenRun} /> : null}
     </>}
@@ -61,7 +68,7 @@ export function WorkflowWorkspace({ item, roleTargets, rolesUnavailable, onRetry
       runControl={<Control size="sm" disabled={!item.runnable || dirty || rolesUnavailable} loading={starter.isStartingWorkflow} onClick={() => void starter.start({ workflowId: workflow.workflow_id, triggerSource: "ui" })} title={dirty ? "Save your edits before running." : !item.runnable ? "Activate a valid workflow with available roles before running." : undefined}>Run workflow</Control>}
       workflowActions={[
         ...(workflow.id ? [{ label: "Source", onSelect: () => setDetail("source") }] : []),
-        { label: "Schedule", disabled: !workflow.id || !item.definition || dirty, reason: dirty ? "Save your edits before scheduling." : undefined, onSelect: () => setDetail("schedule") },
+        { label: "Schedule", disabled: !workflow.id || !item.definition || dirty, reason: dirty ? "Save your edits before scheduling." : !workflow.id ? "Save this workflow before scheduling." : !item.definition ? "Finish and save a valid definition before scheduling." : undefined, onSelect: () => setDetail("schedule") },
       ]}
       workflow={workflow} roleTargets={roleTargets} initialDefinition={sopDefinition} embedded onSaved={onSaved} onDirtyChange={setDirty}
       onDraftChange={onDraftChange} draftRevision={bridge.draftRevision ?? ""} proposal={bridge.proposal} onProposalApplied={bridge.applied} onProposalDismissed={bridge.dismiss}

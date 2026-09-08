@@ -55,6 +55,7 @@ import type {
   WorkspaceEntity,
   WorkflowRunItem,
   WorkflowRunStatus,
+  WorkflowStartAttempt,
   WorkflowTemplateItem,
 } from "@/lib/types";
 import { normalizeProjectSignalRows } from "@/lib/project-signals";
@@ -64,9 +65,14 @@ import {
   dryRunWorkflowDefinition,
   validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
+  workflowDefinitionHash,
   type WorkflowDefinitionV1,
 } from "@/lib/workflow-schema";
 import { supabase } from "@/lib/supabase";
+import {
+  attachWorkflowTransitionContinuation,
+  loadWorkflowRunContinuation,
+} from "@/lib/workflow-continuation";
 import { submitWorkflow } from "@/services/agent";
 import { GENZEN_WORKSPACE_DATABASE_IDS } from "@/lib/workspace-ids";
 
@@ -153,6 +159,7 @@ const WORKFLOW_RUN_FIELDS = {
   currentStepId: "run_current_step_id",
   stepStates: "run_step_states",
   approvals: "run_approvals",
+  executionVersion: "run_execution_version",
   version: "run_version",
   fencingToken: "run_fencing_token",
   contextEvidence: "run_context_evidence",
@@ -2393,6 +2400,77 @@ export async function listWorkspaceDatabases(input: EntityFilterInput = {}) {
   return ((data ?? []) as WorkspaceDatabaseRow[]).map(toWorkspaceDatabase) as WorkspaceDatabaseSummary[];
 }
 
+const DATABASE_WAY_IN_REVISION_LIMIT = 500;
+const DATABASE_RECORD_FIELDS_PAGE_SIZE = 250;
+const DATABASE_RECORD_FIELDS_MAX = 5_000;
+
+export type WorkspaceDatabaseWayInSummary = WorkspaceDatabaseSummary & {
+  recordCount: number | null;
+  revisionCount: number | null;
+  revisionCountCapped: boolean;
+};
+
+/** Read-only inventory for the Databases way-in. Counts use PostgREST's exact
+ * head response; revisions remain visibly unavailable if their bounded query
+ * cannot be read. */
+export async function listWorkspaceDatabaseWayIn(input: { entity?: string | null; since?: string | null } = {}): Promise<WorkspaceDatabaseWayInSummary[]> {
+  const databases = await listWorkspaceDatabases({ entity: input.entity });
+  const countResults = await Promise.all(databases.map(async (database) => {
+    const { count, error } = await supabase
+      .schema("workspace").from("records")
+      .select("id", { count: "exact", head: true })
+      .eq("database_id", database.id);
+    return [database.id, error ? null : count] as const;
+  }));
+  const recordCounts = new Map(countResults);
+  if (!input.since || !databases.length) {
+    return databases.map((database) => ({ ...database, recordCount: recordCounts.get(database.id) ?? null, revisionCount: null, revisionCountCapped: false }));
+  }
+
+  const { data, error } = await supabase
+    .schema("workspace").from("record_revisions")
+    .select("database_id")
+    .in("database_id", databases.map((database) => database.id))
+    .gte("revised_at", input.since)
+    .order("revised_at", { ascending: false })
+    .limit(DATABASE_WAY_IN_REVISION_LIMIT);
+  if (error) {
+    return databases.map((database) => ({ ...database, recordCount: recordCounts.get(database.id) ?? null, revisionCount: null, revisionCountCapped: false }));
+  }
+  const revisionCounts = new Map<string, number>();
+  for (const revision of data ?? []) {
+    if (typeof revision.database_id === "string") revisionCounts.set(revision.database_id, (revisionCounts.get(revision.database_id) ?? 0) + 1);
+  }
+  const capped = (data?.length ?? 0) === DATABASE_WAY_IN_REVISION_LIMIT;
+  return databases.map((database) => ({
+    ...database,
+    recordCount: recordCounts.get(database.id) ?? null,
+    revisionCount: revisionCounts.get(database.id) ?? 0,
+    revisionCountCapped: capped,
+  }));
+}
+
+export async function listWorkspaceDatabaseRecordFields(databaseId: string): Promise<{
+  records: Array<Pick<WorkspaceDatabaseRecord, "id" | "fields">>;
+  complete: boolean;
+}> {
+  const records: Array<Pick<WorkspaceDatabaseRecord, "id" | "fields">> = [];
+  for (let offset = 0; offset < DATABASE_RECORD_FIELDS_MAX; offset += DATABASE_RECORD_FIELDS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .schema("workspace").from("records")
+      .select("id, fields, created_at")
+      .eq("database_id", databaseId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + DATABASE_RECORD_FIELDS_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    records.push(...page.map((record) => ({ id: record.id, fields: record.fields as Record<string, WorkspaceDatabaseFieldValue> })));
+    if (page.length < DATABASE_RECORD_FIELDS_PAGE_SIZE) return { records, complete: true };
+  }
+  return { records, complete: false };
+}
+
 export async function listWorkspaceDatabaseCatalog(input: EntityFilterInput = {}) {
   let databaseQuery = supabase
     .schema("workspace").from("databases")
@@ -3208,6 +3286,12 @@ export async function getWorkspaceRecord(id: string) {
   return toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
 }
 
+export async function getWorkspaceDatabaseRecordModel(id: string, expectedDatabaseId: string) {
+  const record = await getWorkspaceRecord(id);
+  if (record.database_id !== expectedDatabaseId) throw new Error("The linked record is not present in this database.");
+  return hydrateWorkspaceDatabaseRecord(record);
+}
+
 async function appendWorkspaceRecordRelation(recordId: string, fieldId: string, relatedRecordId: string) {
   const record = await getWorkspaceRecord(recordId);
   const existing = asStringArray(record.fields[fieldId]);
@@ -3278,6 +3362,7 @@ export function toWorkflowRunItem(record: WorkspaceDatabaseRecord): WorkflowRunI
     current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
     step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
     approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
+    execution_version: fieldNumber(record.fields[WORKFLOW_RUN_FIELDS.executionVersion]),
     run_version: fieldNumber(record.fields[WORKFLOW_RUN_FIELDS.version]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
@@ -3491,6 +3576,412 @@ export async function requestWorkflowApproval(input: {
 
 export type WorkflowApprovalDecision = "approved" | "rejected" | "changes_requested";
 
+type StoredWorkflowApproval = {
+  approvalId: string;
+  stepId: string;
+  requiredRole: string;
+  payloadHash: string;
+  payloadRef?: string;
+  decision: "approved" | "denied" | "changes_requested" | null;
+  invalidatedAt?: string | null;
+};
+
+export function workflowApprovalIdentityFromRecord(record: WorkspaceDatabaseRecordModel) {
+  const structured = fieldString(record[WORKFLOW_RUN_FIELDS.schemaVersion]) === "intellizen.workflow/1";
+  const expectedStepId = structured ? fieldString(record[WORKFLOW_RUN_FIELDS.currentStepId]) : null;
+  const approvalsValue = structured ? fieldJson(record[WORKFLOW_RUN_FIELDS.approvals]) : null;
+  const approvals = approvalsValue && typeof approvalsValue === "object" && !Array.isArray(approvalsValue)
+    ? Object.values(approvalsValue as Record<string, unknown>)
+    : [];
+  const approval = approvals.find((value) => value && typeof value === "object" && !Array.isArray(value)
+    && (value as { stepId?: unknown }).stepId === expectedStepId
+    && (value as { decision?: unknown }).decision === null) as Record<string, unknown> | undefined;
+  const approvalId = typeof approval?.approvalId === "string" ? approval.approvalId : null;
+  const payloadHash = typeof approval?.payloadHash === "string" ? approval.payloadHash : null;
+  const decisionRole = typeof approval?.requiredRole === "string" ? approval.requiredRole : null;
+  return {
+    expectedUpdatedAt: fieldString(record._updatedAt) ?? "",
+    expectedRunVersion: structured ? fieldNumber(record[WORKFLOW_RUN_FIELDS.version]) : null,
+    expectedStepId,
+    approvalId: structured ? approvalId : null,
+    expectedPayloadHash: structured ? payloadHash : null,
+    decisionRole: structured ? decisionRole : null,
+  };
+}
+
+function approvalRecord(value: unknown, approvalId: string): StoredWorkflowApproval | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const approvals = value as Record<string, unknown>;
+  const candidate = approvals[approvalId] ?? Object.values(approvals).find((approval) =>
+    approval && typeof approval === "object" && (approval as { approvalId?: unknown }).approvalId === approvalId
+  );
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const approval = candidate as Record<string, unknown>;
+  return typeof approval.approvalId === "string"
+    && typeof approval.stepId === "string"
+    && typeof approval.requiredRole === "string"
+    && approval.requiredRole.trim().length > 0
+    && typeof approval.payloadHash === "string"
+    && /^(?:[a-f0-9]{64})$/i.test(approval.payloadHash)
+    && (approval.decision === null || ["approved", "denied", "changes_requested"].includes(String(approval.decision)))
+    ? approval as StoredWorkflowApproval
+    : null;
+}
+
+function rpcInteger(value: unknown, label: string) {
+  const number = fieldNumber(value);
+  if (number === null || !Number.isInteger(number) || number < 0) throw new Error(`${label} was not returned by the workflow transition.`);
+  return number;
+}
+
+function workflowApprovalError(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : error && typeof error === "object" && "message" in error
+      ? String(error.message)
+      : String(error);
+}
+
+async function resolveStructuredWorkflowApproval(
+  run: WorkspaceDatabaseRecord,
+  input: {
+    workflowRunId: string;
+    decision: WorkflowApprovalDecision;
+    decisionSummary: string;
+    decidedBy: string;
+    decisionRole?: string | null;
+    expectedRunVersion?: number | null;
+    expectedStepId?: string | null;
+    approvalId?: string | null;
+    expectedPayloadHash?: string | null;
+    confirmWrite?: boolean;
+  },
+) {
+  if (input.expectedRunVersion === null || input.expectedRunVersion === undefined
+    || !input.expectedStepId || !input.approvalId || !input.expectedPayloadHash
+    || !input.decisionRole?.trim()) {
+    throw new Error("This workflow approval needs its exact run version, step, approval, payload, and decision role identity.");
+  }
+  const continuation = await loadWorkflowRunContinuation(run.id);
+  const version = fieldNumber(run.fields[WORKFLOW_RUN_FIELDS.version]);
+  const stepId = fieldString(run.fields[WORKFLOW_RUN_FIELDS.currentStepId]);
+  const mutableStates = fieldJson(run.fields[WORKFLOW_RUN_FIELDS.stepStates]);
+  const mutableStepState = mutableStates && typeof mutableStates === "object" && !Array.isArray(mutableStates)
+    ? fieldString((mutableStates as Record<string, WorkspaceDatabaseFieldValue>)[input.expectedStepId])
+    : null;
+  const continuationState = continuation.stepStates[input.expectedStepId];
+  const stepState = typeof continuationState === "string" && continuationState.trim()
+    ? continuationState.trim()
+    : null;
+  const approval = approvalRecord(fieldJson(run.fields[WORKFLOW_RUN_FIELDS.approvals]), input.approvalId);
+  if (fieldString(run.fields[WORKFLOW_RUN_FIELDS.status]) !== "Needs approval"
+    || version !== input.expectedRunVersion || version !== continuation.runVersion
+    || stepId !== input.expectedStepId || stepId !== continuation.currentStepId
+    || mutableStepState !== stepState
+    || !approval || approval.stepId !== input.expectedStepId
+    || approval.payloadHash !== input.expectedPayloadHash || approval.decision !== null
+    || approval.requiredRole !== input.decisionRole || approval.invalidatedAt) {
+    throw new Error("That workflow approval changed. Review the current payload before deciding.");
+  }
+  if (stepState !== "running") {
+    throw new Error("That workflow approval is no longer awaiting a decision.");
+  }
+  if (!input.confirmWrite) {
+    return {
+      dry_run: true,
+      write_performed: false,
+      workflow_run_id: run.id,
+      expected_run_version: input.expectedRunVersion,
+      expected_step_id: input.expectedStepId,
+      approval_id: input.approvalId,
+      payload_hash: approval.payloadHash,
+      decision_role: approval.requiredRole,
+      decision: input.decision,
+    };
+  }
+
+  const operationId = crypto.randomUUID();
+  const dispatcherSession = crypto.randomUUID();
+  const leaseRequest = {
+    workflowRunId: run.id,
+    expectedRunVersion: input.expectedRunVersion,
+    dispatcherSession,
+    leaseTtlSeconds: 60,
+    idempotencyKey: `workflow-approval:${run.id}:${input.approvalId}:${operationId}:lease`,
+    actor: input.decidedBy,
+  };
+  const { data: leaseData, error: leaseError } = await supabase.schema("workspace").rpc("acquire_workflow_dispatch_lease", {
+    p_workflow_run_id: leaseRequest.workflowRunId,
+    p_expected_run_version: leaseRequest.expectedRunVersion,
+    p_dispatcher_session: leaseRequest.dispatcherSession,
+    p_lease_ttl_seconds: leaseRequest.leaseTtlSeconds,
+    p_idempotency_key: leaseRequest.idempotencyKey,
+    p_request_hash: await workflowDefinitionHash(leaseRequest),
+    p_actor: leaseRequest.actor,
+  });
+  if (leaseError) throw new Error(leaseError.message);
+  const lease = leaseData as Record<string, unknown>;
+  const leasedVersion = rpcInteger(lease?.run_version, "Run version");
+  const fencingToken = rpcInteger(lease?.fencing_token, "Fencing token");
+  const storedDecision = input.decision === "rejected" ? "denied" : input.decision;
+  const approved = storedDecision === "approved";
+  const nextStatus: WorkflowRunStatus = approved ? "In progress" : "Blocked";
+  const transitionRequest = attachWorkflowTransitionContinuation({
+    workflowRunId: run.id,
+    expectedRunVersion: leasedVersion,
+    expectedStepId: input.expectedStepId,
+    expectedStepState: stepState,
+    nextStepId: input.expectedStepId,
+    nextStepState: approved ? "completed" : "blocked",
+    nextRunStatus: nextStatus,
+    dispatcherSession,
+    fencingToken,
+    idempotencyKey: `workflow-approval:${run.id}:${input.approvalId}:${operationId}:decide`,
+    actor: input.decidedBy,
+    eventKind: approved ? "approval_granted" : input.decision === "changes_requested" ? "approval_changes_requested" : "approval_denied",
+    eventSummary: `${input.decidedBy} ${storedDecision.replace("_", " ")} the exact workflow payload: ${input.decisionSummary}`,
+    eventPayload: {
+      approvalId: input.approvalId,
+      payloadRef: approval.payloadRef ?? null,
+      payloadHash: approval.payloadHash,
+      decision: storedDecision,
+      decisionMaker: input.decidedBy,
+      decisionRole: approval.requiredRole,
+    },
+    approvalMutation: {
+      operation: "decide",
+      approvalId: input.approvalId,
+      payloadHash: approval.payloadHash,
+      decision: storedDecision,
+      decisionMaker: input.decidedBy,
+    },
+  }, continuation.identity);
+  let transitionData: unknown;
+  let transitionError: Error | null = null;
+  try {
+    const rpcRequest = {
+      p_workflow_run_id: transitionRequest.workflowRunId,
+      p_expected_run_version: transitionRequest.expectedRunVersion,
+      p_expected_step_id: transitionRequest.expectedStepId,
+      p_expected_step_state: transitionRequest.expectedStepState,
+      p_next_step_id: transitionRequest.nextStepId,
+      p_next_step_state: transitionRequest.nextStepState,
+      p_next_run_status: transitionRequest.nextRunStatus,
+      p_dispatcher_session: transitionRequest.dispatcherSession,
+      p_fencing_token: transitionRequest.fencingToken,
+      p_idempotency_key: transitionRequest.idempotencyKey,
+      p_actor: transitionRequest.actor,
+      p_event_kind: transitionRequest.eventKind,
+      p_event_summary: transitionRequest.eventSummary,
+      p_event_payload: transitionRequest.eventPayload,
+      p_approval_mutation: transitionRequest.approvalMutation ?? null,
+    };
+    const result = await supabase.schema("workspace").rpc("transition_workflow_step", {
+      ...rpcRequest,
+      p_request_hash: await workflowDefinitionHash(rpcRequest),
+    });
+    if (result.error) throw new Error(result.error.message);
+    transitionData = result.data;
+  } catch (error) {
+    transitionError = new Error(workflowApprovalError(error));
+  }
+
+  const releaseRequest = {
+    workflowRunId: run.id,
+    dispatcherSession,
+    fencingToken,
+    idempotencyKey: `workflow-approval:${run.id}:${input.approvalId}:${operationId}:release`,
+    actor: input.decidedBy,
+  };
+  let releaseError: string | null = null;
+  let releasedVersion: number | null = null;
+  try {
+    const result = await supabase.schema("workspace").rpc("release_workflow_dispatch_lease", {
+      p_workflow_run_id: releaseRequest.workflowRunId,
+      p_dispatcher_session: releaseRequest.dispatcherSession,
+      p_fencing_token: releaseRequest.fencingToken,
+      p_actor: releaseRequest.actor,
+      p_idempotency_key: releaseRequest.idempotencyKey,
+      p_request_hash: await workflowDefinitionHash(releaseRequest),
+    });
+    if (result.error) throw new Error(result.error.message);
+    releasedVersion = rpcInteger(result.data?.run_version, "Run version");
+  } catch (error) {
+    releaseError = workflowApprovalError(error);
+  }
+  if (transitionError) throw transitionError;
+
+  const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
+  let syncedTask: AgentWorkItem | null = null;
+  let taskSyncError: string | null = null;
+  if (taskId) {
+    const taskState = taskStateForWorkflowRunStatus(nextStatus);
+    const decisionLabel = input.decision.replace("_", " ");
+    const taskPointerSection = `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Workflow run: ${fieldString(run.fields[WORKFLOW_RUN_FIELDS.name]) ?? run.id} (${run.id})
+Actor: ${input.decidedBy}
+Status: ${nextStatus}
+Current step: Approval ${decisionLabel}: workflow-payload
+Approval needed: ${approved ? "none" : input.decisionSummary}
+Next step: ${approved ? "Resume workflow execution" : "Revise and return for approval"}
+Summary: workflow-payload approval ${decisionLabel} by ${input.decidedBy}: ${input.decisionSummary}
+Details: see the Workflow Runs record receipt timeline.`;
+    try {
+      syncedTask = toAgentWorkItem(await appendRecordSectionAtomic(taskId, taskPointerSection, taskState ? {
+        [AGENT_TASK_FIELDS.status]: taskState.status,
+        [AGENT_TASK_FIELDS.stage]: taskState.stage,
+      } : undefined));
+    } catch (taskError) {
+      taskSyncError = workflowApprovalError(taskError);
+    }
+  }
+  let resumedRun = null;
+  let resumeError: string | null = null;
+  if (approved && !releaseError && releasedVersion !== null) {
+    try {
+      const transition = transitionData && typeof transitionData === "object"
+        ? transitionData as Record<string, unknown>
+        : null;
+      const storedRun = transition?.run && typeof transition.run === "object"
+        ? transition.run as WorkspaceDatabaseRecordRow
+        : null;
+      if (!storedRun) throw new Error("The committed workflow run was not returned for resume.");
+      resumedRun = toWorkflowRunItem(toWorkspaceDatabaseRecord(storedRun));
+      const resumedContinuation = await loadWorkflowRunContinuation(run.id);
+      resumedRun.run_version = resumedContinuation.runVersion;
+      resumedRun.execution_version = resumedContinuation.identity.executionVersion;
+      const { dispatchWorkflowRun } = await import("@/services/workflow-dispatch");
+      await dispatchWorkflowRun(resumedRun);
+    } catch (error) {
+      resumeError = workflowApprovalError(error);
+    }
+  }
+  return {
+    dry_run: false,
+    write_performed: true,
+    transition: transitionData,
+    resumed_run: resumedRun,
+    synced_task: syncedTask,
+    ...(releaseError ? { lease_release_error: releaseError } : {}),
+    ...(taskSyncError ? { task_sync_error: taskSyncError } : {}),
+    ...(resumeError ? { resume_error: resumeError } : {}),
+  };
+}
+
+async function resolveLegacyWorkflowApproval(
+  run: WorkspaceDatabaseRecord,
+  input: {
+    workflowRunId: string;
+    decision: WorkflowApprovalDecision;
+    decisionSummary: string;
+    decidedBy: string;
+    decisionRole?: string | null;
+    approvalType?: string | null;
+    expectedUpdatedAt: string;
+    confirmWrite?: boolean;
+  },
+) {
+  if (run.updated_at !== input.expectedUpdatedAt || fieldString(run.fields[WORKFLOW_RUN_FIELDS.status])?.toLowerCase() !== "needs approval") {
+    throw new Error("That workflow approval changed. Review the current request before deciding.");
+  }
+  const approvalType = input.approvalType?.trim() || "workflow";
+  const decisionLabel = input.decision.replace("_", " ");
+  const nextStatus: WorkflowRunStatus = input.decision === "approved" ? "In progress" : input.decision === "changes_requested" ? "Needs approval" : "Blocked";
+  const updateInput: UpdateWorkflowRunInput = {
+    workflowRunId: input.workflowRunId,
+    actor: input.decidedBy,
+    status: nextStatus,
+    currentStep: `Approval ${decisionLabel}: ${approvalType}`,
+    summary: `${approvalType} approval ${decisionLabel} by ${input.decidedBy}: ${input.decisionSummary}`,
+    actionsTaken: [`Resolved ${approvalType} approval as ${decisionLabel}`],
+    blockedItems: input.decision === "approved" ? undefined : [input.decisionSummary],
+    approvalNeeded: input.decision === "approved" ? null : input.decisionSummary,
+    nextStep: input.decision === "approved" ? "Resume workflow execution" : "Revise and return for approval",
+    eventKind: "approval_decision",
+    decisionRole: input.decisionRole ?? FOUNDER_APPROVAL_ROLE,
+    confirmWrite: input.confirmWrite,
+  };
+  if (!input.confirmWrite) return updateWorkflowRun(updateInput);
+
+  const section = workflowRunUpdateSection(updateInput);
+  const fieldsPatch: Record<string, WorkspaceDatabaseFieldValue> = {
+    [WORKFLOW_RUN_FIELDS.status]: nextStatus,
+    [WORKFLOW_RUN_FIELDS.currentStep]: updateInput.currentStep!,
+    [WORKFLOW_RUN_FIELDS.receipt]: section,
+    ...(["Done", "Blocked", "Deferred"].includes(nextStatus) ? { [WORKFLOW_RUN_FIELDS.completedAt]: new Date().toISOString() } : {}),
+  };
+  const { data, error } = await supabase.schema("workspace").from("records")
+    .update({ fields: { ...run.fields, ...fieldsPatch } })
+    .eq("id", run.id)
+    .eq("updated_at", input.expectedUpdatedAt)
+    .select("id, database_id, entity, fields, body, taxonomy, created_at, updated_at")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("That workflow approval changed. Nothing was written; review it again.");
+  const updated = toWorkspaceDatabaseRecord(data as WorkspaceDatabaseRecordRow);
+  const taskId = firstRelationId(run.fields[WORKFLOW_RUN_FIELDS.task]);
+  const event: WorkEventInput = {
+    recordId: taskId ?? run.id,
+    workflowRunId: run.id,
+    eventKind: "approval_decision",
+    actor: input.decidedBy,
+    decisionRole: input.decisionRole ?? FOUNDER_APPROVAL_ROLE,
+    summary: updateInput.summary.slice(0, 300),
+    payload: {
+      decision: input.decision,
+      approval_type: approvalType,
+      before_updated_at: input.expectedUpdatedAt,
+      after_updated_at: updated.updated_at,
+      synced_task_id: taskId,
+    },
+  };
+  let received: WorkspaceDatabaseRecord;
+  try {
+    received = await appendRecordSectionWithEventAtomic(run.id, section, {}, event);
+  } catch (receiptError) {
+    return {
+      dry_run: false,
+      write_performed: true,
+      run: toWorkflowRunItem(updated),
+      receipt_error: workflowApprovalError(receiptError),
+      task_sync_pending: Boolean(taskId),
+    };
+  }
+
+  let syncedTask: AgentWorkItem | null = null;
+  let taskSyncError: string | null = null;
+  if (taskId) {
+    const taskState = taskStateForWorkflowRunStatus(nextStatus);
+    const taskPointerSection = `## Workflow Run Update - ${formatAgentWorkTimestamp()}
+
+Workflow run: ${fieldString(run.fields[WORKFLOW_RUN_FIELDS.name]) ?? run.id} (${run.id})
+Actor: ${input.decidedBy}
+Status: ${nextStatus}
+Current step: ${updateInput.currentStep}
+Approval needed: ${updateInput.approvalNeeded ?? "none"}
+Next step: ${updateInput.nextStep ?? "none"}
+Summary: ${updateInput.summary}
+Details: see the Workflow Runs record receipt timeline.`;
+    const taskPatch: Record<string, WorkspaceDatabaseFieldValue> | undefined = taskState ? {
+      [AGENT_TASK_FIELDS.status]: taskState.status,
+      [AGENT_TASK_FIELDS.stage]: taskState.stage,
+    } : undefined;
+    try {
+      syncedTask = toAgentWorkItem(await appendRecordSectionAtomic(taskId, taskPointerSection, taskPatch));
+    } catch (taskError) {
+      taskSyncError = workflowApprovalError(taskError);
+    }
+  }
+  return {
+    dry_run: false,
+    write_performed: true,
+    run: toWorkflowRunItem(received),
+    synced_task: syncedTask,
+    ...(taskSyncError ? { task_sync_error: taskSyncError } : {}),
+  };
+}
+
 /**
  * Record an approval decision. decidedBy is required: approval decisions are
  * never attributed to a default identity.
@@ -3500,34 +3991,28 @@ export async function resolveWorkflowApproval(input: {
   decision: WorkflowApprovalDecision;
   decisionSummary: string;
   decidedBy: string;
-  decisionRole?: string;
+  decisionRole?: string | null;
   approvalType?: string | null;
+  expectedUpdatedAt: string;
+  expectedRunVersion?: number | null;
+  expectedStepId?: string | null;
+  approvalId?: string | null;
+  expectedPayloadHash?: string | null;
   confirmWrite?: boolean;
 }) {
   const decidedBy = input.decidedBy.trim();
   if (!decidedBy) throw new Error("resolveWorkflowApproval requires decidedBy: approval decisions must name the decision maker.");
   const decisionSummary = input.decisionSummary.trim();
   if (!decisionSummary) throw new Error("resolveWorkflowApproval requires a decision summary.");
-
-  const approvalType = input.approvalType?.trim() || "workflow";
-  const decisionLabel = input.decision.replace("_", " ");
-  const nextStatus: WorkflowRunStatus =
-    input.decision === "approved" ? "In progress" : input.decision === "changes_requested" ? "Needs approval" : "Blocked";
-
-  return updateWorkflowRun({
-    workflowRunId: input.workflowRunId,
-    actor: decidedBy,
-    status: nextStatus,
-    currentStep: `Approval ${decisionLabel}: ${approvalType}`,
-    summary: `${approvalType} approval ${decisionLabel} by ${decidedBy}: ${decisionSummary}`,
-    actionsTaken: [`Resolved ${approvalType} approval as ${decisionLabel}`],
-    blockedItems: input.decision === "approved" ? undefined : [decisionSummary],
-    approvalNeeded: input.decision === "approved" ? null : decisionSummary,
-    nextStep: input.decision === "approved" ? "Resume workflow execution" : "Revise and return for approval",
-    eventKind: "approval_decision",
-    decisionRole: input.decisionRole ?? FOUNDER_APPROVAL_ROLE,
-    confirmWrite: input.confirmWrite,
-  });
+  if (!input.expectedUpdatedAt?.trim()) throw new Error("resolveWorkflowApproval requires the reviewed record revision.");
+  const run = await getWorkspaceRecord(input.workflowRunId);
+  if (run.database_id !== GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns || run.updated_at !== input.expectedUpdatedAt) {
+    throw new Error("That workflow approval changed. Review the current request before deciding.");
+  }
+  const normalized = { ...input, decidedBy, decisionSummary };
+  return fieldString(run.fields[WORKFLOW_RUN_FIELDS.schemaVersion]) === "intellizen.workflow/1"
+    ? resolveStructuredWorkflowApproval(run, normalized)
+    : resolveLegacyWorkflowApproval(run, normalized);
 }
 
 export async function listWorkflows(input: {
@@ -3663,6 +4148,26 @@ Actions taken:
 Verification:
 ${details.join("\n")}`;
 }
+
+function workflowStartAttempt(
+  workflowName: string,
+  attempt?: WorkflowStartAttempt | null,
+): WorkflowStartAttempt {
+  if (!attempt) {
+    return {
+      idempotency_key: crypto.randomUUID(),
+      run_name: `${workflowName} - ${formatAgentWorkTimestamp()}`,
+      run_started_at: new Date().toISOString(),
+      request_hash: "",
+    };
+  }
+  if (!attempt.idempotency_key.trim() || !attempt.run_name.trim()
+    || !attempt.run_started_at.trim() || !/^[a-f0-9]{64}$/i.test(attempt.request_hash)) {
+    throw new Error("A schema-v1 workflow start attempt must preserve its idempotency key, name, timestamp, and request hash.");
+  }
+  return attempt;
+}
+
 export async function startWorkflow(input: StartWorkflowInput) {
   const workflow = await getWorkflowTemplateByWorkflowId(input.workflowId);
   const workflowItem = toWorkflowTemplateItem(workflow);
@@ -3686,6 +4191,9 @@ export async function startWorkflow(input: StartWorkflowInput) {
         `Workflow definition version mismatch: field ${workflowItem.definition_version}, definition ${definition.version}.`,
       );
     }
+    if (!["ui", "chat", "agent", "mcp"].includes(input.triggerSource)) {
+      throw new Error(`Schema-v1 workflow starts do not support the ${input.triggerSource} trigger source.`);
+    }
   }
   const sourceDocumentIds = Array.from(
     new Set([
@@ -3700,7 +4208,13 @@ export async function startWorkflow(input: StartWorkflowInput) {
       ...(input.bizOpsId ? [input.bizOpsId] : []),
     ]),
   );
-  const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
+  if (definition && input.confirmWrite && !input.startAttempt) {
+    throw new Error("Confirming a schema-v1 workflow start requires the exact preview start_attempt.");
+  }
+  const startAttempt = definition
+    ? workflowStartAttempt(workflowItem.name, input.startAttempt)
+    : null;
+  const runName = startAttempt?.run_name ?? `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
   const initialNeedsApproval = !definition && Boolean(input.requiresApproval);
   const entryStep = definition?.steps[0] ?? null;
   const currentStep = initialNeedsApproval
@@ -3732,7 +4246,7 @@ export async function startWorkflow(input: StartWorkflowInput) {
       config: input.config ?? {},
     }),
     [WORKFLOW_RUN_FIELDS.receipt]: "",
-    [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
+    [WORKFLOW_RUN_FIELDS.startedAt]: startAttempt?.run_started_at ?? new Date().toISOString(),
     [WORKFLOW_RUN_FIELDS.completedAt]: null,
     ...(definition
       ? {
@@ -3770,6 +4284,36 @@ ${markdownList(sourceDocumentIds)}
 
 Context:
 ${JSON.stringify(input.context ?? {}, null, 2)}`;
+  const taxonomy = {
+    entity: "genzen",
+    area: "operations",
+    object_type: "workflow_run",
+    workflow_id: input.workflowId,
+  };
+  const schemaStartRequest = definition && startAttempt
+    ? {
+        p_workflow_record_id: workflow.id,
+        p_fields: fields,
+        p_body: body,
+        p_taxonomy: taxonomy,
+        p_entity: "genzen",
+        p_actor: input.requestedBy,
+        p_task_id: input.taskId ?? null,
+        p_biz_ops_id: input.bizOpsId ?? null,
+        p_idempotency_key: startAttempt.idempotency_key.trim(),
+        p_confirm_write: true,
+      }
+    : null;
+  const expectedStartHash = schemaStartRequest
+    ? await workflowDefinitionHash(schemaStartRequest)
+    : null;
+  const resolvedStartAttempt = startAttempt && expectedStartHash
+    ? { ...startAttempt, request_hash: expectedStartHash }
+    : null;
+  if (input.confirmWrite && startAttempt && expectedStartHash
+    && startAttempt.request_hash !== expectedStartHash) {
+    throw new Error("That schema-v1 workflow start attempt changed. Return to the preview before confirming.");
+  }
 
   if (!input.confirmWrite) {
     const schemaDryRun = definition
@@ -3791,6 +4335,9 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
             role_resolution_required: schemaDryRun.errors
               .filter((error) => error.code === "role_unavailable")
               .map((error) => error.path),
+            confirmation: resolvedStartAttempt
+              ? { start_attempt: resolvedStartAttempt, confirm_write: true }
+              : null,
           }
         : null,
       next_run: {
@@ -3805,17 +4352,36 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
     };
   }
 
+  if (schemaStartRequest && resolvedStartAttempt) {
+    const { data, error } = await supabase.schema("workspace").rpc("start_workflow_run_v1", {
+      ...schemaStartRequest,
+      p_request_hash: resolvedStartAttempt.request_hash,
+    });
+    if (error) throw new Error(error.message);
+    const result = data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : null;
+    const storedRun = result?.run && typeof result.run === "object" && !Array.isArray(result.run)
+      ? result.run as WorkspaceDatabaseRecordRow
+      : null;
+    if (!storedRun) throw new Error("Workflow start did not return its committed run.");
+    const created = toWorkspaceDatabaseRecord(storedRun);
+    return {
+      dry_run: false,
+      workflow_run_id: created.id,
+      session_id: null,
+      status: fieldString(created.fields[WORKFLOW_RUN_FIELDS.status])?.toLowerCase().replace(/\s+/g, "_") ?? "queued",
+      current_step: fieldString(created.fields[WORKFLOW_RUN_FIELDS.currentStep]),
+      run: toWorkflowRunItem(created),
+    };
+  }
+
   let created = await createWorkspaceRecord(
     {
       databaseId: GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns,
       fields,
       body,
-      taxonomy: {
-        entity: "genzen",
-        area: "operations",
-        object_type: "workflow_run",
-        workflow_id: input.workflowId,
-      },
+      taxonomy,
       skipSystemSync: true,
     },
   );

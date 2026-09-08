@@ -58,12 +58,27 @@ export function SettingsView() {
     return () => observer.disconnect();
   }, []);
   const railHidden = compact || collapsed === "true";
+  const selectSection = (id: SectionId) => {
+    setParams({ section: id }, { replace: true });
+    setMenuOpen(false);
+  };
   const navigation = (
     <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-3" aria-label="Settings sections" role="tablist" aria-orientation="vertical">
       {SECTIONS.map((item) => (
         <button key={item.id} type="button" id={`settings-tab-${item.id}`} role="tab" aria-controls="settings-panel"
-          onClick={() => { setParams({ section: item.id }, { replace: true }); setMenuOpen(false); }}
-          aria-selected={section === item.id} className="nav-node px-[11px] py-[9px] text-left">
+          onClick={() => selectSection(item.id)}
+          onKeyDown={(event) => {
+            const index = SECTIONS.findIndex((candidate) => candidate.id === item.id);
+            const next = event.key === "Home" ? 0 : event.key === "End" ? SECTIONS.length - 1
+              : event.key === "ArrowDown" ? (index + 1) % SECTIONS.length
+                : event.key === "ArrowUp" ? (index + SECTIONS.length - 1) % SECTIONS.length : null;
+            if (next === null) return;
+            event.preventDefault();
+            const target = SECTIONS[next]!.id;
+            setParams({ section: target }, { replace: true });
+            requestAnimationFrame(() => document.getElementById(`settings-tab-${target}`)?.focus());
+          }}
+          aria-selected={section === item.id} tabIndex={section === item.id ? 0 : -1} className="nav-node px-[11px] text-left">
           {item.label}
         </button>
       ))}
@@ -84,7 +99,7 @@ export function SettingsView() {
       <main className="subpane relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--base)]">
         <CollapsedRailTrigger visible={railHidden} onExpand={(event) => { menuTrigger.current = event.currentTarget; if (compact) setMenuOpen(true); else setCollapsed("false"); }} label="Expand settings menu" />
         <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 pb-1 pt-5", railHidden && "pl-14")}>
-          <div id="settings-panel" role="tabpanel" aria-label={`${SECTIONS.find((item) => item.id === section)?.label} settings`} className={`flex flex-col gap-2 ${section === "activity" ? "" : "max-w-[880px]"}`}>
+          <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${section}`} className={`flex flex-col gap-2 ${section === "activity" ? "" : "max-w-[880px]"}`}>
           {section === "providers" ? <ProvidersSettings /> : null}
           {section === "capabilities" ? <CapabilitiesSettings engineOpen={engineOpen} /> : null}
           {section === "plugins" ? <PluginsSettings /> : null}

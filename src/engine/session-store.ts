@@ -2,7 +2,11 @@
 // In memory only: Hermes keeps the durable history.
 
 import { create } from "zustand";
-import { promptWithConversationContext, readConversationContext } from "@/lib/conversation-context";
+import {
+  promptWithConversationContext,
+  readConversationContext,
+  type ConversationContextSnapshot,
+} from "@/lib/conversation-context";
 import { readPanelDraft, panelDraftMatches, clearPanelDraft } from "@/components/agent/panel-draft";
 
 import {
@@ -78,7 +82,10 @@ export interface SessionStoreState {
   /** Reopen the last Hermes-owned session for a profile, if one exists. */
   restore: (profile: string) => Promise<void>;
   /** Append the person's turn and submit it. Rejects when nothing was sent. */
-  send: (profile: string, text: string, attachments?: SessionAttachment[]) => Promise<void>;
+  send: (profile: string, text: string, attachments?: SessionAttachment[], context?: ConversationContextSnapshot | null, options?: {
+    preservePanelDraft?: boolean;
+    onQueued?: (messageId: string, sessionId: string) => void;
+  }) => Promise<void>;
   /** Remove this visible turn and everything after it, then ask the edit. */
   editAndSend: (profile: string, messageId: string, text: string) => Promise<void>;
   /** Interrupt the running turn. */
@@ -305,11 +312,11 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
     ensureSession,
     restore,
 
-    send: async (profile, text, attachments = []) => {
+    send: async (profile, text, attachments = [], context = readConversationContext(), options) => {
       const trimmed = text.trim();
-      const prompt = promptWithConversationContext(trimmed, readConversationContext());
-      const draftSnapshot = readPanelDraft(profile);
-      const accepted = () => { if (panelDraftMatches(draftSnapshot, trimmed, attachments)) clearPanelDraft(profile, draftSnapshot); };
+      const prompt = promptWithConversationContext(trimmed, context);
+      const draftSnapshot = options?.preservePanelDraft ? null : readPanelDraft(profile);
+      const accepted = () => { if (draftSnapshot && panelDraftMatches(draftSnapshot, trimmed, attachments)) clearPanelDraft(profile, draftSnapshot); };
       if (!trimmed && attachments.length === 0) throw new Error("Nothing to send.");
       await restore(profile);
       const current = get().threads[profile];
@@ -318,14 +325,16 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
       }
       const now = Date.now();
       const visible = [trimmed, ...attachments.map((attachment) => `[Attached: ${attachment.name}]`)].filter(Boolean).join("\n");
-      update(profile, (t) => ({
-        ...t,
-        error: null,
-        transcript: applyTranscriptAction(t.transcript, { type: "user", text: visible, at: now }),
-      }));
+      let messageId = "";
+      update(profile, (t) => {
+        const transcript = applyTranscriptAction(t.transcript, { type: "user", text: visible, at: now });
+        messageId = transcript.messages[transcript.messages.length - 1]?.id ?? "";
+        return { ...t, error: null, transcript };
+      });
       const client = getGatewayClient();
       try {
         let sessionId = await ensureSession(profile);
+        options?.onQueued?.(messageId, sessionId);
         const agentId = acpId(profile);
         if (agentId) {
           await submitAcpPrompt(sessionId, acpAttachmentPrompt(prompt, attachments));
@@ -339,6 +348,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
           // The gateway restarted under us: resume the durable session once.
           update(profile, (t) => ({ ...t, sessionId: null, restored: false }));
           sessionId = await ensureSession(profile);
+          options?.onQueued?.(messageId, sessionId);
           await submitPrompt(client, sessionId, await attachmentPrompt(client, sessionId, prompt, attachments));
         }
         accepted();
@@ -376,6 +386,10 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
     decideApproval: async (profile, decision, choice) => {
       const thread = get().threads[profile];
       if (!thread?.sessionId) throw new Error("No live session for this decision.");
+      if (!thread.transcript.pending.some((pending) => pending.kind === "approval" && pending.requestId === decision.requestId)) {
+        throw new Error("That request is no longer pending.");
+      }
+      if (thread.deciding) throw new Error("Another answer is already being sent for this conversation.");
       update(profile, (t) => ({ ...t, deciding: decision.requestId }));
       try {
         const agentId = acpId(profile);
@@ -387,7 +401,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
             choice,
           });
         }
-        update(profile, (t) => ({
+        update(profile, (t) => t.deciding !== decision.requestId || t.sessionId !== thread.sessionId ? t : ({
           ...t,
           deciding: null,
           transcript: applyTranscriptAction(t.transcript, {
@@ -398,18 +412,24 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
           }),
         }));
       } catch (error) {
-        update(profile, (t) => ({ ...t, deciding: null, error: errorText(error) }));
+        update(profile, (t) => t.deciding === decision.requestId && t.sessionId === thread.sessionId ? { ...t, deciding: null, error: errorText(error) } : t);
         throw error;
       }
     },
 
     decideClarify: async (profile, decision, answers) => {
+      const thread = get().threads[profile];
+      if (!thread?.sessionId) throw new Error("No live session for this decision.");
+      if (!thread.transcript.pending.some((pending) => pending.kind === "clarify" && pending.requestId === decision.requestId)) {
+        throw new Error("That request is no longer pending.");
+      }
+      if (thread.deciding) throw new Error("Another answer is already being sent for this conversation.");
       if (acpId(profile)) throw new Error("This ACP agent cannot ask structured follow-up questions yet.");
       update(profile, (t) => ({ ...t, deciding: decision.requestId }));
       try {
         await answerClarify(getGatewayClient(), decision, answers);
         const flat = Object.values(answers).flat().join(", ");
-        update(profile, (t) => ({
+        update(profile, (t) => t.deciding !== decision.requestId || t.sessionId !== thread.sessionId ? t : ({
           ...t,
           deciding: null,
           transcript: applyTranscriptAction(t.transcript, {
@@ -420,7 +440,7 @@ export const useSessionStore = create<SessionStoreState>()((set, get) => {
           }),
         }));
       } catch (error) {
-        update(profile, (t) => ({ ...t, deciding: null, error: errorText(error) }));
+        update(profile, (t) => t.deciding === decision.requestId && t.sessionId === thread.sessionId ? { ...t, deciding: null, error: errorText(error) } : t);
         throw error;
       }
     },

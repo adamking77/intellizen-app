@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Button } from "@/components/ui/button";
@@ -158,26 +158,26 @@ export function AddGraphToDocument({
       )}
     >
       <div className="grid gap-4">
-        <div className="flex gap-2" role="radiogroup" aria-label="Document destination">
-          <Button variant="secondary" className={choice === "existing" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("existing")}>Existing document</Button>
-          <Button variant="secondary" className={choice === "new" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("new")}>New document</Button>
+        <div className="flex gap-2" role="group" aria-label="Document destination">
+          <Button aria-pressed={choice === "existing"} variant="secondary" className={choice === "existing" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("existing")}>Existing document</Button>
+          <Button aria-pressed={choice === "new"} variant="secondary" className={choice === "new" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("new")}>New document</Button>
         </div>
         {choice === "existing" ? (
           docs.isPending ? (
-            <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">Loading documents…</p>
+            <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Loading documents…</p>
           ) : docs.error ? (
-            <p className="font-ui text-[var(--t-meta)] text-[var(--bad)]">Documents could not be loaded.</p>
+            <p role="alert" className="font-ui text-[length:var(--t-meta)] text-[var(--bad)]">Documents could not be loaded. <Button size="sm" variant="ghost" onClick={() => void docs.refetch()}>Retry</Button></p>
           ) : records.length ? (
             <Select value={recordId} onChange={(event) => setRecordId(event.target.value)} aria-label="Document">
               {records.map((record) => <option key={record.id} value={record.id}>{documentDisplayTitle(record)}</option>)}
             </Select>
           ) : (
-            <p className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">No documents yet. Choose New document.</p>
+            <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">No documents yet. Choose New document.</p>
           )
         ) : (
           <Input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Document title" autoFocus />
         )}
-        {add.error ? <p role="alert" className="font-ui text-[var(--t-meta)] text-[var(--bad)]">{add.error instanceof Error ? add.error.message : "The graph could not be added."}</p> : null}
+        {add.error ? <p role="alert" className="font-ui text-[length:var(--t-meta)] text-[var(--bad)]">{add.error instanceof Error ? add.error.message : "The graph could not be added."}</p> : null}
       </div>
     </AppDialog>
   );

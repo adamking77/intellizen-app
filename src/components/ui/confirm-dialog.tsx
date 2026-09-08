@@ -38,7 +38,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{message}</p>
+      <p className="font-ui text-[length:var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{message}</p>
     </AppDialog>
   );
 }

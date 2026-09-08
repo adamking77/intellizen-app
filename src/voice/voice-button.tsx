@@ -75,7 +75,7 @@ function DictateButton({ onTranscript, voice, size = 14, className }: VoiceButto
         <Mic style={{ width: size, height: size }} strokeWidth={1.7} aria-hidden />
       </button>
       {v.note ? (
-        <span role="status" className="truncate font-ui text-[var(--t-section)] text-[var(--bad)]" title={v.note}>
+        <span role="status" className="truncate font-ui text-[length:var(--t-section)] text-[var(--bad)]" title={v.note}>
           {v.note}
         </span>
       ) : null}

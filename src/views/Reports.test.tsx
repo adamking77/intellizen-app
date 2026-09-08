@@ -8,7 +8,7 @@ import { ReportsView } from "./Reports";
 import type { WorkspaceDatabaseBundle, WorkspaceDatabaseRecordModel } from "@/lib/types";
 const mocks = vi.hoisted(() => ({ bundle: vi.fn(), workflows: vi.fn(), sync: vi.fn(), publish: vi.fn(), inventory: vi.fn(), mount: vi.fn() }));
 vi.mock("@/lib/data", async () => ({ GENZEN_WORKSPACE_DATABASE_IDS: { workflowRegistry: "registry" }, DOCUMENTS_DB_FIELDS: (await import("@/lib/documents")).DOCUMENTS_DB_FIELDS, getDocumentsWorkspaceBundle: mocks.bundle, listWorkflows: mocks.workflows, syncVaultFilesToDocumentRecords: mocks.sync, createRecordFromTemplate: vi.fn(), deleteVaultFile: vi.fn(), deleteWorkspaceRecord: vi.fn(), listAllVaultFiles: vi.fn(), saveRecordAsTemplate: vi.fn(), updateWorkspaceRecord: vi.fn() }));
-vi.mock("@/components/docs/docs-rail", () => ({ DocsRail: ({ records, onSelect }: { records: WorkspaceDatabaseRecordModel[]; onSelect: (id: string) => void }) => <nav aria-label="Documents">{records.map((record) => <button key={record.id} onClick={() => onSelect(record.id)}>{String(record.doc_title)}</button>)}</nav> }));
+vi.mock("@/components/docs/docs-rail", () => ({ DocsRail: ({ records, onSelect, width }: { records: WorkspaceDatabaseRecordModel[]; onSelect: (id: string) => void; width: number | string }) => <nav aria-label="Documents" data-width={width}>{records.map((record) => <button key={record.id} onClick={() => onSelect(record.id)}>{String(record.doc_title)}</button>)}</nav> }));
 vi.mock("@/components/docs/document-page", () => ({ DocumentPage: ({ record }: { record: WorkspaceDatabaseRecordModel }) => { const [instance] = useState(() => { mocks.mount(record.id); return mocks.mount.mock.calls.length; }); return <article data-document={record.id} data-instance={instance}><h1>{String(record.doc_title)}</h1><textarea aria-label="Document content" defaultValue={record._body} /></article>; } }));
 vi.mock("@/lib/conversation-context", async (original) => ({ ...await original<typeof import("@/lib/conversation-context")>(), publishConversationContext: mocks.publish }));
 vi.mock("@/lib/document-persistence", () => ({ createPortableDocument: vi.fn() }));
@@ -70,4 +70,17 @@ it('opens the vault file by reference without fabricating a workspace document I
 it('leaves the folder browser at rest instead of automatically opening the first document', async () => {
   await render('/docs'); expect(host.querySelector('[data-document]')).toBeNull();
   expect(host.textContent).toContain('Select a document');
+});
+
+it("uses the fixed 232px aside and leaves Cmd+[ to the editor while text is focused", async () => {
+  await render();
+  expect(host.querySelector("nav[aria-label='Documents']")?.getAttribute("data-width")).toBe("232");
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "[", metaKey: true })));
+  expect(host.querySelector("nav[aria-label='Documents']")).toBeNull();
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "[", metaKey: true })));
+  const editor = host.querySelector<HTMLTextAreaElement>("textarea[aria-label='Document content']")!;
+  await act(async () => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "[", metaKey: true, bubbles: true })));
+  expect(host.querySelector("nav[aria-label='Documents']")).not.toBeNull();
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "[", metaKey: true, altKey: true })));
+  expect(host.querySelector("nav[aria-label='Documents']")).not.toBeNull();
 });

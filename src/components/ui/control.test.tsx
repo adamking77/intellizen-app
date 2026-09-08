@@ -6,10 +6,14 @@ import { Control } from "./control";
 
 describe("Control", () => {
   it("renders the closed variants", () => {
-    for (const variant of ["default", "selected", "primary", "quiet", "danger"] as const) {
+    for (const variant of ["default", "selected", "primary", "quiet", "text", "danger"] as const) {
       const html = renderToStaticMarkup(createElement(Control, { variant }, variant));
-      expect(html).toContain("--h-ctl");
-      expect(html).toContain("--r-ctl");
+      if (variant === "text") {
+        expect(html).toContain("underline");
+      } else {
+        expect(html).toContain("--h-ctl");
+        expect(html).toContain("--r-ctl");
+      }
     }
   });
 
@@ -18,5 +22,10 @@ describe("Control", () => {
     expect(html).toContain("disabled");
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("control-running-dot");
+  });
+
+  it("does not submit a containing form unless requested", () => {
+    expect(renderToStaticMarkup(createElement(Control, null, "Cancel"))).toContain('type="button"');
+    expect(renderToStaticMarkup(createElement(Control, { type: "submit" }, "Create"))).toContain('type="submit"');
   });
 });

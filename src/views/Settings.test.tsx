@@ -29,6 +29,19 @@ it("opens Activity from the Settings menu and supports its existing deep link", 
   await click("Providers");
   expect(element.textContent).toContain("Providers content");
 });
+it("uses one selected Settings tab and moves that selection with arrow keys", async () => {
+  await mount();
+  const providers = element.querySelector<HTMLButtonElement>("#settings-tab-providers")!;
+  expect(providers.tabIndex).toBe(0);
+  await act(async () => providers.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  const capabilities = element.querySelector<HTMLButtonElement>("#settings-tab-capabilities")!;
+  expect(capabilities.getAttribute("aria-selected")).toBe("true");
+  expect(capabilities.tabIndex).toBe(0);
+  expect(providers.tabIndex).toBe(-1);
+  expect(document.activeElement).toBe(capabilities);
+  expect(element.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe("settings-tab-capabilities");
+});
 it("keeps Activity selected while the shared rail collapses and restores", async () => {
   await mount("/settings?section=activity");
   expect(element.querySelector('[data-collapsible-rail="Settings"]')).toBeTruthy();
@@ -65,6 +78,11 @@ it("moves a cramped Settings rail into the shared overlay without changing the s
     expect(element.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Expand settings menu");
     await click("Expand settings menu");
+    const activity = element.querySelector<HTMLButtonElement>("#settings-tab-activity")!;
+    await act(async () => activity.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(element.querySelector('[role="dialog"][aria-label="Settings navigation"]')).toBeTruthy();
+    expect(document.activeElement?.id).toBe("settings-tab-appearance");
     await click("Capabilities");
     expect(element.querySelector('[role="dialog"]')).toBeNull();
     expect(element.querySelector('[role="tabpanel"]')?.textContent).toContain("Capabilities content");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { recordProposalDecision } from "@/lib/data/work-receipts";
@@ -22,25 +22,37 @@ async function proposalReceipt(input: Parameters<typeof recordProposalDecision>[
  *  is a proposal taking two seconds to show. Upgrade path is a Tauri event from
  *  a `notify` watcher on the proposals folder; accept/reject do not change. */
 export function useProposals(docPath: string | null) {
-  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [proposals, setProposals] = useState<Proposal[] | null>(docPath ? null : []);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const pathRef = useRef(docPath);
+  const reloadRef = useRef(0);
+  pathRef.current = docPath;
 
   const reload = useCallback(async () => {
+    const request = ++reloadRef.current;
     if (!docPath) {
       setProposals([]);
+      setLoadError(null);
       return;
     }
     try {
-      setProposals(await invoke<Proposal[]>("proposals_list", { docPath }));
-    } catch {
-      // A folder that cannot be read is "nothing waiting": the document is fine.
-      setProposals([]);
+      const next = await invoke<Proposal[]>("proposals_list", { docPath });
+      if (request !== reloadRef.current || pathRef.current !== docPath) return;
+      setProposals(next);
+      setLoadError(null);
+    } catch (cause) {
+      if (request !== reloadRef.current || pathRef.current !== docPath) return;
+      setProposals(null);
+      setLoadError(`Suggested edits could not be read: ${String(cause)}`);
     }
   }, [docPath]);
 
   useEffect(() => {
-    setError(null);
+    setLoadError(null);
+    setActionError(null);
     void reload();
     if (!docPath) return;
     const timer = setInterval(() => void reload(), 2000);
@@ -54,7 +66,10 @@ export function useProposals(docPath: string | null) {
   const accept = useCallback(
     async (id: string, taken: Hunk[], dropped: Hunk[]): Promise<string | null> => {
       if (!docPath) return null;
+      if (busyRef.current) throw new Error("A document proposal decision is already in progress.");
+      busyRef.current = true;
       setBusy(true);
+      setActionError(null);
       try {
         let text: string | null = null;
         let receiptError: string | null = null;
@@ -63,16 +78,22 @@ export function useProposals(docPath: string | null) {
           receiptError = await proposalReceipt({ proposalId: id, docPath, decision: "accepted", hunkCount: taken.length, actor: "Adam" });
         }
         if (dropped.length > 0) {
-          await invoke("proposal_reject_hunk", { docPath, id, hunks: dropped });
-          const droppedReceiptError = await proposalReceipt({ proposalId: id, docPath, decision: "rejected", hunkCount: dropped.length, actor: "Adam" });
-          receiptError ??= droppedReceiptError;
+          try {
+            await invoke("proposal_reject_hunk", { docPath, id, hunks: dropped });
+            const droppedReceiptError = await proposalReceipt({ proposalId: id, docPath, decision: "rejected", hunkCount: dropped.length, actor: "Adam" });
+            receiptError ??= droppedReceiptError;
+          } catch (cause) {
+            if (text === null) throw cause;
+            receiptError = `The accepted edits were applied, but the rejected edits could not be removed: ${String(cause)}`;
+          }
         }
-        setError(receiptError);
+        setActionError(receiptError);
         return text;
       } catch (e) {
-        setError(String(e));
-        return null;
+        setActionError(String(e));
+        throw e;
       } finally {
+        busyRef.current = false;
         setBusy(false);
         void reload();
       }
@@ -80,24 +101,7 @@ export function useProposals(docPath: string | null) {
     [docPath, reload],
   );
 
-  const reject = useCallback(
-    async (id: string) => {
-      if (!docPath) return;
-      setBusy(true);
-      try {
-        await invoke("proposal_reject_hunk", { docPath, id, hunks: [] });
-        setError(await proposalReceipt({ proposalId: id, docPath, decision: "rejected", hunkCount: 1, actor: "Adam" }));
-      } catch (e) {
-        setError(String(e));
-      } finally {
-        setBusy(false);
-        void reload();
-      }
-    },
-    [docPath, reload],
-  );
-
-  return { proposals, accept, reject, busy, error, reload };
+  return { proposals, accept, busy, error: actionError ?? loadError, reload };
 }
 
 /** Counts waiting hunks so the document rail can lift them above folders. */

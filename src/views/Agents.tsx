@@ -8,27 +8,33 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, NewCard, Tag } from "@/components/agents/agent-card";
 import { AgentEditor } from "@/components/agents/agent-editor";
 import { blankAgent, engineLabel, isHermes, profileOf, teamMembers, type Agent, type Team } from "@/components/agents/agent-model";
-import { deleteAgent, describeHermesAgent, listAgents, loadAvatar, saveAgent, setAvatar } from "@/components/agents/agents-data";
-import { Avatar, TeamStack } from "@/components/agents/avatar";
+import { deleteAgent, describeHermesAgent, listAgents, loadAvatar, saveAgent } from "@/components/agents/agents-data";
+import { Avatar, TeamStack, identityColor } from "@/components/agents/avatar";
 import { TeamSheet } from "@/components/agents/team-sheet";
 import { deleteTeam, loadTeams, newTeamId, saveTeam } from "@/components/agents/teams-store";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Control } from "@/components/ui/control";
+import { Segmented } from "@/components/ui/segmented";
+import { MotionList, MotionListItem } from "@/components/ui/motion";
 import { useEngineStore } from "@/engine/engine-store";
 import { discoverAcpProviders } from "@/engine/acp-registry";
 import { getGatewayClient } from "@/engine/gateway";
 import { useSessionStore } from "@/engine/session-store";
+import { transcriptBusy } from "@/engine/transcript";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
-import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
+import { DEFAULT_AGENT_CONTEXT_KEY, usePreference, useStringListPreference } from "@/lib/settings-preferences";
+import { useRestingAgents } from "@/lib/session-mode";
 import { errorMessage, toast } from "@/lib/toast";
 import { groupMemberKey } from "@/rooms/group-membership";
 import { hasGroupChatNameBase } from "@/rooms/group-chat";
 import { createRoom, ensureRoomsLoaded, listRooms } from "@/rooms/rooms";
 import type { GroupMember } from "@/rooms/types";
 
-const TITLE = "font-ui text-[var(--t-title)] font-light uppercase tracking-[0.16em] text-[var(--text)]";
+const TITLE = "font-ui text-[24px] font-light leading-[1.3] text-[var(--text)]";
+const EYEBROW = "font-mono text-[length:var(--t-count)] uppercase tracking-[0.1em] text-[var(--text-muted)]";
 const GRID = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]";
 const ACTION =
-  "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[var(--t-meta)] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
+  "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-3.5 py-1.5 font-ui text-[length:var(--t-meta)] text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-50";
 
 /** Point the real panel at this profile, reveal it, and focus its composer. */
 function talkTo(target: string) {
@@ -44,10 +50,14 @@ export function AgentsView() {
 
 function AgentDirectory() {
   const [defaultContext] = useStringListPreference(DEFAULT_AGENT_CONTEXT_KEY);
+  const [storedAgentView, setStoredAgentView] = usePreference("intelizen:agents-view", "cards");
+  const agentView = storedAgentView === "list" ? "list" : "cards";
+  const setAgentView = setStoredAgentView;
+  const resting = useRestingAgents();
   const client = getGatewayClient();
   const queryClient = useQueryClient();
   const engineOpen = useEngineStore((s) => s.connection === "open");
-  const engineError = useEngineStore((s) => s.error);
+  const threads = useSessionStore((state) => state.threads);
 
   const list = useQuery({
     queryKey: ["agents", "list", engineOpen],
@@ -61,6 +71,20 @@ function AgentDirectory() {
     staleTime: 15_000,
   });
   const agents = list.data?.agents ?? [];
+  const toggleRest = useCallback((agentId: string) => {
+    if (!resting.ready) return;
+    resting.setRestingAgents(resting.restingAgents.includes(agentId)
+      ? resting.restingAgents.filter((id) => id !== agentId)
+      : [...resting.restingAgents, agentId]);
+  }, [resting]);
+  const agentState = (agent: Agent) => {
+    if (resting.restingAgents.includes(agent.id)) return { text: "Resting locally. Work keeps going.", active: false };
+    const key = isHermes(agent) ? profileOf(agent.id)! : agent.id;
+    const thread = threads[key];
+    return thread?.opening || (thread && transcriptBusy(thread.transcript))
+      ? { text: "Working in its conversation.", active: true }
+      : { text: "On demand.", active: false };
+  };
   const providerOptions = [
     { id: "hermes" as const, label: "Hermes", available: engineOpen },
     ...(discoveredProviders.data ?? []).map((provider) => ({
@@ -145,6 +169,7 @@ function AgentDirectory() {
       model: agent.model || null,
       provider: agent.provider || engineLabel(agent.engine),
       avatar_style: agent.avatarStyle,
+      avatar_seed: agent.avatarSeed,
       avatar_kind: agent.avatarKind,
       avatar_color: agent.avatarColor,
     }));
@@ -165,23 +190,26 @@ function AgentDirectory() {
   return (
     <div className="relative h-full overflow-y-auto bg-[var(--base)] px-3 py-4 sm:px-6 sm:py-5">
       {offline ? (
-        <Notice tone="bad">Hermes is offline{engineError ? ` — ${engineError}` : ""}. Hermes profiles are unavailable; ACP agents and teams remain editable.</Notice>
+        <Notice tone="bad">Hermes is offline. Profiles are unavailable; ACP agents and teams remain editable.</Notice>
       ) : list.error ? (
-        <Notice tone="bad">Your agents could not be read — {errorMessage(list.error)}. Nothing below is missing; the app cannot see it.</Notice>
+        <Notice tone="bad" action={<Control size="sm" variant="text" onClick={() => void list.refetch()}>Retry</Control>}>The agent list is unavailable. Your saved agents are unchanged.</Notice>
       ) : acpTrouble ? (
-        <Notice tone="wait">The ACP registry could not be read — {acpTrouble}. Hermes profiles are listed; command-line agents are not.</Notice>
+        <Notice tone="wait">Command-line agent availability is unavailable. Hermes profiles remain listed.</Notice>
       ) : null}
 
       {list.isSuccess && agents.length === 0 ? (
-        <p className="max-w-[520px] pb-4 font-ui text-[var(--t-meta)] leading-[1.5] text-[var(--text-muted)]">
-          No agents yet. Make one below — a Hermes profile or any installed ACP command-line agent.
+        <p className="max-w-[520px] pb-4 font-ui text-[length:var(--t-meta)] leading-[1.5] text-[var(--text-muted)]">
+          No agents yet. Create a Hermes profile or add an installed command-line agent.
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-3.5 pb-4">
-        <h1 className={TITLE}>Agents</h1>
-        {list.isSuccess ? <Tag>{agents.length} configured</Tag> : null}
+      <div className="flex flex-wrap items-end gap-3.5 pb-5">
+        <div>
+          <p className={EYEBROW}>Agents{list.isSuccess ? ` · ${agents.length} configured` : ""}</p>
+          <h1 className={`${TITLE} mt-1`}>Agents and teams available for work.</h1>
+        </div>
         <div className="grow" />
+        <Segmented value={agentView} options={[{ value: "cards", label: "Cards" }, { value: "list", label: "List" }]} onValueChange={setAgentView} label="Agent view" />
         <button type="button" className={ACTION} onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })}>
           New agent
         </button>
@@ -193,40 +221,66 @@ function AgentDirectory() {
             <div key={i} className="h-[150px] rounded-[var(--r-plane)] bg-[var(--mantle)] opacity-60" />
           ))}
         </div>
+      ) : agentView === "cards" ? (
+        <MotionList className={GRID}>
+          {agents.map((a) => {
+            const state = agentState(a);
+            return (
+              <MotionListItem key={a.id} className="h-full [&>*]:h-full">
+                <Card
+                  label={a.displayName}
+                  onOpen={() => setEditing({ agent: a, creating: false })}
+                  items={[
+                    { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
+                    { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
+                    ...(resting.ready ? [{ label: resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today", onSelect: () => toggleRest(a.id) }] : []),
+                    { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
+                  ]}
+                >
+                  <Avatar agent={a} size={44} image={images[a.id]} />
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="font-ui text-[length:var(--t-body)] text-[var(--text)]">{a.displayName}</span>
+                    <span className="font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
+                    <span className="line-clamp-2 font-ui text-[length:var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>{a.role || "No role recorded."}</span>
+                    <span className="font-ui text-[length:var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {resting.restingAgents.includes(a.id) ? <Tag>Resting today · Restore in actions</Tag> : null}
+                    {a.isDefault ? <span className="font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">default</span> : null}
+                  </div>
+                </Card>
+              </MotionListItem>
+            );
+          })}
+          <MotionListItem key="new-agent" className="h-full [&>*]:h-full">
+            <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
+          </MotionListItem>
+        </MotionList>
       ) : (
-        <div className={GRID}>
-          {agents.map((a) => (
-            <Card
-              key={a.id}
-              label={a.displayName}
-              onOpen={() => setEditing({ agent: a, creating: false })}
-              items={[
-                { label: "Open in chat", onSelect: () => talkTo(isHermes(a) ? profileOf(a.id)! : a.id) },
-                { label: "Edit agent…", onSelect: () => setEditing({ agent: a, creating: false }) },
-                { label: "Delete", variant: "danger" as const, onSelect: () => setConfirming({ kind: "agent", agent: a }) },
-              ]}
-            >
-              <Avatar agent={a} size={48} image={images[a.id]} />
-              <div className="flex flex-col gap-[3px]">
-                <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{a.displayName}</span>
-                <span className="line-clamp-2 font-ui text-[var(--t-meta)] leading-[1.4] text-[var(--text-muted)]" title={a.role}>
-                  {a.role}
+        <MotionList className="divide-y divide-[var(--row-line)] border-y border-[var(--row-line)]">
+          {agents.map((a) => {
+            const state = agentState(a);
+            return <MotionListItem key={a.id} className="flex flex-wrap items-center gap-3 py-3">
+              <button type="button" className="flex min-w-0 grow items-center gap-3 text-left" onClick={() => setEditing({ agent: a, creating: false })}>
+                <Avatar agent={a} size={26} image={images[a.id]} />
+                <span className="min-w-0">
+                  <span className="block font-ui text-[length:var(--t-ui)] text-[var(--text)]">{a.displayName}</span>
+                  <span className="block truncate font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">{engineLabel(a.engine)} · {a.model || "default model"}</span>
                 </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-[7px]">
-                <Tag>{engineLabel(a.engine)}</Tag>
-                <span className="font-mono text-[var(--t-section)] text-[var(--text-muted)]">{a.model}</span>
-                {a.isDefault ? <span className="font-mono text-[var(--t-count)] text-[var(--text-muted)]">default</span> : null}
-              </div>
-            </Card>
-          ))}
-          <NewCard label="New agent" onClick={() => setEditing({ agent: blankAgent(newAgentEngine), creating: true })} />
-        </div>
+              </button>
+              <span className="max-w-[360px] truncate font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">{a.role || "No role recorded."}</span>
+              <span className="font-ui text-[length:var(--t-meta)]" style={{ color: state.active ? identityColor(a.displayName, a.avatarColor) : "var(--text-muted)" }}>{state.text}</span>
+              <button type="button" className={ACTION} onClick={() => talkTo(isHermes(a) ? profileOf(a.id)! : a.id)}>Message</button>
+              {resting.ready ? <button type="button" className={ACTION} onClick={() => toggleRest(a.id)}>{resting.restingAgents.includes(a.id) ? "Restore" : "Rest for today"}</button> : null}
+              <button type="button" className={ACTION} onClick={() => setEditing({ agent: a, creating: false })}>Edit</button>
+            </MotionListItem>;
+          })}
+        </MotionList>
       )}
 
       {/* Teams: below the agents, because a team is made of them. */}
       <div className="flex flex-wrap items-center gap-3.5 pb-4 pt-[30px]">
-        <h1 className={TITLE}>Teams</h1>
+        <h2 className="font-ui text-[20px] font-light leading-[1.3] text-[var(--text)]">Teams</h2>
         {(teams.data?.length ?? 0) > 0 ? <Tag>{teams.data!.length}</Tag> : null}
         <div className="grow" />
         <button type="button" className={ACTION} disabled={agents.length < 2} onClick={() => setTeamSheet(true)}>
@@ -234,9 +288,9 @@ function AgentDirectory() {
         </button>
       </div>
       {teams.error ? (
-        <Notice tone="bad">Teams could not be read — {errorMessage(teams.error)}.</Notice>
+        <Notice tone="bad" action={<Control size="sm" variant="text" onClick={() => void teams.refetch()}>Retry</Control>}>Teams are unavailable. Your saved teams are unchanged.</Notice>
       ) : agents.length < 2 ? (
-        <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">A team is two or more agents answering in turn. Make a second agent first.</span>
+        <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">A team is two or more agents answering in turn. Make a second agent first.</span>
       ) : (
         <div className={GRID}>
           {(teams.data ?? []).map((t) => {
@@ -254,12 +308,12 @@ function AgentDirectory() {
               >
                 <TeamStack agents={members} size={34} images={images} />
                 <div className="flex flex-col gap-[3px]">
-                  <span className="font-ui text-[var(--t-body)] text-[var(--text)]">{t.name}</span>
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">{members.map((m) => m.displayName).join(", ")}</span>
+                  <span className="font-ui text-[length:var(--t-body)] text-[var(--text)]">{t.name}</span>
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">{members.map((m) => m.displayName).join(", ")}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-[7px]">
                   <Tag>{members.length} agents</Tag>
-                  <span className="font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+                  <span className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
                     {t.projects.length === 0 ? "no project yet" : t.projects.length === 1 ? "1 project" : `${t.projects.length} projects`}
                   </span>
                 </div>
@@ -277,16 +331,10 @@ function AgentDirectory() {
           creating={editing!.creating}
           loadingDetail={detail.isFetching}
           detailError={detail.error ? errorMessage(detail.error) : null}
-          image={images[opened.id] ?? null}
           defaultContext={defaultContext}
           providers={providerOptions}
           onSave={(draft, confirmModel) => save.mutateAsync({ draft, confirmModel }).then(() => undefined)}
           onDelete={(a) => setConfirming({ kind: "agent", agent: a })}
-          onPickImage={async (url) => {
-            await setAvatar(client, opened, url);
-            setImages((m) => ({ ...m, [opened.id]: url }));
-            void refresh();
-          }}
           onClose={() => setEditing(null)}
         />
       ) : null}
@@ -340,13 +388,6 @@ function AgentDirectory() {
   );
 }
 
-function Notice({ tone, children }: { tone: "bad" | "wait"; children: React.ReactNode }) {
-  return (
-    <div
-      className="mb-4 rounded-[var(--r-ctl)] border px-3 py-2 font-ui text-[var(--t-meta)] leading-[1.5]"
-      style={{ borderColor: `var(--${tone})`, color: `var(--${tone})`, background: `color-mix(in srgb, var(--${tone}) 11%, transparent)` }}
-    >
-      {children}
-    </div>
-  );
+function Notice({ tone, children, action }: { tone: "bad" | "wait"; children: React.ReactNode; action?: React.ReactNode }) {
+  return <p role={tone === "bad" ? "alert" : "status"} className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 font-ui text-[length:var(--t-meta)] leading-[1.5] text-[var(--text-muted)]"><span>{tone === "bad" ? <span className="text-[var(--bad)]">Failed · </span> : null}{children}</span>{action}</p>;
 }

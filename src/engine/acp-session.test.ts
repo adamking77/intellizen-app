@@ -19,15 +19,23 @@ import { TurnError } from "./session";
 
 class FakeBridge implements AcpBridge {
   calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  sessionIds = new Map<string, string>();
+  startGate: Promise<void> | null = null;
   private handlers = new Set<(e: AcpEnvelope) => void>();
   listenCount = 0;
   failOn: string | null = null;
+  stringFailure = false;
 
   async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     this.calls.push({ command, args });
-    if (this.failOn === command) throw new Error(`${command} refused`);
+    if (this.failOn === command) {
+      if (this.stringFailure) throw `${command} refused by native policy`;
+      throw new Error(`${command} refused`);
+    }
     if (command === "acp_start") {
-      return { agentId: args?.agentId, sessionId: args?.caller === "room:alpha" ? "sess-room" : "sess-1", pid: 42 } as T;
+      await this.startGate;
+      const caller = String(args?.caller ?? "");
+      return { agentId: args?.agentId, sessionId: this.sessionIds.get(caller) ?? (caller === "room:alpha" ? "sess-room" : "sess-1"), pid: 42 } as T;
     }
     return undefined as T;
   }
@@ -71,6 +79,14 @@ describe("acp session helpers send the Tauri command shapes", () => {
       { command: "acp_cancel", args: { sessionId: "sess-1" } },
     ]);
     expect(bridge.listenCount).toBe(1);
+  });
+
+  it("starts workflow read-only work in a separate restricted process", async () => {
+    await expect(createAcpSession("cc", "workflow", null, "read-only")).resolves.toBe("sess-1");
+    expect(bridge.calls[0]).toEqual({
+      command: "acp_start",
+      args: { agentId: "cc", caller: "workflow", mode: "read-only" },
+    });
   });
 
   it("presents the gateway-shaped client used by rooms", async () => {
@@ -169,8 +185,48 @@ describe("runAcpPrompt", () => {
     });
   });
 
+  it("keeps concurrent isolated callers on separate sessions and stops each one", async () => {
+    bridge.sessionIds.set("workflow:assignment-a", "sess-a");
+    bridge.sessionIds.set("workflow:assignment-b", "sess-b");
+    const first = runAcpPrompt({ agentId: "cc", text: "first", caller: "workflow:assignment-a", mode: "read-only", isolated: true });
+    const second = runAcpPrompt({ agentId: "cc", text: "second", caller: "workflow:assignment-b", mode: "read-only", isolated: true });
+    await vi.advanceTimersByTimeAsync(0);
+    bridge.emit("message.delta", { text: "two" }, "sess-b");
+    bridge.emit("message.complete", { status: "complete" }, "sess-b");
+    bridge.emit("message.delta", { text: "one" }, "sess-a");
+    bridge.emit("message.complete", { status: "complete" }, "sess-a");
+    await expect(first).resolves.toEqual({ sessionId: "sess-a", text: "one" });
+    await expect(second).resolves.toEqual({ sessionId: "sess-b", text: "two" });
+    expect(bridge.calls.filter((call) => call.command === "acp_start").map((call) => call.args?.caller)).toEqual(["workflow:assignment-a", "workflow:assignment-b"]);
+    expect(bridge.calls.filter((call) => call.command === "acp_stop").map((call) => call.args?.sessionId).sort()).toEqual(["sess-a", "sess-b"]);
+  });
+
+  it("does not submit when the signal aborts while an isolated session starts", async () => {
+    let releaseStart!: () => void;
+    bridge.startGate = new Promise((resolve) => { releaseStart = resolve; });
+    const controller = new AbortController();
+    const run = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:delayed", mode: "read-only", isolated: true, signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+    await Promise.resolve();
+    controller.abort();
+    releaseStart();
+    await run;
+    expect(bridge.calls.map((call) => call.command)).toEqual(["acp_start", "acp_cancel", "acp_stop"]);
+  });
+
+  it("requires an explicit caller for isolated work", async () => {
+    await expect(runAcpPrompt({ agentId: "cc", text: "x", mode: "read-only", isolated: true })).rejects.toThrow("explicit caller");
+    expect(bridge.calls).toEqual([]);
+  });
+
+  it("preserves a native session-start rejection as an Error", async () => {
+    bridge.failOn = "acp_start";
+    bridge.stringFailure = true;
+    await expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:rejected", mode: "read-only", isolated: true }))
+      .rejects.toThrow("acp_start refused by native policy");
+  });
+
   it("rejects on an error, an interruption and a timeout", async () => {
-    const failed = expect(runAcpPrompt({ agentId: "cc", text: "x" })).rejects.toMatchObject({
+    const failed = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:failed", mode: "read-only", isolated: true })).rejects.toMatchObject({
       name: "TurnError",
       status: "error",
       message: "not logged in",
@@ -179,23 +235,34 @@ describe("runAcpPrompt", () => {
     bridge.emit("message.complete", { status: "error", error: "not logged in" });
     await failed;
 
-    const stopped = expect(runAcpPrompt({ agentId: "cc", text: "x" })).rejects.toBeInstanceOf(TurnError);
+    const stopped = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:stopped", mode: "read-only", isolated: true })).rejects.toBeInstanceOf(TurnError);
     await vi.advanceTimersByTimeAsync(0);
     bridge.emit("message.complete", { status: "interrupted" });
     await stopped;
 
-    const slow = expect(runAcpPrompt({ agentId: "cc", text: "x", timeoutMs: 1_000 })).rejects.toMatchObject({
+    const slow = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:slow", mode: "read-only", isolated: true, timeoutMs: 1_000 })).rejects.toMatchObject({
       status: "timeout",
     });
     await vi.advanceTimersByTimeAsync(1_001);
     await slow;
     expect(bridge.calls.filter((c) => c.command === "acp_cancel")).toHaveLength(1);
+    expect(bridge.calls.filter((c) => c.command === "acp_stop")).toHaveLength(3);
+  });
+
+  it("stops an isolated session after abort", async () => {
+    const controller = new AbortController();
+    const run = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:abort", mode: "read-only", isolated: true, signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await run;
+    expect(bridge.calls.filter((call) => call.command === "acp_stop")).toEqual([{ command: "acp_stop", args: { sessionId: "sess-1" } }]);
   });
 
   it("surfaces a prompt the adapter refused", async () => {
     bridge.failOn = "acp_prompt";
-    const run = expect(runAcpPrompt({ agentId: "cc", text: "x" })).rejects.toThrow("acp_prompt refused");
+    const run = expect(runAcpPrompt({ agentId: "cc", text: "x", caller: "workflow:refused", mode: "read-only", isolated: true })).rejects.toThrow("acp_prompt refused");
     await vi.advanceTimersByTimeAsync(0);
     await run;
+    expect(bridge.calls.at(-1)).toEqual({ command: "acp_stop", args: { sessionId: "sess-1" } });
   });
 });

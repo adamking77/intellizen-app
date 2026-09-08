@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { Control } from "@/components/ui/control";
 import { Select } from "@/components/ui/select";
+import { Segmented } from "@/components/ui/segmented";
 import {
   FLAVORS,
   DEFAULT_SELECTION_STRENGTH,
   MAX_SELECTION_STRENGTH,
   MIN_SELECTION_STRENGTH,
+  applyContrastLevel,
   applyPanes,
   applySavedTheme,
   applySelectionStrength,
   applyTheme,
   flavorById,
   isLight,
+  loadContrastLevel,
   loadPanes,
   loadSelectionStrength,
   loadSystemThemePreferences,
@@ -23,6 +27,7 @@ import {
   saveTheme,
   systemAppearance,
   SYSTEM_APPEARANCE_CHANGED_EVENT,
+  type ContrastLevel,
   type Flavor,
   type Panes,
   type SystemAppearance,
@@ -33,11 +38,11 @@ import { cn } from "@/lib/utils";
 import { SettingSwitch } from "./setting-switch";
 import { SETTINGS_TITLE } from "./settings-style";
 
-const caps = "font-ui text-[var(--t-section)] font-light uppercase tracking-[0.14em] text-[var(--text-muted)]";
+const caps = "font-mono text-[9.5px] font-normal uppercase tracking-[0.08em] text-[var(--text-muted)]";
 const card =
-  "flex flex-col gap-2 rounded-[var(--r-plane)] p-2.5 text-left text-[var(--text)] motion-safe:transition-[background-color,box-shadow] hover:bg-[var(--raised)]";
+  "flex flex-col gap-2 rounded-[var(--r-ctl)] p-2.5 text-left text-[var(--text)] transition-colors hover:bg-[var(--raised)]";
 const activeTag =
-  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[var(--t-section)] text-[var(--accent-text)]";
+  "whitespace-nowrap rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] px-2 py-px text-[length:var(--t-section)] text-[var(--accent-text)]";
 
 /** The two arrangements, drawn rather than described: three panes at the
  *  shell's proportions, joined by a hairline or held apart over the window. */
@@ -86,6 +91,7 @@ function AccentPicker({
     >
       <div
         role="dialog"
+        id="appearance-accent-picker"
         aria-label="Accent"
         aria-modal="true"
         tabIndex={-1}
@@ -139,7 +145,7 @@ function AccentPicker({
 
         <div className="flex min-h-[22px] items-center gap-2">
           <span className="h-[18px] w-[18px] rounded-[var(--r-pill)]" style={{ background: shown.hex }} />
-          <span className="text-[var(--t-ui)]">{shown.name}</span>
+          <span className="text-[length:var(--t-ui)]">{shown.name}</span>
           <span className="font-mono text-xs text-[var(--text-muted)]">{shown.hex}</span>
         </div>
 
@@ -148,9 +154,9 @@ function AccentPicker({
         </p>
 
         <div className="flex justify-end">
-          <Button variant="secondary" size="sm" onClick={onClose}>
+          <Control size="sm" onClick={onClose}>
             Done
-          </Button>
+          </Control>
         </div>
       </div>
     </div>
@@ -165,8 +171,10 @@ export function AppearanceSection() {
   const [systemTheme, setSystemTheme] = useState(loadSystemThemePreferences);
   const [theme, setTheme] = useState(() => resolveTheme(appearance));
   const [panes, setPanes] = useState(loadPanes);
+  const [contrastLevel, setContrastLevel] = useState(loadContrastLevel);
   const [selectionStrength, setSelectionStrength] = useState(loadSelectionStrength);
   const [picking, setPicking] = useState(false);
+  const accentTrigger = useRef<HTMLButtonElement>(null);
   const active = flavorById(theme.flavor);
   const accentName = active.accents.find((a) => a.hex === theme.accent)?.name ?? "custom";
   const lightFlavors = FLAVORS.filter((flavor) => isLight(flavor.id));
@@ -215,11 +223,21 @@ export function AppearanceSection() {
     applySelectionStrength(next);
   }
 
+  function commitContrastLevel(next: ContrastLevel) {
+    setContrastLevel(next);
+    applyContrastLevel(next);
+  }
+
+  function closeAccentPicker() {
+    setPicking(false);
+    requestAnimationFrame(() => accentTrigger.current?.focus());
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <h1 className={SETTINGS_TITLE}>Appearance</h1>
-      <p className="pb-2.5 text-[var(--t-ui)] leading-normal text-[var(--text-muted)]">
-        Calmppuccin, seven flavors. Each carries its own fourteen accents.
+      <p className="pb-2.5 text-[length:var(--t-ui)] leading-normal text-[var(--text-muted)]">
+        Choose the app’s colors, accent, contrast, and pane arrangement.
       </p>
 
       <div className="flex items-center gap-3 rounded-[var(--r-ctl)] bg-[var(--mantle)] px-3 py-2.5">
@@ -229,7 +247,7 @@ export function AppearanceSection() {
           onToggle={() => commitSystemTheme({ ...systemTheme, followSystem: !systemTheme.followSystem })}
         />
         <div>
-          <div className="text-[var(--t-ui)] text-[var(--text)]">Follow system</div>
+          <div className="text-[length:var(--t-ui)] text-[var(--text)]">Follow system</div>
           <div className="text-xs text-[var(--text-muted)]">Switch light and dark flavors with macOS.</div>
         </div>
       </div>
@@ -237,7 +255,7 @@ export function AppearanceSection() {
       {systemTheme.followSystem ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
-            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Light appearance</span>
+            <span className={cn(caps, "mb-2 block text-[length:var(--t-count)]")}>Light appearance</span>
             <Select
               value={systemTheme.lightFlavor}
               containerClassName="flex"
@@ -247,7 +265,7 @@ export function AppearanceSection() {
             </Select>
           </label>
           <label className="rounded-[var(--r-plane)] bg-[var(--mantle)] p-3">
-            <span className={cn(caps, "mb-2 block text-[var(--t-count)]")}>Dark appearance</span>
+            <span className={cn(caps, "mb-2 block text-[length:var(--t-count)]")}>Dark appearance</span>
             <Select
               value={systemTheme.darkFlavor}
               containerClassName="flex"
@@ -267,7 +285,7 @@ export function AppearanceSection() {
               type="button"
               aria-pressed={on}
               onClick={() => commit(flavor.id, swatch)}
-              className={cn(card, on ? "bg-[var(--raised)]" : "bg-[var(--mantle)]")}
+              className={cn(card, on ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : "bg-[var(--mantle)]")}
             >
               <div className="flex h-[92px] overflow-hidden rounded-[var(--r-ctl)]">
                 {flavor.planes.map((plane, i) => (
@@ -276,7 +294,7 @@ export function AppearanceSection() {
                 <div className="w-[18px]" style={{ background: swatch }} />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--t-ui)]">{flavor.name}</span>
+                <span className="text-[length:var(--t-ui)]">{flavor.name}</span>
                 {on ? <span className={activeTag}>active</span> : null}
               </div>
             </button>
@@ -285,17 +303,20 @@ export function AppearanceSection() {
       </div>}
 
       <div className="flex items-center gap-3 pt-[18px]">
-        <span className={cn(caps, "text-[var(--t-count)]")}>Accent</span>
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Accent</span>
         <button
+          ref={accentTrigger}
           type="button"
           onClick={() => setPicking(true)}
-          className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[var(--t-ui)] text-[var(--text)] motion-safe:transition-colors hover:bg-[var(--raised)]"
+          aria-label={`Choose accent, ${accentName}`}
+          aria-haspopup="dialog"
+          aria-expanded={picking}
+          aria-controls="appearance-accent-picker"
+          className="flex h-[var(--h-ctl)] items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--mantle)] py-[7px] pl-2 pr-3 text-[length:var(--t-ui)] text-[var(--text)] transition-colors hover:bg-[var(--raised)]"
         >
           <span className="h-[22px] w-[22px] rounded-[var(--r-pill)]" style={{ background: theme.accent }} />
           {accentName}
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          <ChevronDown className="h-4 w-4" strokeWidth={1.5} aria-hidden />
         </button>
         <span className="text-xs text-[var(--text-muted)]">
           Switching flavor keeps this choice, in that flavor's own palette.
@@ -303,7 +324,19 @@ export function AppearanceSection() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-[18px]">
-        <label htmlFor="selection-strength" className={cn(caps, "text-[var(--t-count)]")}>
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Readability</span>
+        <Segmented
+          kind="choice"
+          label="Readability"
+          value={contrastLevel}
+          options={[{ value: "calm", label: "Calm" }, { value: "clear", label: "Clear" }, { value: "strong", label: "Strong" }]}
+          onValueChange={commitContrastLevel}
+        />
+        <span className="text-xs text-[var(--text-muted)]">Raises metadata and separator contrast without changing the accent.</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 pt-[18px]">
+        <label htmlFor="selection-strength" className={cn(caps, "text-[length:var(--t-count)]")}>
           Accent Strength
         </label>
         <input
@@ -313,16 +346,17 @@ export function AppearanceSection() {
           max={MAX_SELECTION_STRENGTH}
           step="0.01"
           value={selectionStrength}
+          aria-valuetext={`${Math.round(selectionStrength * 100)}% accent strength`}
           onChange={(event) => commitSelectionStrength(Number(event.currentTarget.value))}
           className="selection-strength"
         />
-        <button
-          type="button"
-          className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] px-2.5 text-xs text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+        <Control
+          size="sm"
+          variant="quiet"
           onClick={() => commitSelectionStrength(DEFAULT_SELECTION_STRENGTH)}
         >
           Default
-        </button>
+        </Control>
         <div className="selection-preview" aria-label="Selection preview">
           <span className="nav-node">Plain</span>
           <span className="nav-node selection-preview-hover">Hovered</span>
@@ -331,8 +365,8 @@ export function AppearanceSection() {
       </div>
 
       <div className="flex flex-col gap-2.5 pt-[26px]">
-        <span className={cn(caps, "text-[var(--t-count)]")}>Panes</span>
-        <div className="flex gap-3">
+        <span className={cn(caps, "text-[length:var(--t-count)]")}>Panes</span>
+        <div className="flex flex-wrap gap-3">
           {(
             [
               { id: "connected", name: "Connected", note: "One surface, divided by a hairline." },
@@ -346,11 +380,11 @@ export function AppearanceSection() {
                 type="button"
                 aria-pressed={on}
                 onClick={() => commitPanes(opt.id)}
-                className={cn(card, "max-w-[260px] flex-1", on ? "bg-[var(--raised)]" : "bg-[var(--mantle)]")}
+                className={cn(card, "basis-[min(260px,100%)] max-w-[260px] flex-1", on ? "bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : "bg-[var(--mantle)]")}
               >
                 <PanesDrawing panes={opt.id} />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--t-ui)]">{opt.name}</span>
+                  <span className="text-[length:var(--t-ui)]">{opt.name}</span>
                   {on ? <span className={activeTag}>active</span> : null}
                 </div>
                 <span className="text-xs text-[var(--text-muted)]">{opt.note}</span>
@@ -365,7 +399,7 @@ export function AppearanceSection() {
           flavor={active}
           accent={theme.accent}
           onPick={commitAccent}
-          onClose={() => setPicking(false)}
+          onClose={closeAccentPicker}
         />
       ) : null}
     </div>

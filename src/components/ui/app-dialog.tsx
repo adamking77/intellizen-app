@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { useInputModality, useMotionEnabled } from "./motion";
 
 interface AppDialogProps {
   open: boolean;
@@ -33,10 +34,13 @@ export function AppDialog({
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const enabled = useMotionEnabled();
+  const modality = useInputModality();
 
   useEffect(() => {
     const node = dialog.current;
     if (!node) return;
+    const returnFocus = document.activeElement;
     if (open && !node.open) {
       node.showModal();
       if (initialFocus === "title") {
@@ -45,6 +49,10 @@ export function AppDialog({
       }
     }
     if (!open && node.open) node.close();
+    if (open) return () => {
+      if (node.open) node.close();
+      if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+    };
   }, [open, initialFocus]);
 
   return (
@@ -52,8 +60,9 @@ export function AppDialog({
       ref={dialog}
       role={role}
       aria-label={title}
+      data-motion={modality === "keyboard" ? "instant" : enabled ? "full" : "reduced"}
       className={cn(
-        "app-dialog modal-surface m-auto max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] overflow-hidden p-0 text-[var(--text)]",
+        "app-dialog motion-modal modal-surface m-auto max-h-[86dvh] min-w-[320px] max-w-[min(560px,calc(100vw-24px))] overflow-hidden p-0 text-[var(--text)]",
         className,
       )}
       onCancel={(event) => {
@@ -66,9 +75,9 @@ export function AppDialog({
     >
       <div className="flex max-h-[86dvh] flex-col">
         <header className={cn("shrink-0 px-[19px] pb-2 pt-[17px]", headerClassName)}>
-          <h2 ref={heading} tabIndex={initialFocus === "title" ? -1 : undefined} className={cn("font-ui text-[var(--t-ui)] font-medium text-[var(--text)]", initialFocus === "title" && "focus-visible:!outline-none")}>{title}</h2>
+          <h2 ref={heading} tabIndex={initialFocus === "title" ? -1 : undefined} className={cn("font-ui text-[length:var(--t-ui)] font-medium text-[var(--text)]", initialFocus === "title" && "focus-visible:!outline-none")}>{title}</h2>
           {description ? (
-            <p className="mt-1 font-ui text-[var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>
+            <p className="mt-1 font-ui text-[length:var(--t-meta)] leading-[1.45] text-[var(--text-muted)]">{description}</p>
           ) : null}
         </header>
         <div ref={body} className={cn("min-h-0 flex-1 overflow-y-auto px-[19px] py-3", bodyClassName)}>{children}</div>

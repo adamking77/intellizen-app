@@ -14,11 +14,17 @@ vi.mock("@/components/canvas/CanvasEditor", () => ({ CanvasEditor: ({ initialDoc
 import { CanvasView } from "./Canvas";
 import { CANVAS_DRAFT_PREFIX, canvasSaveSessions } from "@/lib/canvas-save-session";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 function document(id: number): CanvasDocument {
   return { id, name: `Canvas ${id}`, project_id: null, case_id: null, created_at: "2026-09-05", updated_at: "2026-09-05", content_json: { nodes: [{ id: "n", type: "text", x: 0, y: 0, width: 200, height: 100, text: `Body ${id}` }], edges: [] } };
 }
 const cleanups: (() => Promise<void>)[] = [];
 async function settle() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); }); }
+function changeInput(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
 async function mount(route = "/canvas?canvas=1") {
   const element = window.document.createElement("div");
   window.document.body.append(element);
@@ -39,6 +45,7 @@ beforeEach(() => {
   api.list.mockReset().mockResolvedValue([document(1), document(2)]);
   api.get.mockReset().mockImplementation(async (id: number) => document(id));
   api.save.mockReset().mockImplementation(async (id: number, content: CanvasDocumentData) => ({ ...document(id), content_json: content }));
+  api.rename.mockReset().mockImplementation(async (id: number, input: { name: string }) => ({ ...document(id), name: input.name }));
 });
 afterEach(async () => {
   for (const close of cleanups.splice(0)) await close();
@@ -158,5 +165,36 @@ describe("Canvas route continuity and recovery", () => {
     const app = await mount();
     expect(app.element.querySelector("[data-editor]")?.textContent).toContain("Recovered local canvas");
     expect(app.element.textContent).toContain("Unsaved");
+  });
+
+  it("cancels a title edit on Escape without sending a rename", async () => {
+    const app = await mount();
+    const title = app.element.querySelector<HTMLInputElement>('[aria-label="Canvas title"]')!;
+    await act(async () => {
+      title.focus();
+      changeInput(title, "Changed title");
+    });
+    await act(async () => {
+      title.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await settle();
+    expect(api.rename).not.toHaveBeenCalled();
+    expect(title.value).toBe("Canvas 1");
+  });
+
+  it("keeps the edited title available after a failed rename", async () => {
+    api.rename.mockRejectedValue(new Error("Rename offline"));
+    const app = await mount();
+    const title = app.element.querySelector<HTMLInputElement>('[aria-label="Canvas title"]')!;
+    await act(async () => {
+      title.focus();
+      changeInput(title, "Retry this title");
+    });
+    await act(async () => {
+      title.blur();
+    });
+    await settle();
+    expect(api.rename).toHaveBeenCalledWith(1, { name: "Retry this title" });
+    expect(title.value).toBe("Retry this title");
   });
 });

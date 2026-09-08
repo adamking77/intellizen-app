@@ -15,6 +15,7 @@ import { errorMessage } from "@/lib/toast";
 import { disconnectEngine } from "@/engine/use-engine";
 import { useEngineStore } from "@/engine/engine-store";
 import { disconnectAllAcpProviders, listAcpProviderStatuses } from "@/engine/acp-registry";
+import { Control } from "@/components/ui/control";
 
 import { SettingSwitch } from "./setting-switch";
 import { SETTINGS_TITLE } from "./settings-style";
@@ -54,13 +55,13 @@ export function GeneralSettings() {
     <div>
       <header className="pb-3">
         <h1 className={SETTINGS_TITLE}>General</h1>
-        <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Startup and defaults.</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--subtext-0)]">Set the default workspace, startup connections, and conversation behavior.</p>
       </header>
       <div className="max-w-[660px]">
         <SettingRow label="Default workspace" detail="Where a new conversation starts when its agent has no context folder.">
-          <button type="button" className="action max-w-72 truncate font-mono" onClick={() => void chooseWorkspace()} disabled={busy}>
+          <Control size="sm" className="max-w-72 truncate font-mono" onClick={() => void chooseWorkspace()} disabled={busy}>
             {busy ? "Choosing…" : workspace || "Choose folder"}
-          </button>
+          </Control>
         </SettingRow>
         <SettingRow label="Scan on launch" detail="Find installed provider CLIs and ACP bridges at startup. Turn off to scan only on demand.">
           <SettingSwitch on={scanOnLaunch !== "0"} label="Scan on launch" onToggle={() => setScanOnLaunch(scanOnLaunch === "0" ? "1" : "0")} />
@@ -75,10 +76,9 @@ export function GeneralSettings() {
           <SettingSwitch on={sendOnEnter !== "0"} label="Send on Enter" onToggle={() => setSendOnEnter(sendOnEnter === "0" ? "1" : "0")} />
         </SettingRow>
         <SettingRow label="Disconnect everything" detail="Stops Hermes and every live CLI provider session. They can be reconnected from Providers.">
-          <button
-            type="button"
-            className="action action-tinted"
-            style={{ "--tint": "var(--bad)" } as React.CSSProperties}
+          <Control
+            size="sm"
+            variant="danger"
             disabled={connectedCount === 0 || disconnecting}
             onClick={() => {
               setDisconnecting(true);
@@ -90,10 +90,10 @@ export function GeneralSettings() {
             }}
           >
             {disconnecting ? "Disconnecting…" : connectedCount ? `Disconnect ${connectedCount}` : "Nothing connected"}
-          </button>
+          </Control>
         </SettingRow>
       </div>
-      {error ? <p className="mt-3 text-xs text-[var(--danger)]">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-xs text-[var(--danger)]">The setting could not be changed. {error}</p> : null}
     </div>
   );
 }

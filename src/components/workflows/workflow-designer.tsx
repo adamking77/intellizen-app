@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, X, Undo2, Redo2 } from "lucide-react";
+import { ArrowLeft, LayoutGrid, X, Undo2, Redo2 } from "lucide-react";
 
 import { AppDialog } from "@/components/ui/app-dialog";
 import { Control } from "@/components/ui/control";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
+import { Surface } from "@/components/ui/surface";
 import { WorkflowChangeReview } from "./workflow-change-review";
 import { workflowIssueTarget } from "@/lib/workflow-editor-navigation";
 import { WorkflowStepInsertion, WorkflowStepTypePicker } from "./workflow-step-type";
@@ -124,6 +125,7 @@ export function WorkflowDesigner({
   }, [recoveryKey, initialDraft]);
   const [definition, setDefinition] = useState<WorkflowDefinitionV1>(() => recoveredDraft?.definition ?? initialDraft);
   const [selectedStepId, setSelectedStepId] = useState(initialSurface === "steps" ? definition.steps[0]?.id ?? "" : "");
+  const [autoLayoutRequest, setAutoLayoutRequest] = useState(0);
   const [dryRun, setDryRun] = useState<ReturnType<typeof dryRunWorkflowDefinition> | null>(null);
   const [surface, setSurface] = useState<DesignerSurface>(initialSurface);
   const [positions, setPositions] = useState<WorkflowNodePositions>(() => recoveredDraft?.positions ?? recoverWorkflowComposerPositions(recoveryKey));
@@ -162,7 +164,7 @@ export function WorkflowDesigner({
     return () => clearTimeout(timer);
   }, [repairTarget, surface]);
   function issueList(errors: { path: string; code: string; message: string }[]) {
-    return <ul className="space-y-1 text-[var(--t-meta)]">{errors.map((error) => <li key={`${error.path}-${error.code}`}><button className="text-left underline-offset-2 hover:underline" onClick={() => repairIssue(error.path)}>{workflowIssueTarget(definition, error.path).label}: {error.message}</button></li>)}</ul>;
+    return <ul className="space-y-1 text-[length:var(--t-meta)]">{errors.map((error) => <li key={`${error.path}-${error.code}`}><button className="text-left underline-offset-2 hover:underline" onClick={() => repairIssue(error.path)}>{workflowIssueTarget(definition, error.path).label}: {error.message}</button></li>)}</ul>;
   }
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => { if (dirty) storeWorkflowDesignerDraft(recoveryKey, { definition, baseUpdatedAt, positions, positionsVersion: 2 }); }, [recoveryKey, dirty, definition, baseUpdatedAt, positions]);
@@ -337,8 +339,8 @@ export function WorkflowDesigner({
     finally { setSaving(false); }
   }
 
-  function stepCard(step: WorkflowStep, index: number) {
-    return <WorkflowStepCard autoFocusTitle={surface === "steps"} typeEditor={selectedStepId === step.id ? <WorkflowStepTypePicker step={step} definition={definition} onChange={(kind, branch) => changeStepKind(step, kind, branch)} /> : undefined} step={step} index={index} definition={definition} selected={selectedStepId === step.id} roleTargets={roleTargets} onSelect={setSelectedStepId} onChange={updateSelected} onAskRole={askRole} actions={selectedStepId === step.id ? <WorkflowActionMenu label={`Actions for ${step.title}`} actions={[
+  function stepCard(step: WorkflowStep, index: number, expanded = surface === "steps") {
+    return <WorkflowStepCard autoFocusTitle={surface === "steps" && expanded} typeEditor={selectedStepId === step.id && expanded ? <WorkflowStepTypePicker step={step} definition={definition} onChange={(kind, branch) => changeStepKind(step, kind, branch)} /> : undefined} step={step} index={index} definition={definition} selected={selectedStepId === step.id} expanded={expanded} roleTargets={roleTargets} onSelect={setSelectedStepId} onChange={updateSelected} onAskRole={askRole} actions={selectedStepId === step.id && expanded ? <WorkflowActionMenu label={`Actions for ${step.title}`} actions={[
       { label: "Duplicate step", onSelect: duplicate },
       ...(definition.steps[0]?.id !== step.id ? [{ label: "Start here", onSelect: () => commit({ ...definition, steps: [step, ...definition.steps.filter((item) => item.id !== step.id)] }) }] : []),
       { label: step.kind === "condition" ? "Remove step · keep Yes branch" : "Remove step", onSelect: remove, danger: true },
@@ -348,14 +350,14 @@ export function WorkflowDesigner({
   const rendered = new Set<string>();
   function renderFlow(target: string | null): React.ReactNode {
     const step = definition.steps.find((candidate) => candidate.id === target);
-    if (!step) return <p className="py-2 text-center text-[var(--t-meta)] text-[var(--text-muted)]">{target === "blocked" ? "Blocked" : target === "escalate" ? "Escalate" : target && target !== "complete" ? target : "Complete"}</p>;
+    if (!step) return <p className="py-2 text-center text-[length:var(--t-meta)] text-[var(--text-muted)]">{target === "blocked" ? "Blocked" : target === "escalate" ? "Escalate" : target && target !== "complete" ? target : "Complete"}</p>;
     if (rendered.has(step.id)) return <Control size="sm" variant="quiet" onClick={() => { setSelectedStepId(step.id); document.getElementById(`workflow-step-${step.id}`)?.scrollIntoView({ block: "nearest" }); }}>Continue at {step.title}</Control>;
     rendered.add(step.id);
     return <div key={step.id} id={`workflow-step-${step.id}`} className="min-w-0 scroll-mt-4">
       {stepCard(step, definition.steps.indexOf(step))}
       {step.kind === "condition" ? <div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3 pt-3 max-[700px]:grid-cols-1">
         {(["then", "else"] as const).map((branch) => <div key={branch} className="min-w-0 border-t border-[var(--border)] pt-2">
-          <p className="text-[var(--t-meta)] text-[var(--text-muted)]">{branch === "then" ? "Yes" : "No"}</p><WorkflowStepInsertion label={`Insert on ${branch === "then" ? "Yes" : "No"} branch of ${step.title}`} hasPrevious onAdd={(kind) => addStep(kind, { afterStepId: step.id, branch })} />
+          <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">{branch === "then" ? "Yes" : "No"}</p><WorkflowStepInsertion label={`Insert on ${branch === "then" ? "Yes" : "No"} branch of ${step.title}`} hasPrevious onAdd={(kind) => addStep(kind, { afterStepId: step.id, branch })} />
           {renderFlow(step[branch])}
         </div>)}
       </div> : <><WorkflowStepInsertion label={`Insert after ${step.title}`} hasPrevious onAdd={(kind) => addStep(kind, { afterStepId: step.id })} />{renderFlow(step.next)}</>}
@@ -371,22 +373,15 @@ export function WorkflowDesigner({
               </div>)}
               <Control size="sm" onClick={() => commit({ ...definition, inputs: [...definition.inputs, { key: `input_${definition.inputs.length + 1}`, type: "string" }] })}>Add input</Control>
             </div>);
-  const triggerEditor = <div data-workflow-step="trigger" className="space-y-3 rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--raised)_50%,var(--base))] p-3"><h3 className="text-[var(--t-meta)] font-medium">Trigger and inputs</h3><Select containerClassName="nodrag nopan" data-workflow-field="trigger.kind" aria-label="Workflow trigger" value={definition.trigger.kind} onChange={(event) => commit({ ...definition, trigger: { kind: event.target.value as "manual" | "panel-message" } })}><option value="manual">Start manually</option><option value="panel-message">Panel message</option></Select>{inputsEditor}</div>;
+  const triggerEditor = <div data-workflow-step="trigger" className="space-y-3"><h3 className="text-[length:var(--t-meta)] font-medium">Trigger and inputs</h3><Select containerClassName="nodrag nopan" data-workflow-field="trigger.kind" aria-label="Workflow trigger" value={definition.trigger.kind} onChange={(event) => commit({ ...definition, trigger: { kind: event.target.value as "manual" | "panel-message" } })}><option value="manual">Start manually</option><option value="panel-message">Panel message</option></Select>{inputsEditor}</div>;
 
-  const editingTools = <>
-    <Control size="sm" variant="quiet" onClick={onDraftWithAgent}>Draft with an agent</Control>
-    <div className="ml-auto flex items-center gap-1">
-      <Segmented value={surface} options={DESIGNER_SURFACES} onValueChange={setSurface} label="Definition view" />
-      <Control size="icon" variant="quiet" aria-label="Undo workflow edit" title="Undo · ⌘Z" disabled={!history.past.length} onClick={undo}><Undo2 className="h-3.5 w-3.5" /></Control>
-      <Control size="icon" variant="quiet" aria-label="Redo workflow edit" title="Redo · ⇧⌘Z" disabled={!history.future.length} onClick={redo}><Redo2 className="h-3.5 w-3.5" /></Control>
-    </div>
-  </>;
+  const addStepActions = Object.entries({ "role-assign": "Role assignment", condition: "Condition", approval: "Approval", artifact: "Artifact", decision: "Decision" } satisfies Record<DesignerStepKind, string>).map(([kind, label]) => ({ label, onSelect: () => addStep(kind as DesignerStepKind, selectedStepId && selectedStepId !== "trigger" ? { afterStepId: selectedStepId } : { afterStepId: null }) }));
 
   if (workflow.definition != null && !existingDefinition && !replaceInvalid) {
-    return <section className="space-y-3 p-4">{onBack ? <Control size="sm" onClick={onBack}>Back to workflows</Control> : null}<p role="alert" className="text-[var(--warning)]">This saved definition needs repair. The original is preserved below.</p><ul className="text-[var(--t-meta)]">{validateWorkflowDefinition(workflow.definition).errors.map((error) => <li key={`${error.path}-${error.code}`}>{error.path}: {error.message}</li>)}</ul><details><summary>Original definition</summary><pre className="whitespace-pre-wrap break-words text-[var(--t-count)]">{JSON.stringify(workflow.definition, null, 2)}</pre></details><Control onClick={() => { setReplaceInvalid(true); setDirty(true); }}>Start a replacement draft</Control><p className="text-[var(--t-count)] text-[var(--text-muted)]">The original will only be replaced if you save the new version.</p></section>;
+    return <section className="space-y-3 p-4">{onBack ? <Control size="sm" onClick={onBack}>Back to workflows</Control> : null}<p role="alert" className="text-[var(--warning)]">This saved definition needs repair. The original is preserved below.</p><ul className="text-[length:var(--t-meta)]">{validateWorkflowDefinition(workflow.definition).errors.map((error) => <li key={`${error.path}-${error.code}`}>{error.path}: {error.message}</li>)}</ul><details><summary>Original definition</summary><pre className="whitespace-pre-wrap break-words text-[length:var(--t-count)]">{JSON.stringify(workflow.definition, null, 2)}</pre></details><Control onClick={() => { setReplaceInvalid(true); setDirty(true); }}>Start a replacement draft</Control><p className="text-[length:var(--t-count)] text-[var(--text-muted)]">The original will only be replaced if you save the new version.</p></section>;
   }
   return (
-    <div ref={designerHost} className="workflow-designer flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--base)]" onKeyDown={(event) => {
+    <div ref={designerHost} className="@container/designer workflow-designer flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--base)]" onKeyDown={(event) => {
       if (surface !== "steps" || event.defaultPrevented || (event.target as HTMLElement).closest("input,textarea,select,[contenteditable='true']")) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d" && selectedStepId !== "trigger") { event.preventDefault(); duplicate(); }
@@ -395,11 +390,9 @@ export function WorkflowDesigner({
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
         {onBack ? <Control size="icon" variant="quiet" onClick={onBack} aria-label="Back to workflows" title="Back to workflows"><ArrowLeft className="h-4 w-4" /></Control> : null}
         <div className="min-w-28 flex-1">
-          {embedded ? <Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="h-7 font-medium" /> : <p className="truncate font-ui text-[var(--t-ui)] font-semibold text-[var(--text)]">{definition.name}</p>}
-          <p className="mt-0.5 text-[var(--t-count)] text-[var(--text-muted)]">{dirty ? "Local edits retained" : !workflow.id ? "Local draft" : workflow.status === "Active" ? "Active workflow" : "Draft workflow"}{!embedded ? ` · editing v${definition.version}` : ""}</p>
+          {embedded ? <Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="font-medium" /> : <p className="truncate font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{definition.name}</p>}
+          <p className="mt-0.5 text-[length:var(--t-count)] text-[var(--text-muted)]">{dirty ? "Local edits retained" : !workflow.id ? "Local draft" : workflow.status === "Active" ? "Active workflow" : "Draft workflow"}{!embedded ? ` · editing v${definition.version}` : ""}</p>
         </div>
-        <Control size="sm" variant="primary" onClick={() => void beginSave(false)} disabled={!validation.valid || saving || conflict}>{workflow.status === "Active" && existingDefinition ? "Save version" : "Save draft"}</Control>
-        {runControl}
         <WorkflowActionMenu label="Workflow actions" actions={[
           ...(workflow.id && (workflow.status !== "Active" || !existingDefinition) ? [{ label: "Activate…", disabled: !validation.valid || saving || conflict, onSelect: () => void beginSave(true) }] : []),
           { label: "Validate workflow", onSelect: runDryRun },
@@ -412,8 +405,7 @@ export function WorkflowDesigner({
       {!validation.valid ? <details className="max-h-36 shrink-0 overflow-y-auto px-3 py-2 text-[var(--danger)]"><summary>{validation.errors.length} definition issues prevent saving</summary>{issueList(validation.errors)}</details> : null}
       {failure ? <p role="alert" className="px-3 py-2 text-[var(--danger)]">{failure}</p> : null}
       {conflict ? <div role="alert" className="p-3 text-[var(--warning)]">This workflow changed while you were editing. Your edits are still here. <Control onClick={() => { clearWorkflowDesignerDraft(recoveryKey); setDirty(false); setDefinition(initialDraft); setBaseUpdatedAt(workflow.updated_at); }}>Discard edits and reload</Control></div> : null}
-      {!embedded ? <label className="flex items-center gap-3 px-3 py-2 text-[var(--t-meta)]">Name<Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="max-w-lg" /></label> : null}
-      {surface === "steps" ? <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2">{editingTools}</div> : null}
+      {!embedded ? <label className="flex items-center gap-3 px-3 py-2 text-[length:var(--t-meta)]">Name<Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="max-w-lg" /></label> : null}
       {surface === "steps" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <main className="mx-auto max-w-xl">
           {triggerEditor}
@@ -421,10 +413,10 @@ export function WorkflowDesigner({
             {renderFlow(definition.steps[0]?.id ?? null)}
             {definition.steps.filter((step) => !rendered.has(step.id)).map((step) => <div key={step.id} className="mt-4"><p className="mb-2 text-[var(--warning)]">Unconnected step</p>{renderFlow(step.id)}</div>)}
         </main>
-      </div> : <WorkflowComposerCanvas initialViewport={canvasViewport.current} onViewportChange={(viewport) => { canvasViewport.current = viewport; }} toolbarContent={editingTools} definition={definition} selectedStepId={selectedStepId} positions={positions} roleTargets={roleTargets} renderStep={stepCard} renderTrigger={triggerEditor} onSelect={setSelectedStepId} onPositions={(next) => commit(definition, next)} onConnect={connect} onAdd={addStep} onDuplicate={duplicate} onRemove={remove} onUndo={undo} onRedo={redo} />}
+      </div> : <div className="flex min-h-0 flex-1 @max-[42rem]/designer:flex-col"><WorkflowComposerCanvas initialViewport={canvasViewport.current} onViewportChange={(viewport) => { canvasViewport.current = viewport; }} autoLayoutRequest={autoLayoutRequest} definition={definition} selectedStepId={selectedStepId} positions={positions} roleTargets={roleTargets} renderStep={(step, index) => stepCard(step, index, false)} renderTrigger={triggerEditor} onSelect={setSelectedStepId} onPositions={(next) => commit(definition, next)} onConnect={connect} onDuplicate={duplicate} onRemove={remove} onUndo={undo} onRedo={redo} />{selectedStepId === "trigger" ? <aside aria-label="Step inspector" className="w-[min(24rem,42cqw)] shrink-0 overflow-y-auto border-l border-[var(--border)] bg-[var(--mantle)] p-3 @max-[42rem]/designer:max-h-64 @max-[42rem]/designer:w-full @max-[42rem]/designer:border-l-0 @max-[42rem]/designer:border-t"><Surface>{triggerEditor}</Surface></aside> : selectedStep ? <aside aria-label="Step inspector" className="w-[min(24rem,42cqw)] shrink-0 overflow-y-auto border-l border-[var(--border)] bg-[var(--mantle)] p-3 @max-[42rem]/designer:max-h-64 @max-[42rem]/designer:w-full @max-[42rem]/designer:border-l-0 @max-[42rem]/designer:border-t">{stepCard(selectedStep, definition.steps.indexOf(selectedStep), true)}</aside> : null}</div>}
       <div className="shrink-0 border-t border-[var(--border)] bg-[var(--mantle)]">
-        <div className="flex items-center gap-2 px-3 py-1"><Control size="sm" variant="quiet" onClick={() => { if (tray === "tests") setTray(null); else if (dryRun) setTray("tests"); else runDryRun(); }}>Test results{dryRun ? ` · ${dryRun.errors.length ? `${dryRun.errors.length} issues` : "passed"}` : ""}</Control>{runsTray ? <Control size="sm" variant="quiet" onClick={() => setTray(tray === "runs" ? null : "runs")}>Runs</Control> : null}<span className="ml-auto text-[var(--t-count)] text-[var(--text-muted)]">{definition.steps.length} steps · {validation.valid ? "Valid draft" : `${validation.errors.length} issues`}</span>{tray ? <Control size="sm" variant="quiet" onClick={() => setTray(null)}>Close tray</Control> : null}</div>
-        {tray ? <div className="max-h-[min(16rem,35vh)] overflow-auto border-t border-[var(--border)] p-4">{tray === "runs" ? runsTray : dryRun ? <section><p className={cn("mb-3 text-[var(--t-meta)]", dryRun.valid ? "text-[var(--text-muted)]" : "text-[var(--warning)]")}>{dryRun.valid ? "Definition and role checks passed. No work was dispatched." : "Dry run found issues. No work was dispatched."}</p><ol className="space-y-2 text-[var(--t-meta)]">{dryRun.sequence.map((entry, index) => { const value = entry as Record<string, unknown>; return <li key={index}>{definition.steps.find((step) => step.id === value.stepId)?.title ?? String(value.stepId ?? index + 1)}{typeof value.role === "string" ? ` · ${value.role.replaceAll("_", " ")}` : ""}</li>; })}</ol>{dryRun.errors.length ? <div className="mt-3 text-[var(--danger)]">{issueList(dryRun.errors)}</div> : null}</section> : null}</div> : null}
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2"><Segmented value={surface} options={DESIGNER_SURFACES} onValueChange={setSurface} label="Definition view" /><Control size="sm" variant="primary" onClick={() => void beginSave(false)} disabled={!validation.valid || saving || conflict}>{workflow.status === "Active" && existingDefinition ? "Save version" : "Save draft"}</Control>{runControl}<WorkflowActionMenu label="Add step" actions={addStepActions}>Add step</WorkflowActionMenu><Control size="sm" variant="quiet" onClick={() => setAutoLayoutRequest((value) => value + 1)}><LayoutGrid aria-hidden className="h-3.5 w-3.5" />Auto layout</Control><Control size="sm" variant="quiet" onClick={onDraftWithAgent}>Draft with an agent</Control><Control size="icon" variant="quiet" aria-label="Undo workflow edit" title="Undo · ⌘Z" disabled={!history.past.length} onClick={undo}><Undo2 className="h-3.5 w-3.5" /></Control><Control size="icon" variant="quiet" aria-label="Redo workflow edit" title="Redo · ⇧⌘Z" disabled={!history.future.length} onClick={redo}><Redo2 className="h-3.5 w-3.5" /></Control><Control size="sm" variant="quiet" onClick={() => { if (tray === "tests") setTray(null); else if (dryRun) setTray("tests"); else runDryRun(); }}>Test results{dryRun ? ` · ${dryRun.errors.length ? `${dryRun.errors.length} issues` : "passed"}` : ""}</Control>{runsTray ? <Control size="sm" variant="quiet" onClick={() => setTray(tray === "runs" ? null : "runs")}>Runs</Control> : null}<span className="ml-auto text-[length:var(--t-count)] text-[var(--text-muted)]">{definition.steps.length} steps · {validation.valid ? "Valid draft" : `${validation.errors.length} issues`}</span>{tray ? <Control size="sm" variant="quiet" onClick={() => setTray(null)}>Close tray</Control> : null}</div>
+        {tray ? <div className="max-h-[min(16rem,35vh)] overflow-auto border-t border-[var(--border)] p-4">{tray === "runs" ? runsTray : dryRun ? <section><p className={cn("mb-3 text-[length:var(--t-meta)]", dryRun.valid ? "text-[var(--text-muted)]" : "text-[var(--warning)]")}>{dryRun.valid ? "Definition and role checks passed. No work was dispatched." : "Dry run found issues. No work was dispatched."}</p><ol className="space-y-2 text-[length:var(--t-meta)]">{dryRun.sequence.map((entry, index) => { const value = entry as Record<string, unknown>; return <li key={index}>{definition.steps.find((step) => step.id === value.stepId)?.title ?? String(value.stepId ?? index + 1)}{typeof value.role === "string" ? ` · ${value.role.replaceAll("_", " ")}` : ""}</li>; })}</ol>{dryRun.errors.length ? <div className="mt-3 text-[var(--danger)]">{issueList(dryRun.errors)}</div> : null}</section> : null}</div> : null}
       </div>
 
       <AppDialog

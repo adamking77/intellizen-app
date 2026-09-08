@@ -18,11 +18,13 @@ import {
   dryRunWorkflowDefinition,
   validatedWorkflowDefinitionHash,
   validateWorkflowDefinition,
+  workflowDefinitionHash,
   type WorkflowRoleResolution,
 } from "../../shared/workflow-schema.mjs";
 import {
   ROSTER_DATABASE_IDS,
   WORKER_TOOL_NAMES,
+  adminSupabaseClientOptions,
   assertGenericRecordMutationAllowed,
   assertRosterProposalPatch,
   assertWorkerPlaneEnvironment,
@@ -31,7 +33,7 @@ import {
   parseMcpPlane,
   readWorkerBrokerConfig,
 } from "./control-plane.js";
-import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
+import { additiveDatabaseFields, databaseFieldsPreviewToken, dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
 import { proposeDocumentEditCall, proposeDocumentEditTool } from "./proposals.js";
 import { proposeWorkflowDraftCall, proposeWorkflowDraftTool } from "./workflow-draft-proposal.js";
 import { listHierarchy } from "./hierarchy.js";
@@ -86,7 +88,7 @@ if (MCP_PLANE === "admin" && !SUPABASE_KEY) {
 }
 
 const supabase = MCP_PLANE === "admin"
-  ? createClient(SUPABASE_URL, SUPABASE_KEY!)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY!, adminSupabaseClientOptions(MCP_PLANE, process.env, localEnv))
   : new Proxy({} as ReturnType<typeof createClient>, {
       get() {
         throw new Error("Worker plane cannot access Supabase directly; use the capability broker.");
@@ -389,6 +391,61 @@ async function resolveDatabase(input: { database_id?: string; database_name?: st
   const { data, error } = await query.limit(1).single();
   if (error) throw new Error(error.message);
   return data as WorkspaceDatabaseRow;
+}
+
+async function addDatabaseFields(input: {
+  database_id: string;
+  add_fields: unknown;
+  actor: string;
+  durable_role?: string;
+  summary?: string;
+  expected_updated_at?: string;
+  preview_token?: string;
+  confirm_write?: boolean;
+}) {
+  assertPersistenceSafe(input);
+  if (typeof input.database_id !== "string" || !input.database_id.trim()) throw new Error("database_id is required.");
+  if (typeof input.actor !== "string" || !input.actor.trim()) throw new Error("actor is required.");
+  const database = await resolveDatabase({ database_id: input.database_id });
+  const next = additiveDatabaseFields(database.schema ?? [], input.add_fields);
+  const token = databaseFieldsPreviewToken(database.id, database.updated_at, next.schema);
+  if (input.confirm_write !== true) {
+    return recordWritePreview("add_database_fields", {
+      database_id: database.id,
+      database_name: database.name,
+      current_schema: database.schema,
+      expected_updated_at: database.updated_at,
+      fields_to_add: next.added,
+      next_schema: next.schema,
+      preview_token: token,
+    });
+  }
+  if (input.expected_updated_at !== database.updated_at || input.preview_token !== token) {
+    throw new Error("Database schema or requested fields changed. Preview again before confirming.");
+  }
+  if (!next.added.length) return { dry_run: false, write_performed: false, database_id: database.id, schema: database.schema };
+  const { data, error } = await supabase.schema("workspace").from("databases")
+    .update({ schema: next.schema }).eq("id", database.id).eq("updated_at", database.updated_at)
+    .select("id, schema, updated_at").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Database changed during confirmation. Nothing written; preview again.");
+  const { data: receipt, error: receiptError } = await supabase.schema("workspace").from("work_events")
+    .insert({
+      event_kind: "database.schema.updated",
+      actor: input.actor,
+      durable_role: input.durable_role ?? null,
+      summary: input.summary ?? `Added ${next.added.length} fields to ${database.name}`,
+      payload: {
+        tool: "add_database_fields", database_id: database.id, fields_added: next.added,
+        before_updated_at: database.updated_at, after_updated_at: data.updated_at,
+      },
+    }).select("id").single();
+  // Report a partial receipt failure honestly; the schema mutation must not be retried blindly.
+  return {
+    dry_run: false, write_performed: true, database: data,
+    receipt_id: receipt?.id ?? null,
+    ...(receiptError ? { receipt_error: receiptError.message } : {}),
+  };
 }
 
 async function queryRecords(input: {
@@ -906,6 +963,60 @@ type WorkflowTransitionInput = {
   confirm_write?: boolean;
 };
 
+async function getWorkflowRunContinuation(workflowRunId: string) {
+  const { data, error } = await supabase
+    .schema("workspace")
+    .rpc("get_workflow_run_continuation_v1", { p_workflow_run_id: workflowRunId });
+  if (error) throw new Error(error.message);
+  const continuation = data as {
+    schema?: unknown;
+    continuationStatus?: unknown;
+    run?: { workflowRunId?: unknown; runExecutionVersion?: unknown; runStepStates?: unknown } | null;
+    stepResults?: unknown;
+    execution?: {
+      workflowRunId?: unknown;
+      executionVersion?: unknown;
+      definitionHash?: unknown;
+    } | null;
+  } | null;
+  const executionVersion = continuation?.execution?.executionVersion;
+  const definitionHash = continuation?.execution?.definitionHash;
+  if (continuation?.schema !== "intellizen.workflow-run-continuation/1"
+    || continuation?.run?.workflowRunId !== workflowRunId
+    || continuation?.execution?.workflowRunId !== workflowRunId) {
+    throw new Error("Workflow continuation does not match the requested Run.");
+  }
+  if (continuation.continuationStatus !== "ready") {
+    throw new Error("Workflow continuation is not ready; immutable execution or completed-step receipts are missing.");
+  }
+  if (!Number.isSafeInteger(executionVersion) || Number(executionVersion) <= 0
+    || typeof definitionHash !== "string" || !/^[a-f0-9]{64}$/.test(definitionHash)) {
+    throw new Error("Workflow continuation returned an invalid execution identity.");
+  }
+  const states = continuation.run?.runStepStates;
+  const receipts = continuation.stepResults;
+  if (continuation.run?.runExecutionVersion !== executionVersion
+    || !states || typeof states !== "object" || Array.isArray(states)
+    || !receipts || typeof receipts !== "object" || Array.isArray(receipts)) {
+    throw new Error("Workflow continuation has incomplete execution history.");
+  }
+  for (const [stepId, value] of Object.entries(receipts)) {
+    const receipt = value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown> : null;
+    if (!receipt || !("result" in receipt) || receipt.workflowRunId !== workflowRunId
+      || receipt.stepId !== stepId || receipt.executionVersion !== executionVersion
+      || receipt.definitionHash !== definitionHash) {
+      throw new Error("Workflow continuation result does not belong to this execution.");
+    }
+  }
+  for (const [stepId, state] of Object.entries(states)) {
+    if (state === "completed" && !Object.hasOwn(receipts, stepId)) {
+      throw new Error("Workflow continuation is missing a completed-step receipt.");
+    }
+  }
+  return { executionVersion: Number(executionVersion), definitionHash };
+}
+
 async function advanceWorkflowStep(input: WorkflowTransitionInput) {
   const receiptFields = [
     input.idempotency_key,
@@ -920,8 +1031,24 @@ async function advanceWorkflowStep(input: WorkflowTransitionInput) {
     );
   }
   assertPersistenceSafe(input);
+  if (input.event_payload != null && (typeof input.event_payload !== "object" || Array.isArray(input.event_payload))) {
+    throw new Error("advance_workflow_step event_payload must be an object.");
+  }
 
-  const rpcArguments = {
+  const continuation = await getWorkflowRunContinuation(input.workflow_run_id);
+  const completesExpectedStep =
+    input.next_step_id === input.expected_step_id && input.next_step_state === "completed";
+  const eventPayload = {
+    ...(input.event_payload ?? {}),
+    _continuation: {
+      schema: "intellizen.workflow-transition-continuation/1",
+      executionVersion: continuation.executionVersion,
+      definitionHash: continuation.definitionHash,
+      stepResult: completesExpectedStep ? input.event_payload?.result ?? null : null,
+    },
+  };
+
+  const rpcArgumentsWithoutRequestHash = {
     p_workflow_run_id: input.workflow_run_id,
     p_expected_run_version: input.expected_run_version,
     p_expected_step_id: input.expected_step_id,
@@ -932,12 +1059,15 @@ async function advanceWorkflowStep(input: WorkflowTransitionInput) {
     p_dispatcher_session: input.dispatcher_session,
     p_fencing_token: input.fencing_token,
     p_idempotency_key: input.idempotency_key,
-    p_request_hash: input.request_hash,
     p_actor: input.actor,
     p_event_kind: input.event_kind,
     p_event_summary: input.event_summary,
-    p_event_payload: input.event_payload ?? {},
+    p_event_payload: eventPayload,
     p_approval_mutation: input.approval_mutation ?? null,
+  };
+  const rpcArguments = {
+    ...rpcArgumentsWithoutRequestHash,
+    p_request_hash: await workflowDefinitionHash(rpcArgumentsWithoutRequestHash),
   };
 
   if (!input.confirm_write) {
@@ -2828,6 +2958,12 @@ async function startWorkflow(input: {
   workflow_id: string;
   trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
   requested_by: string;
+  start_attempt?: {
+    idempotency_key: string;
+    run_name: string;
+    run_started_at: string;
+    request_hash: string;
+  };
   entity_scope?: string | null;
   task_id?: string | null;
   biz_ops_id?: string | null;
@@ -2877,7 +3013,27 @@ async function startWorkflow(input: {
       ...(input.biz_ops_id ? [input.biz_ops_id] : []),
     ]),
   );
-  const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
+  if (definition != null && !["ui", "chat", "agent", "mcp"].includes(input.trigger_source)) {
+    throw new Error(`Schema-v1 Workflow Runs do not support trigger source ${input.trigger_source}.`);
+  }
+  const generatedRunName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
+  const generatedRunStartedAt = new Date().toISOString();
+  const startAttempt = definition == null
+    ? null
+    : input.start_attempt ?? {
+        idempotency_key: randomUUID(),
+        run_name: generatedRunName,
+        run_started_at: generatedRunStartedAt,
+        request_hash: "",
+      };
+  if (startAttempt && (
+    !startAttempt.idempotency_key?.trim()
+    || !startAttempt.run_name?.trim()
+    || !startAttempt.run_started_at?.trim()
+  )) {
+    throw new Error("start_attempt requires idempotency_key, run_name, and run_started_at.");
+  }
+  const runName = startAttempt?.run_name ?? generatedRunName;
   const definitionSteps =
     definition && typeof definition === "object" && Array.isArray(
       (definition as { steps?: unknown }).steps,
@@ -2912,7 +3068,7 @@ async function startWorkflow(input: {
       config: input.config ?? {},
     }),
     [WORKFLOW_RUN_FIELDS.receipt]: "",
-    [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
+    [WORKFLOW_RUN_FIELDS.startedAt]: startAttempt?.run_started_at ?? generatedRunStartedAt,
     [WORKFLOW_RUN_FIELDS.completedAt]: null,
     ...(definition
       ? {
@@ -2949,6 +3105,29 @@ ${markdownList(sourceDocumentIds)}
 Context:
 ${JSON.stringify(input.context ?? {}, null, 2)}`;
 
+  const schemaV1RpcArguments = definition == null || startAttempt == null
+    ? null
+    : {
+        p_workflow_record_id: workflow.id,
+        p_fields: fields,
+        p_body: body,
+        p_taxonomy: {
+          entity: "genzen",
+          area: "operations",
+          object_type: "workflow_run",
+          workflow_id: input.workflow_id,
+        },
+        p_entity: "genzen",
+        p_actor: input.requested_by,
+        p_task_id: input.task_id ?? null,
+        p_biz_ops_id: input.biz_ops_id ?? null,
+        p_idempotency_key: startAttempt.idempotency_key.trim(),
+        p_confirm_write: true,
+      };
+  const startRequestHash = schemaV1RpcArguments
+    ? await workflowDefinitionHash(schemaV1RpcArguments)
+    : null;
+
   if (!input.confirm_write) {
     return dryRunPreview("start_workflow_run", "create a Workflow Runs record", {
       workflow: workflowItem,
@@ -2964,6 +3143,13 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
             role_resolution_required: definitionSteps
               .filter((step) => (step as { kind?: string }).kind === "role-assign")
               .map((step) => step.id),
+            confirmation: {
+              start_attempt: startAttempt && {
+                ...startAttempt,
+                request_hash: startRequestHash,
+              },
+              confirm_write: true,
+            },
           }
         : null,
       next_run: {
@@ -2976,6 +3162,21 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         source_records: sourceRecords,
       },
     });
+  }
+
+  if (schemaV1RpcArguments) {
+    if (!input.start_attempt) {
+      throw new Error("Confirmed schema-v1 starts require the start_attempt returned by preview.");
+    }
+    if (input.start_attempt.request_hash !== startRequestHash) {
+      throw new Error("Workflow start inputs changed after preview. Preview again before confirming.");
+    }
+    const { data, error } = await supabase.schema("workspace").rpc("start_workflow_run_v1", {
+      ...schemaV1RpcArguments,
+      p_request_hash: startRequestHash,
+    });
+    if (error) throw new Error(error.message);
+    return data;
   }
 
   const { data, error } = await supabase
@@ -3326,6 +3527,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "reason",
           "actor",
         ],
+      },
+    },
+    {
+      name: "add_database_fields",
+      description: "Preview or append text/select metadata fields to a workspace database. Preserves all existing definitions and records; never replaces or removes fields. Admin only. Confirm with the exact expected_updated_at and preview_token returned by preview. Reports the durable work-event receipt or an explicit receipt error.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          database_id: { type: "string", description: "Exact workspace database UUID." },
+          add_fields: { type: "array", minItems: 1, items: {
+            type: "object", additionalProperties: false,
+            properties: {
+              id: { type: "string" }, name: { type: "string" },
+              type: { type: "string", enum: ["text", "select"] },
+              options: { type: "array", items: { type: "string" } },
+            }, required: ["id", "name", "type"],
+          } },
+          actor: { type: "string" }, durable_role: { type: "string" }, summary: { type: "string" },
+          expected_updated_at: { type: "string" }, preview_token: { type: "string" },
+          confirm_write: { type: "boolean", description: "Defaults to preview; true confirms the exact preview." },
+        },
+        required: ["database_id", "add_fields", "actor"],
       },
     },
     {
@@ -3733,6 +3956,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           workflow_id: { type: "string", description: "Canonical workflow id, e.g. gzs.expertise_page_build." },
           trigger_source: { type: "string", enum: ["ui", "chat", "monitor", "agent", "schedule", "mcp"] },
           requested_by: { type: "string" },
+          start_attempt: {
+            type: "object",
+            additionalProperties: false,
+            description: "For a confirmed schema-v1 start, pass the exact attempt returned by preview so retries keep the same identity, name, and start time.",
+            properties: {
+              idempotency_key: { type: "string" },
+              run_name: { type: "string" },
+              run_started_at: { type: "string" },
+              request_hash: { type: "string" },
+            },
+            required: ["idempotency_key", "run_name", "run_started_at", "request_hash"],
+          },
           entity_scope: { type: "string" },
           task_id: { type: "string", description: "Optional Tasks record UUID." },
           biz_ops_id: { type: "string", description: "Optional Biz Ops record UUID." },
@@ -4297,6 +4532,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
+  if (name === "add_database_fields") {
+    const result = await addDatabaseFields((args ?? {}) as Parameters<typeof addDatabaseFields>[0]);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }
+
   // ── list_database_views ───────────────────────────────────────────────────
   if (name === "list_database_views") {
     const result = await listDatabaseViews((args ?? {}) as {
@@ -4511,6 +4751,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       workflow_id: string;
       trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
       requested_by: string;
+      start_attempt?: {
+        idempotency_key: string;
+        run_name: string;
+        run_started_at: string;
+        request_hash: string;
+      };
       entity_scope?: string | null;
       task_id?: string | null;
       biz_ops_id?: string | null;

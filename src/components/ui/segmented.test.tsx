@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Segmented } from "./segmented";
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  Reflect.deleteProperty(document, "startViewTransition");
+  Reflect.deleteProperty(window, "matchMedia");
+});
 
 describe("Segmented", () => {
   it("moves with arrows, Home and End", async () => {
@@ -14,6 +18,12 @@ describe("Segmented", () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     const change = vi.fn();
+    const transition = vi.fn((update: () => void) => {
+      update();
+      return { finished: Promise.resolve() };
+    });
+    Object.defineProperty(document, "startViewTransition", { configurable: true, value: transition });
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: () => ({ matches: false }) });
     await act(async () => root.render(
       <Segmented
         label="Views"
@@ -30,7 +40,40 @@ describe("Segmented", () => {
     expect(change).toHaveBeenLastCalledWith("brief");
     tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     expect(change).toHaveBeenLastCalledWith("table");
+    expect(transition).not.toHaveBeenCalled();
     expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+
+    await act(async () => window.dispatchEvent(new Event("pointerdown")));
+    await act(async () => tabs[1].click());
+    expect(transition).toHaveBeenCalledOnce();
+
+    await act(async () => root.unmount());
+  });
+
+  it("keeps an enabled option reachable when the selected option is disabled", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const change = vi.fn();
+    await act(async () => root.render(
+      <Segmented
+        label="Availability"
+        value="thinking"
+        options={[
+          { value: "thinking", label: "Thinking", disabled: true },
+          { value: "executing", label: "Executing" },
+          { value: "reviewing", label: "Reviewing" },
+        ]}
+        onValueChange={change}
+      />,
+    ));
+    const group = host.querySelector<HTMLElement>('[role="tablist"]')!;
+    const tabs = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+    expect(group.className).toContain("flex-wrap");
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, 0, -1]);
+    tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(change).toHaveBeenLastCalledWith("reviewing");
 
     await act(async () => root.unmount());
   });

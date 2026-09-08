@@ -59,6 +59,7 @@ export function memberFromProfile(profile: HermesProfile): GroupMember {
     model: profile.model,
     provider: profile.provider,
     avatar_style: profile.avatarStyle,
+    avatar_seed: profile.avatarSeed,
     avatar_kind: profile.avatarKind,
     avatar_color: profile.avatarColor,
   };
@@ -75,6 +76,7 @@ export function durableGroupChatMembers(members: GroupMember[]): GroupMember[] {
     ...(member.model ? { model: member.model } : {}),
     ...(member.provider ? { provider: member.provider } : {}),
     ...(member.avatar_style ? { avatar_style: member.avatar_style } : {}),
+    ...(Number.isInteger(member.avatar_seed) ? { avatar_seed: member.avatar_seed } : {}),
     ...(member.avatar_kind ? { avatar_kind: member.avatar_kind } : {}),
     ...(member.avatar_color ? { avatar_color: member.avatar_color } : {}),
   }));

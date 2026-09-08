@@ -88,7 +88,11 @@ export function ProjectView() {
     enabled: Boolean(node?.folders.length),
   });
   const catalog = useQuery({ queryKey: ["workspace-database-catalog", "project-room"], queryFn: () => listWorkspaceDatabaseCatalog() });
-  const linkedRecords = useMemo(() => linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId), [catalog.data, id, legacyProjectId]);
+  const linkedRecords = useMemo(() => {
+    const documentIds = new Set(files.map((file) => file.id));
+    return linkedWorkspaceRecords(catalog.data ?? [], id, legacyProjectId)
+      .filter((record) => !documentIds.has(record.recordId));
+  }, [catalog.data, files, id, legacyProjectId]);
   const canvases = useQuery({ queryKey: ["canvas-documents"], queryFn: listCanvasDocuments });
   const projectCanvases = useMemo(
     () => legacyProjectId == null ? [] : (canvases.data ?? []).filter((canvas) => canvas.project_id === legacyProjectId),
@@ -169,7 +173,7 @@ export function ProjectView() {
           <ProjectBrief clientCase={clientCase} files={files} linkedRecords={linkedRecords} graphCount={graphNodes.error || graphNodes.isLoading ? null : graphNodes.data?.length ?? 0} investigation={investigation} />
         </QueryState>
       ) : view === "table" || view === "evidence" ? (
-        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading || investigationSignals.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error ?? investigationSignals.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) + (investigationSignals.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Signals, workspace documents, linked records, and files in this project's folder appear here." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch(), investigationSignals.refetch()])}>
+        <QueryState className="m-5" isLoading={docs.isLoading || catalog.isLoading || folderFiles.isLoading || investigationSignals.isLoading} error={docs.error ?? catalog.error ?? folderFiles.error ?? investigationSignals.error} isEmpty={files.length + linkedRecords.length + (folderFiles.data?.length ?? 0) + (investigationSignals.data?.length ?? 0) === 0} loadingLabel="Loading evidence" errorTitle="Evidence unavailable" emptyTitle="No evidence yet" emptyDescription="Link a signal, workspace document, record, or file to add evidence to this project." onRetry={() => void Promise.all([docs.refetch(), catalog.refetch(), folderFiles.refetch(), investigationSignals.refetch()])}>
           <ProjectEvidenceTable files={files} folderFiles={folderFiles.data} linkedRecords={linkedRecords} signals={investigationSignals.data} onOpenDocument={(record) => setSelected({ kind: "document", record })} onOpenFile={(file) => setSelected({ kind: "file", file })} onOpenRecord={(record) => setSelected({ kind: "record", record })} onOpenSignal={(signal) => setSelected({ kind: "signal", signal })} />
         </QueryState>
       ) : view === "entities" ? (
@@ -187,7 +191,7 @@ export function ProjectView() {
       ) : view === "timeline" ? (
         <ProjectTimeline files={files} investigation={investigation} onOpenDocument={(record) => setSelected({ kind: "document", record })} />
       ) : (
-        <p className="p-5 text-[var(--t-ui)] text-[var(--text-muted)]">This view will appear when the project has linked material.</p>
+        <p className="p-5 text-[length:var(--t-ui)] text-[var(--text-muted)]">No linked material is available for this view.</p>
       )}
       </div>
 
@@ -196,30 +200,30 @@ export function ProjectView() {
           <div className="grid gap-5 p-4">
             {selected.kind === "file" ? <ProjectFileView file={selected.file} folders={node?.folders ?? []} /> : selected.kind === "entity" ? <>
               <div>
-                <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.entity.entity_type}</div>
-                <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.entity.name}</h2>
+                <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.entity.entity_type}</div>
+                <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.entity.name}</h2>
               </div>
               {selected.entity.confidence ? <Pill>{selected.entity.confidence}</Pill> : null}
-              {selected.entity.aliases.length ? <p className="text-[var(--t-meta)] text-[var(--text-muted)]">Also known as {selected.entity.aliases.join(", ")}</p> : null}
-              <p className="text-[var(--t-ui)] text-[var(--text)]">{selected.entity.summary || "No summary yet."}</p>
+              {selected.entity.aliases.length ? <p className="text-[length:var(--t-meta)] text-[var(--text-muted)]">Also known as {selected.entity.aliases.join(", ")}</p> : null}
+              <p className="text-[length:var(--t-ui)] text-[var(--text)]">{selected.entity.summary || "No summary yet."}</p>
             </> : selected.kind === "signal" ? <>
               <div>
-                <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Signal · {selected.signal.intel_signals?.source || "unknown source"}</div>
-                <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.signal.intel_signals?.title || "Untitled signal"}</h2>
+                <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">Signal · {selected.signal.intel_signals?.source || "unknown source"}</div>
+                <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.signal.intel_signals?.title || "Untitled signal"}</h2>
               </div>
-              <p className="text-[var(--t-ui)] text-[var(--text)]">{selected.signal.intel_signals?.snippet || "No excerpt available."}</p>
+              <p className="text-[length:var(--t-ui)] text-[var(--text)]">{selected.signal.intel_signals?.snippet || "No excerpt available."}</p>
               {selected.signal.intel_signals?.url ? <DrawerActions onOpen={openSelection} /> : null}
             </> : <>
             <div>
-              <div className="text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
-              <h2 className="mt-1 text-[var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
+              <div className="text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--text-muted)]">{selected.kind === "document" ? "Document" : selected.record.databaseName}</div>
+              <h2 className="mt-1 text-[length:var(--t-title)] text-[var(--text)]">{selected.kind === "document" ? documentTitle(selected.record) : selected.record.title}</h2>
             </div>
             {selected.kind === "document" ? (
               <>
-                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} /> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+                {value(selected.record, DOCUMENTS_DB_FIELDS.author) ? <Identity name={value(selected.record, DOCUMENTS_DB_FIELDS.author)} /> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
                 <Pill>{value(selected.record, DOCUMENTS_DB_FIELDS.stage) || "document"}</Pill>
               </>
-            ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
+            ) : selected.record.status ? <Pill>{selected.record.status}</Pill> : <span className="text-[length:var(--t-meta)] text-[var(--text-muted)]">— unassigned</span>}
             <DrawerActions onOpen={openSelection} />
             </>}
           </div>

@@ -32,10 +32,10 @@ export function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
   return (
     <figure className="overflow-hidden rounded-[var(--r-plane)] border border-[var(--border)] bg-[var(--crust)]">
       <figcaption className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
-        <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">
+        <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.1em] text-[var(--overlay-1)]">
           Relationship graph · {spec.mode}
         </span>
-        <Link className="inline-flex items-center gap-1 font-ui text-[var(--t-count)] text-[var(--accent-text)] hover:underline" to={href}>
+        <Link className="inline-flex items-center gap-1 font-ui text-[length:var(--t-count)] text-[var(--accent-text)] hover:underline" to={href}>
           Open graph <ArrowUpRight className="h-3 w-3" />
         </Link>
       </figcaption>
@@ -43,11 +43,11 @@ export function GraphEmbedPreview({ spec }: { spec: GraphEmbedSpec }) {
         {query.isLoading ? (
           <Skeleton lines={3} className="w-full" />
         ) : query.error ? (
-          <p className="font-ui text-[var(--t-section)] text-[var(--danger)]">Graph snapshot could not be loaded.</p>
+          <p className="font-ui text-[length:var(--t-section)] text-[var(--danger)]">Graph snapshot could not be loaded.</p>
         ) : query.data?.nodes.length ? (
           <div className="h-[260px] w-full [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: svg }} />
         ) : (
-          <p className="font-ui text-[var(--t-section)] text-[var(--overlay-1)]">This graph has no nodes.</p>
+          <p className="font-ui text-[length:var(--t-section)] text-[var(--overlay-1)]">This graph has no nodes.</p>
         )}
       </div>
     </figure>

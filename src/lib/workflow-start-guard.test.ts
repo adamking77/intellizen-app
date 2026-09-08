@@ -1,8 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { WorkflowStartAttempt } from "./types";
 
-const backend = vi.hoisted(() => ({ status: "Draft" as unknown, writes: vi.fn(), runs: [] as Array<Record<string, unknown>>, filters: [] as Array<unknown>, range: [] as number[], workflowLookups: 0 }));
+const backend = vi.hoisted(() => ({ status: "Draft" as unknown, definition: null as Record<string, unknown> | null, writes: vi.fn(), rpc: vi.fn(), runs: [] as Array<Record<string, unknown>>, filters: [] as Array<unknown>, range: [] as number[], workflowLookups: 0 }));
 vi.mock("@/lib/supabase", () => ({
-  supabase: { schema: () => ({ from: (table: string) => {
+  supabase: { schema: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      backend.rpc(name, args);
+      if (name !== "start_workflow_run_v1") throw new Error(`Unexpected RPC ${name}`);
+      return {
+        data: {
+          run: {
+            id: "00000000-0000-4000-8000-000000000099",
+            database_id: "c1000000-0000-0000-0000-000000000002",
+            entity: "genzen",
+            fields: args.p_fields,
+            body: args.p_body,
+            taxonomy: args.p_taxonomy,
+            created_at: "2026-09-07T12:00:00.000Z",
+            updated_at: "2026-09-07T12:00:00.000Z",
+          },
+        },
+        error: null,
+      };
+    },
+    from: (table: string) => {
     let membership: Record<string, unknown> | null = null;
     let end = Number.POSITIVE_INFINITY;
     const query = {
@@ -14,7 +35,7 @@ vi.mock("@/lib/supabase", () => ({
       single: async () => {
         if (table === "databases") return { data: { id: "runs", name: "Workflow Runs", schema: [], taxonomy: {} }, error: null };
         backend.workflowLookups += 1;
-        return { data: { id: "c1000000-0000-0000-0000-000000000010", fields: { workflow_id: "example", workflow_name: "Example", workflow_status: backend.status }, taxonomy: {} }, error: null };
+        return { data: { id: "c1000000-0000-0000-0000-000000000010", fields: { workflow_id: "example", workflow_name: "Example", workflow_status: backend.status, workflow_definition: backend.definition, workflow_definition_version: backend.definition ? 1 : null }, taxonomy: {} }, error: null };
       },
       then: (resolve: (value: unknown) => unknown) => {
         // PostgREST evaluates filters before its range, regardless of chaining order.
@@ -28,7 +49,29 @@ vi.mock("@/lib/supabase", () => ({
 
 import { GENZEN_WORKSPACE_DATABASE_IDS, listWorkflowRuns, startWorkflow } from "./data";
 
-beforeEach(() => { backend.writes.mockClear(); backend.status = "Draft"; backend.runs = []; backend.filters = []; backend.range = []; backend.workflowLookups = 0; });
+const schemaV1Definition = {
+  schema: "intellizen.workflow/1",
+  id: "example-v1",
+  name: "Example",
+  version: 1,
+  trigger: { kind: "manual" },
+  inputs: [],
+  steps: [{
+    id: "work",
+    kind: "role-assign",
+    title: "Work",
+    role: "worker",
+    resolution: "primary-active-occupant",
+    instructions: "Perform the bounded work.",
+    execution: "ephemeral",
+    mediatedAuthority: "read-only",
+    verification: { required: false },
+    timeoutMinutes: 30,
+    next: null,
+  }],
+};
+
+beforeEach(() => { backend.writes.mockClear(); backend.rpc.mockClear(); backend.status = "Draft"; backend.definition = null; backend.runs = []; backend.filters = []; backend.range = []; backend.workflowLookups = 0; });
 
 describe("workflow activation at the start boundary", () => {
   it.each(["Draft", "Paused", "Retired", "Unknown", null, undefined])("refuses %s even with confirmed write and creates no records", async (status) => {
@@ -42,6 +85,42 @@ describe("workflow activation at the start boundary", () => {
     expect(backend.writes).not.toHaveBeenCalled();
     await expect(startWorkflow({ workflowId: "example", requestedBy: "fixture", triggerSource: "ui", confirmWrite: true })).rejects.toThrow("Fixture stopped at first write");
     expect(backend.writes).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays the previewed schema-v1 start attempt through the atomic RPC", async () => {
+    backend.status = "Active";
+    backend.definition = schemaV1Definition;
+    const preview = await startWorkflow({ workflowId: "example", requestedBy: "fixture", triggerSource: "ui" });
+    const attempt = (preview as { schema_v1: { confirmation: { start_attempt: WorkflowStartAttempt } } }).schema_v1.confirmation.start_attempt;
+
+    await expect(startWorkflow({
+      workflowId: "example",
+      requestedBy: "fixture",
+      triggerSource: "ui",
+      confirmWrite: true,
+      startAttempt: attempt,
+    })).resolves.toMatchObject({ workflow_run_id: "00000000-0000-4000-8000-000000000099" });
+    expect(backend.writes).not.toHaveBeenCalled();
+    expect(backend.rpc).toHaveBeenCalledWith("start_workflow_run_v1", expect.objectContaining({
+      p_idempotency_key: attempt.idempotency_key,
+      p_request_hash: attempt.request_hash,
+      p_confirm_write: true,
+      p_fields: expect.objectContaining({
+        run_name: attempt.run_name,
+        run_started_at: attempt.run_started_at,
+      }),
+    }));
+  });
+
+  it("rejects an unpreviewed or unsupported schema-v1 start before writing", async () => {
+    backend.status = "Active";
+    backend.definition = schemaV1Definition;
+    await expect(startWorkflow({ workflowId: "example", requestedBy: "fixture", triggerSource: "ui", confirmWrite: true }))
+      .rejects.toThrow("requires the exact preview start_attempt");
+    await expect(startWorkflow({ workflowId: "example", requestedBy: "fixture", triggerSource: "schedule" }))
+      .rejects.toThrow("do not support the schedule trigger source");
+    expect(backend.writes).not.toHaveBeenCalled();
+    expect(backend.rpc).not.toHaveBeenCalled();
   });
 });
 

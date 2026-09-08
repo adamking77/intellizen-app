@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 // @vitest-environment happy-dom
 
-import { ejectReducer, leaveHudHandoff, panelModeReducer, sizeFor, takeHudHandoff } from "./panel-window";
+import { createRouteConversationContext, publishConversationContext } from "@/lib/conversation-context";
+import { capturePanelActionContext, ejectReducer, leaveHudHandoff, panelModeReducer, sizeFor, takeHudHandoff } from "./panel-window";
 
 describe("ejected panel state", () => {
   it("returns the conversation home when opening fails or the window closes", () => {
@@ -30,5 +31,16 @@ describe("ejected panel state", () => {
     expect(takeHudHandoff()).toBe(true);
     leaveHudHandoff(false);
     expect(takeHudHandoff()).toBe(false);
+  });
+
+  it("captures detached send context before the main window handles the action", () => {
+    window.localStorage.clear();
+    const selected = createRouteConversationContext({ pathname: "/docs", search: "?record=doc-a" });
+    selected.selections = [{ kind: "document", documentId: "doc-a" }];
+    publishConversationContext(selected);
+    const action = capturePanelActionContext({ type: "send", profile: "keel", text: "Review" });
+    publishConversationContext(createRouteConversationContext({ pathname: "/home" }));
+
+    expect(action).toMatchObject({ type: "send", context: selected });
   });
 });

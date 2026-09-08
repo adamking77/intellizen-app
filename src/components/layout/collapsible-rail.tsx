@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 
+import { useInputModality, useMotionEnabled } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 interface CollapsibleRailProps {
@@ -28,14 +29,15 @@ export function CollapsibleRail({
   bodyClassName,
   showCollapseButton = true,
 }: CollapsibleRailProps) {
+  const animateWidth = useMotionEnabled() && useInputModality() === "pointer";
   return (
     <aside
       data-collapsible-rail={title}
       style={{ width: collapsed ? 0 : width }}
       aria-hidden={collapsed ? true : undefined}
       className={cn(
-        "relative flex shrink-0 flex-col overflow-hidden bg-[var(--mantle)]",
-        "transition-[width] duration-[var(--t-slow)] ease-[var(--ease)]",
+        "relative flex shrink-0 flex-col overflow-hidden bg-[var(--ground)]",
+        animateWidth ? "transition-[width] duration-[var(--dur-sheet)] ease-[var(--ease-sheet)]" : "transition-none",
         !collapsed && "border-r border-[var(--border)]",
         collapsed && "invisible",
         className,

@@ -2,7 +2,7 @@
 
 The remote Supabase project (`jicrdrwtwubveyvzyyrh`) is the authoritative schema record. This repository holds only an app-local subset and cannot rebuild the full database.
 
-Snapshot: 2026-09-05 — 160 remote-applied migrations, verified through Supabase MCP `list_migrations`. Regenerate after applying migrations.
+Snapshot: 2026-09-07 — 162 remote-applied migrations, refreshed after post-apply Supabase MCP verification. Regenerate after applying migrations.
 
 The vault sync repair adds `sync_vault_document_v1`, a service-role-only transaction that checks document versions and updates content and derived embeddings together. Local migration `20260905080216_vault_sync_atomic_document.sql` matches its remote version.
 
@@ -172,3 +172,5 @@ Post-apply authority verification is defined in `supabase/tests/v2_audit_receipt
 | 20260817185458 | native_executor_claim_and_receipt_v2 |
 | 20260901200717 | add_hierarchy_nodes |
 | 20260905080216 | vault_sync_atomic_document |
+| 20260907173514 | workflow_meanwhile_side_transitions |
+| 20260907175524 | workflow_meanwhile_claim_receipt_guard |

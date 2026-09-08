@@ -7,8 +7,8 @@ import {
   resolveInitialPanelRole,
 } from "@/lib/agent-panel-roles";
 const executionTargets = [
-  { ref: "hermes:fiona", agentKey: "fiona", kind: "hermes" as const, targetId: "fiona", model: null, execution: "durable" as const },
-  { ref: "acp:keel", agentKey: "keel", kind: "acp" as const, targetId: "keel", model: "gpt-5.3-codex", execution: "ephemeral" as const },
+  { ref: "hermes:fiona", agentKey: "fiona", kind: "hermes" as const, engine: "hermes", targetId: "fiona", model: null, execution: "durable" as const },
+  { ref: "acp:keel", agentKey: "keel", kind: "acp" as const, engine: "codex", targetId: "keel", model: "gpt-5.3-codex", execution: "ephemeral" as const },
 ];
 
 describe("Agent Panel role routing", () => {

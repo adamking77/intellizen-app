@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, Copy, FileText, Pencil, RotateCcw, Volume2, VolumeX } from "lucide-react";
 
-import { took, clock } from "@/components/agent/turn-time";
 import {
   agentTurnActions,
   errorReport,
@@ -26,13 +25,17 @@ import { cn } from "@/lib/utils";
 const TURN_ICON =
   "inline-flex h-5 w-5 items-center justify-center rounded-[var(--r-ctl)] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]";
 
+function absoluteTime(at: number) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /** A fact about a turn, in the row with its controls. Not a control, so it
  *  never rides the hover fade. */
 export function TurnFact({ text, title, truncate }: { text: string; title?: string; truncate?: boolean }) {
   return (
     <span
       className={cn(
-        "px-0.5 font-ui text-[var(--t-meta)] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
+        "px-0.5 font-ui text-[length:var(--t-meta)] tabular-nums text-[var(--text-muted)] whitespace-nowrap",
         truncate ? "min-w-0 truncate" : "shrink-0",
       )}
       title={title}
@@ -124,7 +127,6 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
           className="min-w-0 flex-1"
           tool={tool.name}
           detail={tool.title === tool.name ? undefined : tool.title}
-          duration={tool.durationMs === undefined ? undefined : tool.durationMs < 1000 ? `${tool.durationMs} ms` : `${(tool.durationMs / 1000).toFixed(1)} s`}
           state={tool.ok === undefined ? tool.historical ? "recorded" : "running" : tool.ok ? "completed" : "failure"}
         />
       </button>
@@ -142,7 +144,7 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
         />
       ) : null}
       {open && tool.resultText ? (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[var(--t-section)] leading-relaxed text-[var(--text-muted)]">
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-[var(--hair)] px-[9px] py-1.5 font-mono text-[length:var(--t-section)] leading-relaxed text-[var(--text-muted)]">
           {tool.resultText}
         </pre>
       ) : null}
@@ -152,11 +154,9 @@ function ToolRowView({ tool }: { tool: ToolRowModel }) {
 
 export function UserTurn({
   message,
-  now,
   actions,
 }: {
   message: Message;
-  now: number;
   actions?: TurnActions;
 }) {
   // Editing replaces the bubble with an editor rather than opening a second
@@ -188,7 +188,7 @@ export function UserTurn({
               }
             }}
             aria-label="Edit this message"
-            className="w-full resize-none bg-transparent font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+            className="w-full resize-none bg-transparent font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
             <Control
@@ -217,11 +217,11 @@ export function UserTurn({
   return (
     <div className="group relative max-w-[82%] self-end">
       <div className="rounded-[var(--r-ctl)] bg-[var(--user-bubble)] px-[11px] py-2">
-        <span className="whitespace-pre-wrap font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
+        <span className="whitespace-pre-wrap font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]">{message.text}</span>
       </div>
       <TurnBar align="end">
         {message.at !== undefined ? (
-          <TurnFact text={clock(message.at, now)} title={new Date(message.at).toLocaleString()} />
+          <TurnFact text={absoluteTime(message.at)} title={new Date(message.at).toLocaleString()} />
         ) : null}
         {userTurnActions(message, contextOf(actions, false)).map((action) => (
           <ActionIcon key={action.id} action={action} onRun={run} />
@@ -234,7 +234,6 @@ export function UserTurn({
 export function AgentTurn({
   message,
   profile,
-  now,
   onRetry,
   actions,
   reading,
@@ -243,7 +242,6 @@ export function AgentTurn({
 }: {
   message: Message;
   profile: HermesProfile | null;
-  now: number;
   onRetry?: (prompt: string) => void;
   actions?: TurnActions;
   /** Measured playback amplitude while this reply is being spoken. */
@@ -276,12 +274,12 @@ export function AgentTurn({
             onToggle={(event) => setThoughtOpen(event.currentTarget.open)}
             className="rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[7px]"
           >
-            <summary className="cursor-default list-none font-ui text-[var(--t-meta)] text-[var(--text-muted)]">
+            <summary className="cursor-default list-none font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">
               {message.streaming ? "Thinking…" : "Thought"}
             </summary>
             <ReplyMarkdown
               content={message.thought.replace(/^\s+/, "")}
-              className="mt-1 font-ui text-[var(--t-meta)] leading-normal text-[var(--text-muted)]"
+              className="mt-1 font-ui text-[length:var(--t-meta)] leading-normal text-[var(--text-muted)]"
             />
           </details>
         ) : null}
@@ -292,7 +290,7 @@ export function AgentTurn({
             onClick={() => setRunOpen(true)}
             className="flex items-center gap-2 rounded-[var(--r-ctl)] bg-[var(--crust)] px-[9px] py-1.5 text-left"
           >
-            <span className="flex-1 font-mono text-[var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
+            <span className="flex-1 font-mono text-[length:var(--t-meta)] text-[var(--text-muted)]">{tools.length} steps</span>
             <ChevronDown className="h-3 w-3 text-[var(--text-muted)]" strokeWidth={1.8} aria-hidden />
           </button>
         ) : (
@@ -304,12 +302,12 @@ export function AgentTurn({
         {message.text || message.streaming ? (
           <div
             className="rounded-[var(--r-ctl)] px-[11px] py-2"
-            style={{ background: `color-mix(in srgb, ${agentColor} 12%, transparent)` }}
+            style={{ background: `color-mix(in srgb, ${agentColor} var(--agent-bubble-weight), transparent)` }}
           >
             {message.text ? (
               <ReplyMarkdown
                 content={message.text.replace(/^\s+/, "")}
-                className="font-ui text-[var(--t-ui)] leading-normal text-[var(--text)]"
+                className="font-ui text-[length:var(--t-ui)] leading-normal text-[var(--text)]"
               />
             ) : null}
             {message.streaming ? (
@@ -330,17 +328,16 @@ export function AgentTurn({
             {agentTurnActions(message, contextOf(actions, Boolean(reading))).map((action) => (
               <ActionIcon key={action.id} action={action} onRun={runAction} />
             ))}
-            {message.tookMs !== undefined ? <TurnFact text={took(message.tookMs)} title="How long this turn took" /> : null}
             <div className="flex-1" />
             {message.at !== undefined ? (
-              <TurnFact text={clock(message.at, now)} title={new Date(message.at).toLocaleString()} />
+              <TurnFact text={absoluteTime(message.at)} title={new Date(message.at).toLocaleString()} />
             ) : null}
           </TurnBar>
         ) : null}
 
         {message.failed ? (
-          <div className="rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] px-[11px] py-2">
-            <p className="font-ui text-[var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
+          <div className="rounded-[var(--r-ctl)] bg-transparent px-[11px] py-2">
+            <p className="font-ui text-[length:var(--t-ui)] leading-normal text-[var(--bad)]">{message.failed}</p>
             {/* Word-labelled and always visible: an action you must hover to
                 discover is not offered, and the row survives greyscale. */}
             <div className="mt-2 flex gap-1.5">

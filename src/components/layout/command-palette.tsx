@@ -19,6 +19,12 @@ import { useAppStore } from "@/store";
 import { usePluginPaletteCommands } from "@/plugins/commands";
 import { toastError } from "@/lib/toast";
 import { useHierarchy } from "@/lib/use-hierarchy";
+import { readConversationContext } from "@/lib/conversation-context";
+import { useSessionStore } from "@/engine/session-store";
+import { ReplyMarkdown } from "@/components/agent/reply-markdown";
+import { runRoomAction } from "@/components/agent/panel-room";
+import { $groupChats } from "@/rooms/group-chat";
+import { useValue } from "@/rooms/store";
 
 // ============================================================
 // Context + provider
@@ -92,7 +98,42 @@ interface Command {
   label: string;
   hint?: string;
   kind: CommandKind;
+  disabled?: boolean;
+  stayOpen?: boolean;
   run: (ctx: { navigate: (to: string) => void }) => void | Promise<void>;
+}
+
+interface AskAttempt {
+  id: number;
+  kind: "profile" | "room";
+  targetId: string;
+  agent: string;
+  question: string;
+  questionMessageId: string | null;
+  sessionId: string | null;
+  submitted: boolean;
+  error: string | null;
+}
+
+export interface AskSource {
+  label: string;
+  href: string;
+}
+
+/** Links explicitly attached to the correlated reply. No link means no
+ * source claim: route context is input material, not proof the agent used it. */
+export function askSources(text: string): AskSource[] {
+  const sources = new Map<string, AskSource>();
+  for (const match of text.matchAll(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g)) {
+    sources.set(match[2], { label: match[1], href: match[2] });
+  }
+  for (const match of text.matchAll(/https?:\/\/[^\s<>)\]]+/g)) {
+    if (sources.has(match[0])) continue;
+    let label = match[0];
+    try { label = new URL(match[0]).hostname; } catch { /* Keep the visible URL. */ }
+    sources.set(match[0], { label, href: match[0] });
+  }
+  return [...sources.values()].slice(0, 8);
 }
 
 const NAV_COMMANDS: Command[] = [
@@ -166,6 +207,37 @@ function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [ask, setAsk] = useState<AskAttempt | null>(null);
+  const askSequence = useRef(0);
+  const selectedRoomId = useSessionStore((state) => state.selectedRoomId);
+  const rooms = useValue($groupChats);
+  const selectedRoom = selectedRoomId ? rooms[selectedRoomId] : null;
+  const selectedProfile = useSessionStore((state) => state.selectedRoomId ? null : state.selectedProfile);
+  const selectedAgent = useSessionStore((state) => selectedProfile ? state.profileDirectory[selectedProfile] : null);
+  const askThread = useSessionStore((state) => ask?.kind === "profile" ? state.threads[ask.targetId] : undefined);
+  const askRoom = ask?.kind === "room" ? rooms[ask.targetId] : undefined;
+  const profileAskedAt = ask?.kind === "profile" && ask.questionMessageId && askThread?.sessionId === ask.sessionId
+    ? askThread.transcript.messages.findIndex((message) => message.id === ask.questionMessageId && message.from === "you")
+    : -1;
+  const profileTail = profileAskedAt >= 0 ? askThread?.transcript.messages.slice(profileAskedAt + 1) ?? [] : [];
+  const profileBoundary = profileTail.findIndex((message) => message.from === "you");
+  const profileAnswer = profileAskedAt >= 0
+    ? profileTail.slice(0, profileBoundary < 0 ? undefined : profileBoundary).find((message) => message.from !== "you")
+    : undefined;
+  const roomAskedAt = ask?.kind === "room" && ask.questionMessageId
+    ? askRoom?.log.findIndex((message) => message.id === ask.questionMessageId && message.from.kind === "user") ?? -1
+    : -1;
+  const roomQuestion = roomAskedAt >= 0 ? askRoom?.log[roomAskedAt] : undefined;
+  const roomTail = roomQuestion ? askRoom?.log.slice(roomAskedAt + 1) ?? [] : [];
+  const roomBoundary = roomTail.findIndex((message) => message.from.kind === "user");
+  const roomAnswers = roomQuestion
+    ? roomTail.slice(0, roomBoundary < 0 ? undefined : roomBoundary).filter((message) => message.from.kind === "member" && message.thread === roomQuestion.thread)
+    : [];
+  const answerText = ask?.kind === "room" ? roomAnswers.map((message) => message.text).join("\n\n") : profileAnswer?.text ?? "";
+  const sources = useMemo(() => askSources(answerText), [answerText]);
+  const askRunning = Boolean(ask && !ask.error && (!ask.submitted || (ask.kind === "room"
+    ? Boolean(roomQuestion && roomBoundary < 0 && askRoom?.running)
+    : Boolean(profileAskedAt >= 0 && profileBoundary < 0 && askThread?.transcript.turnStartedAt !== null))));
   const workspaceQuery = query.trim();
   const { data: workspaceResults = [] } = useQuery({
     queryKey: ["command-palette-workspace-search", workspaceQuery, entityFilter],
@@ -183,6 +255,47 @@ function CommandPalette() {
   }, [isOpen]);
 
   const pluginCommands = usePluginPaletteCommands(); // wave-1 plugins
+  const askQuestion = useCallback(async () => {
+    const question = query.trim();
+    const state = useSessionStore.getState();
+    const roomId = state.selectedRoomId;
+    const room = roomId ? $groupChats.get()[roomId] : null;
+    const profile = roomId ? null : state.selectedProfile;
+    if (!question || askRunning || (!room && !profile)) return;
+    const agent = room
+      ? room.name || "Team"
+      : state.profileDirectory[profile!]?.displayName || state.profileDirectory[profile!]?.name || profile!;
+    const id = ++askSequence.current;
+    setAsk({
+      id,
+      kind: room ? "room" : "profile",
+      targetId: room ? roomId! : profile!,
+      agent,
+      question,
+      questionMessageId: null,
+      sessionId: null,
+      submitted: false,
+      error: null,
+    });
+    try {
+      const context = readConversationContext();
+      if (room) {
+        const sent = await runRoomAction({ type: "room-send", roomId: roomId!, text: question, context, preservePanelDraft: true });
+        setAsk((current) => current?.id === id ? { ...current, questionMessageId: sent?.messageId ?? null, submitted: true } : current);
+      } else {
+        await state.send(profile!, question, [], context, {
+          preservePanelDraft: true,
+          onQueued: (messageId, sessionId) => setAsk((current) => current?.id === id
+            ? { ...current, questionMessageId: messageId, sessionId, submitted: true }
+            : current),
+        });
+      }
+    } catch (error) {
+      setAsk((current) => current?.id === id
+        ? { ...current, error: error instanceof Error ? error.message : String(error) }
+        : current);
+    }
+  }, [query, askRunning]);
   const groups = useMemo(() => {
     const rank = (cmds: Command[]) =>
       cmds
@@ -192,14 +305,24 @@ function CommandPalette() {
         .map((r) => r.c);
 
     const workspaceCommands = workspaceResults.map((result) => commandFromWorkspaceResult(result, tree));
+    const targetId = selectedRoom ? selectedRoomId : selectedAgent ? selectedProfile : null;
+    const targetLabel = selectedRoom?.name || selectedAgent?.displayName || selectedAgent?.name || targetId;
+    const askCommand: Command[] = workspaceQuery && targetId ? [{
+      id: `ask:${targetId}`,
+      label: `“${workspaceQuery}”`,
+      hint: askRunning ? "asking" : "↵ to ask",
+      kind: "action",
+      disabled: askRunning,
+      stayOpen: true,
+      run: askQuestion,
+    }] : [];
 
     return [
-      { heading: "Navigation", items: rank(NAV_COMMANDS) },
-      { heading: "Actions", items: rank(ACTION_COMMANDS) },
-      { heading: "Workspace", items: workspaceCommands },
-      { heading: "Plugins", items: rank(pluginCommands) },
+      { heading: "Go", items: rank([...NAV_COMMANDS, ...ACTION_COMMANDS, ...pluginCommands]) },
+      { heading: "Found", items: workspaceCommands },
+      { heading: `Ask ${targetLabel || "an agent"}`, items: askCommand },
     ].filter((g) => g.items.length > 0);
-  }, [query, workspaceResults, pluginCommands, tree]);
+  }, [query, workspaceQuery, workspaceResults, pluginCommands, tree, selectedRoom, selectedRoomId, selectedProfile, selectedAgent, askRunning, askQuestion]);
 
   const flatResults = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
@@ -211,8 +334,9 @@ function CommandPalette() {
 
   const execute = useCallback(
     (cmd: Command) => {
+      if (cmd.disabled) return;
       void Promise.resolve(cmd.run({ navigate })).catch((error) => toastError("Couldn't open search result", error));
-      close();
+      if (!cmd.stayOpen) close();
     },
     [navigate, close],
   );
@@ -224,17 +348,17 @@ function CommandPalette() {
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[13vh]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
     >
       {/* Backdrop */}
-      <div className="modal-backdrop absolute inset-0" aria-hidden />
+      <div className="absolute inset-0" style={{ background: "color-mix(in srgb, var(--crust) 72%, transparent)" }} onMouseDown={close} aria-hidden />
 
       <div
         className={cn(
-          "modal-surface relative z-10 flex max-h-[60dvh] w-[588px] max-w-[calc(100vw-24px)] flex-col overflow-hidden",
+          "relative z-10 flex max-h-[72dvh] w-[760px] max-w-[calc(100vw-32px)] flex-col overflow-hidden",
           "animate-fade-in",
         )}
         onKeyDown={(e) => {
@@ -243,11 +367,12 @@ function CommandPalette() {
             close();
           } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            setActiveIndex((i) => Math.min(flatResults.length - 1, i + 1));
+            setActiveIndex((i) => Math.min(Math.max(0, flatResults.length - 1), i + 1));
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setActiveIndex((i) => Math.max(0, i - 1));
           } else if (e.key === "Enter") {
+            if (e.target instanceof HTMLAnchorElement || e.target instanceof HTMLButtonElement) return;
             e.preventDefault();
             const cmd = flatResults[activeIndex];
             if (cmd) execute(cmd);
@@ -267,27 +392,27 @@ function CommandPalette() {
             setQuery(e.target.value);
             setActiveIndex(0);
           }}
-          placeholder="Type a command or search…"
+          placeholder="Type to go, find, or ask…"
           className={cn(
-            "w-full bg-transparent px-4 py-3",
-            "font-ui text-[var(--t-body)] text-[var(--text)]",
-            "placeholder:text-[var(--overlay-0)]",
-            "border-b border-[var(--border)]",
+            "w-full border-b border-[var(--text-muted)] bg-transparent px-0 pb-3 pt-1",
+            "font-ui text-[28px] font-light leading-tight text-[var(--text)]",
+            "placeholder:text-[var(--text-dim)]",
             "focus:outline-none",
           )}
         />
 
-        <div id="cp-listbox" role="listbox" aria-label="Commands" className="min-h-0 flex-1 overflow-y-auto py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+          <div id="cp-listbox" role="listbox" aria-label="Commands">
           {groups.length === 0 && (
-            <div className="px-4 py-6 text-center font-ui text-[var(--t-ui)] text-[var(--overlay-1)]">
+            <div className="py-6 text-center font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">
               No results
             </div>
           )}
           {groups.map((group) => {
             return (
-              <div key={group.heading} className="pb-2">
-                <div className="px-4 pb-1 pt-2">
-                  <span className="font-ui text-[var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+              <div key={group.heading} className="border-t border-[var(--line)] py-3">
+                <div className="pb-1">
+                  <span className="font-mono text-[10px] font-normal uppercase tracking-[0.12em] text-[var(--text-muted)]">
                     {group.heading}
                   </span>
                 </div>
@@ -301,20 +426,22 @@ function CommandPalette() {
                       type="button"
                       role="option"
                       aria-selected={isActive}
+                      disabled={cmd.disabled}
                       onMouseEnter={() => setActiveIndex(flatIdx)}
                       onClick={() => execute(cmd)}
                       className={cn(
-                        "flex w-full items-center justify-between px-4 py-2 text-left",
-                        "font-ui text-[var(--t-ui)]",
+                        "flex w-full items-center justify-between rounded-[var(--r-ctl)] px-0 py-1.5 text-left",
+                        "font-ui text-[18px] font-light leading-snug",
                         "transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
+                        cmd.disabled && "opacity-60",
                         isActive
-                          ? "bg-[var(--selected)] text-[var(--text)]"
-                          : "text-[var(--subtext-1)] hover:bg-[var(--surface-wash)]",
+                          ? "text-[var(--text)]"
+                          : "text-[var(--text-muted)] hover:text-[var(--text)]",
                       )}
                     >
                       <span>{cmd.label}</span>
                       {cmd.hint && (
-                        <span className="font-mono text-[var(--t-section)] text-[var(--overlay-1)]">
+                        <span className="font-mono text-[10px] text-[var(--text-muted)]">
                           {cmd.hint}
                         </span>
                       )}
@@ -324,21 +451,38 @@ function CommandPalette() {
               </div>
             );
           })}
+          </div>
+          {ask ? <section aria-label={`Answer from ${ask.agent}`} className="border-t border-[var(--line)] py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent-text)]">{ask.agent} · answer</p>
+            <p className="mt-1 font-ui text-[15px] text-[var(--text-muted)]">{ask.question}</p>
+            {ask.error || profileAnswer?.failed ? <p role="alert" className="mt-3 text-[length:var(--t-ui)] text-[var(--bad)]">{ask.error || profileAnswer?.failed}</p> : ask.kind === "room" && roomAnswers.length ? (
+              <div className="mt-3 grid gap-3">{roomAnswers.map((message) => <div key={message.id || `${message.at}:${message.from.name}`}>
+                <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">{message.from.name}</p>
+                <ReplyMarkdown content={message.text} className="mt-1 font-ui text-[17px] leading-relaxed text-[var(--text)]" />
+              </div>)}</div>
+            ) : profileAnswer?.text ? (
+              <ReplyMarkdown content={profileAnswer.text} className="mt-3 font-ui text-[17px] leading-relaxed text-[var(--text)]" />
+            ) : <p role="status" className="mt-3 font-ui text-[length:var(--t-ui)] text-[var(--text-muted)]">{askRunning ? `${ask.agent} is checking…` : "No answer was returned."}</p>}
+            {(ask.kind === "room" ? Boolean(roomQuestion && !askRoom?.running) : Boolean(profileAnswer && !profileAnswer.streaming)) ? <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-[var(--line)] pt-3 font-mono text-[10px] text-[var(--text-muted)]">
+              <span className="uppercase tracking-[0.1em]">Sources</span>
+              {sources.length ? <span className="flex flex-wrap gap-x-3 gap-y-1">{sources.map((source) => <a key={source.href} href={source.href} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] underline decoration-[var(--accent-border)] underline-offset-2">{source.label}</a>)}</span> : <span>None attached to this answer</span>}
+            </div> : null}
+          </section> : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-2">
-          <div className="flex items-center gap-3 font-ui text-[var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+        <div className="flex items-center justify-between border-t border-[var(--line)] py-2">
+          <div className="flex items-center gap-3 font-mono text-[10px] text-[var(--text-muted)]">
             <span>
               <span className="font-mono">↑↓</span> Navigate
             </span>
             <span>
-              <span className="font-mono">↵</span> Run
+              <span className="font-mono">↵</span> Open or ask
             </span>
             <span>
               <span className="font-mono">Esc</span> Close
             </span>
           </div>
-          <span className="font-mono text-[var(--t-count)] text-[var(--overlay-1)]">⌘K</span>
+          <span className="font-mono text-[10px] text-[var(--text-muted)]">⌘K</span>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@
  *  branches on which window it is in.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ApprovalChoice } from "@/engine/contract";
 import type { SessionAttachment } from "@/engine/session";
@@ -22,6 +22,7 @@ export interface PanelSession {
   selectedProfile: string | null;
   room: import("./panel-room").PanelRoomSnapshot | null;
   thread: ProfileThread | null;
+  decisionError: { requestId: string; message: string } | null;
   selectProfile: (profile: string | null) => void;
   restore: (profile: string) => Promise<void>;
   send: (profile: string, text: string, attachments?: SessionAttachment[]) => Promise<void>;
@@ -85,13 +86,28 @@ export function usePanelSession(parentFrame?: PanelFrame | null): PanelSession {
   const storeStop = useSessionStore((s) => s.stop);
   const storeApproval = useSessionStore((s) => s.decideApproval);
   const storeClarify = useSessionStore((s) => s.decideClarify);
+  const decisionAttempt = useRef(0);
+  const [remoteDecision, setRemoteDecision] = useState<{ profile: string; requestId: string; attempt: number; pending: boolean; error?: string } | null>(null);
 
   const selectedProfile = remote ? (frame?.selectedProfile ?? null) : storeSelected;
   const threads = remote ? (frame?.threads ?? EMPTY) : storeThreads;
-  const thread = useMemo(
+  const baseThread = useMemo(
     () => (selectedProfile ? (threads[selectedProfile] ?? emptyThread(selectedProfile)) : null),
     [threads, selectedProfile],
   );
+  const thread = useMemo(
+    () => remote && remoteDecision?.profile === selectedProfile && remoteDecision.pending && baseThread
+      ? { ...baseThread, deciding: remoteDecision.requestId }
+      : baseThread,
+    [remote, remoteDecision, selectedProfile, baseThread],
+  );
+
+  useEffect(() => setRemoteDecision(null), [selectedProfile]);
+
+  useEffect(() => {
+    if (!remoteDecision?.error || baseThread?.transcript.pending.some((decision) => decision.requestId === remoteDecision.requestId)) return;
+    setRemoteDecision(null);
+  }, [remoteDecision, baseThread]);
 
   // Every remote act resolves immediately: the answer arrives as the next
   // frame, and a promise that waited for it would hold the composer open on
@@ -137,21 +153,41 @@ export function usePanelSession(parentFrame?: PanelFrame | null): PanelSession {
 
   const decideApproval = useCallback(
     async (profile: string, decision: ApprovalDecision, choice: ApprovalChoice) => {
-      if (remote) requestAction({ type: "approve", profile, decision, choice });
-      else await storeApproval(profile, decision, choice);
+      if (!remote) { await storeApproval(profile, decision, choice); return; }
+      const attempt = ++decisionAttempt.current;
+      setRemoteDecision({ profile, requestId: decision.requestId, attempt, pending: true });
+      try {
+        await requestAction({ type: "approve", profile, decision, choice });
+        setRemoteDecision((current) => current?.profile === profile && current.requestId === decision.requestId && current.attempt === attempt ? null : current);
+      } catch (error) {
+        setRemoteDecision((current) => current?.profile === profile && current.requestId === decision.requestId && current.attempt === attempt
+          ? { ...current, pending: false, error: error instanceof Error ? error.message : String(error) }
+          : current);
+        throw error;
+      }
     },
     [remote, storeApproval],
   );
 
   const decideClarify = useCallback(
     async (profile: string, decision: ClarifyDecision, answers: Record<string, string[]>) => {
-      if (remote) requestAction({ type: "clarify", profile, decision, answers });
-      else await storeClarify(profile, decision, answers);
+      if (!remote) { await storeClarify(profile, decision, answers); return; }
+      const attempt = ++decisionAttempt.current;
+      setRemoteDecision({ profile, requestId: decision.requestId, attempt, pending: true });
+      try {
+        await requestAction({ type: "clarify", profile, decision, answers });
+        setRemoteDecision((current) => current?.profile === profile && current.requestId === decision.requestId && current.attempt === attempt ? null : current);
+      } catch (error) {
+        setRemoteDecision((current) => current?.profile === profile && current.requestId === decision.requestId && current.attempt === attempt
+          ? { ...current, pending: false, error: error instanceof Error ? error.message : String(error) }
+          : current);
+        throw error;
+      }
     },
     [remote, storeClarify],
   );
 
-  return { room: frame?.room ?? null, remote, frameReady: !remote || frame !== null, profileDirectory: remote ? frame?.profileDirectory ?? EMPTY_DIRECTORY : storeDirectory, selectedProfile, thread, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
+  return { room: frame?.room ?? null, remote, frameReady: !remote || frame !== null, profileDirectory: remote ? frame?.profileDirectory ?? EMPTY_DIRECTORY : storeDirectory, selectedProfile, thread, decisionError: remoteDecision?.profile === selectedProfile && remoteDecision.error ? { requestId: remoteDecision.requestId, message: remoteDecision.error } : null, selectProfile, restore, send, editAndSend, stop, decideApproval, decideClarify };
 }
 
 const EMPTY: Record<string, ProfileThread> = {};

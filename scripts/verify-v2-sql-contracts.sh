@@ -159,6 +159,13 @@ for migration in "$repo_dir"/supabase/migrations/*.sql; do
       --file="$repo_dir/supabase/tests/v2_isolated_baseline.sql" \
       >/dev/null
   fi
+  if [[ "$(basename "$migration")" == "20260907180000_workflow_meanwhile_side_transitions.sql" ]]; then
+    echo "Applying isolated hosted continuation baseline"
+    "$postgres_bin/psql" \
+      "${psql_args[@]}" \
+      --file="$repo_dir/supabase/tests/workflow_continuation_hosted_baseline.sql" \
+      >/dev/null
+  fi
   echo "Applying $(basename "$migration")"
   "$postgres_bin/psql" "${psql_args[@]}" --file="$migration" >/dev/null
 done
@@ -177,4 +184,27 @@ for contract in "${contracts[@]}"; do
     >/dev/null
 done
 
-echo "V2 isolated SQL contracts passed (4/4)."
+hosted_transition_snapshot="$cluster_root/hosted-transition.sql"
+awk '
+  /^-- BEGIN HOSTED TRANSITION SNAPSHOT/ { capture = 1; next }
+  /^-- END HOSTED TRANSITION SNAPSHOT/ { exit }
+  capture && $0 !~ /^\\if false$/ && $0 !~ /^\\endif$/ { print }
+' "$repo_dir/supabase/tests/workflow_continuation_hosted_baseline.sql" \
+  > "$hosted_transition_snapshot"
+if [[ ! -s "$hosted_transition_snapshot" ]]; then
+  echo "Hosted transition snapshot is missing."
+  exit 1
+fi
+echo "Applying hosted transition snapshot"
+"$postgres_bin/psql" \
+  "${psql_args[@]}" \
+  --file="$hosted_transition_snapshot" \
+  >/dev/null
+
+echo "Running workflow_meanwhile_contract.sql"
+"$postgres_bin/psql" \
+  "${psql_args[@]}" \
+  --file="$repo_dir/supabase/tests/workflow_meanwhile_contract.sql" \
+  >/dev/null
+
+echo "V2 isolated SQL contracts passed (5/5)."

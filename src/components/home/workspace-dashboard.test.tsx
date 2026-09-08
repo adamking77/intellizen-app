@@ -43,7 +43,7 @@ describe("WorkspaceDashboard", () => {
     });
     await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 0)); });
 
-    expect(container.textContent).toContain("No widgets yet");
+    expect(container.textContent).toContain("No dashboard widgets yet");
     const add = Array.from(container.querySelectorAll("button")).filter((button) => button.textContent?.includes("Add widget")).at(-1);
     await act(async () => add?.click());
     expect(container.textContent).toContain("Database views");

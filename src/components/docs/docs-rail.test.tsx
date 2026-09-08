@@ -8,7 +8,7 @@ let root: ReturnType<typeof createRoot>;
 afterEach(async () => { await act(async () => root?.unmount()); document.body.replaceChildren(); localStorage.clear(); });
 async function render(search = '') {
  const host = document.createElement('div'); document.body.append(host); root = createRoot(host);
- await act(async () => root.render(<DocsRail records={[{id:'a',doc_title:'Client report',doc_vault_path:'vault:work/client/report.md'}, {id:'remote',doc_title:'Remote draft'}]} projects={[]} proposalCounts={{}} selectedRecordId={null} searchQuery={search} width={300} creating={false} activeFolder="" onFolder={vi.fn()} onRefresh={vi.fn()} onSearch={vi.fn()} onSelect={vi.fn()} onCreate={vi.fn()} onCreateFolder={vi.fn()} onResize={vi.fn()} />)); return host;
+ await act(async () => root.render(<DocsRail records={[{id:'a',doc_title:'Client report',doc_vault_path:'vault:work/client/report.md'}, {id:'remote',doc_title:'Remote draft'}]} projects={[]} proposalCounts={{}} selectedRecordId={null} searchQuery={search} width={232} creating={false} activeFolder="" onFolder={vi.fn()} onRefresh={vi.fn()} onSearch={vi.fn()} onSelect={vi.fn()} onCreate={vi.fn()} onCreateFolder={vi.fn()} />)); return host;
 }
 it('starts with collapsed folders and exposes nested files only on disclosure', async () => {
  const host = await render(); expect(host.textContent).not.toContain('Client report');
