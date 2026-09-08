@@ -158,15 +158,15 @@ export function AddGraphToDocument({
       )}
     >
       <div className="grid gap-4">
-        <div className="flex gap-2" role="radiogroup" aria-label="Document destination">
-          <Button variant="secondary" className={choice === "existing" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("existing")}>Existing document</Button>
-          <Button variant="secondary" className={choice === "new" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("new")}>New document</Button>
+        <div className="flex gap-2" role="group" aria-label="Document destination">
+          <Button aria-pressed={choice === "existing"} variant="secondary" className={choice === "existing" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("existing")}>Existing document</Button>
+          <Button aria-pressed={choice === "new"} variant="secondary" className={choice === "new" ? "border-transparent bg-[var(--selected)] hover:bg-[var(--selected-hover)]" : undefined} onClick={() => setChoice("new")}>New document</Button>
         </div>
         {choice === "existing" ? (
           docs.isPending ? (
             <p className="font-ui text-[length:var(--t-meta)] text-[var(--text-muted)]">Loading documents…</p>
           ) : docs.error ? (
-            <p className="font-ui text-[length:var(--t-meta)] text-[var(--bad)]">Documents could not be loaded.</p>
+            <p role="alert" className="font-ui text-[length:var(--t-meta)] text-[var(--bad)]">Documents could not be loaded. <Button size="sm" variant="ghost" onClick={() => void docs.refetch()}>Retry</Button></p>
           ) : records.length ? (
             <Select value={recordId} onChange={(event) => setRecordId(event.target.value)} aria-label="Document">
               {records.map((record) => <option key={record.id} value={record.id}>{documentDisplayTitle(record)}</option>)}

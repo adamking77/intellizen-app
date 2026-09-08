@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEventHandler, MouseEventHandler, ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -9,9 +9,11 @@ export function GraphLoadingOverlay() {
 
 interface ButtonProps {
   children: ReactNode;
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
   title: string;
   disabled?: boolean;
+  expanded?: boolean;
+  controls?: string;
 }
 
 export function GraphTopbarIconButton({
@@ -19,6 +21,8 @@ export function GraphTopbarIconButton({
   onClick,
   title,
   disabled,
+  expanded,
+  controls,
 }: ButtonProps) {
   return (
     <button
@@ -26,6 +30,8 @@ export function GraphTopbarIconButton({
       onClick={onClick}
       title={title}
       aria-label={title}
+      aria-expanded={expanded}
+      aria-controls={controls}
       disabled={disabled}
       className={cn(
         "inline-flex h-7 w-7 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)]",
@@ -51,6 +57,7 @@ export function GraphOverflowItem({
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
       disabled={disabled}
       className={cn(
@@ -66,18 +73,30 @@ export function GraphOverflowItem({
 }
 
 export function GraphRailTab({
+  id,
   label,
   active,
+  controls,
   onClick,
+  onKeyDown,
 }: {
+  id: string;
   label: string;
   active: boolean;
+  controls: string;
   onClick: () => void;
+  onKeyDown: KeyboardEventHandler<HTMLButtonElement>;
 }) {
   return (
     <button
+      id={id}
       type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       className={cn(
         "rounded-[var(--r-pill)] px-2.5 py-1 font-ui text-[length:var(--t-section)] font-medium transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
         active
@@ -96,6 +115,8 @@ export function GraphToolbarButton({
   title,
   active,
   disabled,
+  expanded,
+  controls,
 }: ButtonProps & { active?: boolean }) {
   return (
     <button
@@ -104,6 +125,8 @@ export function GraphToolbarButton({
       title={title}
       aria-label={title}
       aria-pressed={active}
+      aria-expanded={expanded}
+      aria-controls={controls}
       disabled={disabled}
       className={cn(
         "inline-flex h-[var(--h-ctl)] items-center gap-1.5 rounded-[var(--r-pill)] px-2 font-ui text-[12.5px] transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
@@ -147,10 +170,10 @@ export function GraphSettingToggle({
       >
         <span
           className={cn(
-            "absolute top-0.5 h-3.5 w-3.5 rounded-[var(--r-pill)] transition-[left,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
+            "absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-[var(--r-pill)] transition-[transform,background-color] duration-[var(--t-base)] ease-[var(--ease)]",
             checked
-              ? "left-[17px] bg-[var(--accent)]"
-              : "left-0.5 bg-[var(--overlay-1)]",
+              ? "translate-x-[15px] bg-[var(--accent)]"
+              : "translate-x-0 bg-[var(--overlay-1)]",
           )}
         />
       </span>

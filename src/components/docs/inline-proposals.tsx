@@ -48,7 +48,7 @@ export function InlineProposals({ review, onDecision }: {
       <Control variant="quiet" disabled={review.busy} onClick={() => void decide(decision([], proposal.hunks))}>Reject all</Control>
     </div>
     {proposal.note ? <p className="mt-1 text-[length:var(--t-meta)] text-[var(--text-muted)]">{proposal.note}</p> : null}
-    {review.proposals.length > 1 ? <div className="mt-2 flex flex-wrap gap-1">{review.proposals.map((item) => <Control key={item.id} variant={item.id === proposal.id ? "selected" : "quiet"} onClick={() => setSelected(item.id)}>{item.author} · {item.hunks.length}</Control>)}</div> : null}
+    {review.proposals.length > 1 ? <div className="mt-2 flex flex-wrap gap-1">{review.proposals.map((item) => <Control key={item.id} aria-pressed={item.id === proposal.id} variant={item.id === proposal.id ? "selected" : "quiet"} onClick={() => setSelected(item.id)}>{item.author} · {item.hunks.length}</Control>)}</div> : null}
     {localError || review.error ? <p role="alert" className="mt-2 text-[length:var(--t-meta)] text-[var(--bad)]">{localError ?? review.error}</p> : null}
     <div className="mt-3 grid gap-3">
       {proposal.hunks.map((hunk) => <div key={hunk.id} className="rounded-[var(--r-ctl)] border border-[var(--line)] p-2">

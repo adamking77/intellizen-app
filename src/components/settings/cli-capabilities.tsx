@@ -5,6 +5,7 @@ import { SettingSwitch } from "./setting-switch";
 import { useSearchParams } from "react-router-dom";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Control } from "@/components/ui/control";
 import { errorMessage } from "@/lib/toast";
 
 export type CliCapability = {
@@ -61,7 +62,7 @@ export function CliCapabilities({ hermesControls }: { hermesControls?: (query: s
           {provider !== "all" && !PROVIDERS[provider] ? <option value={provider}>{provider}</option> : null}
         </Select>
         <Input className="min-w-0 flex-1 basis-40" aria-label="Search CLI capabilities" placeholder="Search capabilities…" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <button type="button" className="action" disabled={inventory.isFetching} onClick={() => void inventory.refetch()}>{inventory.isFetching ? "Reading…" : "Refresh"}</button>
+        <Control size="sm" disabled={inventory.isFetching} onClick={() => void inventory.refetch()}>{inventory.isFetching ? "Reading…" : "Refresh"}</Control>
       </div>
       {toggle.error ? <p role="alert" className="text-xs text-[var(--danger)]">Selection was not saved. {errorMessage(toggle.error)}</p> : null}
       {toggle.isSuccess ? <p role="status" className="text-xs text-[var(--subtext-0)]">Saved for new chats. Existing chats keep their current capabilities until reconnected.</p> : null}

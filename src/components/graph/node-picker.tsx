@@ -29,6 +29,7 @@ export function NodePicker({
   const [query, setQuery] = useState("");
   const popupId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(
@@ -50,7 +51,10 @@ export function NodePicker({
       if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+      requestAnimationFrame(() => triggerRef.current?.focus());
     }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
@@ -70,10 +74,12 @@ export function NodePicker({
     <div ref={containerRef} className="relative">
       <div className="flex h-[var(--h-ctl)] w-full items-center gap-1 rounded-[var(--r-ctl)] border border-[var(--surface-line)] bg-[var(--surface)] px-2 focus-within:border-[var(--accent)]">
         <button
+          ref={triggerRef}
           type="button"
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={popupId}
+          aria-label={selected ? `Selected node: ${selected.label}` : placeholder}
           onClick={() => setOpen((o) => !o)}
           className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left focus-visible:outline-none"
         >
@@ -115,6 +121,7 @@ export function NodePicker({
             <Search className="h-3 w-3 shrink-0 text-[var(--overlay-1)]" />
             <input
               ref={inputRef}
+              aria-label="Search nodes"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search nodes…"
@@ -131,9 +138,11 @@ export function NodePicker({
                   <button
                     key={node.node_id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => {
                       onChange(node.node_id);
                       setOpen(false);
+                      requestAnimationFrame(() => triggerRef.current?.focus());
                     }}
                     className={cn(
                       "flex w-full items-center gap-1.5 px-2 py-1.5 text-left transition-colors duration-[var(--t-base)] ease-[var(--ease)]",

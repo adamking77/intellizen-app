@@ -23,7 +23,7 @@ export function SettingSwitch({
       onClick={onToggle}
       className={cn(
         "relative shrink-0 rounded-[var(--r-pill)] transition-colors disabled:opacity-40",
-        size === "compact" ? "h-[19px] w-8" : "h-[22px] w-[38px]",
+        size === "compact" ? "h-[var(--h-ctl)] w-9" : "h-[var(--h-ctl)] w-10",
         on
           ? "bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           : "bg-[color-mix(in_srgb,var(--text)_14%,transparent)]",
@@ -32,9 +32,9 @@ export function SettingSwitch({
       <span
         aria-hidden
         className={cn(
-          "absolute top-[2px] h-[18px] w-[18px] rounded-[var(--r-pill)] transition-[left,background-color]",
-          size === "compact" && "top-[2px] h-[15px] w-[15px]",
-          size === "compact" ? (on ? "left-[15px]" : "left-[2px]") : (on ? "left-[18px]" : "left-[2px]"),
+          "absolute top-1/2 h-[18px] w-[18px] -translate-y-1/2 rounded-[var(--r-pill)] transition-[left,background-color]",
+          size === "compact" && "h-[15px] w-[15px]",
+          size === "compact" ? (on ? "left-[19px]" : "left-[2px]") : (on ? "left-[20px]" : "left-[2px]"),
           on ? "bg-[var(--accent)]" : "bg-[var(--text-muted)]",
         )}
       />

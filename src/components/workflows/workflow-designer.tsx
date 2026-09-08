@@ -373,7 +373,7 @@ export function WorkflowDesigner({
               </div>)}
               <Control size="sm" onClick={() => commit({ ...definition, inputs: [...definition.inputs, { key: `input_${definition.inputs.length + 1}`, type: "string" }] })}>Add input</Control>
             </div>);
-  const triggerEditor = <div data-workflow-step="trigger" className="space-y-3 rounded-[var(--r-ctl)] bg-[color-mix(in_srgb,var(--raised)_50%,var(--base))] p-3"><h3 className="text-[length:var(--t-meta)] font-medium">Trigger and inputs</h3><Select containerClassName="nodrag nopan" data-workflow-field="trigger.kind" aria-label="Workflow trigger" value={definition.trigger.kind} onChange={(event) => commit({ ...definition, trigger: { kind: event.target.value as "manual" | "panel-message" } })}><option value="manual">Start manually</option><option value="panel-message">Panel message</option></Select>{inputsEditor}</div>;
+  const triggerEditor = <div data-workflow-step="trigger" className="space-y-3"><h3 className="text-[length:var(--t-meta)] font-medium">Trigger and inputs</h3><Select containerClassName="nodrag nopan" data-workflow-field="trigger.kind" aria-label="Workflow trigger" value={definition.trigger.kind} onChange={(event) => commit({ ...definition, trigger: { kind: event.target.value as "manual" | "panel-message" } })}><option value="manual">Start manually</option><option value="panel-message">Panel message</option></Select>{inputsEditor}</div>;
 
   const addStepActions = Object.entries({ "role-assign": "Role assignment", condition: "Condition", approval: "Approval", artifact: "Artifact", decision: "Decision" } satisfies Record<DesignerStepKind, string>).map(([kind, label]) => ({ label, onSelect: () => addStep(kind as DesignerStepKind, selectedStepId && selectedStepId !== "trigger" ? { afterStepId: selectedStepId } : { afterStepId: null }) }));
 
@@ -390,7 +390,7 @@ export function WorkflowDesigner({
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
         {onBack ? <Control size="icon" variant="quiet" onClick={onBack} aria-label="Back to workflows" title="Back to workflows"><ArrowLeft className="h-4 w-4" /></Control> : null}
         <div className="min-w-28 flex-1">
-          {embedded ? <Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="h-7 font-medium" /> : <p className="truncate font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{definition.name}</p>}
+          {embedded ? <Input data-workflow-field="name" aria-label="Workflow name" value={definition.name} onChange={(event) => commit({ ...definition, name: event.target.value })} className="font-medium" /> : <p className="truncate font-ui text-[length:var(--t-ui)] font-semibold text-[var(--text)]">{definition.name}</p>}
           <p className="mt-0.5 text-[length:var(--t-count)] text-[var(--text-muted)]">{dirty ? "Local edits retained" : !workflow.id ? "Local draft" : workflow.status === "Active" ? "Active workflow" : "Draft workflow"}{!embedded ? ` · editing v${definition.version}` : ""}</p>
         </div>
         <WorkflowActionMenu label="Workflow actions" actions={[

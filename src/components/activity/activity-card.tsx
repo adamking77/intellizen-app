@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
 import { UsageChart, OutcomesChart } from "./activity-charts";
 import type { ActivityChartStyle } from "@/lib/activity-pins";
 import { useSessionStore } from "@/engine/session-store";
 import { requestAgentPanelOpen } from "@/lib/agent-panel-persistence";
-import { formatDuration } from "@/lib/activity";
 import {
   finite,
   type ActivityCardId,
@@ -17,6 +17,9 @@ import {
 } from "@/lib/activity-dashboard";
 
 const META = "font-mono text-[12px] leading-5 text-[var(--text-muted)]";
+function updatedAt(at: number) {
+  return new Date(at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
 export function money(amount: number | null, currency = "USD") {
   if (amount === null) return "Not reported";
   try {
@@ -79,7 +82,7 @@ function ItemList({ items, empty, onOpen }: { items: ActivityItem[]; empty: stri
             </p>
             <p className={META}>
               {item.owner} · {item.state}
-              {item.updated ? ` · updated ${formatDuration(Date.now() - item.updated)} ago` : ""}
+              {item.updated ? ` · updated ${updatedAt(item.updated)}` : ""}
             </p>
           </div>
           <ArrowUpRight
@@ -152,7 +155,7 @@ export function ActivityCardBody({
           title={review === "workflows" ? "Open workflow records" : id === "attention" ? "Questions and issues" : "Live conversations"}
           onOpenChange={(open) => { if (!open) closeReview(); }}
           initialFocus="title"
-          footer={<button className="action" onClick={closeReview}>Close</button>}>
+          footer={<Control variant="quiet" onClick={closeReview}>Close</Control>}>
           {review === "workflows" ? <p className={`${META} mb-3`}>Stored queued / in-progress states. These do not confirm a live process.</p> : null}
           <ItemList key={review} items={review === "workflows" ? model.openWorkflows : id === "attention" ? model.attention : model.progress}
             empty={id === "attention" ? "Nothing waiting in the available sources." : "No live conversations running."}
@@ -354,7 +357,7 @@ export function ActivityCardBody({
       </div>
       <AppDialog open={review !== null} title="Runtime availability" initialFocus="title"
         onOpenChange={(open) => { if (!open) closeReview(); }}
-        footer={<button className="action" onClick={closeReview}>Close</button>}>
+        footer={<Control variant="quiet" onClick={closeReview}>Close</Control>}>
         <p className={`${META} mb-3`}>Global configuration · available runtimes connect on demand.</p>
 
       {model.connections.map((c) => (

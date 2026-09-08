@@ -14,13 +14,10 @@ import {
   GraphTopbarIconButton as TopbarIconBtn,
 } from "@/components/graph/graph-controls";
 import {
-  Building2,
-  CalendarClock,
   ChevronRight,
   Crosshair,
   Download,
   Link2,
-  MapPin,
   Maximize2,
   Orbit,
   PanelRightClose,
@@ -32,8 +29,6 @@ import {
   Trash2,
   Undo2,
   Unlink,
-  User,
-  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -109,6 +104,11 @@ import { buildGraphExtractionPrompt } from "@/lib/shell";
 import { exportGraphSvgFile } from "@/components/graph/export-actions";
 import { GraphExportMenu } from "@/components/graph/graph-export-menu";
 import { AddGraphToDocument } from "@/components/graph/add-to-document";
+import {
+  GRAPH_ENTITY_ICON as ENTITY_ICON,
+  GRAPH_ENTITY_LABEL as ENTITY_LABEL,
+  GRAPH_ENTITY_STYLES as ENTITY_STYLES,
+} from "@/components/graph/graph-entity-presentation";
 import type { GraphEdgeRecord, GraphEntityType, GraphNodeRecord } from "@/lib/types";
 
 type GraphMode = "project" | "standalone";
@@ -124,60 +124,6 @@ const FIONA_GRAPH_POLL_INTERVAL_MS = 4_000;
 const FIONA_GRAPH_POLL_TIMEOUT_MS = 3 * 60_000;
 const EMPTY_GRAPH_NODES: GraphNodeRecord[] = [];
 const EMPTY_GRAPH_EDGES: GraphEdgeRecord[] = [];
-
-const ENTITY_STYLES: Record<
-  GraphEntityType,
-  {
-    chip: string;
-    fill: string;
-    border: string;
-    text: string;
-    accent: string;
-  }
-> = {
-  person: {
-    chip: "color-mix(in srgb, var(--entity-person) 15%, transparent)",
-    fill: "var(--base)",
-    border: "var(--entity-person)",
-    text: "var(--text)",
-    accent: "var(--entity-person)",
-  },
-  organisation: {
-    chip: "color-mix(in srgb, var(--entity-org) 15%, transparent)",
-    fill: "var(--base)",
-    border: "var(--entity-org)",
-    text: "var(--text)",
-    accent: "var(--entity-org)",
-  },
-  location: {
-    chip: "color-mix(in srgb, var(--entity-location) 15%, transparent)",
-    fill: "var(--base)",
-    border: "var(--entity-location)",
-    text: "var(--text)",
-    accent: "var(--entity-location)",
-  },
-  event: {
-    chip: "color-mix(in srgb, var(--entity-event) 15%, transparent)",
-    fill: "var(--base)",
-    border: "var(--entity-event)",
-    text: "var(--text)",
-    accent: "var(--entity-event)",
-  },
-};
-
-const ENTITY_ICON: Record<GraphEntityType, typeof User> = {
-  person: User,
-  organisation: Building2,
-  location: MapPin,
-  event: CalendarClock,
-};
-
-const ENTITY_LABEL: Record<GraphEntityType, string> = {
-  person: "Person",
-  organisation: "Organisation",
-  location: "Location",
-  event: "Event",
-};
 
 const EMPTY_STRING_SET = new Set<string>();
 
@@ -349,6 +295,14 @@ export function GraphView() {
     }
   }, [railOpen]);
 
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      overflowMenuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [overflowOpen]);
+
   // Auto-close the rail when the window gets cramped; user can still re-open.
   useEffect(() => {
     if (isCramped) setRailOpen(false);
@@ -378,6 +332,8 @@ export function GraphView() {
   const graphProjectIdRef = useRef(graphProjectId);
   const effectiveProjectIdRef = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
+  const overflowTriggerRef = useRef<HTMLElement | null>(null);
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const pastSnapshotsRef = useRef<GraphSnapshot[]>([]);
   const futureSnapshotsRef = useRef<GraphSnapshot[]>([]);
@@ -1363,7 +1319,10 @@ export function GraphView() {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const isTextInputTarget = Boolean(
-        target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName),
+        target && (
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+          target.closest("[contenteditable='true'], [role='dialog']")
+        ),
       );
 
       if (!isTextInputTarget && event.key === "/") {
@@ -1376,7 +1335,7 @@ export function GraphView() {
       if (isTextInputTarget) return;
 
       if (event.key === "Escape") {
-        if (overflowOpen) { setOverflowOpen(false); return; }
+        if (overflowOpen) { closeOverflowMenu(true); return; }
         if (clearConfirmOpen) { setClearConfirmOpen(false); return; }
         if (exportModalOpen) { setExportModalOpen(false); setExportDataUrl(null); return; }
         setPlaceMode(false);
@@ -1937,6 +1896,53 @@ export function GraphView() {
     window.requestAnimationFrame(() => createInputRef.current?.focus());
   }
 
+  function openOverflowMenu(event: React.MouseEvent<HTMLButtonElement>) {
+    overflowTriggerRef.current = event.currentTarget;
+    setOverflowOpen(true);
+  }
+
+  function closeOverflowMenu(restoreFocus = true) {
+    setOverflowOpen(false);
+    if (restoreFocus) {
+      overflowTriggerRef.current?.focus();
+    }
+  }
+
+  function handleOverflowMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+    );
+    if (items.length === 0) return;
+
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : event.key === "ArrowDown"
+          ? (currentIndex + 1 + items.length) % items.length
+          : (currentIndex - 1 + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }
+
+  function handleRailTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    const tabs = ["inspect", "controls"] as const;
+    const currentIndex = tabs.indexOf(railTab);
+    let nextTab: (typeof tabs)[number] | null = null;
+
+    if (event.key === "ArrowLeft") nextTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
+    if (event.key === "ArrowRight") nextTab = tabs[(currentIndex + 1) % tabs.length];
+    if (event.key === "Home") nextTab = tabs[0];
+    if (event.key === "End") nextTab = tabs[tabs.length - 1];
+    if (!nextTab) return;
+
+    event.preventDefault();
+    setRailTab(nextTab);
+    window.requestAnimationFrame(() => document.getElementById(`graph-rail-tab-${nextTab}`)?.focus());
+  }
+
 
   return (
     <div className="relative flex h-full w-full overflow-hidden bg-[var(--ground)]">
@@ -1963,6 +1969,7 @@ export function GraphView() {
               </div>
             )}
             <select
+              aria-label="Graph scope"
               value={graphMode === "standalone" ? "standalone" : String(graphProjectId ?? "")}
               onChange={(e) => {
                 const v = e.target.value;
@@ -2002,6 +2009,7 @@ export function GraphView() {
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--overlay-1)]" />
                 <input
                   ref={searchInputRef}
+                  aria-label="Search graph nodes"
                   value={nodeSearch}
                   onChange={(e) => setNodeSearch(e.target.value)}
                   placeholder="Search ( / )"
@@ -2014,12 +2022,19 @@ export function GraphView() {
             <div className="relative">
               {overflowOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setOverflowOpen(false)} />
-                  <div className="fixed bottom-14 left-4 z-50 w-[220px] rounded-[var(--r-surface)] bg-[var(--surface)] py-1">
+                  <div className="fixed inset-0 z-40" onClick={() => closeOverflowMenu(true)} />
+                  <div
+                    id="graph-actions-menu"
+                    ref={overflowMenuRef}
+                    role="menu"
+                    aria-label="Graph actions"
+                    onKeyDown={handleOverflowMenuKeyDown}
+                    className="fixed bottom-14 left-4 z-50 w-[220px] rounded-[var(--r-surface)] bg-[var(--surface)] py-1"
+                  >
                     <OverflowItem
                       label="Reset view"
                       onClick={() => {
-                        setOverflowOpen(false);
+                        closeOverflowMenu(true);
                         if (isInsightMode) insightGraphRef.current?.zoomToFit(64);
                         else setViewport(DEFAULT_VIEW);
                       }}
@@ -2028,7 +2043,7 @@ export function GraphView() {
                       label="Tidy layout"
                       disabled={!isConstructMode || visualNodes.length === 0}
                       onClick={() => {
-                        setOverflowOpen(false);
+                        closeOverflowMenu(true);
                         void handleTidyLayout();
                       }}
                     />
@@ -2036,7 +2051,7 @@ export function GraphView() {
                       label="Reflow (Insight)"
                       disabled={!isInsightMode}
                       onClick={() => {
-                        setOverflowOpen(false);
+                        closeOverflowMenu(true);
                         setInsightLayoutTick((c) => c + 1);
                       }}
                     />
@@ -2049,7 +2064,7 @@ export function GraphView() {
                           (projectSignalsQuery.data?.length ?? 0) === 0
                         }
                         onClick={() => {
-                          setOverflowOpen(false);
+                          closeOverflowMenu(true);
                           void handleAutoGenerateFromProject();
                         }}
                       />
@@ -2057,15 +2072,15 @@ export function GraphView() {
                     <div className="my-1 h-px bg-[var(--border)]" />
                     <GraphExportMenu
                       disabled={visualNodes.length === 0}
-                      onPng={() => { setOverflowOpen(false); void handleExportPng(); }}
-                      onSvg={() => { setOverflowOpen(false); void exportGraphSvgFile({ nodes, edges, mode: interactionMode }).then((path) => { if (path) setStatusMessage(`Saved: ${path}`); }).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to export SVG.")); }}
-                      onEmbed={() => { setOverflowOpen(false); setAddToDocumentOpen(true); }}
+                      onPng={() => { closeOverflowMenu(true); void handleExportPng(); }}
+                      onSvg={() => { closeOverflowMenu(true); void exportGraphSvgFile({ nodes, edges, mode: interactionMode }).then((path) => { if (path) setStatusMessage(`Saved: ${path}`); }).catch((error) => setErrorMessage(error instanceof Error ? error.message : "Failed to export SVG.")); }}
+                      onEmbed={() => { closeOverflowMenu(); setAddToDocumentOpen(true); }}
                     />
                     <OverflowItem
                       label="Clear graph…"
                       disabled={!isConstructMode || (nodes.length === 0 && edges.length === 0)}
                       onClick={() => {
-                        setOverflowOpen(false);
+                        closeOverflowMenu();
                         setClearConfirmOpen(true);
                       }}
                     />
@@ -2420,7 +2435,11 @@ export function GraphView() {
                   >
                     <button
                       type="button"
+                      aria-label={`${node.label}, ${ENTITY_LABEL[node.entity_type]}`}
                       className="flex h-full w-full items-center gap-3 p-3 text-left"
+                      onClick={(event) => {
+                        if (event.detail === 0) selectSingleNode(node.node_id);
+                      }}
                       onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
@@ -2523,6 +2542,7 @@ export function GraphView() {
                             });
                             selectSingleNode(node.node_id);
                           }}
+                          aria-label={`Drag from ${anchorSide} edge to connect`}
                           title={`Drag from ${anchorSide} edge to connect`}
                         />
                       ))}
@@ -2619,7 +2639,7 @@ export function GraphView() {
           {/* Floating construct toolbar (construct only) */}
           {isConstructMode && (
             <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-[320px] -translate-x-1/2 @container">
-              <div className="flex w-fit max-w-full flex-wrap justify-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[22rem]:gap-0 @max-[22rem]:rounded-[var(--r-ctl)]">
+              <div role="toolbar" aria-label="Construct graph" className="flex w-fit max-w-full flex-wrap justify-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[22rem]:gap-0 @max-[22rem]:rounded-[var(--r-ctl)]">
                 <ToolbarBtn
                   title="Create node"
                   onClick={() => {
@@ -2641,7 +2661,7 @@ export function GraphView() {
                 >
                   <Crosshair className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
+                <div aria-hidden="true" className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Start link from selected"
                   disabled={!selectedNode && activeSelectedNodeIds.length === 0}
@@ -2668,7 +2688,7 @@ export function GraphView() {
                 >
                   <Unlink className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
+                <div aria-hidden="true" className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Undo"
                   disabled={historyStats.undoCount === 0}
@@ -2683,7 +2703,7 @@ export function GraphView() {
                 >
                   <Redo2 className="h-3.5 w-3.5" />
                 </ToolbarBtn>
-                <div className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
+                <div aria-hidden="true" className="mx-1 h-5 w-px bg-[var(--border)] @max-[22rem]:hidden" />
                 <ToolbarBtn
                   title="Delete selected"
                   disabled={
@@ -2703,25 +2723,17 @@ export function GraphView() {
           )}
 
           <div data-graph-dock className={cn("pointer-events-auto absolute left-4 z-30 w-[calc(100%-2rem)] max-w-[640px] @container", isConstructMode ? "bottom-20" : "bottom-4")}>
-            <div className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[36rem]:rounded-[var(--r-ctl)]">
+            <div role="toolbar" aria-label="Graph view" className="flex w-fit max-w-full flex-wrap items-center gap-1 rounded-[var(--r-pill)] bg-[var(--surface)] p-1 @max-[36rem]:rounded-[var(--r-ctl)]">
               <ToolbarBtn title="Insight" active={isInsightMode} onClick={() => setInteractionMode("insight")}>Insight</ToolbarBtn>
               <ToolbarBtn title="Construct" active={isConstructMode} onClick={() => setInteractionMode("construct")}>Construct</ToolbarBtn>
-              <div className="mx-1 h-5 w-px bg-[var(--border)]" />
+              <div aria-hidden="true" className="mx-1 h-5 w-px bg-[var(--border)]" />
               <ToolbarBtn title="Fit graph" onClick={fitVisibleGraph}><Maximize2 className="h-3.5 w-3.5" />Fit</ToolbarBtn>
               <ToolbarBtn title="Zoom in" onClick={() => zoomGraph(1.2)} aria-label="Zoom in"><ZoomIn className="h-3.5 w-3.5" /></ToolbarBtn>
               <ToolbarBtn title="Zoom out" onClick={() => zoomGraph(1 / 1.2)} aria-label="Zoom out"><ZoomOut className="h-3.5 w-3.5" /></ToolbarBtn>
               <ToolbarBtn title="Ego network from selection" disabled={activeSelectedNodeIds.length === 0} onClick={handleApplyEgoFromSelection}><Orbit className="h-3.5 w-3.5" />Ego</ToolbarBtn>
               <ToolbarBtn title="Path from selection" disabled={activeSelectedNodeIds.length < 2} onClick={handleUseSelectedForPath}><Route className="h-3.5 w-3.5" />Path</ToolbarBtn>
-              <ToolbarBtn title="Export graph" disabled={visualNodes.length === 0} onClick={() => setOverflowOpen(true)}><Download className="h-3.5 w-3.5" />Export</ToolbarBtn>
-              <ToolbarBtn title="More graph actions" onClick={() => setOverflowOpen(true)}>More</ToolbarBtn>
-              <details onKeyDown={(event) => {
-                if (event.key !== "Escape") return;
-                event.currentTarget.open = false;
-                event.currentTarget.querySelector("summary")?.focus();
-              }}>
-                <summary className="flex h-[var(--h-ctl)] cursor-pointer list-none items-center px-2 font-ui text-[12.5px] text-[var(--text-dim)] [&::-webkit-details-marker]:hidden">What is this?</summary>
-                <p className="absolute bottom-full left-0 mb-2 w-full max-w-[360px] rounded-[var(--r-surface)] bg-[var(--surface)] px-4 py-3.5 font-ui text-[length:var(--t-ui)] leading-relaxed text-[var(--text)]">Graph shows connections in the selected project. Insight explores existing evidence; Construct edits nodes and connections. Select a node to inspect it, or two nodes to find a path. Agents continue their work while you explore.</p>
-              </details>
+              <ToolbarBtn title="Export graph" disabled={visualNodes.length === 0} expanded={overflowOpen} controls="graph-actions-menu" onClick={openOverflowMenu}><Download className="h-3.5 w-3.5" />Export</ToolbarBtn>
+              <ToolbarBtn title="More graph actions" expanded={overflowOpen} controls="graph-actions-menu" onClick={openOverflowMenu}>More</ToolbarBtn>
             </div>
           </div>
 
@@ -2729,6 +2741,7 @@ export function GraphView() {
           {(statusMessage || errorMessage) && (
             <div className={cn("pointer-events-none absolute left-4 z-30", isConstructMode ? "bottom-32" : "bottom-16")}>
               <div
+                role={errorMessage ? "alert" : "status"}
                 className={cn(
                   "rounded-[var(--r-surface)] bg-[var(--surface)] px-3 py-1.5 font-ui text-[length:var(--t-section)]",
                   errorMessage
@@ -2758,35 +2771,36 @@ export function GraphView() {
         {railOpen && (
           <>
             {/* Tab toggle */}
-            <div className="flex h-14 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+            <div role="tablist" aria-label="Graph rail" className="flex h-14 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
               <RailTab
+                id="graph-rail-tab-inspect"
                 label="Inspect"
                 active={railTab === "inspect"}
+                controls="graph-rail-panel-inspect"
                 onClick={() => setRailTab("inspect")}
+                onKeyDown={handleRailTabKeyDown}
               />
               <RailTab
+                id="graph-rail-tab-controls"
                 label="Controls"
                 active={railTab === "controls"}
+                controls="graph-rail-panel-controls"
                 onClick={() => setRailTab("controls")}
+                onKeyDown={handleRailTabKeyDown}
               />
               <div className="flex-1" />
-              {isNarrow ? (
-                <TopbarIconBtn title="Close graph rail" onClick={() => setRailOpen(false)}>
-                  <PanelRightClose className="h-3.5 w-3.5" />
-                </TopbarIconBtn>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setRailOpen(false)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--r-pill)] text-[var(--overlay-1)] transition-colors duration-[var(--t-base)] ease-[var(--ease)] hover:bg-[var(--surface-wash)] hover:text-[var(--text)]"
-                title="Hide"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <TopbarIconBtn title="Close graph rail" onClick={() => setRailOpen(false)}>
+                <PanelRightClose className="h-3.5 w-3.5" />
+              </TopbarIconBtn>
             </div>
 
             {/* Panel body */}
-            <div className="flex-1 overflow-y-auto">
+            <div
+              id={`graph-rail-panel-${railTab}`}
+              role="tabpanel"
+              aria-labelledby={`graph-rail-tab-${railTab}`}
+              className="flex-1 overflow-y-auto"
+            >
               {railTab === "inspect" ? (
                 /* ============ INSPECT PANEL ============ */
                 <div className="flex flex-col divide-y divide-[var(--border)]">
@@ -3137,6 +3151,7 @@ export function GraphView() {
                         <button
                           key={type}
                           type="button"
+                          aria-pressed={entityTypeFilters[type]}
                           onClick={() => toggleEntityTypeFilter(type)}
                           className={cn(
                             "flex items-center justify-between rounded-[var(--r-ctl)] px-2 py-1.5 transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
@@ -3165,6 +3180,7 @@ export function GraphView() {
                       <SettingToggleRow label="Minimap" checked={showMinimap} onChange={() => setShowMinimap((c) => !c)} />
                       <Button
                         size="sm"
+                        aria-pressed={focusMode === "selection"}
                         variant={focusMode === "selection" ? "accent-outline" : "ghost"}
                         className="w-full"
                         onClick={() =>
@@ -3185,6 +3201,7 @@ export function GraphView() {
                         <div className="flex gap-1">
                           <Button
                             size="sm"
+                            aria-pressed={insightAutoLayout}
                             variant={insightAutoLayout ? "accent-outline" : "ghost"}
                             onClick={() => setInsightAutoLayout((c) => !c)}
                           >
@@ -3228,11 +3245,12 @@ export function GraphView() {
                       />
                       <div className="flex flex-col gap-1.5">
                         <span className="text-label">Label density</span>
-                        <div className="flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--base)] p-0.5">
+                        <div role="group" aria-label="Label density" className="flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--base)] p-0.5">
                           {(["context", "selected", "all"] as const).map((mode) => (
                             <button
                               key={mode}
                               type="button"
+                              aria-pressed={insightLabelMode === mode}
                               onClick={() => setInsightLabelMode(mode)}
                               className={cn(
                                 "flex-1 rounded-[var(--r-pill)] px-2 py-1 font-ui text-[length:var(--t-section)] font-medium capitalize transition-colors duration-[var(--t-base)] ease-[var(--ease)]",
@@ -3301,6 +3319,7 @@ export function GraphView() {
                     />
                     <div className="flex items-center gap-2">
                       <Input
+                        aria-label="Ego network depth"
                         type="number"
                         min={1}
                         max={4}
@@ -3452,11 +3471,12 @@ export function GraphView() {
                 <span className="font-ui text-[length:var(--t-count)] font-light uppercase tracking-[0.14em] text-[var(--overlay-1)]">
                   Save to
                 </span>
-                <div className="flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--base)] p-0.5">
+                <div role="group" aria-label="Export destination" className="flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--border)] bg-[var(--base)] p-0.5">
                   {(["project", "investigation"] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
+                      aria-pressed={exportTarget === t}
                       onClick={() => {
                         setExportTarget(t);
                         setExportTargetId(
@@ -3478,6 +3498,7 @@ export function GraphView() {
                 </div>
                 {exportTarget === "project" ? (
                   <select
+                    aria-label="Evidence pile"
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(Number(e.target.value))}
                     className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[length:var(--t-meta)] text-[var(--text)]  focus-visible:border-[var(--accent)]"
@@ -3490,6 +3511,7 @@ export function GraphView() {
                   </select>
                 ) : (
                   <select
+                    aria-label="Investigation"
                     value={String(exportTargetId ?? "")}
                     onChange={(e) => setExportTargetId(e.target.value)}
                     className="h-[var(--h-ctl)] rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-2.5 font-ui text-[length:var(--t-meta)] text-[var(--text)]  focus-visible:border-[var(--accent)]"

@@ -7,6 +7,7 @@ import { Folder, X } from "lucide-react";
 import { tildify } from "@/components/layout/workspace-tree";
 import { DEFAULT_AGENT_CONTEXT_KEY, useStringListPreference } from "@/lib/settings-preferences";
 import { errorMessage } from "@/lib/toast";
+import { Control } from "@/components/ui/control";
 
 import { SETTINGS_TITLE } from "./settings-style";
 
@@ -70,15 +71,15 @@ export function ContextSettings() {
             className="flex items-center gap-2.5 rounded-[var(--r-ctl)] bg-[var(--crust)] px-2.5 py-[9px]"
             style={missing[path] ? { border: "1px solid var(--bad)" } : undefined}
           >
-            <Folder className="h-[13px] w-[13px] shrink-0 text-[var(--text-muted)]" strokeWidth={1.6} aria-hidden />
+            <Folder className="h-4 w-4 shrink-0 text-[var(--text-muted)]" strokeWidth={1.5} aria-hidden />
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--text)]">{path}</span>
             <span className={missing[path]
               ? "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--bad)_14%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--bad)]"
               : "rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]"
             }>{missing[path] ? "not found" : "read"}</span>
-            <button type="button" className="pill !p-1" onClick={() => setContext(context.filter((item) => item !== path))} aria-label={`Remove ${path}`} title={`Remove ${path}`}>
-              <X className="h-[13px] w-[13px]" strokeWidth={1.9} aria-hidden />
-            </button>
+            <Control size="icon" variant="quiet" onClick={() => setContext(context.filter((item) => item !== path))} aria-label={`Remove ${path}`} title={`Remove ${path}`}>
+              <X className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+            </Control>
           </div>
         ))}
         {context.length === 0 ? (
@@ -89,9 +90,9 @@ export function ContextSettings() {
         ) : null}
       </div>
 
-      {error ? <p className="text-xs text-[var(--danger)]">{error}</p> : null}
+      {error ? <p role="alert" className="text-xs text-[var(--danger)]">The folder could not be added. {error}</p> : null}
       <div className="flex items-center gap-3">
-        <button type="button" className="action" onClick={() => void add()} disabled={busy}>{busy ? "Choosing…" : "Add folder"}</button>
+        <Control size="sm" onClick={() => void add()} disabled={busy}>{busy ? "Choosing…" : "Add folder"}</Control>
         <span className="text-[length:var(--t-section)] text-[var(--overlay-1)]">Database and API access stays in each provider’s own connection settings.</span>
       </div>
     </div>

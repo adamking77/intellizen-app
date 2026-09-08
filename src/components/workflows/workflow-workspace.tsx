@@ -68,7 +68,7 @@ export function WorkflowWorkspace({ item, autoDraftWithAgent = false, roleTarget
       runControl={<Control size="sm" disabled={!item.runnable || dirty || rolesUnavailable} loading={starter.isStartingWorkflow} onClick={() => void starter.start({ workflowId: workflow.workflow_id, triggerSource: "ui" })} title={dirty ? "Save your edits before running." : !item.runnable ? "Activate a valid workflow with available roles before running." : undefined}>Run workflow</Control>}
       workflowActions={[
         ...(workflow.id ? [{ label: "Source", onSelect: () => setDetail("source") }] : []),
-        { label: "Schedule", disabled: !workflow.id || !item.definition || dirty, reason: dirty ? "Save your edits before scheduling." : undefined, onSelect: () => setDetail("schedule") },
+        { label: "Schedule", disabled: !workflow.id || !item.definition || dirty, reason: dirty ? "Save your edits before scheduling." : !workflow.id ? "Save this workflow before scheduling." : !item.definition ? "Finish and save a valid definition before scheduling." : undefined, onSelect: () => setDetail("schedule") },
       ]}
       workflow={workflow} roleTargets={roleTargets} initialDefinition={sopDefinition} embedded onSaved={onSaved} onDirtyChange={setDirty}
       onDraftChange={onDraftChange} draftRevision={bridge.draftRevision ?? ""} proposal={bridge.proposal} onProposalApplied={bridge.applied} onProposalDismissed={bridge.dismiss}

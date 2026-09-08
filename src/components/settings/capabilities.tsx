@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { listHermesCapabilities, setHermesCapability, type HermesCapabilityKind } from "@/services/hermes-settings";
 
 import { SettingSwitch } from "./setting-switch";
+import { Control } from "@/components/ui/control";
 
 const GROUPS: { id: HermesCapabilityKind; label: string; description: string }[] = [
   { id: "skill", label: "Skills", description: "Instructions Hermes loads when a task matches." },
@@ -73,19 +74,19 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
 
       <div className="flex flex-wrap items-center gap-2 py-1">
         {(profiles.data ?? []).map((row) => (
-          <button
+          <Control
             key={row.name}
-            type="button"
-            className="pill"
-            aria-selected={effectiveProfile === row.name}
+            size="sm"
+            variant={effectiveProfile === row.name ? "selected" : "quiet"}
+            aria-pressed={effectiveProfile === row.name}
             disabled={!engineOpen}
             onClick={() => setProfile(row.name)}
           >
             {row.displayName || row.name}
-          </button>
+          </Control>
         ))}
         {(profiles.data?.length ?? 0) > 0 ? <div className="h-[18px] w-px bg-[var(--line)]" /> : null}
-        <button type="button" className="pill" aria-selected={availableOnly} disabled={!engineOpen} onClick={() => setAvailableOnly((value) => !value)}>Available only</button>
+        <Control size="sm" variant={availableOnly ? "selected" : "quiet"} aria-pressed={availableOnly} disabled={!engineOpen} onClick={() => setAvailableOnly((value) => !value)}>Available only</Control>
         <div className="min-w-2 flex-1" />
 
       </div>
@@ -107,7 +108,7 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
             {rows.map((row) => {
               const pending = toggle.isPending && toggle.variables?.id === row.id && toggle.variables.kind === row.kind;
               return (
-                <div key={`${row.kind}:${row.id}`} className={cn("flex flex-wrap items-center gap-3 border-b border-[var(--hair)] px-0.5 py-[9px]", !row.available && "opacity-45")}>
+                <div key={`${row.kind}:${row.id}`} className="flex flex-wrap items-center gap-3 border-b border-[var(--hair)] px-0.5 py-[9px]">
                   <SettingSwitch
                     size="compact"
                     on={row.enabled}
@@ -119,6 +120,7 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
                     <summary className="cursor-pointer break-words font-ui text-xs text-[var(--text)]">{row.name}</summary>
                     <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--t-meta)] leading-5 text-[var(--subtext-0)]">{row.description || "No description supplied."}</p>
                   </details>
+                  {!row.available ? <span className="font-mono text-[length:var(--t-count)] text-[var(--text-muted)]">Unavailable</span> : null}
                   <span className="shrink-0 rounded-[var(--r-pill)] bg-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-0.5 font-mono text-[length:var(--t-count)] text-[var(--overlay-1)]">{row.detail}</span>
                 </div>
               );
@@ -142,5 +144,5 @@ function HermesCapabilities({ engineOpen, query }: { engineOpen: boolean; query:
 }
 
 function Notice({ children, bad }: { children: React.ReactNode; bad?: boolean }) {
-  return <p className={cn("rounded-[var(--r-ctl)] px-3 py-2 text-xs", bad ? "border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] text-[var(--danger)]" : "bg-[var(--mantle)] text-[var(--subtext-0)]")}>{children}</p>;
+  return <p role={bad ? "alert" : "status"} className={cn("rounded-[var(--r-ctl)] px-3 py-2 text-xs", bad ? "border border-[var(--bad)] bg-[color-mix(in_srgb,var(--bad)_11%,transparent)] text-[var(--danger)]" : "bg-[var(--mantle)] text-[var(--subtext-0)]")}>{children}</p>;
 }

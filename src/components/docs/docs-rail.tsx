@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, FilePlus, Folder, FolderOpen, FolderPlus, RefreshCw, Search, Star } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight, Folder, FolderOpen, RefreshCw, Search, Star } from 'lucide-react';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { Control } from '@/components/ui/control';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -20,23 +21,14 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
   onCreate: (template?: WorkspaceDatabaseRecordModel | null) => void;
   onCreateFolder: (name: string) => Promise<void>;
 }) {
-  const [menu, setMenu] = useState(false);
   const [view, setView] = useState<DocsView>('folders');
   const [expanded, setExpanded] = useState<string[]>(() => savedList('intelizen:docs-folders'));
   const [favorites, setFavorites] = useState<string[]>(() => savedList('intelizen:docs-favorites'));
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [folderBusy, setFolderBusy] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => { try { localStorage.setItem('intelizen:docs-folders', JSON.stringify(expanded)); } catch { /* Mounted state survives. */ } }, [expanded]);
   useEffect(() => { try { localStorage.setItem('intelizen:docs-favorites', JSON.stringify(favorites)); } catch { /* Mounted state survives. */ } }, [favorites]);
-  useEffect(() => {
-    if (!menu) return;
-    const close = (event: MouseEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(false); };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setMenu(false); menuRef.current?.querySelector('button')?.focus(); } };
-    window.addEventListener('mousedown', close); window.addEventListener('keydown', escape);
-    return () => { window.removeEventListener('mousedown', close); window.removeEventListener('keydown', escape); };
-  }, [menu]);
   useEffect(() => {
     const selected = records.find(record => record.id === selectedRecordId);
     const path = selected && recordVaultPath(selected);
@@ -74,13 +66,11 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
     <div className="grid gap-2 p-3">
       <div className="flex min-h-[var(--h-ctl)] items-center gap-2"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text)]">Docs</span><div className="flex-1" />
         <Control size="icon" variant="quiet" aria-label="Refresh vault folders" onClick={onRefresh}><RefreshCw className="h-3.5 w-3.5" /></Control>
-        <div ref={menuRef} className="relative"><Control size="sm" variant="primary" loading={creating} onClick={() => setMenu(open => !open)} aria-expanded={menu}>New <ChevronDown className="h-3 w-3" /></Control>
-          {menu ? <div className="absolute right-0 top-8 z-40 w-60 max-w-[80vw] rounded-[var(--r-surface)] bg-[var(--surface)] p-1.5">
-            <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenu(false); onCreate(null); }}><FilePlus className="h-3.5 w-3.5" />Note</Control>
-            <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenu(false); setNewFolder(''); setFolderError(null); }}><FolderPlus className="h-3.5 w-3.5" />Folder</Control>
-            {records.filter(record => record._isTemplate).map(template => <Control key={template.id} variant="quiet" className="w-full justify-start" onClick={() => { setMenu(false); onCreate(template); }}>{documentDisplayTitle(template)}</Control>)}
-          </div> : null}
-        </div>
+        <ActionMenu label="New document" variant="primary" loading={creating} actions={[
+          { label: 'Note', onSelect: () => onCreate(null) },
+          { label: 'Folder', onSelect: () => { setNewFolder(''); setFolderError(null); } },
+          ...records.filter(record => record._isTemplate).map(template => ({ label: documentDisplayTitle(template), onSelect: () => onCreate(template) })),
+        ]}>New <ChevronDown aria-hidden className="h-3 w-3" /></ActionMenu>
       </div>
       <Select aria-label="Document view" value={view} onChange={event => setView(event.target.value as DocsView)}><option value="folders">Vault folders</option><option value="recent">Recent</option><option value="favorites">Favorites</option><option value="reports">Reports</option><option value="journals">Journals</option><option value="outputs">Outputs</option></Select>
       <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" /><Input value={searchQuery} onChange={event => onSearch(event.target.value)} placeholder="Search documents and folders" aria-label="Search documents" className="pl-7" /></div>
@@ -104,8 +94,8 @@ export function DocsRail({ records, proposalCounts, selectedRecordId, searchQuer
 }
 function DocumentRow({ record, selected, favorite, pending, level, showPath, onSelect, onFavorite }: { record: WorkspaceDatabaseRecordModel; selected: boolean; favorite: boolean; pending: number; level: number; showPath: boolean; onSelect: (id: string) => void; onFavorite: (id: string) => void }) {
   const path = recordVaultPath(record);
-  return <div className={cn('group mb-px flex items-center rounded-[var(--r-control)]', selected && 'bg-[var(--selected)] text-[var(--text)]')} style={{ paddingInlineStart: 8 + level * 12 }}>
+  return <div className={cn('group mb-px flex items-center rounded-[var(--r-ctl)]', selected && 'bg-[var(--selected)] text-[var(--text)]')} style={{ paddingInlineStart: 8 + level * 12 }}>
     <button type="button" onClick={() => onSelect(record.id)} aria-current={selected ? 'page' : undefined} title={path ?? documentDisplayTitle(record)} className="nav-node min-h-[var(--h-row)] min-w-0 flex-1 py-1 pl-2 pr-1 text-left"><span className="min-w-0 flex-1"><span className="block truncate">{documentDisplayTitle(record)}</span>{showPath ? <span className="block truncate text-[length:var(--t-meta)] text-[var(--text-muted)]">{path ?? 'Saved in workspace'}</span> : null}</span>{pending ? <span title="Suggested edits" className="text-[var(--wait)]">{pending}</span> : null}{record._vaultMissing ? <span className="text-[length:var(--t-count)] text-[var(--text-muted)]">Unlinked</span> : null}</button>
-    <button type="button" aria-label={`${favorite ? 'Unstar' : 'Star'} ${documentDisplayTitle(record)}`} aria-pressed={favorite} onClick={() => onFavorite(record.id)} className={cn('shrink-0 rounded-[var(--r-control)] p-1.5 text-[var(--text-muted)] focus-visible:opacity-100 group-hover:opacity-100', !favorite && 'opacity-0')}><Star className="h-3 w-3" fill={favorite ? 'currentColor' : 'none'} /></button>
+    <button type="button" aria-label={`${favorite ? 'Unstar' : 'Star'} ${documentDisplayTitle(record)}`} aria-pressed={favorite} onClick={() => onFavorite(record.id)} className={cn('shrink-0 rounded-[var(--r-ctl)] p-1.5 text-[var(--text-muted)] focus-visible:opacity-100 group-hover:opacity-100', !favorite && 'opacity-0')}><Star className="h-3 w-3" fill={favorite ? 'currentColor' : 'none'} /></button>
   </div>;
 }

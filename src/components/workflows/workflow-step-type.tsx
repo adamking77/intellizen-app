@@ -32,7 +32,7 @@ export function WorkflowStepInsertion({ label, hasPrevious, onAdd }: { label: st
   }, [open]);
   function cancel() { returnFocus.current = true; setOpen(false); }
   if (!open) return <div className="flex h-8 items-center justify-center"><Control ref={trigger} size="icon" variant="quiet" aria-label={label} onClick={() => setOpen(true)}><Plus aria-hidden className="h-3.5 w-3.5" /></Control></div>;
-  return <Card className="my-3 border border-[var(--border-strong)]" role="group" aria-label="New workflow step" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); } }}>
+  return <Card className="my-3" role="group" aria-label="New workflow step" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); } }}>
     <div className="mb-3 flex items-center justify-between gap-2"><p className="text-[length:var(--t-ui)] font-medium">New step</p><Control size="sm" variant="quiet" onClick={cancel}>Cancel</Control></div>
     <Select ref={picker} aria-label="New step type" value="" containerClassName="w-full" onChange={(event) => { onAdd(event.target.value as DesignerStepKind); setOpen(false); }}><option value="" disabled>Choose step type…</option>{kindOptions(hasPrevious)}</Select>
   </Card>;

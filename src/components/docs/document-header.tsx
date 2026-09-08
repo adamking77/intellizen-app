@@ -1,6 +1,6 @@
-import { ArrowLeft, MoreHorizontal, PanelLeft } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, PanelLeft } from "lucide-react";
 
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Control } from "@/components/ui/control";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
@@ -63,25 +63,6 @@ export function DocumentHeader({
   onFile: () => void;
   decisionBusy?: boolean;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", escape);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", escape);
-    };
-  }, [menuOpen]);
-
   return (
     <div className="flex min-h-14 items-center gap-2 px-5 py-2">
       <Control size="icon" variant="quiet" onClick={onBack} aria-label={isCramped ? "Back to document list" : "Toggle document list"}>{isCramped ? <ArrowLeft className="h-3.5 w-3.5" /> : <PanelLeft className="h-3.5 w-3.5" />}</Control>
@@ -92,17 +73,11 @@ export function DocumentHeader({
           ? <Control variant="quiet" onClick={onMakeRunnable}>Make runnable</Control>
           : <Control variant="quiet" disabled={decisionBusy} onClick={() => onModeChange(mode === "edit" ? "read" : "edit")}>{mode === "edit" ? "Editing · ⌘E to read" : "Reading · ⌘E to edit"}</Control>}
         action={(
-          !localOnly ? <div ref={menuRef} className="relative">
-            <Control size="icon" variant="quiet" onClick={() => setMenuOpen((open) => !open)} aria-label="Document menu" aria-expanded={menuOpen}><MoreHorizontal className="h-4 w-4" /></Control>
-            {menuOpen ? (
-              <div className="absolute right-0 top-9 z-40 w-48 rounded-[var(--r-surface)] bg-[var(--surface)] p-1.5">
-                {!readOnly && !isTemplate ? <Control variant="quiet" loading={savingTemplate} className="w-full justify-start" onClick={() => { setMenuOpen(false); onSaveTemplate(); }}>Save as template</Control> : null}
-                <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenuOpen(false); onHistory(); }}>History</Control>
-                {!readOnly ? <Control variant="quiet" className="w-full justify-start" onClick={() => { setMenuOpen(false); onFile(); }}>Link to project</Control> : null}
-                {!readOnly ? <Control variant="danger" className="w-full justify-start" onClick={() => { setMenuOpen(false); onDelete(); }}>Delete</Control> : null}
-              </div>
-            ) : null}
-          </div> : null
+          !localOnly ? <ActionMenu label="Document menu" actions={[
+            ...(!readOnly && !isTemplate ? [{ label: savingTemplate ? "Saving template…" : "Save as template", disabled: savingTemplate, onSelect: onSaveTemplate }] : []),
+            { label: "History", onSelect: onHistory },
+            ...(!readOnly ? [{ label: "Link to project", onSelect: onFile }, { label: "Delete", danger: true, onSelect: onDelete }] : []),
+          ]} /> : null
         )}
       />
     </div>

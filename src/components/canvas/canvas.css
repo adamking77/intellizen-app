@@ -814,6 +814,16 @@
   border-radius: 999px;
 }
 
+.intelizen-canvas .tray-button:focus-visible,
+.intelizen-canvas .shape-button:focus-visible,
+.intelizen-canvas .align-button:focus-visible,
+.intelizen-canvas .swatch-button:focus-visible,
+.intelizen-canvas .toolbar-command:focus-visible,
+.intelizen-canvas .insert-button:focus-visible {
+  outline: 2px solid var(--canvas-accent);
+  outline-offset: 2px;
+}
+
 .intelizen-canvas .tray-button:hover,
 .intelizen-canvas .shape-button:hover,
 .intelizen-canvas .align-button:hover,

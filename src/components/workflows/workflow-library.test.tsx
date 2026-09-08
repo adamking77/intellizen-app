@@ -18,6 +18,7 @@ it("opens an exact workflow from a semantic card, without rendering run history"
   const card = host.querySelector<HTMLButtonElement>('[aria-label="Edit Publish report"]')!;
   await act(async () => card.click()); expect(open).toHaveBeenCalledWith(items[1]);
   expect(host.querySelector("table")).toBeNull(); expect(host.textContent).not.toContain("Last ran");
+  expect(card.querySelector("div,h1,h2,h3,h4,h5,h6,p,section")).toBeNull();
 });
 it("filters drafts without selecting or starting any workflow", async () => {
   await render();

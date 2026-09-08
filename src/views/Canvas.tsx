@@ -105,6 +105,7 @@ export function CanvasView() {
   const draftFingerprintRef = useRef<string | null>(null);
   const saveSessionRef = useRef<DocumentSaveSession | null>(null);
   const lastPersistedTitleRef = useRef<string | null>(null);
+  const cancelRenameRef = useRef(false);
   const [selectedId, setSelectedId] = useState<number | null>(requestedId);
   const [draftCanvasId, setDraftCanvasId] = useState<number | null>(null);
   const [draftDocument, setDraftDocument] = useState<CanvasDocumentData | null>(null);
@@ -267,7 +268,6 @@ export function CanvasView() {
         ) ?? prev,
       );
     } catch (error) {
-      setTitleDraft(selectedCanvas.name);
       toastError("Rename failed", error);
     } finally {
       setIsRenaming(false);
@@ -413,7 +413,13 @@ export function CanvasView() {
                 aria-label="Canvas title"
                 value={titleDraft}
                 onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={() => void commitRename()}
+                onBlur={() => {
+                  if (cancelRenameRef.current) {
+                    cancelRenameRef.current = false;
+                    return;
+                  }
+                  void commitRename();
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -421,6 +427,7 @@ export function CanvasView() {
                   }
                   if (event.key === "Escape") {
                     event.preventDefault();
+                    cancelRenameRef.current = true;
                     setTitleDraft(selectedCanvas.name);
                     (event.target as HTMLInputElement).blur();
                   }
@@ -432,7 +439,7 @@ export function CanvasView() {
           {loadingCanvas ? (
             <Skeleton lines={1} className="w-20" />
           ) : selectedCanvas && draftDocument ? (
-            <span className="font-mono text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
+            <span aria-live="polite" className="font-mono text-[length:var(--t-count)] uppercase tracking-[0.14em] text-[var(--overlay-1)]">
               {formatSaveStatus(saveStatus)}
             </span>
           ) : null}

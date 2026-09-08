@@ -4,6 +4,7 @@ import { Pin, RefreshCw } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { AppDialog } from "@/components/ui/app-dialog";
+import { Control } from "@/components/ui/control";
 import { ActivityCardBody } from "./activity-card";
 import { useActivity } from "./use-activity";
 import {
@@ -144,14 +145,15 @@ export function ActivityDashboard() {
             </option>
           ))}
         </Select>
-        <button
-          className="action p-2"
+        <Control
+          size="icon"
+          variant="quiet"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
           aria-label="Refresh activity"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-        </button>
+        </Control>
         </div>
       </header>
       <details className="text-[length:var(--t-meta)] text-[var(--text-muted)]">
@@ -224,9 +226,12 @@ export function ActivityDashboard() {
                   options={(id === "usage" ? ["line", "bar"] : ["ring", "bar"]).map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))}
                   onValueChange={(style) => saveCharts(JSON.stringify({ ...charts, [id]: style }))}
                 /> : null}
-                <button
-                  className="action p-1.5"
+                <Control
+                  size="icon"
+                  variant="quiet"
                   aria-label={`Pin ${ACTIVITY_TITLES[id]} to a dashboard`}
+                  aria-haspopup="dialog"
+                  aria-expanded={pinning === id}
                   onClick={(event) => {
                     pinTrigger.current = event.currentTarget;
                     setPinning(id);
@@ -238,7 +243,7 @@ export function ActivityDashboard() {
                   }}
                 >
                   <Pin className="h-3.5 w-3.5" />
-                </button>
+                </Control>
               </header>
               <ActivityCardBody
                 id={id}
@@ -286,16 +291,16 @@ export function ActivityDashboard() {
               : " The current workspace filter is preserved."}
           </p>
           <div className="flex justify-end gap-2">
-            <button className="action" disabled={saving} onClick={closePin}>
+            <Control variant="quiet" disabled={saving} onClick={closePin}>
               Cancel
-            </button>
-            <button
-              className="action"
-              disabled={saving}
+            </Control>
+            <Control
+              variant="primary"
+              loading={saving}
               onClick={() => void pin()}
             >
-              {saving ? "Saving…" : "Pin widget"}
-            </button>
+              Pin widget
+            </Control>
           </div>
         </div>
       </AppDialog>

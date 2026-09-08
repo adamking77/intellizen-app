@@ -204,4 +204,3 @@
 .workflow-designer input[type="number"]:focus-visible { outline: none !important; }
 
 .react-flow__node.dragging .workflow-composer-node { cursor: grabbing; }
-.workflow-composer-node.is-terminal.is-selected { outline: 1px solid var(--border-strong); }

@@ -105,5 +105,12 @@ it("shows truthful unsourced metadata and lets reading focus change and restore 
   expect(host.querySelector('[aria-label="Document menu"]')).toBeNull();
   expect(focus.getAttribute("aria-pressed")).toBe("true");
   await act(async () => focus.click());
-  expect(host.querySelector('[aria-label="Document menu"]')).not.toBeNull();
+  const menu = host.querySelector<HTMLButtonElement>('[aria-label="Document menu"]')!;
+  await act(async () => menu.click());
+  expect(document.activeElement?.textContent).toBe("Save as template");
+  await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+  expect(document.activeElement?.textContent).toBe("History");
+  await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(document.activeElement).toBe(menu);
 });

@@ -272,13 +272,13 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
           </label>
         </section>
 
-        <div className="rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2.5 font-ui text-[length:var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
+        <div className="px-1 py-1 font-ui text-[length:var(--t-section)] leading-relaxed text-[var(--subtext-0)]">
           Hermes will run the saved definition as <span className="font-mono text-[var(--text)]">{profile || "the selected profile"}</span>.
           {board ? ` ${definition.steps.length} idempotent progress cards will be created on ${board}.` : " No board data will be created."}
         </div>
 
         {profilesQuery.error || blueprintsQuery.error || boardsQuery.error || jobsQuery.error || failure ? (
-          <div role="alert" className="rounded-[var(--r-ctl)] border border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--base))] px-3 py-2 font-ui text-[length:var(--t-section)] text-[var(--danger)]">
+          <div role="alert" className="px-1 py-1 font-ui text-[length:var(--t-section)] text-[var(--danger)]">
             {failure ?? errorMessage(profilesQuery.error ?? blueprintsQuery.error ?? boardsQuery.error ?? jobsQuery.error)}
           </div>
         ) : null}
@@ -289,9 +289,9 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
             {jobsQuery.isFetching ? <span className="control-running-dot" aria-label="Refreshing schedules" /> : null}
           </div>
           {jobs.length ? (
-            <div className="space-y-2">
+            <div className="divide-y divide-[var(--row-line)]">
               {jobs.map((job) => (
-                <div className="flex items-center gap-3 rounded-[var(--r-ctl)] border border-[var(--border)] bg-[var(--base)] px-3 py-2" key={job.id}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-2.5" key={job.id}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-ui text-[length:var(--t-meta)] font-medium text-[var(--text)]">{job.scheduleDisplay}</span>
@@ -300,22 +300,24 @@ export function ScheduleSheet({ open, workflow, definition, onOpenChange, inline
                     <p className="mt-0.5 truncate font-ui text-[length:var(--t-count)] text-[var(--overlay-1)]">{job.profile} · {nextRunLabel(job.nextRunAt)}</p>
                     {runsQuery.isLoading ? <Skeleton lines={1} className="mt-1" /> : runsQuery.data?.[job.id]?.[0] ? <p className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">Last outcome · {runsQuery.data[job.id][0].outcome}{runsQuery.data[job.id][0].preview ? ` · ${runsQuery.data[job.id][0].preview}` : ""}</p> : null}
                   </div>
-                  <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id || (!job.enabled && !canExecute)} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
-                    {job.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                  </Control>
-                  <Control aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id || !canExecute} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="quiet">
-                    <Play className="h-3.5 w-3.5" />
-                  </Control>
-                  <Control
-                    aria-label={confirmDelete === job.id ? `Confirm delete ${job.scheduleDisplay}` : `Delete ${job.scheduleDisplay}`}
-                    disabled={actionId === job.id}
-                    onClick={() => void remove(job.id, job.profile)}
-                    size={confirmDelete === job.id ? "sm" : "icon"}
-                    variant={confirmDelete === job.id ? "danger" : "quiet"}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {confirmDelete === job.id ? "Delete?" : null}
-                  </Control>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Control aria-label={`${job.enabled ? "Pause" : "Resume"} ${job.scheduleDisplay}`} disabled={actionId === job.id || (!job.enabled && !canExecute)} onClick={() => void toggle(job.id, job.profile, job.enabled)} size="icon" variant="quiet">
+                      {job.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </Control>
+                    <Control aria-label={`Run ${job.scheduleDisplay} now`} disabled={actionId === job.id || !canExecute} onClick={() => void runNow(job.id, job.profile)} size="icon" variant="quiet">
+                      <Play className="h-3.5 w-3.5" />
+                    </Control>
+                    <Control
+                      aria-label={confirmDelete === job.id ? `Confirm delete ${job.scheduleDisplay}` : `Delete ${job.scheduleDisplay}`}
+                      disabled={actionId === job.id}
+                      onClick={() => void remove(job.id, job.profile)}
+                      size={confirmDelete === job.id ? "sm" : "icon"}
+                      variant={confirmDelete === job.id ? "danger" : "quiet"}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {confirmDelete === job.id ? "Delete?" : null}
+                    </Control>
+                  </div>
                 </div>
               ))}
             </div>

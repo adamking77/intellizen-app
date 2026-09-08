@@ -56,6 +56,7 @@ function Half({
   value,
   catalog,
   found,
+  modelsUnavailable = false,
   language = false,
   onChange,
 }: {
@@ -65,6 +66,7 @@ function Half({
   catalog: Catalog[];
   /** Models discovered on this machine, when the chosen service has any. */
   found?: { id: string; label: string }[];
+  modelsUnavailable?: boolean;
   language?: boolean;
   onChange: (next: SpeechService) => void;
 }) {
@@ -106,7 +108,7 @@ function Half({
           {custom ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>Service id</span>
-              <Input className="h-8 text-[length:var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
+              <Input className="text-[length:var(--t-meta)]" value={value.service.trim()} placeholder="elevenlabs" onChange={(e) => onChange({ ...value, service: e.target.value || " " })} />
               <span className={meta}>
                 Custom services are saved for future use. Only {catalog.map((p) => p.label).join(" and ")} {title === "Speaking" ? "can speak" : "works for dictation"} in the current app.
               </span>
@@ -118,7 +120,7 @@ function Half({
               <span className={caps}>{title === "Speaking" ? "Voice" : "Model"}</span>
               {chosen ? (
                 <Select controlSize="sm" value={value.model} onChange={(e) => onChange({ ...value, model: e.target.value })}>
-                  <option value="">{options.length === 0 ? "Nothing installed" : "Choose…"}</option>
+                  <option value="">{modelsUnavailable ? "Models unavailable" : options.length === 0 ? "Nothing installed" : "Choose…"}</option>
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.label}
@@ -126,8 +128,9 @@ function Half({
                   ))}
                 </Select>
               ) : (
-                <Input className="h-8 text-[length:var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
+                <Input className="text-[length:var(--t-meta)]" value={value.model} placeholder="Model id" onChange={(e) => onChange({ ...value, model: e.target.value })} />
               )}
+              {modelsUnavailable && title === "Dictation" ? <span role="alert" className={meta}>The local dictation models could not be read.</span> : null}
             </label>
           ) : null}
 
@@ -135,7 +138,7 @@ function Half({
             <label className="flex flex-col gap-1">
               <span className={caps}>Language</span>
               <Input
-                className="h-8 text-[length:var(--t-meta)]"
+                className="text-[length:var(--t-meta)]"
                 value={value.language}
                 placeholder="en"
                 onChange={(e) => onChange({ ...value, language: e.target.value })}
@@ -147,7 +150,7 @@ function Half({
           {needsKey ? (
             <label className="flex flex-col gap-1">
               <span className={caps}>API key</span>
-              <Input className="h-8 text-[length:var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
+              <Input className="text-[length:var(--t-meta)]" type="password" value={value.apiKey} placeholder="Read from the environment" onChange={(e) => onChange({ ...value, apiKey: e.target.value })} />
               <span className={meta}>
                 The app reads credentials from the service’s environment variable. A key entered here is saved but is not used yet.
               </span>
@@ -164,10 +167,11 @@ export function VoiceSettings() {
   const setVoice = useVoicePrefs((s) => s.setVoice);
   // What is actually installed, asked once when the page opens.
   const [found, setFound] = useState<{ id: string; label: string }[]>([]);
+  const [modelsUnavailable, setModelsUnavailable] = useState(false);
   useEffect(() => {
     void invoke<{ id: string; label: string }[]>("voice_models")
-      .then(setFound)
-      .catch(() => setFound([]));
+      .then((models) => { setFound(models); setModelsUnavailable(false); })
+      .catch(() => { setFound([]); setModelsUnavailable(true); });
   }, []);
 
   return (
@@ -188,6 +192,7 @@ export function VoiceSettings() {
         value={voice.dictation}
         catalog={DICTATION_SERVICES}
         found={found}
+        modelsUnavailable={modelsUnavailable}
         language
         onChange={(dictation) => setVoice({ ...voice, dictation })}
       />

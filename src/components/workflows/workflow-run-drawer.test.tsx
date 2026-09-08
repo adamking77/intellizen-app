@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), project: vi.fn(), events: vi.fn(
 vi.mock("@/lib/data", () => ({ GENZEN_WORKSPACE_DATABASE_IDS: { workflowRuns: "runs-db" }, getWorkspaceRecord: mocks.get, toWorkflowRunItem: mocks.project, resolveWorkflowApproval: mocks.approval }));
 vi.mock("@/lib/data/work-receipts", () => ({ listWorkEvents: mocks.events }));
 vi.mock("@/services/workflow-dispatch", () => ({ dispatchWorkflowRun: mocks.dispatch }));
-vi.mock("./workflow-detail", () => ({ runDuration: () => "2m" }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: ReturnType<typeof createRoot>; let host: HTMLDivElement; let client: QueryClient;
 afterEach(() => { if (root) act(() => root.unmount()); host?.remove(); client?.clear(); vi.clearAllMocks(); });
@@ -51,6 +50,8 @@ describe("exact workflow run drawer", () => {
     expect(host.querySelector('a[href="/databases/runs-db?record=exact-run"]')).toBeTruthy();
     expect(host.textContent).toContain("Historical definition");
     expect(host.textContent).toContain("Receipt end"); expect(host.textContent).toContain("Full record notes, including approval context.");
+    expect(host.textContent).not.toContain("Took");
+    expect(host.textContent).not.toContain("Took");
     expect(host.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Exact requested run");
     const context = host.querySelector("details");
     expect(context?.open).toBe(false);

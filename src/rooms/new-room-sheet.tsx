@@ -109,7 +109,7 @@ export function NewRoomSheet({
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="What is this room for?"
+            placeholder="Room purpose"
             maxLength={64}
             autoFocus
           />

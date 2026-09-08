@@ -15,7 +15,6 @@ import { canonicalWorkflowJson, validateWorkflowDefinition, type WorkflowDefinit
 import type { WorkflowRunItem } from "@/lib/types";
 import { dispatchWorkflowRun } from "@/services/workflow-dispatch";
 import { runResultVariant } from "./workflow-presentation";
-import { runDuration } from "./workflow-detail";
 import { WorkflowApprovalCard } from "./workflow-approval-card";
 import { WorkflowRunPulse } from "./workflow-run-pulse";
 import { meanwhileRunSummary } from "./workflow-meanwhile";
@@ -129,7 +128,7 @@ export function WorkflowRunDrawer({ runId, item, onClose }: { runId: string; ite
       {canStartWaitingWork ? <Control className="self-start" size="sm" disabled={waitingBusy} onClick={() => void startWaitingWork()}>{waitingBusy ? "Starting waiting work…" : "Start waiting work"}</Control> : null}
       {waitingError ? <p role="alert" className="text-[length:var(--t-meta)] text-[var(--danger)]">{waitingError}</p> : null}
       <Link to={`/databases/${GENZEN_WORKSPACE_DATABASE_IDS.workflowRuns}?record=${encodeURIComponent(run.id)}`} className="inline-flex text-[length:var(--t-meta)] text-[var(--accent-text)] hover:underline">{run.status?.toLowerCase() === "needs approval" ? "Review approval in run record" : "Open run record"}</Link>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[length:var(--t-meta)]"><dt className="text-[var(--text-muted)]">Started</dt><dd>{run.started_at ? new Date(run.started_at).toLocaleString() : "Not recorded"}</dd><dt className="text-[var(--text-muted)]">Took</dt><dd>{runDuration(run)}</dd><dt className="text-[var(--text-muted)]">Current step</dt><dd className="break-words">{displayedCurrentStep}</dd></dl>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[length:var(--t-meta)]"><dt className="text-[var(--text-muted)]">Started</dt><dd>{run.started_at ? new Date(run.started_at).toLocaleString() : "Not recorded"}</dd><dt className="text-[var(--text-muted)]">Current step</dt><dd className="break-words">{displayedCurrentStep}</dd></dl>
       {drift ? <p className="text-[length:var(--t-meta)] text-[var(--warning)]">The Registry definition changed after this run started. This run retains its original definition snapshot.</p> : null}
       {contextJson !== null ? <details><summary className="text-[length:var(--t-meta)]">Run context</summary><pre className="mt-2 whitespace-pre-wrap break-words text-[length:var(--t-count)]">{contextJson}</pre></details> : run.context ? <section><h3 className="mb-2 font-medium">Context</h3><MarkdownBody content={run.context} /></section> : null}
       {run.receipt ? <section><h3 className="mb-2 font-medium">Receipts</h3><MarkdownBody content={run.receipt} /></section> : null}

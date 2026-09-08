@@ -40,6 +40,7 @@ export function AppDialog({
   useEffect(() => {
     const node = dialog.current;
     if (!node) return;
+    const returnFocus = document.activeElement;
     if (open && !node.open) {
       node.showModal();
       if (initialFocus === "title") {
@@ -48,6 +49,10 @@ export function AppDialog({
       }
     }
     if (!open && node.open) node.close();
+    if (open) return () => {
+      if (node.open) node.close();
+      if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+    };
   }, [open, initialFocus]);
 
   return (

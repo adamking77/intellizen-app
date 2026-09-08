@@ -6,25 +6,16 @@ import { Pill } from "@/components/ui/status-pill";
 import { Control } from "@/components/ui/control";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getWorkflowSource } from "@/lib/workflow-source";
-import { formatElapsed } from "@/lib/format-elapsed";
 import type { WorkflowCatalogItem } from "@/lib/workflow-catalog";
 import type { WorkflowRunItem } from "@/lib/types";
 import { runResultVariant } from "./workflow-presentation";
 
-export function runDuration(run: WorkflowRunItem) {
-  if (!run.started_at || !run.completed_at) return "—";
-  const elapsed = Date.parse(run.completed_at) - Date.parse(run.started_at);
-  if (!Number.isFinite(elapsed) || elapsed < 0) return "—";
-  const seconds = Math.round(elapsed / 1000);
-  return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
-}
-
 export function RunsTable({ runs, onOpenRun }: { runs: WorkflowRunItem[]; onOpenRun: (run: WorkflowRunItem) => void }) {
   if (!runs.length) return <p className="py-3 text-[length:var(--t-meta)] text-[var(--text-muted)]">No workflow runs yet. Started runs and their receipts appear in this list.</p>;
   return <div className="overflow-auto"><table className="w-full min-w-[650px] table-fixed text-left text-[length:var(--t-meta)]">
-    <colgroup><col className="w-[20%]" /><col className="w-[25%]" /><col className="w-[22%]" /><col className="w-[23%]" /><col className="w-[10%]" /></colgroup>
-    <thead className="text-[length:var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]"><tr className="h-[var(--h-row)]"><th className="font-normal">Started</th><th className="font-normal">By</th><th className="font-normal">Result</th><th className="font-normal">Receipts</th><th className="font-normal">Took</th></tr></thead>
-    <tbody>{runs.map((run) => <tr key={run.id} className="h-[var(--h-line)]"><td className="pr-3 text-[var(--text-muted)]">{run.started_at ? formatElapsed(run.started_at) : "—"}</td><td className="pr-3"><Identity name={run.actor || run.owner_role || "Unassigned"} /><span className="ml-1 text-[length:var(--t-count)] text-[var(--text-muted)]">{run.trigger_source}</span></td><td className="pr-3"><Pill variant={runResultVariant(run.status)}>{run.status || "Unknown"}</Pill></td><td className="pr-3"><Control size="sm" variant="quiet" onClick={() => onOpenRun(run)} aria-label={`Open run ${run.name}${run.started_at ? ` from ${run.started_at}` : ""}`}>{run.receipt ? "Read receipts" : "Open run"}</Control></td><td className="text-[var(--text-muted)]">{runDuration(run)}</td></tr>)}</tbody>
+    <colgroup><col className="w-[22%]" /><col className="w-[28%]" /><col className="w-[22%]" /><col className="w-[28%]" /></colgroup>
+    <thead className="text-[length:var(--t-count)] uppercase tracking-[0.12em] text-[var(--text-muted)]"><tr className="h-[var(--h-row)]"><th className="font-normal">Started</th><th className="font-normal">By</th><th className="font-normal">Result</th><th className="font-normal">Receipts</th></tr></thead>
+    <tbody>{runs.map((run) => <tr key={run.id} className="h-[var(--h-line)]"><td className="pr-3 text-[var(--text-muted)]">{run.started_at ? new Date(run.started_at).toLocaleString() : "—"}</td><td className="pr-3"><Identity name={run.actor || run.owner_role || "Unassigned"} /><span className="ml-1 text-[length:var(--t-count)] text-[var(--text-muted)]">{run.trigger_source}</span></td><td className="pr-3"><Pill variant={runResultVariant(run.status)}>{run.status || "Unknown"}</Pill></td><td className="pr-3"><Control size="sm" variant="quiet" onClick={() => onOpenRun(run)} aria-label={`Open run ${run.name}${run.started_at ? ` from ${run.started_at}` : ""}`}>{run.receipt ? "Read receipts" : "Open run"}</Control></td></tr>)}</tbody>
   </table></div>;
 }
 

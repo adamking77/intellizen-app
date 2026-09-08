@@ -93,14 +93,6 @@ export function Dock({
         </Control>
         {aside ? <Control size="sm" variant="quiet" onClick={onRestore}>Restore</Control> : null}
       </div> : null}
-      <details onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
-        event.currentTarget.open = false;
-        event.currentTarget.querySelector("summary")?.focus();
-      }}>
-        <summary className="flex min-h-[var(--h-ctl)] cursor-pointer list-none items-center px-2.5 font-ui text-[12.5px] text-[var(--text-dim)] [&::-webkit-details-marker]:hidden">What is this?</summary>
-        <p className="absolute bottom-full left-0 z-40 mb-2 w-full max-w-[360px] rounded-[var(--r-surface)] bg-[var(--surface)] px-4 py-3.5 font-ui text-[length:var(--t-ui)] leading-relaxed text-[var(--text)]">Home shows current work and questions. Choose Thinking to read, Deciding to answer questions, Executing to find tasks, or Not today to quiet updates. Agents keep working; actions that require your approval wait. Open saved dashboards with Show pinned views.</p>
-      </details>
       </div>
       <div className="ml-auto flex min-h-[36px] min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 rounded-[var(--r-pill)] bg-[var(--surface)] px-3 py-1">
         <span className="font-mono text-[length:var(--t-count)] text-[var(--text-dim)]">{SESSION_MODE_LABEL[mode]}</span>

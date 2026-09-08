@@ -104,16 +104,37 @@ it("retains the supplied viewport and opens an optional outline that selects a n
   const definition = createWorkflowDesignerDraft({ id: "outline", name: "Outline" });
   const select = vi.fn(), setViewport = vi.fn(), fitView = vi.fn(), changed = vi.fn();
   const viewport = { x: 123, y: -80, zoom: 0.55 };
-  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={() => {}} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} initialViewport={viewport} onViewportChange={changed} />));
+  await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="step_1" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={select} onPositions={() => {}} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} initialViewport={viewport} onViewportChange={changed} />));
   await act(async () => (mock.flowProps.onInit as Function)({ setViewport, fitView, getViewport: () => viewport, getNode: () => undefined }));
   expect(setViewport).toHaveBeenCalledWith(viewport);
   expect(fitView).not.toHaveBeenCalled();
   expect(host.querySelector("nav")).toBeNull();
   await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Workflow outline"]')!.click());
   expect(host.querySelector('input[aria-label="Find a workflow step"]')).toBeTruthy();
-  await act(async () => [...host.querySelectorAll<HTMLButtonElement>("nav button")].find((button) => button.textContent?.includes("Complete assigned work"))!.click());
+  const selected = [...host.querySelectorAll<HTMLButtonElement>("nav button")].find((button) => button.textContent?.includes("Complete assigned work"))!;
+  expect(selected.getAttribute("aria-current")).toBe("step");
+  await act(async () => selected.click());
   expect(select).toHaveBeenCalledWith("step_1");
   expect(host.querySelector("nav")).toBeNull();
   (mock.flowProps.onMoveEnd as Function)(null, viewport);
   expect(changed).toHaveBeenCalledWith(viewport);
+});
+
+it("reveals an outline selection instantly after keyboard input", async () => {
+  vi.useFakeTimers();
+  try {
+    host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+    const definition = createWorkflowDesignerDraft({ id: "keyboard-outline", name: "Keyboard outline" });
+    const viewport = { x: 0, y: 0, zoom: 1 }; const setViewport = vi.fn();
+    await act(async () => root.render(<WorkflowComposerCanvas definition={definition} selectedStepId="" positions={{}} roleTargets={[]} renderStep={() => null} renderTrigger={null} onSelect={() => {}} onPositions={() => {}} onConnect={() => {}} onDuplicate={() => {}} onRemove={() => {}} onUndo={() => {}} onRedo={() => {}} />));
+    const canvas = host.querySelector<HTMLElement>(".workflow-composer > .relative.flex > .relative.min-h-0.flex-1")!;
+    Object.defineProperties(canvas, { clientWidth: { value: 700 }, clientHeight: { value: 500 } });
+    await act(async () => (mock.flowProps.onInit as Function)({ setViewport, fitView: vi.fn(), getViewport: () => viewport, getNode: () => ({ position: { x: 900, y: 900 }, measured: { width: 280, height: 140 }, data: { expanded: false } }) }));
+    setViewport.mockClear();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Workflow outline"]')!.click());
+    await act(async () => [...host.querySelectorAll<HTMLButtonElement>("nav button")].find((button) => button.textContent?.includes("Complete assigned work"))!.click());
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(setViewport).toHaveBeenCalledWith(expect.any(Object), { duration: 0 });
+  } finally { vi.useRealTimers(); }
 });

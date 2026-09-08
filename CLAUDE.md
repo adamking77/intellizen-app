@@ -54,6 +54,9 @@ surfaces remain flat and borderless.
 groups anchored to the far left and far right of its available width. They may
 wrap on narrow screens, but do not pull both groups into a centered cluster.
 
+**Dock help removal, Adam 2026-09-08:** do not add “What is this?” controls
+to the bottom docks or menus. Keep those surfaces for modes and actions.
+
 **Week theme restoration, Adam 2026-09-08:** retain the production weekly
 rotation label as persistent app context, including Not today. It shares the
 existing compact header and is not a transient notification.
