@@ -1,0 +1,567 @@
+const WORKFLOW_SCHEMA = "intellizen.workflow/1";
+const STEP_ID = /^[a-z][a-z0-9_-]{0,63}$/;
+const WORKFLOW_ID = /^[a-z0-9][a-z0-9._-]{2,127}$/;
+const INPUT_KEY = /^[a-z][a-z0-9_]{0,63}$/;
+const CONDITION =
+  /^steps\.([a-z][a-z0-9_-]*)\.state == '(queued|running|awaiting-input|needs-approval|blocked|completed|failed|cancelled|abandoned)'$/;
+const PAYLOAD_REF = /^steps\.([a-z][a-z0-9_-]*)\.result$/;
+const TERMINALS = new Set(["complete", "blocked", "escalate"]);
+const KINDS = new Set([
+  "role-assign",
+  "condition",
+  "approval",
+  "artifact",
+  "decision",
+]);
+const EXECUTION = new Set(["ephemeral", "durable"]);
+const ARTIFACT_ACTIONS = new Set([
+  "create-doc",
+  "revise-doc",
+  "create-record",
+  "simulate-consequential-action",
+]);
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function add(errors, path, code, message) {
+  errors.push({ path, code, message });
+}
+
+function nonEmpty(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function stepTargets(step) {
+  if (step.kind === "condition") return [step.then, step.else];
+  return step.next == null ? [] : [step.next];
+}
+
+function graphTargets(step) {
+  return [
+    ...stepTargets(step),
+    ...(step.kind === "approval" && Array.isArray(step.meanwhile)
+      ? step.meanwhile
+      : []),
+  ];
+}
+
+function validateCommonStep(step, index, errors) {
+  const path = `steps[${index}]`;
+  if (!isRecord(step)) {
+    add(errors, path, "invalid_step", "Step must be an object.");
+    return false;
+  }
+  if (!STEP_ID.test(step.id ?? "")) {
+    add(errors, `${path}.id`, "invalid_step_id", "Step id is invalid.");
+  }
+  if (!KINDS.has(step.kind)) {
+    add(errors, `${path}.kind`, "unsupported_step_kind", "Step kind is not supported in workflow schema v1.");
+  }
+  if (!nonEmpty(step.title)) {
+    add(errors, `${path}.title`, "missing_title", "Step title is required.");
+  }
+  return true;
+}
+
+function validateRoleAssign(step, index, errors, inputKeys) {
+  const path = `steps[${index}]`;
+  if (!nonEmpty(step.role)) add(errors, `${path}.role`, "missing_role", "Role is required.");
+  if (!["primary-active-occupant", "explicit-agent-override"].includes(step.resolution)) {
+    add(errors, `${path}.resolution`, "invalid_resolution", "Role resolution is invalid.");
+  }
+  if (step.resolution === "explicit-agent-override") {
+    if (!nonEmpty(step.agentOverride)) {
+      add(errors, `${path}.agentOverride`, "missing_agent_override", "Explicit resolution requires agentOverride.");
+    }
+    if (!nonEmpty(step.overrideReason)) {
+      add(errors, `${path}.overrideReason`, "missing_override_reason", "Explicit resolution requires overrideReason.");
+    }
+  } else if (step.agentOverride != null || step.overrideReason != null) {
+    add(errors, path, "unexpected_agent_override", "Primary occupant resolution cannot carry an agent override.");
+  }
+  if (!nonEmpty(step.instructions)) {
+    add(errors, `${path}.instructions`, "missing_instructions", "Role assignment instructions are required.");
+  }
+  if (!EXECUTION.has(step.execution)) {
+    add(errors, `${path}.execution`, "invalid_execution", "Execution must be ephemeral or durable.");
+  }
+  if (!Number.isSafeInteger(step.timeoutMinutes) || step.timeoutMinutes < 1 || step.timeoutMinutes > 240) {
+    add(errors, `${path}.timeoutMinutes`, "invalid_timeout", "Timeout must be an integer from 1 to 240 minutes.");
+  }
+  if (!isRecord(step.verification) || typeof step.verification.required !== "boolean") {
+    add(errors, `${path}.verification`, "invalid_verification", "Verification policy is required.");
+  } else if (step.verification.required && !nonEmpty(step.verification.method)) {
+    add(errors, `${path}.verification.method`, "missing_verification_method", "Required verification must name a method.");
+  }
+  if (step.contextRefs != null && !Array.isArray(step.contextRefs)) {
+    add(errors, `${path}.contextRefs`, "invalid_context_refs", "contextRefs must be an array.");
+  } else {
+    for (const [contextIndex, reference] of (step.contextRefs ?? []).entries()) {
+      if (!nonEmpty(reference)) {
+        add(errors, `${path}.contextRefs[${contextIndex}]`, "invalid_context_ref", "Context reference is invalid.");
+      } else if (reference.startsWith("input.") && !inputKeys.has(reference.slice("input.".length))) {
+        add(errors, `${path}.contextRefs[${contextIndex}]`, "unknown_input", `Unknown input reference "${reference}".`);
+      }
+    }
+  }
+}
+
+function validateCondition(step, index, errors) {
+  const path = `steps[${index}]`;
+  if (!CONDITION.test(step.expr ?? "")) {
+    add(
+      errors,
+      `${path}.expr`,
+      "invalid_condition",
+      "Condition must be a workflow step-state equality check.",
+    );
+  }
+  if (!nonEmpty(step.then) || !nonEmpty(step.else)) {
+    add(errors, path, "invalid_condition_target", "Condition requires then and else targets.");
+  }
+}
+
+function validateApproval(step, index, errors) {
+  const path = `steps[${index}]`;
+  if (!nonEmpty(step.gate)) {
+    add(errors, `${path}.gate`, "missing_approval_gate", "Approval gate role is required.");
+  }
+  if (!PAYLOAD_REF.test(step.payloadRef ?? "")) {
+    add(errors, `${path}.payloadRef`, "invalid_payload_ref", "Approval payloadRef must target a prior step result.");
+  }
+  if (step.meanwhile != null && !Array.isArray(step.meanwhile)) {
+    add(errors, `${path}.meanwhile`, "invalid_meanwhile", "Meanwhile must list explicit step ids.");
+  } else {
+    const seen = new Set();
+    for (const [meanwhileIndex, stepId] of (step.meanwhile ?? []).entries()) {
+      if (!STEP_ID.test(stepId ?? "")) {
+        add(errors, `${path}.meanwhile[${meanwhileIndex}]`, "invalid_meanwhile_step", "Meanwhile step id is invalid.");
+      } else if (seen.has(stepId)) {
+        add(errors, `${path}.meanwhile[${meanwhileIndex}]`, "duplicate_meanwhile_step", `Meanwhile step "${stepId}" is listed more than once.`);
+      }
+      seen.add(stepId);
+    }
+  }
+  if (step.reminder != null && step.reminder !== "never") {
+    add(errors, `${path}.reminder`, "unsupported_reminder", "Workflow reminders default to never and no other reminder mode is supported.");
+  }
+}
+
+function validateArtifact(step, index, errors) {
+  const path = `steps[${index}]`;
+  if (!ARTIFACT_ACTIONS.has(step.action)) {
+    add(errors, `${path}.action`, "invalid_artifact_action", "Artifact action is not supported.");
+  }
+  if (!nonEmpty(step.template)) {
+    add(errors, `${path}.template`, "missing_artifact_template", "Artifact template is required.");
+  }
+}
+
+function validateDecision(step, index, errors) {
+  const path = `steps[${index}]`;
+  if (!nonEmpty(step.rationale)) {
+    add(errors, `${path}.rationale`, "missing_decision_rationale", "Decision rationale is required.");
+  }
+}
+
+export function validateWorkflowDefinition(definition) {
+  const errors = [];
+  if (!isRecord(definition)) {
+    add(errors, "$", "invalid_definition", "Workflow definition must be an object.");
+    return { valid: false, errors, entryStepId: null, reachableStepIds: [] };
+  }
+  if (definition.schema !== WORKFLOW_SCHEMA) {
+    add(errors, "schema", "unsupported_schema", `Schema must be ${WORKFLOW_SCHEMA}.`);
+  }
+  if (!WORKFLOW_ID.test(definition.id ?? "")) {
+    add(errors, "id", "invalid_workflow_id", "Workflow id is invalid.");
+  }
+  if (!nonEmpty(definition.name)) add(errors, "name", "missing_name", "Workflow name is required.");
+  if (!Number.isSafeInteger(definition.version) || definition.version < 1) {
+    add(errors, "version", "invalid_version", "Workflow version must be a positive integer.");
+  }
+  if (!isRecord(definition.trigger) || !["manual", "panel-message"].includes(definition.trigger.kind)) {
+    add(errors, "trigger", "invalid_trigger", "Workflow trigger must be manual or panel-message.");
+  }
+  if (!Array.isArray(definition.inputs)) {
+    add(errors, "inputs", "invalid_inputs", "Workflow inputs must be an array.");
+  }
+  const inputKeys = new Set();
+  for (const [index, input] of (Array.isArray(definition.inputs) ? definition.inputs : []).entries()) {
+    const path = `inputs[${index}]`;
+    if (!isRecord(input) || !INPUT_KEY.test(input.key ?? "")) {
+      add(errors, path, "invalid_input", "Workflow input is invalid.");
+      continue;
+    }
+    if (inputKeys.has(input.key)) add(errors, `${path}.key`, "duplicate_input", `Duplicate input "${input.key}".`);
+    inputKeys.add(input.key);
+    if (input.required !== undefined && typeof input.required !== "boolean") {
+      add(errors, `${path}.required`, "invalid_input_required", "Input required must be a boolean when provided.");
+    }
+    if (!["string", "number", "boolean", "record-ref", "document-ref", "json"].includes(input.type)) {
+      add(errors, `${path}.type`, "invalid_input_type", "Workflow input type is invalid.");
+    }
+    if (input.type === "record-ref" && !nonEmpty(input.database)) {
+      add(errors, `${path}.database`, "missing_input_database", "record-ref input requires a database.");
+    }
+  }
+  if (!Array.isArray(definition.steps) || definition.steps.length === 0) {
+    add(errors, "steps", "missing_steps", "Workflow requires at least one step.");
+    return { valid: false, errors, entryStepId: null, reachableStepIds: [] };
+  }
+
+  const byId = new Map();
+  for (const [index, step] of definition.steps.entries()) {
+    if (!validateCommonStep(step, index, errors)) continue;
+    if (byId.has(step.id)) {
+      add(errors, `steps[${index}].id`, "duplicate_step_id", `Duplicate step id "${step.id}".`);
+    }
+    byId.set(step.id, step);
+    if (step.kind === "role-assign") validateRoleAssign(step, index, errors, inputKeys);
+    else if (step.kind === "condition") validateCondition(step, index, errors);
+    else if (step.kind === "approval") validateApproval(step, index, errors);
+    else if (step.kind === "artifact") validateArtifact(step, index, errors);
+    else if (step.kind === "decision") validateDecision(step, index, errors);
+    if (step.kind !== "condition" && step.next !== null && !nonEmpty(step.next)) {
+      add(errors, `steps[${index}].next`, "invalid_next", "next must be a step id or null.");
+    }
+  }
+
+  for (const [index, step] of definition.steps.entries()) {
+    if (!isRecord(step)) continue;
+    for (const target of stepTargets(step)) {
+      if (!TERMINALS.has(target) && !byId.has(target)) {
+        add(errors, `steps[${index}]`, "unknown_step_target", `Unknown step target "${target}".`);
+      }
+    }
+    if (step.kind === "condition") {
+      const stateRef = CONDITION.exec(step.expr ?? "")?.[1];
+      if (stateRef && !byId.has(stateRef)) {
+        add(errors, `steps[${index}].expr`, "unknown_condition_step", `Condition references unknown step "${stateRef}".`);
+      }
+    }
+    if (step.kind === "approval") {
+      const payloadStep = PAYLOAD_REF.exec(step.payloadRef ?? "")?.[1];
+      if (payloadStep && !byId.has(payloadStep)) {
+        add(errors, `steps[${index}].payloadRef`, "unknown_payload_step", `Approval references unknown step "${payloadStep}".`);
+      }
+      for (const [meanwhileIndex, meanwhileId] of (Array.isArray(step.meanwhile) ? step.meanwhile : []).entries()) {
+        if (!byId.has(meanwhileId)) {
+          add(errors, `steps[${index}].meanwhile[${meanwhileIndex}]`, "unknown_meanwhile_step", `Unknown meanwhile step "${meanwhileId}".`);
+        }
+      }
+    }
+    if (step.kind === "role-assign" && step.verification?.required) {
+      const verifierId = /^verifier-step:([a-z][a-z0-9_-]*)$/.exec(step.verification.method ?? "")?.[1];
+      const verifier = verifierId ? byId.get(verifierId) : null;
+      if (!verifierId || !verifier || verifier.kind !== "role-assign" || verifier.role !== "verifier") {
+        add(
+          errors,
+          `steps[${index}].verification.method`,
+          "unreachable_verification",
+          "Verification method must name a verifier role step.",
+        );
+      }
+    }
+  }
+
+  const normalIncoming = new Map([...byId.keys()].map((stepId) => [stepId, new Set()]));
+  for (const step of byId.values()) {
+    for (const target of stepTargets(step)) {
+      if (byId.has(target)) normalIncoming.get(target).add(step.id);
+    }
+  }
+  const meanwhileOwner = new Map();
+  const normalAncestors = (targetId) => {
+    const ancestors = new Set();
+    const pending = [...(normalIncoming.get(targetId) ?? [])];
+    while (pending.length) {
+      const predecessor = pending.pop();
+      if (ancestors.has(predecessor)) continue;
+      ancestors.add(predecessor);
+      pending.push(...(normalIncoming.get(predecessor) ?? []));
+    }
+    return ancestors;
+  };
+  for (const [index, approval] of definition.steps.entries()) {
+    if (!isRecord(approval) || approval.kind !== "approval" || !Array.isArray(approval.meanwhile)) continue;
+    const ancestors = normalAncestors(approval.id);
+    for (const [meanwhileIndex, meanwhileId] of approval.meanwhile.entries()) {
+      const path = `steps[${index}].meanwhile[${meanwhileIndex}]`;
+      const candidate = byId.get(meanwhileId);
+      if (!candidate) continue;
+      if (meanwhileOwner.has(meanwhileId)) {
+        add(errors, path, "shared_meanwhile_step", `Meanwhile step "${meanwhileId}" belongs to more than one approval.`);
+      } else {
+        meanwhileOwner.set(meanwhileId, approval.id);
+      }
+      if (candidate.kind !== "role-assign") {
+        add(errors, path, "unsupported_meanwhile_kind", "Meanwhile currently supports role-assignment steps only.");
+        continue;
+      }
+      if ((normalIncoming.get(meanwhileId)?.size ?? 0) > 0) {
+        add(errors, path, "meanwhile_control_dependency", `Meanwhile step "${meanwhileId}" must not have a normal control-flow predecessor.`);
+      }
+      if (candidate.next != null && !TERMINALS.has(candidate.next)) {
+        add(errors, path, "meanwhile_not_leaf", `Meanwhile step "${meanwhileId}" must end at a terminal target.`);
+      }
+      if (!["read-only", "draft-only"].includes(candidate.mediatedAuthority)) {
+        add(errors, path, "unsafe_meanwhile_authority", `Meanwhile step "${meanwhileId}" must explicitly use read-only or draft-only authority.`);
+      }
+      if (candidate.verification?.required) {
+        add(errors, path, "meanwhile_verification_dependency", `Meanwhile step "${meanwhileId}" cannot schedule an implicit verifier.`);
+      }
+      for (const reference of candidate.contextRefs ?? []) {
+        const referencedStep = PAYLOAD_REF.exec(reference)?.[1];
+        if (!referencedStep) continue;
+        if (!ancestors.has(referencedStep)) {
+          add(errors, path, "meanwhile_result_dependency", `Meanwhile step "${meanwhileId}" may reference results only from steps before approval "${approval.id}".`);
+        }
+      }
+    }
+  }
+
+  const entryStepId = isRecord(definition.steps[0]) && nonEmpty(definition.steps[0].id)
+    ? definition.steps[0].id
+    : null;
+  const reachable = new Set();
+  const visiting = new Set();
+  const visited = new Set();
+  let terminalReachable = false;
+
+  function visit(stepId) {
+    if (TERMINALS.has(stepId)) {
+      terminalReachable = true;
+      return;
+    }
+    if (!byId.has(stepId)) return;
+    reachable.add(stepId);
+    if (visiting.has(stepId)) {
+      add(errors, `steps.${stepId}`, "workflow_cycle", `Workflow contains a cycle at "${stepId}".`);
+      return;
+    }
+    if (visited.has(stepId)) return;
+    visiting.add(stepId);
+    const step = byId.get(stepId);
+    const targets = graphTargets(step);
+    if (targets.length === 0) terminalReachable = true;
+    for (const target of targets) visit(target);
+    visiting.delete(stepId);
+    visited.add(stepId);
+  }
+  if (entryStepId) visit(entryStepId);
+  for (const stepId of byId.keys()) {
+    if (!reachable.has(stepId)) {
+      add(errors, `steps.${stepId}`, "unreachable_step", `Step "${stepId}" is not reachable from the entry step.`);
+    }
+  }
+  if (!terminalReachable) {
+    add(errors, "steps", "no_terminal_path", "Workflow has no reachable terminal path.");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    entryStepId,
+    reachableStepIds: [...reachable],
+  };
+}
+
+function canonicalNumber(value) {
+  const magnitude = Math.abs(value);
+  return Number.isFinite(value) && magnitude <= Number.MAX_SAFE_INTEGER &&
+    (magnitude === 0 || magnitude >= 1e-6);
+}
+
+function jsonValue(value, seen = new Set()) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return canonicalNumber(value);
+  if (typeof value !== "object" || seen.has(value)) return false;
+  seen.add(value);
+  const valid = Array.isArray(value)
+    ? value.every((item) => jsonValue(item, seen))
+    : Object.getPrototypeOf(value) === Object.prototype &&
+      Object.values(value).every((item) => jsonValue(item, seen));
+  seen.delete(value);
+  return valid;
+}
+
+/** Validate typed per-run values without coercing caller input. */
+export function validateWorkflowInputs(definition, inputs) {
+  const errors = [];
+  if (!isRecord(definition) || !Array.isArray(definition.inputs)) {
+    add(errors, "$", "invalid_definition", "Workflow definition inputs are invalid.");
+    return { valid: false, errors };
+  }
+  if (!isRecord(inputs)) {
+    add(errors, "$", "invalid_inputs", "Workflow inputs must be an object.");
+    return { valid: false, errors };
+  }
+  const referenced = new Set(
+    (Array.isArray(definition.steps) ? definition.steps : [])
+      .flatMap((step) => Array.isArray(step?.contextRefs) ? step.contextRefs : [])
+      .filter((reference) => typeof reference === "string" && reference.startsWith("input."))
+      .map((reference) => reference.slice("input.".length)),
+  );
+  for (const input of definition.inputs) {
+    if (!isRecord(input) || !INPUT_KEY.test(input.key ?? "")) continue;
+    const path = `inputs.${input.key}`;
+    const present = Object.prototype.hasOwnProperty.call(inputs, input.key) && inputs[input.key] !== undefined;
+    if (!present) {
+      if (input.required === true || referenced.has(input.key)) {
+        add(errors, path, "missing_input", `Required workflow input is missing: input.${input.key}`);
+      }
+      continue;
+    }
+    const value = inputs[input.key];
+    const valid = input.type === "string"
+      ? nonEmpty(value)
+      : input.type === "number"
+        ? typeof value === "number" && canonicalNumber(value)
+        : input.type === "boolean"
+          ? typeof value === "boolean"
+          : input.type === "record-ref" || input.type === "document-ref"
+            ? nonEmpty(value)
+            : input.type === "json"
+              ? jsonValue(value)
+              : false;
+    if (!valid) add(errors, path, "invalid_input_value", `Workflow input input.${input.key} must be a valid ${input.type}.`);
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function dryRunWorkflowDefinition({
+  definition,
+  roleResolutions = {},
+  knownApprovalRoles = [],
+}) {
+  const validation = validateWorkflowDefinition(definition);
+  const errors = [...validation.errors];
+  const sequence = [];
+  const approvals = [];
+  if (!isRecord(definition) || !Array.isArray(definition.steps)) {
+    return { valid: false, errors, dispatches: false, sequence, approvals };
+  }
+  const knownGates = new Set(knownApprovalRoles);
+  for (const step of definition.steps) {
+    if (!isRecord(step)) continue;
+    if (step.kind === "role-assign") {
+      const resolution = roleResolutions[step.role];
+      const explicitMatches =
+        step.resolution === "explicit-agent-override" &&
+        resolution?.agent === step.agentOverride;
+      const available =
+        resolution?.roleStatus === "active" &&
+        resolution.agentStatus === "active" &&
+        nonEmpty(resolution.bindingRef) &&
+        resolution.authReady === true &&
+        resolution.execution === step.execution &&
+        (step.resolution === "primary-active-occupant" || explicitMatches);
+      if (!available) {
+        add(
+          errors,
+          `steps.${step.id}.role`,
+          "role_unavailable",
+          `Role "${step.role}" has no eligible ${step.execution} runtime resolution.`,
+        );
+      }
+      sequence.push({
+        stepId: step.id,
+        kind: step.kind,
+        title: step.title,
+        role: step.role,
+        agent: resolution?.agent ?? null,
+        bindingRef: resolution?.bindingRef ?? null,
+        adapterId: resolution?.adapterId ?? null,
+        execution: step.execution,
+        mediatedAuthority: step.mediatedAuthority ?? null,
+        verificationRequired: step.verification?.required === true,
+        dispatches: false,
+      });
+    } else if (step.kind === "approval") {
+      if (!knownGates.has(step.gate)) {
+        add(errors, `steps.${step.id}.gate`, "unknown_approval_gate", `Unknown approval role "${step.gate}".`);
+      }
+      const approval = {
+        stepId: step.id,
+        gate: step.gate,
+        payloadRef: step.payloadRef,
+        payloadBound: true,
+      };
+      approvals.push(approval);
+      sequence.push({ ...approval, kind: step.kind, title: step.title, dispatches: false });
+    } else {
+      sequence.push({
+        stepId: step.id,
+        kind: step.kind,
+        title: step.title,
+        ...(step.kind === "condition"
+          ? { expression: step.expr, then: step.then, else: step.else }
+          : {}),
+        ...(step.kind === "artifact"
+          ? { action: step.action, simulated: step.action === "simulate-consequential-action" }
+          : {}),
+        dispatches: false,
+      });
+    }
+  }
+  return {
+    valid: errors.length === 0,
+    errors,
+    dispatches: false,
+    sequence,
+    approvals,
+  };
+}
+
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stable(value[key])]),
+  );
+}
+
+export function canonicalWorkflowJson(definition) {
+  return JSON.stringify(stable(definition));
+}
+
+export async function workflowDefinitionHash(definition) {
+  const bytes = new TextEncoder().encode(canonicalWorkflowJson(definition));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+export async function validatedWorkflowDefinitionHash(definition) {
+  const validation = validateWorkflowDefinition(definition);
+  if (!validation.valid) {
+    throw new Error(
+      `Cannot identify invalid workflow definition: ${validation.errors
+        .map((error) => `${error.path}: ${error.message}`)
+        .join("; ")}`,
+    );
+  }
+  return workflowDefinitionHash(definition);
+}
+
+export async function assertWorkflowDefinitionIdentity(
+  definition,
+  expectedHash,
+) {
+  if (expectedHash == null || expectedHash === "") return;
+  if (typeof expectedHash !== "string") {
+    throw new Error("Stored workflow definition identity is invalid.");
+  }
+  const observedHash = await validatedWorkflowDefinitionHash(definition);
+  if (observedHash !== expectedHash) {
+    throw new Error(
+      "Stored workflow definition snapshot does not match its persisted identity.",
+    );
+  }
+}

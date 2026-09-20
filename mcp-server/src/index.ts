@@ -13,7 +13,20 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
+import {
+  dryRunWorkflowDefinition,
+  validatedWorkflowDefinitionHash,
+  validateWorkflowDefinition,
+  validateWorkflowInputs,
+  workflowDefinitionHash,
+} from "../../shared/workflow-schema.mjs";
 import { dryRunPreview, resolveHomePinPlacement, type HomePinPlacement } from "./write-contract.js";
+import { dispatchWorkflowStart } from "./workflow-dispatch.js";
+import {
+  assertWorkflowInvocationIdentity,
+  workflowInvocationIdentityFromLaunchConfig,
+  type WorkflowInvocationIdentity,
+} from "./workflow-invocation-identity.js";
 
 function loadEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
@@ -36,6 +49,14 @@ function loadEnvFile(path: string): Record<string, string> {
 const localEnv = loadEnvFile(
   join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env.local"),
 );
+
+const WORKFLOW_INVOCATION_IDENTITY: WorkflowInvocationIdentity | Error = (() => {
+  try {
+    return workflowInvocationIdentityFromLaunchConfig(process.env);
+  } catch (error) {
+    return error instanceof Error ? error : new Error("MCP caller identity is invalid.");
+  }
+})();
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ??
@@ -107,6 +128,8 @@ const WORKFLOW_REGISTRY_FIELDS = {
   receiptTemplate: "workflow_receipt_template",
   successCriteria: "workflow_success_criteria",
   failureBehavior: "workflow_failure_behavior",
+  definition: "workflow_definition",
+  definitionVersion: "workflow_definition_version",
   runs: "workflow_runs",
 } as const;
 
@@ -127,6 +150,16 @@ const WORKFLOW_RUN_FIELDS = {
   receipt: "run_receipt",
   startedAt: "run_started_at",
   completedAt: "run_completed_at",
+  schemaVersion: "run_schema_version",
+  definitionSnapshot: "run_definition_snapshot",
+  definitionHash: "run_definition_hash",
+  executionVersion: "run_execution_version",
+  currentStepId: "run_current_step_id",
+  stepStates: "run_step_states",
+  approvals: "run_approvals",
+  version: "run_version",
+  fencingToken: "run_fencing_token",
+  contextEvidence: "run_context_evidence",
 } as const;
 
 function vaultPath(...segments: string[]): string {
@@ -241,6 +274,25 @@ function fieldString(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return null;
+}
+
+function fieldNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function fieldJson(value: unknown): unknown | null {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function firstRelationId(value: unknown): string | null {
@@ -1976,6 +2028,10 @@ function toWorkflowTemplateItem(record: WorkspaceRecordRow) {
     receipt_template: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.receiptTemplate]),
     success_criteria: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.successCriteria]),
     failure_behavior: fieldString(record.fields[WORKFLOW_REGISTRY_FIELDS.failureBehavior]),
+    definition: fieldJson(record.fields[WORKFLOW_REGISTRY_FIELDS.definition]),
+    definition_version: fieldNumber(
+      record.fields[WORKFLOW_REGISTRY_FIELDS.definitionVersion],
+    ),
     run_ids: asStringArray(record.fields[WORKFLOW_REGISTRY_FIELDS.runs]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
@@ -2001,6 +2057,14 @@ function toWorkflowRunItem(record: WorkspaceRecordRow) {
     receipt: fieldString(record.fields[WORKFLOW_RUN_FIELDS.receipt]),
     started_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.startedAt]),
     completed_at: fieldString(record.fields[WORKFLOW_RUN_FIELDS.completedAt]),
+    schema_version: fieldString(record.fields[WORKFLOW_RUN_FIELDS.schemaVersion]),
+    definition_snapshot: fieldJson(
+      record.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot],
+    ),
+    current_step_id: fieldString(record.fields[WORKFLOW_RUN_FIELDS.currentStepId]),
+    step_states: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.stepStates]),
+    approvals: fieldJson(record.fields[WORKFLOW_RUN_FIELDS.approvals]),
+    run_version: fieldNumber(record.fields[WORKFLOW_RUN_FIELDS.version]),
     body_preview: (record.body ?? "").slice(0, 500),
     updated_at: record.updated_at,
   };
@@ -2338,6 +2402,12 @@ async function startWorkflow(input: {
   workflow_id: string;
   trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
   requested_by: string;
+  start_attempt?: {
+    idempotency_key: string;
+    run_name: string;
+    run_started_at: string;
+    request_hash: string;
+  };
   entity_scope?: string | null;
   task_id?: string | null;
   biz_ops_id?: string | null;
@@ -2347,9 +2417,39 @@ async function startWorkflow(input: {
   config?: Record<string, unknown>;
   requires_approval?: boolean;
   confirm_write?: boolean;
-}) {
+}, dispatchStart?: typeof dispatchWorkflowStart) {
   const workflow = await getWorkflowByWorkflowId(input.workflow_id);
   const workflowItem = toWorkflowTemplateItem(workflow);
+  if (workflowItem.status !== "Active") throw new Error("Activate this workflow before starting a run.");
+  const definition = workflowItem.definition;
+  if (definition != null) {
+    const validation = validateWorkflowDefinition(definition);
+    if (!validation.valid) {
+      throw new Error(
+        `Workflow definition is invalid: ${validation.errors
+          .map((error) => `${error.path}: ${error.message}`)
+          .join("; ")}`,
+      );
+    }
+    const inputValidation = validateWorkflowInputs(definition, input.context ?? {});
+    if (!inputValidation.valid) {
+      throw new Error(`Workflow inputs are invalid: ${inputValidation.errors
+        .map((error) => `${error.path}: ${error.message}`)
+        .join("; ")}`);
+    }
+    const definitionVersion =
+      typeof (definition as { version?: unknown }).version === "number"
+        ? (definition as { version: number }).version
+        : null;
+    if (
+      workflowItem.definition_version != null &&
+      workflowItem.definition_version !== definitionVersion
+    ) {
+      throw new Error(
+        `Workflow definition version mismatch: field ${workflowItem.definition_version}, definition ${definitionVersion}.`,
+      );
+    }
+  }
   const sourceDocumentIds = Array.from(
     new Set([
       ...(input.source_documents ?? []).map((value) => String(value)),
@@ -2363,11 +2463,44 @@ async function startWorkflow(input: {
       ...(input.biz_ops_id ? [input.biz_ops_id] : []),
     ]),
   );
-  const runName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
-  const currentStep = input.requires_approval ? "Queued for approval" : "Queued";
+  if (definition != null && !["ui", "chat", "agent", "mcp"].includes(input.trigger_source)) {
+    throw new Error(`Schema-v1 Workflow Runs do not support trigger source ${input.trigger_source}.`);
+  }
+  const generatedRunName = `${workflowItem.name} - ${formatAgentWorkTimestamp()}`;
+  const generatedRunStartedAt = new Date().toISOString();
+  const startAttempt = definition == null
+    ? null
+    : input.start_attempt ?? {
+        idempotency_key: randomUUID(),
+        run_name: generatedRunName,
+        run_started_at: generatedRunStartedAt,
+        request_hash: "",
+      };
+  if (startAttempt && (
+    !startAttempt.idempotency_key?.trim()
+    || !startAttempt.run_name?.trim()
+    || !startAttempt.run_started_at?.trim()
+  )) {
+    throw new Error("start_attempt requires idempotency_key, run_name, and run_started_at.");
+  }
+  const runName = startAttempt?.run_name ?? generatedRunName;
+  const definitionSteps =
+    definition && typeof definition === "object" && Array.isArray(
+      (definition as { steps?: unknown }).steps,
+    )
+      ? ((definition as { steps: Array<{ id: string; title: string }> }).steps)
+      : [];
+  const entryStep = definitionSteps[0] ?? null;
+  const initialNeedsApproval = definition == null && Boolean(input.requires_approval);
+  const definitionHash = definition ? await validatedWorkflowDefinitionHash(definition) : null;
+  const currentStep = initialNeedsApproval
+    ? "Queued for approval"
+    : entryStep
+      ? `Queued: ${entryStep.title}`
+      : "Queued";
   const fields = {
     [WORKFLOW_RUN_FIELDS.name]: runName,
-    [WORKFLOW_RUN_FIELDS.status]: input.requires_approval ? "Needs approval" : "Queued",
+    [WORKFLOW_RUN_FIELDS.status]: initialNeedsApproval ? "Needs approval" : "Queued",
     [WORKFLOW_RUN_FIELDS.workflow]: [workflow.id],
     [WORKFLOW_RUN_FIELDS.task]: input.task_id ? [input.task_id] : [],
     [WORKFLOW_RUN_FIELDS.bizOps]: input.biz_ops_id ? [input.biz_ops_id] : [],
@@ -2385,8 +2518,23 @@ async function startWorkflow(input: {
       config: input.config ?? {},
     }),
     [WORKFLOW_RUN_FIELDS.receipt]: "",
-    [WORKFLOW_RUN_FIELDS.startedAt]: new Date().toISOString(),
+    [WORKFLOW_RUN_FIELDS.startedAt]: startAttempt?.run_started_at ?? generatedRunStartedAt,
     [WORKFLOW_RUN_FIELDS.completedAt]: null,
+    ...(definition
+      ? {
+          [WORKFLOW_RUN_FIELDS.schemaVersion]: "intellizen.workflow/1",
+          [WORKFLOW_RUN_FIELDS.definitionSnapshot]: definition,
+          [WORKFLOW_RUN_FIELDS.definitionHash]: definitionHash,
+          [WORKFLOW_RUN_FIELDS.currentStepId]: entryStep?.id ?? "",
+          [WORKFLOW_RUN_FIELDS.stepStates]: Object.fromEntries(
+            definitionSteps.map((step) => [step.id, "queued"]),
+          ),
+          [WORKFLOW_RUN_FIELDS.approvals]: {},
+          [WORKFLOW_RUN_FIELDS.version]: 0,
+          [WORKFLOW_RUN_FIELDS.fencingToken]: 0,
+          [WORKFLOW_RUN_FIELDS.contextEvidence]: {},
+        }
+      : {}),
   };
   const body = `# ${runName}
 
@@ -2407,9 +2555,54 @@ ${markdownList(sourceDocumentIds)}
 Context:
 ${JSON.stringify(input.context ?? {}, null, 2)}`;
 
+  const schemaV1RpcArguments = definition == null || startAttempt == null
+    ? null
+    : {
+        p_workflow_record_id: workflow.id,
+        p_fields: fields,
+        p_body: body,
+        p_taxonomy: {
+          entity: "genzen",
+          area: "operations",
+          object_type: "workflow_run",
+          workflow_id: input.workflow_id,
+        },
+        p_entity: "genzen",
+        p_actor: input.requested_by,
+        p_task_id: input.task_id ?? null,
+        p_biz_ops_id: input.biz_ops_id ?? null,
+        p_idempotency_key: startAttempt.idempotency_key.trim(),
+        p_confirm_write: true,
+      };
+  const startRequestHash = schemaV1RpcArguments
+    ? await workflowDefinitionHash(schemaV1RpcArguments)
+    : null;
+
   if (!input.confirm_write) {
     return dryRunPreview("start_workflow_run", "create a Workflow Runs record", {
       workflow: workflowItem,
+      schema_v1: definition
+        ? {
+            definition_valid: true,
+            dispatches: false,
+            native_handoff: false,
+            sequence: dryRunWorkflowDefinition({
+              definition,
+              roleResolutions: {},
+              knownApprovalRoles: ["founder_approval_authority"],
+            }).sequence,
+            role_resolution_required: definitionSteps
+              .filter((step) => (step as { kind?: string }).kind === "role-assign")
+              .map((step) => step.id),
+            confirmation: {
+              start_attempt: startAttempt && {
+                ...startAttempt,
+                request_hash: startRequestHash,
+              },
+              confirm_write: true,
+            },
+          }
+        : null,
       next_run: {
         name: runName,
         status: fields[WORKFLOW_RUN_FIELDS.status],
@@ -2420,6 +2613,70 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
         source_records: sourceRecords,
       },
     });
+  }
+
+  if (schemaV1RpcArguments) {
+    if (!input.start_attempt) {
+      throw new Error("Confirmed schema-v1 starts require the start_attempt returned by preview.");
+    }
+    if (input.start_attempt.request_hash !== startRequestHash) {
+      throw new Error("Workflow start inputs changed after preview. Preview again before confirming.");
+    }
+    const { data, error } = await supabase.schema("workspace").rpc("start_workflow_run_v1", {
+      ...schemaV1RpcArguments,
+      p_request_hash: startRequestHash,
+    });
+    if (error) throw new Error(error.message);
+    const runId = typeof data?.workflow_run_id === "string"
+      ? data.workflow_run_id
+      : typeof data?.run?.id === "string" ? data.run.id : null;
+    if (!runId) return data;
+    const dispatch = dispatchStart ? await dispatchStart({
+      runId,
+      startAttempt: {
+        idempotencyKey: startAttempt!.idempotency_key.trim(),
+        requestHash: startRequestHash,
+      },
+    }) : { status: "unavailable" as const, error: "IntelliZen app dispatch was not available to this MCP process." };
+    if (data?.duplicate === true) {
+      try {
+        const run = await getWorkflowRunRecord(runId);
+        const runStatus = fieldString(run.fields[WORKFLOW_RUN_FIELDS.status]);
+        const storedCurrentStep = fieldString(run.fields[WORKFLOW_RUN_FIELDS.currentStep]);
+        const currentStepId = fieldString(run.fields[WORKFLOW_RUN_FIELDS.currentStepId]);
+        const snapshot = fieldJson(run.fields[WORKFLOW_RUN_FIELDS.definitionSnapshot]);
+        const stepStates = fieldJson(run.fields[WORKFLOW_RUN_FIELDS.stepStates]);
+        const steps = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+          && Array.isArray((snapshot as Record<string, unknown>).steps)
+          ? (snapshot as { steps: unknown[] }).steps : [];
+        const currentStep = steps.find((step) => step && typeof step === "object"
+          && (step as Record<string, unknown>).id === currentStepId);
+        const title = currentStep && typeof currentStep === "object"
+          ? (currentStep as Record<string, unknown>).title : null;
+        const state = currentStepId && stepStates && typeof stepStates === "object" && !Array.isArray(stepStates)
+          ? (stepStates as Record<string, unknown>)[currentStepId] : null;
+        return {
+          ...data,
+          run,
+          run_status: runStatus,
+          run_current_step: runStatus === "Done" && currentStepId === "complete"
+            ? "Completed"
+            : typeof title === "string" && typeof state === "string" && state.trim()
+              ? `${title} · ${state.replaceAll("_", " ")}` : storedCurrentStep,
+          run_version: fieldNumber(run.fields[WORKFLOW_RUN_FIELDS.version]),
+          dispatch,
+        };
+      } catch (error) {
+        const { run: _run, run_status: _status, run_current_step: _step, run_version: _version, ...identity } = data;
+        return {
+          ...identity,
+          dispatch,
+          current_status: "unavailable",
+          current_status_error: error instanceof Error ? error.message : "Could not reload the current workflow run status.",
+        };
+      }
+    }
+    return { ...data, dispatch };
   }
 
   const { data, error } = await supabase
@@ -2461,6 +2718,26 @@ ${JSON.stringify(input.context ?? {}, null, 2)}`;
   if (input.biz_ops_id) {
     await appendWorkspaceRecordRelation(input.biz_ops_id, AGENT_BIZ_OPS_FIELDS.workflowRuns, run.id);
   }
+
+  await recordWorkEvent({
+    record_id: input.task_id ?? run.id,
+    workflow_run_id: run.id,
+    event_kind: "workflow_run_started",
+    actor: input.requested_by,
+    durable_role: workflowItem.owner_role,
+    summary: runName,
+    payload: {
+      workflow_id: input.workflow_id,
+      workflow_record_id: workflow.id,
+      trigger_source: input.trigger_source,
+      entity_scope: input.entity_scope ?? workflowItem.entity ?? null,
+      task_id: input.task_id ?? null,
+      biz_ops_id: input.biz_ops_id ?? null,
+      schema_version: definition ? "intellizen.workflow/1" : null,
+      definition_version: workflowItem.definition_version,
+      requires_approval: Boolean(initialNeedsApproval),
+    },
+  });
 
   return {
     dry_run: false,
@@ -2992,13 +3269,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "start_workflow",
       description:
-        "Preview or create a Workflow Runs record from a registered workflow. Defaults to dry-run; set confirm_write true to create the run.",
+        "Preview or create a Workflow Runs record from a registered workflow. Defaults to dry-run; set confirm_write true to create it. Confirmed schema-v1 starts request handoff to a running local IntelliZen app when available; an accepted handoff is not completion, and no app leaves the saved run queued.",
       inputSchema: {
         type: "object",
         properties: {
           workflow_id: { type: "string", description: "Canonical workflow id, e.g. gzs.expertise_page_build." },
           trigger_source: { type: "string", enum: ["ui", "chat", "monitor", "agent", "schedule", "mcp"] },
           requested_by: { type: "string" },
+          start_attempt: {
+            type: "object",
+            additionalProperties: false,
+            description: "For a confirmed schema-v1 start, pass the exact attempt returned by preview so retries keep the same identity, name, and start time.",
+            properties: {
+              idempotency_key: { type: "string" },
+              run_name: { type: "string" },
+              run_started_at: { type: "string" },
+              request_hash: { type: "string" },
+            },
+            required: ["idempotency_key", "run_name", "run_started_at", "request_hash"],
+          },
           entity_scope: { type: "string" },
           task_id: { type: "string", description: "Optional Tasks record UUID." },
           biz_ops_id: { type: "string", description: "Optional Biz Ops record UUID." },
@@ -3879,10 +4168,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   // ── start_workflow ────────────────────────────────────────────────────────
   if (name === "start_workflow") {
-    const result = await startWorkflow((args ?? {}) as {
+    const input = (args ?? {}) as {
       workflow_id: string;
       trigger_source: "ui" | "chat" | "monitor" | "agent" | "schedule" | "mcp";
       requested_by: string;
+      start_attempt?: {
+        idempotency_key: string;
+        run_name: string;
+        run_started_at: string;
+        request_hash: string;
+      };
       entity_scope?: string | null;
       task_id?: string | null;
       biz_ops_id?: string | null;
@@ -3892,7 +4187,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       config?: Record<string, unknown>;
       requires_approval?: boolean;
       confirm_write?: boolean;
-    });
+    };
+    if (WORKFLOW_INVOCATION_IDENTITY instanceof Error) {
+      throw new Error(`start_workflow requires authenticated MCP launch identity: ${WORKFLOW_INVOCATION_IDENTITY.message}`);
+    }
+    assertWorkflowInvocationIdentity(WORKFLOW_INVOCATION_IDENTITY, input.requested_by);
+    const result = await startWorkflow(input, dispatchWorkflowStart);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
 
